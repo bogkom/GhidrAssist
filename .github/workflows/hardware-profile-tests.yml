@@ -4,14 +4,31 @@ on:
   push:
     branches:
       - feature/hardware-analysis
+      - feature/hardware-analysis-seven-stages
     paths:
       - 'src/main/java/ghidrassist/hardware/HardwareProfiles.java'
+      - 'src/main/java/ghidrassist/hardware/ChipSelectModel.java'
+      - 'src/main/java/ghidrassist/hardware/FirmwarePatternScanner.java'
+      - 'src/main/java/ghidrassist/hardware/ManualRegisterHints.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareNamingReview.java'
       - 'src/test/java/ghidrassist/hardware/HardwareProfilesSelfTest.java'
+      - 'src/test/java/ghidrassist/hardware/ChipSelectModelSelfTest.java'
+      - 'src/test/java/ghidrassist/hardware/FirmwarePatternScannerSelfTest.java'
+      - 'src/test/java/ghidrassist/hardware/ManualRegisterHintsSelfTest.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareNamingReviewSelfTest.java'
       - '.github/workflows/hardware-profile-tests.yml'
   pull_request:
     paths:
       - 'src/main/java/ghidrassist/hardware/HardwareProfiles.java'
+      - 'src/main/java/ghidrassist/hardware/ChipSelectModel.java'
+      - 'src/main/java/ghidrassist/hardware/FirmwarePatternScanner.java'
+      - 'src/main/java/ghidrassist/hardware/ManualRegisterHints.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareNamingReview.java'
       - 'src/test/java/ghidrassist/hardware/HardwareProfilesSelfTest.java'
+      - 'src/test/java/ghidrassist/hardware/ChipSelectModelSelfTest.java'
+      - 'src/test/java/ghidrassist/hardware/FirmwarePatternScannerSelfTest.java'
+      - 'src/test/java/ghidrassist/hardware/ManualRegisterHintsSelfTest.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareNamingReviewSelfTest.java'
       - '.github/workflows/hardware-profile-tests.yml'
 
 jobs:
@@ -30,6 +47,22 @@ jobs:
           mkdir -p "$RUNNER_TEMP/hardware-tests"
           javac --release 21 -d "$RUNNER_TEMP/hardware-tests" \
             src/main/java/ghidrassist/hardware/HardwareProfiles.java \
-            src/test/java/ghidrassist/hardware/HardwareProfilesSelfTest.java
+            src/main/java/ghidrassist/hardware/ChipSelectModel.java \
+            src/main/java/ghidrassist/hardware/FirmwarePatternScanner.java \
+            src/main/java/ghidrassist/hardware/ManualRegisterHints.java \
+            src/main/java/ghidrassist/hardware/HardwareNamingReview.java \
+            src/test/java/ghidrassist/hardware/HardwareProfilesSelfTest.java \
+            src/test/java/ghidrassist/hardware/ChipSelectModelSelfTest.java \
+            src/test/java/ghidrassist/hardware/FirmwarePatternScannerSelfTest.java \
+            src/test/java/ghidrassist/hardware/HardwareNamingReviewSelfTest.java \
+            src/test/java/ghidrassist/hardware/ManualRegisterHintsSelfTest.java
           java -cp "$RUNNER_TEMP/hardware-tests" \
             ghidrassist.hardware.HardwareProfilesSelfTest
+          java -cp "$RUNNER_TEMP/hardware-tests" \
+            ghidrassist.hardware.ChipSelectModelSelfTest
+          java -cp "$RUNNER_TEMP/hardware-tests" \
+            ghidrassist.hardware.FirmwarePatternScannerSelfTest
+          java -cp "$RUNNER_TEMP/hardware-tests" \
+            ghidrassist.hardware.ManualRegisterHintsSelfTest
+          java -cp "$RUNNER_TEMP/hardware-tests" \
+            ghidrassist.hardware.HardwareNamingReviewSelfTest

@@ -149,7 +149,8 @@ public final class SimcrMmAnalyzer {
             String mnemonic = mnemonic(insn);
             if (!(mnemonic.startsWith("MOVE") || mnemonic.equals("ORI") ||
                     mnemonic.equals("ANDI") || mnemonic.equals("EORI") ||
-                    mnemonic.equals("BSET") || mnemonic.equals("BCLR"))) {
+                    mnemonic.equals("BSET") || mnemonic.equals("BCLR") ||
+                    mnemonic.equals("CLR"))) {
                 continue;
             }
             int dest = operands - 1; // Motorola syntax: destination last.
@@ -216,6 +217,18 @@ public final class SimcrMmAnalyzer {
 
         String m = mnemonic(insn);
         int operands = insn.getNumOperands();
+        if (m.equals("CLR") && operands == 1 &&
+                isAbsoluteDestination(insn, 0) && matchesAddress(insn, 0, target)) {
+            String suffix=insn.getMnemonicString().toUpperCase(Locale.ROOT);
+            boolean relevantWord=suffix.endsWith(".W") && (target & 1L)==0;
+            boolean relevantLowByte=suffix.endsWith(".B") && (target & 1L)==1;
+            return new Finding(insn.getAddress(),target,full,true,
+                relevantWord || relevantLowByte ? Effect.CLEAR_MM : Effect.UNKNOWN,
+                Confidence.DIRECT_IMMEDIATE,
+                relevantWord || relevantLowByte ?
+                    "CLR zeroes relevant SIMCR word/low-byte; MM clear requested." :
+                    "CLR width/destination does not prove relevant MM change.");
+        }
         if (operands != 2 || !isAbsoluteDestination(insn, 1) ||
                 !matchesAddress(insn, 1, target)) {
             return new Finding(insn.getAddress(), target, full, true,

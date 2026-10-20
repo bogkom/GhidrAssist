@@ -21,6 +21,7 @@ public class GhidrAssistUI extends JPanel {
     private final ActionsTab actionsTab;
     private final RAGManagementTab ragManagementTab;
     private final SettingsTab settingsTab;
+    private final HardwareAnalysisTab hardwareAnalysisTab;
     private final SemanticGraphTab semanticGraphTab;
     private SymGraphTab symGraphTab;
 
@@ -38,6 +39,7 @@ public class GhidrAssistUI extends JPanel {
         this.actionsTab = new ActionsTab(controller);
         this.ragManagementTab = new RAGManagementTab(controller);
         this.settingsTab = new SettingsTab(controller);
+        this.hardwareAnalysisTab = new HardwareAnalysisTab(plugin);
         this.semanticGraphTab = new SemanticGraphTab(controller);
         this.symGraphTab = new SymGraphTab(controller);
 
@@ -63,6 +65,7 @@ public class GhidrAssistUI extends JPanel {
         tabbedPane.addTab("Semantic Graph", semanticGraphTab);
         tabbedPane.addTab("SymGraph", symGraphTab);
         tabbedPane.addTab("RAG", ragManagementTab);
+        tabbedPane.addTab("Hardware Analysis", hardwareAnalysisTab);
         tabbedPane.addTab("Settings", settingsTab);
 
         add(tabbedPane, BorderLayout.CENTER);
