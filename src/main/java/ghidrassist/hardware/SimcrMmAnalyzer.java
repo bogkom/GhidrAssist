@@ -126,7 +126,11 @@ public final class SimcrMmAnalyzer {
                 if (insn == null) continue;
                 boolean write = ref.getReferenceType().isWrite();
                 Finding finding = interpret(insn, addrValue, write, Confidence.POSSIBLE_REFERENCE);
-                found.putIfAbsent(key(insn, addrValue), finding);
+                String candidateKey = key(insn, addrValue);
+                Finding previous = found.get(candidateKey);
+                if (previous == null || (!previous.referencedAsWrite && write)) {
+                    found.put(candidateKey, finding);
+                }
             }
         }
 
