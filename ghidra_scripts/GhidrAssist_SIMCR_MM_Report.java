@@ -12,7 +12,7 @@ import java.util.Arrays;
  */
 public class GhidrAssist_SIMCR_MM_Report extends GhidraScript {
     @Override
-    protected void run() throws Exception {
+    public void run() throws Exception {
         if (currentProgram == null) {
             printerr("Open a program first.");
             return;
