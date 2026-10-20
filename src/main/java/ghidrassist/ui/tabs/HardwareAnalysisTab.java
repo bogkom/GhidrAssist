@@ -35,9 +35,11 @@ public final class HardwareAnalysisTab extends JPanel {
     });
     private final JButton run=new JButton("Analyze current program");
     private final JButton export=new JButton("Export evidence Markdown for RAG");
+    private final JButton namePreview=new JButton("Export naming review CSV");
     private final JTextArea report=new JTextArea();
     private final JLabel status=new JLabel("Open a Ghidra program, then analyze candidate MCU registers.");
     private volatile String latestMarkdown;
+    private volatile String latestNameCsv;
     private volatile Program latestProgram;
 
     public HardwareAnalysisTab(GhidrAssistPlugin plugin){
@@ -48,7 +50,9 @@ public final class HardwareAnalysisTab extends JPanel {
         controls.add(selection);
         controls.add(run);
         controls.add(export);
+        controls.add(namePreview);
         export.setEnabled(false);
+        namePreview.setEnabled(false);
         report.setEditable(false);
         report.setFont(new Font(Font.MONOSPACED,Font.PLAIN,12));
         report.setText(
@@ -65,6 +69,7 @@ public final class HardwareAnalysisTab extends JPanel {
         add(status,BorderLayout.SOUTH);
         run.addActionListener(e->startScan());
         export.addActionListener(e->exportMarkdown());
+        namePreview.addActionListener(e->exportNamingPreview());
     }
 
     private void startScan(){
@@ -75,8 +80,8 @@ public final class HardwareAnalysisTab extends JPanel {
             return;
         }
         final boolean concrete=selection.getSelectedIndex()==1;
-        run.setEnabled(false);export.setEnabled(false);
-        latestMarkdown=null;latestProgram=null;
+        run.setEnabled(false);export.setEnabled(false);namePreview.setEnabled(false);
+        latestMarkdown=null;latestNameCsv=null;latestProgram=null;
         status.setText("Scanning references and disassembled instructions. Read-only.");
         SwingWorker<HardwareInventoryService.Report,Void> worker=
                 new SwingWorker<>() {
@@ -94,10 +99,12 @@ public final class HardwareAnalysisTab extends JPanel {
                         return;
                     }
                     latestMarkdown=finished.markdown;
+                    latestNameCsv=finished.namePreviewCsv;
                     latestProgram=program;
                     report.setText(finished.markdown);
                     report.setCaretPosition(0);
                     export.setEnabled(true);
+                    namePreview.setEnabled(true);
                     status.setText("Read-only: "+finished.uniqueSites+
                         " candidate sites in "+finished.functions+" functions. No database edits.");
                 }catch(Exception ex){
@@ -132,6 +139,32 @@ public final class HardwareAnalysisTab extends JPanel {
             status.setText("Markdown saved; import manually in GhidrAssist > RAG > Add Documents.");
         }catch(Exception ex){
             JOptionPane.showMessageDialog(this,"Cannot save evidence:\n"+ex.getMessage(),
+                "Export error",JOptionPane.ERROR_MESSAGE);
+        }
+    }
+    private void exportNamingPreview(){
+        if(latestNameCsv==null || latestProgram!=plugin.getCurrentProgram()){
+            namePreview.setEnabled(false);
+            status.setText("Program changed; rerun analysis before exporting naming review.");
+            return;
+        }
+        JFileChooser chooser=new JFileChooser();
+        chooser.setDialogTitle("Export review-only hardware label proposals (never applied)");
+        chooser.setFileFilter(new FileNameExtensionFilter("CSV naming review (*.csv)","csv"));
+        chooser.setSelectedFile(new File("GhidrAssist_Hardware_Name_Review.csv"));
+        if(chooser.showSaveDialog(this)!=JFileChooser.APPROVE_OPTION)return;
+        File dest=chooser.getSelectedFile();
+        if(!dest.getName().toLowerCase(java.util.Locale.ROOT).endsWith(".csv"))
+            dest=new File(dest.getParentFile(),dest.getName()+".csv");
+        if(dest.isFile() && JOptionPane.showConfirmDialog(this,
+                "Replace existing CSV file?\n"+dest.getAbsolutePath(),
+                "Confirm review-only export",JOptionPane.YES_NO_OPTION)!=JOptionPane.YES_OPTION)
+            return;
+        try{
+            Files.writeString(dest.toPath(),latestNameCsv,StandardCharsets.UTF_8);
+            status.setText("Saved CSV naming review only. No Ghidra symbols changed.");
+        }catch(Exception ex){
+            JOptionPane.showMessageDialog(this,"Cannot save CSV:\n"+ex.getMessage(),
                 "Export error",JOptionPane.ERROR_MESSAGE);
         }
     }
