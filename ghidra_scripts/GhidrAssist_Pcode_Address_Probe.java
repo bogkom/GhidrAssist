@@ -145,7 +145,7 @@ public class GhidrAssist_Pcode_Address_Probe extends GhidraScript {
     @Override
     public void run()throws Exception{
         if(currentProgram==null){printerr("Open a program first.");return;}
-        Set<Long> targets=loadTargets(getSourceFile());
+        Set<Long> targets=loadTargets(getSourceFile()==null?null:new java.io.File(getSourceFile().getAbsolutePath()));
         println("P-CODE / REGISTER ADDRESS PROBE — READ ONLY");
         println("Program: "+currentProgram.getName()+"; target addresses="+targets.size());
         println("Known register pointers are tentative; CPU32 does not prove an MC68332.");
