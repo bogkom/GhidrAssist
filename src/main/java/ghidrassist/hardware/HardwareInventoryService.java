@@ -161,8 +161,8 @@ public final class HardwareInventoryService {
         String choice=concreteDevice?"MC68332 (MANUALLY ASSUMED)":"CPU32 (MC68332-ADDRESS RECONNAISSANCE)";
         StringBuilder md=new StringBuilder();
         md.append("# Hardware Evidence — read-only\n\n")
-          .append("- Program: \`").append(program.getName()).append("\`\n")
-          .append("- Ghidra language: \`").append(program.getLanguageID()).append("\`\n")
+          .append("- Program: `").append(program.getName()).append("`\n")
+          .append("- Ghidra language: `").append(program.getLanguageID()).append("`\n")
           .append("- Selection: **").append(choice).append("**\n")
           .append("- Scanned Listing instructions: ").append(scanned).append("\n")
           .append("- Unique instruction/register reference sites: ").append(sites.size()).append("\n")
@@ -182,12 +182,12 @@ public final class HardwareInventoryService {
                 for(Site site:group.getValue()){
                     if((site.registerAddress<0x800000L?0:1)!=mm)continue;
                     any=true;
-                    md.append("- \`").append(site.pc).append("\` ")
-                      .append(site.register).append(" \`")
-                      .append(hex(site.registerAddress,6)).append("\` — ")
+                    md.append("- `").append(site.pc).append("` ")
+                      .append(site.register).append(" `")
+                      .append(hex(site.registerAddress,6)).append("` — ")
                       .append(site.write?"WRITE":"READ/REFERENCE")
                       .append("; ").append(site.literal==null?"value UNKNOWN":hex(site.literal,4))
-                      .append("; \`").append(site.asm).append("\`\n");
+                      .append("; `").append(site.asm).append("`\n");
                     if(site.write){
                         if(site.literal==null)values.remove(site.register);
                         else values.put(site.register,site.literal);
