@@ -1,0 +1,257 @@
+package ghidrassist.hardware;
+
+import ghidra.program.model.address.Address;
+import ghidra.program.model.lang.Register;
+import ghidra.program.model.listing.Instruction;
+import ghidra.program.model.listing.InstructionIterator;
+import ghidra.program.model.listing.Program;
+import ghidra.program.model.scalar.Scalar;
+import ghidra.program.model.symbol.Reference;
+import ghidra.program.model.symbol.ReferenceIterator;
+import ghidra.util.exception.CancelledException;
+import ghidra.util.task.TaskMonitor;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+
+/**
+ * Read-only evidence collection for MC68332 SIMCR/MM. Does not patch memory,
+ * generate labels or claim to know runtime control-flow order.
+ *
+ * Known limitation: a pointer computed in a register may have no reference to
+ * SIMCR. The conservative report must explicitly say that the inventory may
+ * be incomplete. Local p-code/constant propagation will be added later.
+ */
+public final class SimcrMmAnalyzer {
+    public enum Effect { SET_MM, CLEAR_MM, PRESERVE_MM, UNKNOWN }
+    public enum Confidence { DIRECT_IMMEDIATE, POSSIBLE_REFERENCE, HEURISTIC }
+
+    public static final class Finding {
+        public final Address instruction;
+        public final long registerAddress;
+        public final String instructionText;
+        public final boolean referencedAsWrite;
+        public final Effect effect;
+        public final Confidence confidence;
+        public final String explanation;
+
+        private Finding(Address instruction, long registerAddress, String instructionText,
+                boolean referencedAsWrite, Effect effect, Confidence confidence,
+                String explanation) {
+            this.instruction = instruction;
+            this.registerAddress = registerAddress;
+            this.instructionText = instructionText;
+            this.referencedAsWrite = referencedAsWrite;
+            this.effect = effect;
+            this.confidence = confidence;
+            this.explanation = explanation;
+        }
+    }
+
+    public static final class Report {
+        public final String profile;
+        public final List<Finding> findings;
+        public final int xrefCount;
+        public final int scannedInstructionCount;
+        public final String caveat;
+
+        private Report(String profile, List<Finding> findings, int xrefCount,
+                int scannedInstructionCount) {
+            this.profile = profile;
+            this.findings = Collections.unmodifiableList(new ArrayList<>(findings));
+            this.xrefCount = xrefCount;
+            this.scannedInstructionCount = scannedInstructionCount;
+            this.caveat = "Static candidates only. A write seen in disassembly is not proof " +
+                "that its path executes. Indirect addressing, modified pointers, aliases, " +
+                "data embedded in code and self-modifying code may be missed. " +
+                "No final MM value or chip-select memory map is inferred.";
+        }
+
+        public long count(Effect effect) {
+            return findings.stream().filter(f -> f.effect == effect).count();
+        }
+
+        public String toText() {
+            StringBuilder b = new StringBuilder();
+            b.append("Hardware Analysis (READ ONLY)\n");
+            b.append("Profile: ").append(profile).append("\n");
+            b.append("SIMCR candidates: 0x7FFA00 / 0xFFFA00\n");
+            b.append("XREFs: ").append(xrefCount).append("; instructions scanned: ")
+                .append(scannedInstructionCount).append("\n");
+            b.append("Set: ").append(count(Effect.SET_MM))
+                .append("; clear: ").append(count(Effect.CLEAR_MM))
+                .append("; preserve: ").append(count(Effect.PRESERVE_MM))
+                .append("; unknown: ").append(count(Effect.UNKNOWN)).append("\n\n");
+            for (Finding f : findings) {
+                b.append(f.instruction).append(" -> SIMCR 0x")
+                    .append(Long.toHexString(f.registerAddress).toUpperCase(Locale.ROOT))
+                    .append(" ").append(f.effect).append(" [").append(f.confidence)
+                    .append("] ").append(f.instructionText).append("\n");
+                b.append("    ").append(f.explanation).append("\n");
+            }
+            b.append("\nWARNING: ").append(caveat).append("\n");
+            return b.toString();
+        }
+    }
+
+    public Report analyze(Program program, HardwareProfiles.Profile profile,
+            TaskMonitor monitor) throws CancelledException {
+        if (program == null || profile == null) {
+            throw new IllegalArgumentException("Program and profile are required");
+        }
+        if (!"MC68332".equals(profile.id) || !profile.concreteDevice) {
+            throw new IllegalArgumentException("SIMCR/MM decoding requires explicit MC68332 profile");
+        }
+        if (monitor == null) monitor = TaskMonitor.DUMMY;
+
+        HardwareProfiles.Register simcr = profile.register("SIMCR");
+        long low = profile.absoluteAddress(simcr, 0);
+        long high = profile.absoluteAddress(simcr, 1);
+        Map<String, Finding> found = new LinkedHashMap<>();
+        int references = 0;
+        for (long addrValue : new long[]{ low, high }) {
+            monitor.checkCancelled();
+            Address target = program.getAddressFactory().getDefaultAddressSpace()
+                .getAddress(addrValue);
+            ReferenceIterator refs = program.getReferenceManager().getReferencesTo(target);
+            while (refs.hasNext()) {
+                monitor.checkCancelled();
+                Reference ref = refs.next();
+                references++;
+                Instruction insn = program.getListing().getInstructionContaining(ref.getFromAddress());
+                if (insn == null) continue;
+                boolean write = ref.getReferenceType().isWrite();
+                Finding finding = interpret(insn, addrValue, write, Confidence.POSSIBLE_REFERENCE);
+                found.putIfAbsent(key(insn, addrValue), finding);
+            }
+        }
+
+        // XREF-free programs are common for raw firmware: inspect explicit
+        // destination operands but never treat an arbitrary immediate as an address.
+        int scanned = 0;
+        InstructionIterator iterator = program.getListing().getInstructions(true);
+        while (iterator.hasNext()) {
+            monitor.checkCancelled();
+            Instruction insn = iterator.next();
+            scanned++;
+            int operands = insn.getNumOperands();
+            if (operands < 1) continue;
+            String mnemonic = mnemonic(insn);
+            if (!(mnemonic.startsWith("MOVE") || mnemonic.equals("ORI") ||
+                    mnemonic.equals("ANDI") || mnemonic.equals("EORI") ||
+                    mnemonic.equals("BSET") || mnemonic.equals("BCLR"))) {
+                continue;
+            }
+            int dest = operands - 1; // Motorola syntax: destination last.
+            if (!isAbsoluteDestination(insn, dest)) continue;
+            for (long addrValue : new long[]{ low, high }) {
+                if (!matchesAddress(insn, dest, addrValue)) continue;
+                String k = key(insn, addrValue);
+                if (!found.containsKey(k)) {
+                    found.put(k, interpret(insn, addrValue, true, Confidence.HEURISTIC));
+                }
+            }
+        }
+        return new Report(profile.id, new ArrayList<>(found.values()), references, scanned);
+    }
+
+    private static String key(Instruction insn, long target) {
+        return insn.getAddress().toString() + "/" + Long.toHexString(target);
+    }
+
+    private static String mnemonic(Instruction insn) {
+        String m = insn.getMnemonicString().toUpperCase(Locale.ROOT);
+        int dot = m.indexOf('.');
+        return dot >= 0 ? m.substring(0, dot) : m;
+    }
+
+    private static boolean isAbsoluteDestination(Instruction insn, int op) {
+        Object[] objects = insn.getOpObjects(op);
+        if (objects == null) return false;
+        for (Object o : objects) if (o instanceof Register) return false;
+        String representation = insn.getDefaultOperandRepresentation(op);
+        if (representation == null || representation.isBlank() ||
+            representation.contains("#") || representation.contains("(") ||
+            representation.contains("[") || representation.contains("%")) return false;
+        return true;
+    }
+
+    private static boolean matchesAddress(Instruction insn, int op, long target) {
+        Object[] objects = insn.getOpObjects(op);
+        if (objects == null) return false;
+        for (Object o : objects) {
+            if (o instanceof Address a && a.getOffset() == target) return true;
+            if (o instanceof Scalar s && s.getUnsignedValue() == target) return true;
+        }
+        return false;
+    }
+
+    private static Finding interpret(Instruction insn, long target,
+            boolean write, Confidence fallbackConfidence) {
+        String full = insn.toString();
+        if (!write) {
+            return new Finding(insn.getAddress(), target, full, false,
+                Effect.UNKNOWN, Confidence.POSSIBLE_REFERENCE,
+                "Reference is not marked as a write; may be a read or an address lookup.");
+        }
+
+        String m = mnemonic(insn);
+        int operands = insn.getNumOperands();
+        if (operands != 2 || !isAbsoluteDestination(insn, 1) ||
+                !matchesAddress(insn, 1, target)) {
+            return new Finding(insn.getAddress(), target, full, true,
+                Effect.UNKNOWN, fallbackConfidence,
+                "Possible write; destination or source not proven to be a direct immediate.");
+        }
+
+        // Immediate operand must be explicitly marked #; otherwise Scalar
+        // objects may denote displacement or address and are not reliable.
+        String sourceText = insn.getDefaultOperandRepresentation(0);
+        Scalar s = insn.getScalar(0);
+        if (sourceText == null || !sourceText.trim().startsWith("#") || s == null) {
+            return new Finding(insn.getAddress(), target, full, true,
+                Effect.UNKNOWN, fallbackConfidence,
+                "Source is register/memory or non-immediate; requires value-flow analysis.");
+        }
+
+        long immediate = s.getUnsignedValue();
+        boolean mmBit = (immediate & HardwareProfiles.MM_MASK) != 0;
+        Effect effect = Effect.UNKNOWN;
+        String explanation = "Immediate value alone does not determine MM.";
+        String mn = insn.getMnemonicString().toUpperCase(Locale.ROOT);
+        boolean word = mn.endsWith(".W") || (!mn.contains(".") && !mn.startsWith("B"));
+        if (m.equals("MOVE") && word) {
+            effect = mmBit ? Effect.SET_MM : Effect.CLEAR_MM;
+            explanation = "16-bit immediate overwrites SIMCR, fixing the MM bit.";
+        } else if (m.equals("ORI") && word && mmBit) {
+            effect = Effect.SET_MM;
+            explanation = "OR mask includes MM.";
+        } else if (m.equals("ORI") && word) {
+            effect = Effect.PRESERVE_MM;
+            explanation = "OR mask excludes MM.";
+        } else if (m.equals("ANDI") && word && !mmBit) {
+            effect = Effect.CLEAR_MM;
+            explanation = "AND mask clears MM.";
+        } else if (m.equals("ANDI") && word) {
+            effect = Effect.PRESERVE_MM;
+            explanation = "AND mask preserves MM.";
+        } else if (m.equals("BSET") && immediate == 6) {
+            effect = Effect.SET_MM;
+            explanation = "Bit set on MM (bit 6); verify bit-operation size.";
+        } else if (m.equals("BCLR") && immediate == 6) {
+            effect = Effect.CLEAR_MM;
+            explanation = "Bit clear on MM (bit 6); verify bit-operation size.";
+        } else if (m.equals("EORI") && word && !mmBit) {
+            effect = Effect.PRESERVE_MM;
+            explanation = "XOR mask excludes MM.";
+        } else if (m.equals("EORI") && word) {
+            explanation = "XOR toggles MM; incoming MM value is required.";
+        }
+        return new Finding(insn.getAddress(), target, full, true,
+            effect, Confidence.DIRECT_IMMEDIATE, explanation);
+    }
+}
