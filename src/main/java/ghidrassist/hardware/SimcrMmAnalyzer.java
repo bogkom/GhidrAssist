@@ -65,10 +65,12 @@ public final class SimcrMmAnalyzer {
             this.findings = Collections.unmodifiableList(new ArrayList<>(findings));
             this.xrefCount = xrefCount;
             this.scannedInstructionCount = scannedInstructionCount;
-            this.caveat = "Static candidates only. A write seen in disassembly is not proof " +
-                "that its path executes. Indirect addressing, modified pointers, aliases, " +
-                "data embedded in code and self-modifying code may be missed. " +
-                "No final MM value or chip-select memory map is inferred.";
+            this.caveat = "Static candidate sites only, not executed writes. On MC68332, " +
+                "the MM field is write-once after reset; several SET_MM sites do not " +
+                "imply several successful MM updates. Access to 0xFFFA00 as SIMCR " +
+                "requires MM=1 at that time. Indirect addressing, modified pointers, " +
+                "aliases, data embedded in code and self-modifying code may be missed. " +
+                "No runtime order, final MM value or chip-select map is inferred.";
         }
 
         public long count(Effect effect) {
@@ -82,7 +84,7 @@ public final class SimcrMmAnalyzer {
             b.append("SIMCR candidates: 0x7FFA00 / 0xFFFA00 (16-bit), plus +1 low-byte targets\n");
             b.append("XREFs: ").append(xrefCount).append("; instructions scanned: ")
                 .append(scannedInstructionCount).append("\n");
-            b.append("Set: ").append(count(Effect.SET_MM))
+            b.append("SET_MM candidate sites: ").append(count(Effect.SET_MM))
                 .append("; clear: ").append(count(Effect.CLEAR_MM))
                 .append("; preserve: ").append(count(Effect.PRESERVE_MM))
                 .append("; unknown: ").append(count(Effect.UNKNOWN)).append("\n\n");
