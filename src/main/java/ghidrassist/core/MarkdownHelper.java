@@ -13,6 +13,7 @@ import java.util.Arrays;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.swing.UIManager;
+import ghidra.framework.preferences.Preferences;
 
 public class MarkdownHelper {
     /**
@@ -56,7 +57,8 @@ public class MarkdownHelper {
             ? brighter(fg, -40)
             : darker(fg, -40);
 
-        return "body { font-family: sans-serif; font-size: 10px; margin: 8px; " +
+        return "body { font-family: '" + cssFontFamily(getResponseFontFamily()) +
+                   "'; font-size: " + getResponseFontSize() + "px; margin: 8px; " +
                    "color: " + hex(fg) + "; background-color: " + hex(bg) + "; width: auto; }" +
                "pre { background-color: " + hex(codeBg) + "; padding: 10px; " +
                    "border: 1px solid " + hex(codeBorder) + "; white-space: pre-wrap; " +
@@ -76,6 +78,26 @@ public class MarkdownHelper {
                "blockquote { border-left: 3px solid " + hex(bqBorder) + "; margin-left: 0; " +
                    "padding-left: 12px; color: " + hex(bqText) + "; }" +
                "a { color: " + hex(isDark ? new Color(100, 160, 255) : new Color(0, 100, 200)) + "; }";
+    }
+
+    // Settings are stored in Ghidra preferences, not in the extension ZIP.
+    public static String getResponseFontFamily() {
+        String family = Preferences.getProperty("GhidrAssist.ResponseFontFamily", "SansSerif");
+        return (family == null || family.isBlank()) ? "SansSerif" : family;
+    }
+
+    public static int getResponseFontSize() {
+        try {
+            int size = Integer.parseInt(Preferences.getProperty("GhidrAssist.ResponseFontSize", "10"));
+            return Math.max(8, Math.min(36, size));
+        } catch (NumberFormatException ex) {
+            return 10;
+        }
+    }
+
+    private static String cssFontFamily(String family) {
+        // Escape CSS special characters in the quoted font family name.
+        return family.replace("\\", "\\\\").replace("'", "\\'");
     }
 
     private static Color brighter(Color c, int amount) {

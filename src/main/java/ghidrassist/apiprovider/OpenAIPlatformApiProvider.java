@@ -681,12 +681,7 @@ public class OpenAIPlatformApiProvider extends APIProvider implements FunctionCa
 
         // Handle different token field names based on model
         String modelName = super.getModel();
-        if (modelName != null && (
-                modelName.startsWith("o1-") || 
-                modelName.startsWith("o3-") || 
-                modelName.startsWith("o4-") || 
-                modelName.startsWith("gpt-5") || 
-                modelName.startsWith("gpt-6"))) {
+        if (modelName != null && (modelName.startsWith("o1-") || modelName.startsWith("o3-") || modelName.startsWith("o4-") || modelName.startsWith("gpt-5"))) {
             payload.addProperty("max_completion_tokens", super.getMaxTokens());
         } else {
             payload.addProperty("max_tokens", super.getMaxTokens());

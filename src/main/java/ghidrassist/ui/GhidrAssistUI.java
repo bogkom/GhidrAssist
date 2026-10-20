@@ -96,6 +96,10 @@ public class GhidrAssistUI extends JPanel {
         }
     }
 
+    public void refreshRAGDocuments() {
+        controller.refreshRAGDocuments();
+    }
+
     public JComponent getComponent() {
         return this;
     }

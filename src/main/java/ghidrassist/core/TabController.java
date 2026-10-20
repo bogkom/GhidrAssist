@@ -1229,26 +1229,111 @@ public class TabController {
 
     // ==== RAG Management Operations ====
 
+    public void handleOpenRAGSource(SearchResult result) {
+        try {
+            RAGSourceOpener.open(result);
+        } catch (Exception ex) {
+            Msg.showError(this, ragManagementTab, "Open document", ex.getMessage());
+        }
+    }
+
+
+    public void handleRAGLibrarySelection(java.util.Set<String> selected) {
+        RAGLibraries.setActive(plugin.getCurrentProgram(), selected);
+        if (ragManagementTab != null) ragManagementTab.clearSearchResults();
+    }
+
+    public void handleCreateRAGLibrary() {
+        String name = JOptionPane.showInputDialog(ragManagementTab, "Library name:", "New RAG Library",
+            JOptionPane.QUESTION_MESSAGE);
+        if (name == null) return;
+        try {
+            String id = RAGLibraries.create(name);
+            java.util.Set<String> active = RAGLibraries.active(plugin.getCurrentProgram());
+            active.add(id);
+            RAGLibraries.setActive(plugin.getCurrentProgram(), active);
+            refreshRAGDocuments();
+        } catch (Exception e) {
+            Msg.showError(this, ragManagementTab, "Library Error", e.getMessage());
+        }
+    }
+
+    public void handleRenameRAGLibrary(String id) {
+        if (id == null) return;
+        String name = JOptionPane.showInputDialog(ragManagementTab, "New library name:",
+            RAGLibraries.nameOf(id));
+        if (name == null) return;
+        try {
+            RAGLibraries.rename(id, name);
+            refreshRAGDocuments();
+        } catch (Exception e) {
+            Msg.showError(this, ragManagementTab, "Library Error", e.getMessage());
+        }
+    }
+
+    public void handleDeleteRAGLibrary(String id) {
+        if (id == null) return;
+        if (RAGLibraries.UNIVERSAL.equals(id)) {
+            Msg.showInfo(this, ragManagementTab, "Protected", "Universal library cannot be deleted.");
+            return;
+        }
+        int decision = JOptionPane.showConfirmDialog(ragManagementTab,
+            "Delete library '" + RAGLibraries.nameOf(id) + "'? Its documents will be moved to Uniwersalna.",
+            "Delete Library", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
+        if (decision != JOptionPane.YES_OPTION) return;
+        try {
+            RAGEngine.moveLibraryDocuments(id, RAGLibraries.UNIVERSAL);
+            RAGLibraries.delete(id);
+            refreshRAGDocuments();
+            ragManagementTab.clearSearchResults();
+        } catch (Exception e) {
+            Msg.showError(this, ragManagementTab, "Library Error", e.getMessage());
+        }
+    }
+
+    public void handleMoveRAGDocument(String filename) {
+        if (filename == null) return;
+        String destination = ragManagementTab.chooseTargetLibrary("Move document to library");
+        if (destination == null) return;
+        try {
+            RAGEngine.moveDocument(filename, destination);
+            refreshRAGDocuments();
+            ragManagementTab.clearSearchResults();
+        } catch (Exception e) {
+            Msg.showError(this, ragManagementTab, "Move Document Error", e.getMessage());
+        }
+    }
+
+
     /**
      * Handle adding documents to RAG index.
      */
     public void handleAddDocuments() {
-        JFileChooser fileChooser = createDocumentFileChooser();
-
-        int result = fileChooser.showOpenDialog(ragManagementTab);
-        if (result == JFileChooser.APPROVE_OPTION) {
-            lastDocumentDirectory = fileChooser.getCurrentDirectory();
-            File[] files = fileChooser.getSelectedFiles();
-            try {
-                ragManagementService.addDocuments(files);
-                refreshRAGDocuments();
-                Msg.showInfo(this, ragManagementTab, "Success", "Documents added to RAG.");
-            } catch (Exception ex) {
-                Msg.showError(this, ragManagementTab, "Error",
-                        "Failed to ingest documents: " + ex.getMessage());
+        JFileChooser chooser = createDocumentFileChooser();
+        if (chooser.showOpenDialog(ragManagementTab) != JFileChooser.APPROVE_OPTION) return;
+        lastDocumentDirectory = chooser.getCurrentDirectory();
+        final File[] files = chooser.getSelectedFiles();
+        final String libraryId = ragManagementTab.chooseTargetLibrary("Add documents to library");
+        if (libraryId == null || files.length == 0) return;
+        // Hundreds of PDF pages must not block the Swing event thread.
+        Task task = new Task("Index RAG documents", true, true, true) {
+            @Override public void run(TaskMonitor monitor) {
+                try {
+                    monitor.setMessage("Extracting PDF pages and indexing documents...");
+                    java.util.List<String> report = ragManagementService.addDocumentsWithReport(files, libraryId);
+                    SwingUtilities.invokeLater(() -> {
+                        refreshRAGDocuments();
+                        Msg.showInfo(this, ragManagementTab, "RAG Import", String.join("\n", report));
+                    });
+                } catch (Exception ex) {
+                    SwingUtilities.invokeLater(() -> Msg.showError(this, ragManagementTab,
+                        "RAG Import Failed", ex.getMessage()));
+                }
             }
-        }
+        };
+        new TaskLauncher(task, plugin.getTool().getToolFrame());
     }
+
 
     /**
      * Handle deleting a single document from RAG index.
@@ -1308,6 +1393,8 @@ public class TabController {
             return;
         }
         try {
+            ragManagementTab.updateLibraries(RAGLibraries.list(),
+                RAGLibraries.active(plugin.getCurrentProgram()));
             // Get documents with metadata
             List<RAGDocumentInfo> docs = ragManagementService.getIndexedDocumentsWithInfo();
             ragManagementTab.updateDocumentTable(docs);
@@ -1336,17 +1423,18 @@ public class TabController {
         try {
             List<SearchResult> results;
             int maxResults = 10;
+            java.util.Set<String> active = RAGLibraries.active(plugin.getCurrentProgram());
 
             switch (searchType) {
                 case "Semantic":
-                    results = ragManagementService.searchSemantic(query, maxResults);
+                    results = ragManagementService.searchSemantic(query, maxResults, active);
                     break;
                 case "Keyword":
-                    results = ragManagementService.searchKeyword(query, maxResults);
+                    results = ragManagementService.searchKeyword(query, maxResults, active);
                     break;
                 case "Hybrid":
                 default:
-                    results = ragManagementService.searchHybrid(query, maxResults);
+                    results = ragManagementService.searchHybrid(query, maxResults, active);
                     break;
             }
 
@@ -2017,7 +2105,7 @@ public class TabController {
         }
         fileChooser.addChoosableFileFilter(
             new javax.swing.filechooser.FileNameExtensionFilter(
-                "Text and Markdown Files", "txt", "md"));
+                "PDF, Text and Markdown", "pdf", "txt", "md"));
         fileChooser.addChoosableFileFilter(
             new javax.swing.filechooser.FileNameExtensionFilter(
                 "Source Code", "c", "h", "cpp", "hpp", "py", "java", "rs", "asm"));

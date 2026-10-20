@@ -4,6 +4,10 @@ import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import ghidrassist.core.RAGDocumentInfo;
+import ghidrassist.core.RAGLibraries;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.Set;
 import ghidrassist.core.SearchResult;
 import ghidrassist.core.TabController;
 
@@ -21,6 +25,13 @@ public class RAGManagementTab extends JPanel {
     private JButton refreshButton;
     private JButton deleteButton;
     private JButton clearIndexButton;
+    private JButton moveDocumentButton;
+    private JPanel libraryCheckboxPanel;
+    private JComboBox<RAGLibraries.Library> libraryManagementCombo;
+    private JButton addLibraryButton;
+    private JButton renameLibraryButton;
+    private JButton deleteLibraryButton;
+    private boolean refreshingLibraries;
 
     // Search Documents section
     private JTextField queryField;
@@ -46,10 +57,17 @@ public class RAGManagementTab extends JPanel {
         refreshButton = new JButton("Refresh");
         deleteButton = new JButton("Delete");
         clearIndexButton = new JButton("Clear Index");
+        moveDocumentButton = new JButton("Move Document");
+        libraryCheckboxPanel = new JPanel();
+        libraryCheckboxPanel.setLayout(new BoxLayout(libraryCheckboxPanel, BoxLayout.Y_AXIS));
+        libraryManagementCombo = new JComboBox<>();
+        addLibraryButton = new JButton("New");
+        renameLibraryButton = new JButton("Rename");
+        deleteLibraryButton = new JButton("Delete Library");
         statsLabel = new JLabel("Documents: 0 | Chunks: 0 | Embeddings: 0");
 
         // Document table
-        documentTableModel = new DefaultTableModel(new Object[]{"Name", "Size", "Chunks"}, 0) {
+        documentTableModel = new DefaultTableModel(new Object[]{"Name", "Library", "Size", "Chunks"}, 0) {
             private static final long serialVersionUID = 1L;
             @Override
             public boolean isCellEditable(int row, int column) {
@@ -60,8 +78,9 @@ public class RAGManagementTab extends JPanel {
         documentTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         documentTable.setRowHeight(20);
         documentTable.getColumnModel().getColumn(0).setPreferredWidth(200);
-        documentTable.getColumnModel().getColumn(1).setPreferredWidth(80);
-        documentTable.getColumnModel().getColumn(2).setPreferredWidth(60);
+        documentTable.getColumnModel().getColumn(1).setPreferredWidth(120);
+        documentTable.getColumnModel().getColumn(2).setPreferredWidth(80);
+        documentTable.getColumnModel().getColumn(3).setPreferredWidth(60);
 
         // Search components
         queryField = new JTextField(20);
@@ -90,7 +109,20 @@ public class RAGManagementTab extends JPanel {
         // Top section (header + toolbar)
         JPanel docTopPanel = new JPanel(new BorderLayout());
         docTopPanel.add(docHeader, BorderLayout.NORTH);
-        docTopPanel.add(toolbarPanel, BorderLayout.SOUTH);
+        docTopPanel.add(toolbarPanel, BorderLayout.CENTER);
+
+        JPanel librarySection = new JPanel(new BorderLayout(4, 4));
+        librarySection.setBorder(BorderFactory.createTitledBorder("Active libraries (check one or more)"));
+        JScrollPane libScroll = new JScrollPane(libraryCheckboxPanel);
+        libScroll.setPreferredSize(new Dimension(350, 105));
+        librarySection.add(libScroll, BorderLayout.CENTER);
+        JPanel libraryControls = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 1));
+        libraryControls.add(libraryManagementCombo);
+        libraryControls.add(addLibraryButton);
+        libraryControls.add(renameLibraryButton);
+        libraryControls.add(deleteLibraryButton);
+        librarySection.add(libraryControls, BorderLayout.SOUTH);
+        docTopPanel.add(librarySection, BorderLayout.SOUTH);
 
         // Bottom buttons
         JPanel docButtonPanel = new JPanel(new BorderLayout());
@@ -98,6 +130,7 @@ public class RAGManagementTab extends JPanel {
         JPanel leftButtons = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 0));
         leftButtons.add(refreshButton);
         leftButtons.add(deleteButton);
+        leftButtons.add(moveDocumentButton);
         JPanel rightButtons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 5, 0));
         rightButtons.add(clearIndexButton);
         docButtonPanel.add(leftButtons, BorderLayout.WEST);
@@ -171,6 +204,10 @@ public class RAGManagementTab extends JPanel {
         });
         refreshButton.addActionListener(e -> controller.refreshRAGDocuments());
         clearIndexButton.addActionListener(e -> controller.handleClearIndex());
+        moveDocumentButton.addActionListener(e -> controller.handleMoveRAGDocument(getSelectedDocument()));
+        addLibraryButton.addActionListener(e -> controller.handleCreateRAGLibrary());
+        renameLibraryButton.addActionListener(e -> controller.handleRenameRAGLibrary(getManagedLibraryId()));
+        deleteLibraryButton.addActionListener(e -> controller.handleDeleteRAGLibrary(getManagedLibraryId()));
         searchButton.addActionListener(e -> {
             String query = queryField.getText().trim();
             String searchType = (String) searchTypeCombo.getSelectedItem();
@@ -189,12 +226,73 @@ public class RAGManagementTab extends JPanel {
     public void updateDocumentTable(List<RAGDocumentInfo> docs) {
         documentTableModel.setRowCount(0);
         for (RAGDocumentInfo doc : docs) {
+            String library = RAGLibraries.UNIVERSAL;
+            try {
+                String stored = ghidrassist.core.RAGEngine.getDocumentLibrary(doc.getFilename());
+                if (stored != null) library = stored;
+            } catch (java.io.IOException ex) {
+                library = "?";
+            }
             documentTableModel.addRow(new Object[]{
                     doc.getFilename(),
+                    RAGLibraries.nameOf(library),
                     doc.getFormattedSize(),
                     doc.getChunkCount()
             });
         }
+    }
+
+    public void updateLibraries(List<RAGLibraries.Library> libraries, Set<String> active) {
+        refreshingLibraries = true;
+        try {
+            RAGLibraries.Library prior = (RAGLibraries.Library) libraryManagementCombo.getSelectedItem();
+            String priorId = prior == null ? null : prior.id;
+            libraryManagementCombo.removeAllItems();
+            libraryCheckboxPanel.removeAll();
+            for (RAGLibraries.Library lib : libraries) {
+                libraryManagementCombo.addItem(lib);
+                JCheckBox check = new JCheckBox(lib.name, active.contains(lib.id));
+                check.addActionListener(e -> {
+                    if (!refreshingLibraries) controller.handleRAGLibrarySelection(getCheckedLibraryIds());
+                });
+                check.putClientProperty("rag.library.id", lib.id);
+                libraryCheckboxPanel.add(check);
+                if (lib.id.equals(priorId)) libraryManagementCombo.setSelectedItem(lib);
+            }
+            libraryCheckboxPanel.revalidate();
+            libraryCheckboxPanel.repaint();
+        } finally {
+            refreshingLibraries = false;
+        }
+    }
+
+    private Set<String> getCheckedLibraryIds() {
+        Set<String> selected = new LinkedHashSet<>();
+        for (Component component : libraryCheckboxPanel.getComponents()) {
+            if (component instanceof JCheckBox) {
+                JCheckBox box = (JCheckBox) component;
+                if (box.isSelected()) selected.add((String) box.getClientProperty("rag.library.id"));
+            }
+        }
+        return selected;
+    }
+
+    public String getManagedLibraryId() {
+        RAGLibraries.Library lib = (RAGLibraries.Library) libraryManagementCombo.getSelectedItem();
+        return lib == null ? null : lib.id;
+    }
+
+    /** User explicitly selects the destination even if multiple libraries are checked. */
+    public String chooseTargetLibrary(String caption) {
+        List<RAGLibraries.Library> libraries = RAGLibraries.list();
+        JComboBox<RAGLibraries.Library> choice = new JComboBox<>(libraries.toArray(new RAGLibraries.Library[0]));
+        String managed = getManagedLibraryId();
+        for (RAGLibraries.Library lib : libraries) if (lib.id.equals(managed)) choice.setSelectedItem(lib);
+        int result = JOptionPane.showConfirmDialog(this, choice, caption,
+            JOptionPane.OK_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE);
+        if (result != JOptionPane.OK_OPTION) return null;
+        RAGLibraries.Library selected = (RAGLibraries.Library) choice.getSelectedItem();
+        return selected == null ? null : selected.id;
     }
 
     /**
@@ -248,9 +346,10 @@ public class RAGManagementTab extends JPanel {
         titleLabel.setFont(titleLabel.getFont().deriveFont(Font.BOLD));
         titleLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-        // Metadata: "Score: 60% | Type: hybrid | Chunk: 7"
+        // Show original source PDF page, not just Lucene chunk number.
         String meta = String.format("Score: %.0f%% | Type: %s | Chunk: %d",
                 result.getScore() * 100, searchType.toLowerCase(), result.getChunkId());
+        if (result.getPageNumber() > 0) meta += " | PDF page: " + result.getPageNumber();
         JLabel metaLabel = new JLabel(meta);
         metaLabel.setFont(metaLabel.getFont().deriveFont(Font.PLAIN, 10f));
         metaLabel.setForeground(Color.GRAY);
@@ -272,6 +371,19 @@ public class RAGManagementTab extends JPanel {
         panel.add(titleLabel);
         panel.add(Box.createVerticalStrut(2));
         panel.add(metaLabel);
+        if (result.isUncertainTable()) {
+            JLabel caution = new JLabel("Possible table / columns: verify exact register and bit values in source PDF.");
+            caution.setForeground(new Color(160, 90, 0));
+            caution.setAlignmentX(Component.LEFT_ALIGNMENT);
+            panel.add(caution);
+        }
+        if (result.getSourcePath() != null && !result.getSourcePath().isBlank()) {
+            JButton openSource = new JButton(result.getPageNumber() > 0
+                ? "Open source PDF - page " + result.getPageNumber() : "Open source document");
+            openSource.setAlignmentX(Component.LEFT_ALIGNMENT);
+            openSource.addActionListener(e -> controller.handleOpenRAGSource(result));
+            panel.add(openSource);
+        }
         panel.add(Box.createVerticalStrut(2));
         panel.add(contentLabel);
 
