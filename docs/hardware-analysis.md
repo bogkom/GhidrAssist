@@ -62,6 +62,37 @@ To test without recompilation: download **only** `ghidra_scripts/hardware_profil
 
 This milestone only catalogs accesses; **do not** treat immediate words written to CSBAR or CSOR as a final map. The future path-aware decoder must combine CSBAR size/base, CSOR enable/access conditions, CSPAR pin mode, bus function codes, and firmware execution phase (and recognize indirect writes). `VBR` is a CPU control register, not a memory-mapped SIM register and must be analyzed separately.
 
+### Expanded catalog: verified Ghidra script output (2026-10-20)
+
+The standalone script in family-reconnaissance mode successfully loaded 62 entries from `hardware_profiles.tsv` (66 candidate addresses total). On `ECU_FLASH 512KB.bin` it scanned 120,461 instructions and reported **111 distinct candidate instruction/address sites** and 111 XREF hits. This verifies the scanner's operation, **not** the exact microcontroller identity, bus wiring or reachability of those instructions.
+
+The candidate references group by existing Ghidra function:
+
+| Ghidra function | Entry | Matching sites |
+|---|---:|---:|
+| `fun_reset` | `0x002BC0` | 34 |
+| `configure_sim_qsm_tpu_and_chip_selects` | `0x009C96` | 31 |
+| `app_initialize_hardware` | `0x06E968` | 36 |
+| Five other functions (peripheral control and memory-test labels) | — | 10 |
+
+The three large blocks contain direct candidates for CSBAR/CSOR pairs covering CSBOOT and CS0..10. Existing function names are **labels supplied by Ghidra**, not independent verification of behavior.
+
+A comparison of **16-bit constant values written by instructions** in the three main blocks reveals seven register differences; values shown are normalized unsigned 16-bit immediates from the logged instructions:
+
+| Candidate register | `fun_reset` | `configure_sim_...` | `app_initialize_hardware` |
+|---|---:|---:|---:|
+| CSPAR1 | `0x00AA` | `0x00AB` | `0x00AB` |
+| CSOR0 | `0x3870` | `0x3830` | `0x3870` |
+| CSOR1 | `0x5870` | `0x5830` | `0x5870` |
+| CSBAR2 | `0xFFFB` | `0xFFF3` | `0xFFFB` |
+| CSOR3 | `0x7070` | `0x7030` | `0x7030` |
+| CSOR4 | `0x7000` | `0x7800` | `0x7000` |
+| CSOR10 | `0x6000` | `0x0000` | `0x6000` |
+
+**Do not interpret the table as three known runtime states or physical memory maps.** It is a static comparison of code sites across separate functions, with no proof of mutual exclusivity, execution sequence or even the exact CPU variant. Resolving chip-select windows requires verified MC68332 bitfield semantics, CSPAR/CSOR eligibility, function codes, MM/other relocations and path ordering.
+
+Investigation to follow: scan call sites to establish paths and duplicated/alternative initialization flows; decode CSBAR base/size and CSOR access flags under explicit, verified profiles; include read/modify/write, `CLR.W`, indirect addressing and width-sensitive accesses. **Flag suspicious mismatches:** the catalog currently marks TRAMMCR as 16-bit whereas this firmware contains a `MOVE.L` to candidate `0xFFFB00`; do not assume that is a valid single-register write without checking the device reference manual.
+
 ### First field-test record (2026-10-20)
 
 - Program: `ECU_FLASH 512KB.bin`; Ghidra language `68000:BE:32:CPU32`; device profile **manually selected** as `MC68332` for a provisional test, **not confirmed hardware identification**.
