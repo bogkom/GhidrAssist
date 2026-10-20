@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Map;
+import ghidrassist.hardware.ManualRegisterHints;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
@@ -62,6 +63,11 @@ public final class RAGPdfExtractor {
                     suspicious++;
                     text = "[POSSIBLE TABLE / COLUMNS: LAYOUT NOT VERIFIED; CHECK ORIGINAL PDF PAGE]"
                         + System.lineSeparator() + text;
+                }
+                // Add at most 12 *explicitly unverified* candidate row hints.
+                // Never transform layout guesses into verified register definitions.
+                if (table) {
+                    text += ManualRegisterHints.evidenceTail(page, text, 12);
                 }
                 sink.accept(page, text, table);
                 indexed++;
