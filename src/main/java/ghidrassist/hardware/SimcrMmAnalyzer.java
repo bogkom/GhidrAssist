@@ -79,7 +79,7 @@ public final class SimcrMmAnalyzer {
             StringBuilder b = new StringBuilder();
             b.append("Hardware Analysis (READ ONLY)\n");
             b.append("Profile: ").append(profile).append("\n");
-            b.append("SIMCR candidates: 0x7FFA00 / 0xFFFA00\n");
+            b.append("SIMCR candidates: 0x7FFA00 / 0xFFFA00 (16-bit), plus +1 low-byte targets\n");
             b.append("XREFs: ").append(xrefCount).append("; instructions scanned: ")
                 .append(scannedInstructionCount).append("\n");
             b.append("Set: ").append(count(Effect.SET_MM))
@@ -113,7 +113,7 @@ public final class SimcrMmAnalyzer {
         long high = profile.absoluteAddress(simcr, 1);
         Map<String, Finding> found = new LinkedHashMap<>();
         int references = 0;
-        for (long addrValue : new long[]{ low, high }) {
+        for (long addrValue : new long[]{ low, low + 1, high, high + 1 }) {
             monitor.checkCancelled();
             Address target = program.getAddressFactory().getDefaultAddressSpace()
                 .getAddress(addrValue);
@@ -152,7 +152,7 @@ public final class SimcrMmAnalyzer {
             }
             int dest = operands - 1; // Motorola syntax: destination last.
             if (!isAbsoluteDestination(insn, dest)) continue;
-            for (long addrValue : new long[]{ low, high }) {
+            for (long addrValue : new long[]{ low, low + 1, high, high + 1 }) {
                 if (!matchesAddress(insn, dest, addrValue)) continue;
                 String k = key(insn, addrValue);
                 if (!found.containsKey(k)) {
@@ -232,33 +232,40 @@ public final class SimcrMmAnalyzer {
         }
 
         long immediate = s.getUnsignedValue();
-        boolean mmBit = (immediate & HardwareProfiles.MM_MASK) != 0;
+        boolean lowByteAddress = (target & 1L) != 0;
+        int relevantMask = lowByteAddress ? 0x40 : HardwareProfiles.MM_MASK;
+        boolean mmBit = (immediate & relevantMask) != 0;
         Effect effect = Effect.UNKNOWN;
         String explanation = "Immediate value alone does not determine MM.";
         String mn = insn.getMnemonicString().toUpperCase(Locale.ROOT);
-        boolean word = mn.endsWith(".W");
-        if (m.equals("MOVE") && word) {
+        boolean word = mn.endsWith(".W") && !lowByteAddress;
+        boolean relevantByte = mn.endsWith(".B") && lowByteAddress;
+        if (m.equals("MOVE") && (word || relevantByte)) {
             effect = mmBit ? Effect.SET_MM : Effect.CLEAR_MM;
-            explanation = "16-bit immediate overwrites SIMCR, fixing the MM bit.";
-        } else if (m.equals("ORI") && word && mmBit) {
+            explanation = "Immediate overwrite of relevant SIMCR word/low-byte, fixing MM.";
+        } else if (m.equals("ORI") && (word || relevantByte) && mmBit) {
             effect = Effect.SET_MM;
             explanation = "OR mask includes MM.";
-        } else if (m.equals("ORI") && word) {
+        } else if (m.equals("ORI") && (word || relevantByte)) {
             effect = Effect.PRESERVE_MM;
             explanation = "OR mask excludes MM.";
-        } else if (m.equals("ANDI") && word && !mmBit) {
+        } else if (m.equals("ANDI") && (word || relevantByte) && !mmBit) {
             effect = Effect.CLEAR_MM;
             explanation = "AND mask clears MM.";
-        } else if (m.equals("ANDI") && word) {
+        } else if (m.equals("ANDI") && (word || relevantByte)) {
             effect = Effect.PRESERVE_MM;
             explanation = "AND mask preserves MM.";
+        } else if ((m.equals("BSET") || m.equals("BCLR")) &&
+                lowByteAddress && immediate == 6) {
+            effect = m.equals("BSET") ? Effect.SET_MM : Effect.CLEAR_MM;
+            explanation = "68k memory bit operation on SIMCR low byte at base+1, bit 6.";
         } else if (m.equals("BSET") || m.equals("BCLR")) {
-            explanation = "68k bit operations on memory are byte-sized; a write at SIMCR " +
-                "base addresses the high byte, not MM in the low byte (+1).";
-        } else if (m.equals("EORI") && word && !mmBit) {
+            effect = Effect.PRESERVE_MM;
+            explanation = "68k memory bit operation does not target MM bit 6 at SIMCR+1.";
+        } else if (m.equals("EORI") && (word || relevantByte) && !mmBit) {
             effect = Effect.PRESERVE_MM;
             explanation = "XOR mask excludes MM.";
-        } else if (m.equals("EORI") && word) {
+        } else if (m.equals("EORI") && (word || relevantByte)) {
             explanation = "XOR toggles MM; incoming MM value is required.";
         }
         return new Finding(insn.getAddress(), target, full, true,
