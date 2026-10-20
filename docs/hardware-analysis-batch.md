@@ -43,6 +43,22 @@ The optional `hardware_profiles.tsv` now includes **120 additional documented ca
 
 Primary device reference: [MC68332 User's Manual](https://www.nxp.com/docs/en/user-guide/MC68332UM.pdf), particularly system integration module and Appendix D register maps.
 
+
+## Field-test results: second batch (2026-10-20)
+
+The user successfully ran all three batch scripts on `ECU_FLASH 512KB.bin` (`68000:BE:32:CPU32`):
+
+- `GhidrAssist_ChipSelect_Map.java`: 120,461 disassembled instructions scanned; **96** candidate register sites in the chip-select-map subset (as expected, this script does not include all registers used by the broad reconnaissance scanner). Three possible configuration groups appeared in Ghidra functions `fun_reset` (31 sites; direct callers at `0x3020` and `0x3308`), `configure_sim_qsm_tpu_and_chip_selects` (28 sites; caller at `0x8468`) and `app_initialize_hardware` (31 sites; caller at `0x6E658`). Caller XREFs do **not** establish live execution.
+- `GhidrAssist_Pcode_Address_Probe.java`: 4 `MOVEC ...,VBR` candidate sites at `0x3050`, `0x8440`, `0x6E670` and `0x700A0`. Two tentative source values `0x000000`, two unresolved. **0 extra P-code / register-indirect matched addresses** — this means the current restricted algorithm found no additional candidates, *not* that indirect hardware writes do not exist.
+- `GhidrAssist_Export_Hardware_Context.java`: generated a local Markdown RAG source with **111** references across **32** distinct candidate addresses. The original CPU32-family CSV mistakenly proposed device-specific names for unverified processors; this revision intentionally suppresses those proposals in family mode.
+- The default Ghidra Save dialog originally led to names ending `.txt.md`. The exporter now converts the dialog's `.txt` extension to `.md`, and derives a matching `_name_preview.csv` filename.
+
+For potential MC68332 register semantics, **CSBOOT 512 KiB at `0x000000–0x07FFFF`** matches the firmware image size, but this is *not* proof of wiring/boot source. **CS0/CS1 both cover `0xF80000–0xF8FFFF`** with separate lower/upper BYTE assignments; **CS9 covers `0xF00000–0xFFFFFF`** but may differ by RW, bus function codes or other runtime gating. The decoder now labels shared address ranges by the known access conditions, rather than declaring every overlap a conflict.
+
+The [MC68332 User's Manual, section 4.8 and tables 4-20 through 4-22](https://www.nxp.com/docs/en/user-guide/MC68332UM.pdf) defines CSPAR 2-bit pin assignments, CSBAR block sizes, BYTE lane selection and CSOR access/function-space fields. Particular cautions: CSOR BYTE=`00` disables chip-select assertion, R/W=`00` is reserved, SPACE=`00` is CPU space rather than ordinary program/data memory, and upper/lower BYTE pairs are often intentional. Internal register/RAM accesses take precedence over matching external chip-select targets.
+
+**Still to verify:** the real processor, multi-function execution order, branch-sensitive register values, time-varying MM/TRAMBAR/VBR maps, external device wiring and u-Link NT access routes. Do not flash an inferred window or automatically modify any Ghidra symbol.
+
 ## Work remaining — seven planned areas
 
 | Planned area | Covered in batch | Important remaining tasks |

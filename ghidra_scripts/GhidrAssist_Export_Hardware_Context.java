@@ -88,6 +88,7 @@ public class GhidrAssist_Export_Hardware_Context extends GhidraScript {
           .append("- Ghidra ISA: `").append(currentProgram.getLanguageID()).append("`\n")
           .append("- User-selected reference: `").append(selected).append("`\n")
           .append("- CPU identification: **NOT PROVEN**; hardware matches are conditional\n")
+          .append("- Naming policy: CPU32 family mode emits **no device-specific label proposal**\n")
           .append("- Source for MC68332 mapping: [MC68332 User Manual](https://www.nxp.com/docs/en/user-guide/MC68332UM.pdf); match register and bit-field details against the original PDF\n")
           .append("- Critical: current MM state, CSPAR pin assignments, CSOR bus conditions, path execution and physical wiring are unresolved\n")
           .append("- u-Link NT: DO NOT treat any hypothesized window as a verified flash/RAM access region\n\n");
@@ -124,20 +125,35 @@ public class GhidrAssist_Export_Hardware_Context extends GhidraScript {
                   .append(clean(c.register)).append(" | `").append(hex(c.address))
                   .append("` | `").append(clean(existing)).append("` | ")
                   .append(lines.size()).append(" |\n");
-                String proposal=proposed(c);
+                // A CPU32 family match is not an identification of a concrete MCU.
+                // Never propose several conflicting device-specific names for one address.
+                String proposal=family?"":proposed(c);
                 boolean userName=!existing.isBlank()&&!existing.startsWith("DAT_")&&
                     !existing.startsWith("UNK_")&&!existing.startsWith("LAB_");
-                String status=userName?"KEEP EXISTING NAME":"HYPOTHESIS, MANUAL REVIEW ONLY";
-                String id=hex(c.address)+":"+proposal;
+                String status=userName?"KEEP EXISTING NAME":
+                    family?"FAMILY ONLY: NO NAME PROPOSAL":
+                        "MODEL NOT PROVEN: MANUAL REVIEW REQUIRED";
+                String id=family?hex(c.address):hex(c.address)+":"+proposal;
                 if(previewDuplicates.add(id)){
+                    String profileLabel=c.device, registerLabel=c.register;
+                    if(family){
+                        Set<String> candidateDevices=new LinkedHashSet<>();
+                        Set<String> candidateRegisters=new LinkedHashSet<>();
+                        for(Candidate alternative:pair.getValue()){
+                            candidateDevices.add(alternative.device);
+                            candidateRegisters.add(alternative.register);
+                        }
+                        profileLabel="CPU32 CANDIDATES: "+String.join("/",candidateDevices);
+                        registerLabel=String.join("/",candidateRegisters);
+                    }
                     names.append(csv(hex(c.address))).append(",")
                         .append(csv(existing)).append(",")
                         .append(csv(proposal)).append(",")
-                        .append(csv(c.device)).append(",")
-                        .append(csv(c.register)).append(",")
+                        .append(csv(profileLabel)).append(",")
+                        .append(csv(registerLabel)).append(",")
                         .append(lines.size()).append(",")
                         .append(csv(status)).append("\n");
-                    if(!userName)previewCount++;
+                    if(!userName&&!family)previewCount++;
                 }
             }
             evidence.append("### `").append(hex(pair.getKey())).append("` — ");
@@ -161,8 +177,14 @@ public class GhidrAssist_Export_Hardware_Context extends GhidraScript {
             "Save");
         if(dest==null){println("Export cancelled. No files or Ghidra database changed.");return;}
         Path markdown=dest.toPath();
-        if(!markdown.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".md"))
-            markdown=markdown.resolveSibling(markdown.getFileName()+".md");
+        if(!markdown.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".md")){
+            String name=markdown.getFileName().toString();
+            // Ghidra's generic file chooser may append .txt to the selected name.
+            // Convert that extension rather than producing a double .txt.md suffix.
+            if(name.toLowerCase(Locale.ROOT).endsWith(".txt"))
+                name=name.substring(0,name.length()-4);
+            markdown=markdown.resolveSibling(name+".md");
+        }
         String filename=markdown.getFileName().toString();
         Path csvPath=markdown.resolveSibling(filename.substring(0,filename.length()-3)+"_name_preview.csv");
         if((Files.exists(markdown)||Files.exists(csvPath)) &&
