@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Service for managing RAG (Retrieval Augmented Generation) documents.
@@ -20,11 +21,15 @@ public class RAGManagementService {
      * Add documents to the RAG index
      */
     public void addDocuments(File[] files) throws IOException {
+        addDocuments(files, ghidrassist.core.RAGLibraries.UNIVERSAL);
+    }
+
+    public void addDocuments(File[] files, String libraryId) throws IOException {
         if (files == null || files.length == 0) {
             throw new IllegalArgumentException("No files provided for ingestion.");
         }
         
-        RAGEngine.ingestDocuments(Arrays.asList(files));
+        addDocumentsWithReport(files, libraryId);
     }
     
     /**
@@ -88,8 +93,17 @@ public class RAGManagementService {
     /**
      * Perform hybrid search (combines vector and keyword search).
      */
+    public List<String> addDocumentsWithReport(File[] files, String libraryId) throws IOException {
+        if (files == null || files.length == 0)
+            throw new IllegalArgumentException("No files provided for ingestion.");
+        return RAGEngine.ingestDocumentsWithReport(Arrays.asList(files), libraryId);
+    }
+
     public List<SearchResult> searchHybrid(String query, int maxResults) throws Exception {
         return RAGEngine.hybridSearch(query, maxResults);
+    }
+    public List<SearchResult> searchHybrid(String query, int maxResults, Set<String> active) throws Exception {
+        return RAGEngine.hybridSearch(query, maxResults, active);
     }
 
     /**
@@ -98,12 +112,18 @@ public class RAGManagementService {
     public List<SearchResult> searchSemantic(String query, int maxResults) throws Exception {
         return RAGEngine.semanticSearch(query, maxResults);
     }
+    public List<SearchResult> searchSemantic(String query, int maxResults, Set<String> active) throws Exception {
+        return RAGEngine.semanticSearch(query, maxResults, active);
+    }
 
     /**
      * Perform keyword (BM25) search.
      */
     public List<SearchResult> searchKeyword(String query, int maxResults) throws Exception {
         return RAGEngine.search(query, maxResults);
+    }
+    public List<SearchResult> searchKeyword(String query, int maxResults, Set<String> active) throws Exception {
+        return RAGEngine.search(query, maxResults, active);
     }
 
     /**

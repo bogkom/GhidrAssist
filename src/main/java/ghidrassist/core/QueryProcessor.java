@@ -68,8 +68,9 @@ public class QueryProcessor {
      * @return Query with RAG context prepended
      * @throws Exception if RAG search fails
      */
-    public static String appendRAGContext(String query) throws Exception {
-        List<SearchResult> results = RAGEngine.hybridSearch(query, MAX_SEARCH_RESULTS);
+    public static String appendRAGContext(String query, GhidrAssistPlugin plugin) throws Exception {
+        List<SearchResult> results = RAGEngine.hybridSearch(query, MAX_SEARCH_RESULTS,
+            RAGLibraries.active(plugin.getCurrentProgram()));
         if (results.isEmpty()) {
             return query;
         }
@@ -81,6 +82,12 @@ public class QueryProcessor {
             contextBuilder.append("<result>\n");
             contextBuilder.append("</br><file>").append(result.getFilename()).append("</file>\n");
             contextBuilder.append("</br><chunkid>").append(result.getChunkId()).append("</chunkid>\n");
+            if (result.getPageNumber() > 0)
+                contextBuilder.append("<page>").append(result.getPageNumber()).append("</page>\n");
+            if (result.getSourcePath() != null)
+                contextBuilder.append("<source>").append(result.getSourcePath()).append("</source>\n");
+            if (result.isUncertainTable())
+                contextBuilder.append("<warning>TABLE/COLUMN LAYOUT UNVERIFIED. Do not infer exact bit-to-description mappings without checking source PDF page.</warning>\n");
             contextBuilder.append("</br><score>").append(result.getScore()).append("</score>\n");
             contextBuilder.append("</br><content>\n").append(result.getSnippet()).append("\n</content>\n");
             contextBuilder.append("\n</result>\n\n");

@@ -51,6 +51,16 @@ public class GhidrAssistPlugin extends ProgramPlugin {
     }
 
     @Override
+    protected void programActivated(Program program) {
+        super.programActivated(program);
+        if (provider != null) {
+            javax.swing.SwingUtilities.invokeLater(() -> {
+                if (provider != null) provider.getUI().refreshRAGDocuments();
+            });
+        }
+    }
+
+    @Override
     public void locationChanged(ProgramLocation loc) {
         if (provider != null) {
             provider.getUI().updateLocation(loc);

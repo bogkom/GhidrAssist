@@ -18,6 +18,7 @@ import ghidrassist.GhidrAssistPlugin;
 import ghidrassist.apiprovider.APIProvider;
 import ghidrassist.apiprovider.APIProviderConfig;
 import ghidrassist.core.TabController;
+import ghidrassist.core.MarkdownHelper;
 import ghidrassist.ui.GhidrAssistUI;
 import ghidrassist.mcp2.server.MCPServerConfig;
 import ghidrassist.mcp2.server.MCPServerRegistry;
@@ -81,6 +82,11 @@ public class SettingsTab extends JPanel {
 
     // Analysis Options section components
     private JSpinner maxToolCallsSpinner;
+
+    // Response appearance section components
+    private JComboBox<String> responseFontFamilyCombo;
+    private JSpinner responseFontSizeSpinner;
+    private JLabel responseFontPreview;
 
     // Test status indicators
     private JButton llmTestButton;
@@ -202,6 +208,30 @@ public class SettingsTab extends JPanel {
         maxToolCallsSpinner.setPreferredSize(new Dimension(75, maxToolCallsSpinner.getPreferredSize().height));
         maxToolCallsSpinner.setToolTipText("Maximum tool calls per ReAct iteration (default: 10). Plain Query/MCP mode is unlimited.");
 
+        // Use fonts installed on the user's system.
+        String[] fontFamilies = GraphicsEnvironment.getLocalGraphicsEnvironment()
+            .getAvailableFontFamilyNames();
+        responseFontFamilyCombo = new JComboBox<>(fontFamilies);
+        responseFontFamilyCombo.setPrototypeDisplayValue("DejaVu Sans Mono");
+        String savedFontFamily = MarkdownHelper.getResponseFontFamily();
+        boolean fontFound = false;
+        for (String family : fontFamilies) {
+            if (family.equals(savedFontFamily)) {
+                fontFound = true;
+                break;
+            }
+        }
+        if (!fontFound) {
+            responseFontFamilyCombo.addItem(savedFontFamily);
+        }
+        responseFontFamilyCombo.setSelectedItem(savedFontFamily);
+        responseFontFamilyCombo.setToolTipText("Font used to display AI responses in Query and Explain");
+        responseFontSizeSpinner = new JSpinner(
+            new SpinnerNumberModel(MarkdownHelper.getResponseFontSize(), 8, 36, 1));
+        responseFontSizeSpinner.setToolTipText("AI response font size in pixels (8-36)");
+        responseFontPreview = new JLabel("Preview: Aa Aa 1234 / Aa Ąą Ćć Łł Źź");
+        updateResponseFontPreview();
+
         autoSizeTableColumns(llmTable);
         autoSizeTableColumns(mcpServersTable);
     }
@@ -224,6 +254,8 @@ public class SettingsTab extends JPanel {
         contentPanel.add(createDatabasePathsSection());
         contentPanel.add(Box.createVerticalStrut(10));
         contentPanel.add(createAnalysisOptionsSection());
+        contentPanel.add(Box.createVerticalStrut(10));
+        contentPanel.add(createResponseAppearanceSection());
         contentPanel.add(Box.createVerticalGlue());
 
         JScrollPane scrollPane = new JScrollPane(contentPanel);
@@ -441,6 +473,42 @@ public class SettingsTab extends JPanel {
         return panel;
     }
 
+    private JPanel createResponseAppearanceSection() {
+        JPanel panel = new JPanel();
+        panel.setBorder(BorderFactory.createTitledBorder("Response Appearance"));
+        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+
+        JPanel fontRow = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        fontRow.add(new JLabel("Font family:"));
+        fontRow.add(responseFontFamilyCombo);
+        fontRow.add(Box.createHorizontalStrut(12));
+        fontRow.add(new JLabel("Font size (px):"));
+        fontRow.add(responseFontSizeSpinner);
+
+        JPanel previewRow = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        previewRow.add(responseFontPreview);
+        panel.add(fontRow);
+        panel.add(previewRow);
+        return panel;
+    }
+
+    private void updateResponseFontPreview() {
+        String family = (String) responseFontFamilyCombo.getSelectedItem();
+        if (family == null) family = "SansSerif";
+        int size = ((Number) responseFontSizeSpinner.getValue()).intValue();
+        responseFontPreview.setFont(new Font(family, Font.PLAIN, size));
+    }
+
+    private void saveResponseFontAppearance() {
+        String family = (String) responseFontFamilyCombo.getSelectedItem();
+        if (family == null || family.isBlank()) return;
+        int size = ((Number) responseFontSizeSpinner.getValue()).intValue();
+        Preferences.setProperty("GhidrAssist.ResponseFontFamily", family);
+        Preferences.setProperty("GhidrAssist.ResponseFontSize", Integer.toString(size));
+        Preferences.store();
+        updateResponseFontPreview();
+    }
+
     private void setupListeners() {
         // Active provider change
         activeProviderComboBox.addActionListener(e -> {
@@ -461,6 +529,11 @@ public class SettingsTab extends JPanel {
             int maxToolCalls = (Integer) maxToolCallsSpinner.getValue();
             controller.setMaxToolCalls(maxToolCalls);
         });
+
+        // Persist appearance changes immediately; preview updates without restart.
+        // Existing response HTML retains its CSS until it is rendered again.
+        responseFontFamilyCombo.addActionListener(e -> saveResponseFontAppearance());
+        responseFontSizeSpinner.addChangeListener(e -> saveResponseFontAppearance());
 
         // SymGraph key visibility toggle
         showKeyButton.addActionListener(e -> {
