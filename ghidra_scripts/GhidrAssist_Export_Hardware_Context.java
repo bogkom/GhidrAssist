@@ -133,13 +133,24 @@ public class GhidrAssist_Export_Hardware_Context extends GhidraScript {
                 String status=userName?"KEEP EXISTING NAME":
                     family?"FAMILY ONLY: NO NAME PROPOSAL":
                         "MODEL NOT PROVEN: MANUAL REVIEW REQUIRED";
-                String id=hex(c.address)+":"+proposal;
+                String id=family?hex(c.address):hex(c.address)+":"+proposal;
                 if(previewDuplicates.add(id)){
+                    String profileLabel=c.device, registerLabel=c.register;
+                    if(family){
+                        Set<String> candidateDevices=new LinkedHashSet<>();
+                        Set<String> candidateRegisters=new LinkedHashSet<>();
+                        for(Candidate alternative:pair.getValue()){
+                            candidateDevices.add(alternative.device);
+                            candidateRegisters.add(alternative.register);
+                        }
+                        profileLabel="CPU32 CANDIDATES: "+String.join("/",candidateDevices);
+                        registerLabel=String.join("/",candidateRegisters);
+                    }
                     names.append(csv(hex(c.address))).append(",")
                         .append(csv(existing)).append(",")
                         .append(csv(proposal)).append(",")
-                        .append(csv(c.device)).append(",")
-                        .append(csv(c.register)).append(",")
+                        .append(csv(profileLabel)).append(",")
+                        .append(csv(registerLabel)).append(",")
                         .append(lines.size()).append(",")
                         .append(csv(status)).append("\n");
                     if(!userName&&!family)previewCount++;
