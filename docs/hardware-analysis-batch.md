@@ -21,6 +21,16 @@ When testing this batch, run the three **new, uniquely named scripts** against t
 
 For the markdown: go to GhidrAssist's RAG tab and manually add the generated `.md` to the desired document library. This is an **import handoff**, not automatic integration or proof that AI will use the source correctly.
 
+## Expanded CPU32 family evidence catalog
+
+The optional `hardware_profiles.tsv` now includes **120 additional documented candidate entries**, on top of the earlier MC68332 index:
+
+- **MC68331:** SIMCR/MM at both module-map locations (NXP [MC68331 Technical Summary](https://www.nxp.com/docs/en/data-sheet/MC68331TS.pdf)).
+- **MC68336 and MC68376:** SIMCR/SYNCR, CSBOOT and CS0..10 CSPAR/CSBAR/CSOR, and `QADCMCR` (NXP [MC68336/376 Register Summary](https://www.nxp.com/docs/en/user-guide/MC68336376UMD.pdf)).
+- **MC68376 only:** `CANMCR` (TouCAN module at `YFF080`), which can be a useful distinguishing clue when the firmware directly accesses it.
+
+**Interpretation:** CPU32 mode will find many common SIM register addresses associated with several possible MCU models. Do not count this as multiple different hits or assign a chip model from shared register addresses. A TouCAN-specific address can strengthen a hypothesis but still does not prove physical processor identity; bus writes can refer to external peripherals, unused space or other devices. The standalone chip-select map script deliberately remains **MC68332-specific** until bitfield compatibility of other devices is implemented and verified.
+
 ## Interpretation principles
 
 1. The selected Ghidra ISA `68000:BE:32:CPU32` is **not a processor identification**. The MCU-specific meaning of 0xFFFA00 and other addresses remains conditional on the real chip.
@@ -37,7 +47,7 @@ Primary device reference: [MC68332 User's Manual](https://www.nxp.com/docs/en/us
 
 | Planned area | Covered in batch | Important remaining tasks |
 |---|---|---|
-| 1. Processor profiles and register index | Existing MC68332 TSV; script-only candidate structure | Add other **verified** concrete MCUs; widths, reset values, field tables, source page refs |
+| 1. Processor profiles and register index | MC68331/332/336/376 candidate TSV; script-only model definitions | Add other **verified** concrete MCUs; widths, reset values, field tables, source page refs |
 | 2. SIMCR/MM and related register access | Earlier scanner plus local P-code and address-register heuristics | Full intra/inter-basic-block SSA propagation, branch-sensitive execution ordering |
 | 3. Actual firmware tests | Previous scanner was tested successfully | **These three new scripts have not been run in Ghidra**; test and fix API/runtime issues |
 | 4. VBR and **all dynamic memory areas**, especially chip selects | Conditional per-function CSBAR/CSOR/CSPAR hypotheses, VBR sightings | Full state graph from reset, CSBOOT behavior, peripheral RAM, MM, access function codes, alternate buses, CPU-space and overlap priority |
