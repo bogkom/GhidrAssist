@@ -1,4 +1,3 @@
-// @category GhidrAssist.Hardware
 // Standalone read-only reconnaissance for Ghidra 12.1.4.
 // Copy this Java file into any Ghidra Script Manager directory.
 // Optionally add hardware_profiles.tsv beside it to extend MCU profiles.
@@ -272,18 +271,21 @@ public class GhidrAssist_SIMCR_MM_Report extends GhidraScript {
         boolean fullWord = !lowByte && mn.endsWith(".W");
         boolean byteLow = lowByte && mn.endsWith(".B");
         int mask = lowByte ? target.mask & 0xff : target.mask;
-        if (mask == 0 || !(fullWord || byteLow)) {
+        String op = baseMnemonic(insn);
+        boolean memoryBitOp = (op.equals("BSET") || op.equals("BCLR")) && lowByte;
+        // BSET/BCLR memory destinations are byte operations on 68k even when
+        // the printed mnemonic has no ".B" suffix.
+        if (mask == 0 || !(fullWord || byteLow || memoryBitOp)) {
             return "UNRESOLVED (access width incompatible with defined MM field)";
         }
         boolean bit = (value & mask) != 0;
-        String op = baseMnemonic(insn);
         String effect = "UNKNOWN";
         if (op.equals("MOVE")) effect = bit ? "SET_MM" : "CLEAR_MM";
         else if (op.equals("ORI")) effect = bit ? "SET_MM" : "PRESERVE_MM";
         else if (op.equals("ANDI")) effect = bit ? "PRESERVE_MM" : "CLEAR_MM";
         else if (op.equals("EORI")) effect = bit ? "TOGGLE_MM_REQUIRES_PREVIOUS_STATE" : "PRESERVE_MM";
-        else if ((op.equals("BSET") || op.equals("BCLR")) && byteLow) {
-            int bitNumber = Long.numberOfTrailingZeros(mask);
+        else if (memoryBitOp) {
+            int bitNumber = Integer.numberOfTrailingZeros(mask);
             effect = value == bitNumber ? (op.equals("BSET") ? "SET_MM" : "CLEAR_MM") :
                 "PRESERVE_MM";
         }
