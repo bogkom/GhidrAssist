@@ -70,7 +70,7 @@ public class GhidrAssist_Export_Hardware_Context extends GhidraScript {
             "Choosing a profile only labels hypotheses; no processor is identified by this action.",
             List.of("CPU32","MC68332"),"CPU32");
         boolean family=selected.equals("CPU32");
-        List<Candidate> all=catalog(getSourceFile());
+        List<Candidate> all=catalog(getSourceFile()==null?null:new java.io.File(getSourceFile().getAbsolutePath()));
         Map<Long,List<Candidate>> addresses=new LinkedHashMap<>();
         for(Candidate c:all){
             if(family?c.family.equals(selected):c.device.equals(selected)){
