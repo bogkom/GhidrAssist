@@ -19,7 +19,7 @@ Initial MC68332 register definitions in HardwareProfiles.java are based on the [
 
 ### Experimental usage
 
-Compile and install the GhidrAssist extension including the two new Java classes, then run ghidra_scripts/GhidrAssist_SIMCR_MM_Report.java from Ghidra Script Manager. Select MC68332 **only** when justified. Its output is a read-only report in the script console; the generic CPU32 choice intentionally does not enable the MCU-specific analysis. The permanent UI is planned for stage 6.
+Run ghidra_scripts/GhidrAssist_SIMCR_MM_Report.java directly in Ghidra Script Manager. It is standalone; no extension build is required for script-only updates. Select CPU32 for exploratory investigation or a concrete, evidenced device for conditional bit decoding. Output is read-only and appears in the script console. The permanent UI is planned for stage 6.
 
 ## Required stage 4: all dynamically determined address spaces
 
@@ -34,6 +34,23 @@ Compile and install the GhidrAssist extension including the two new Java classes
 - **External device association:** An address window does not prove ROM, RAM, flash or peripheral contents. Report chip-select behavior separately from board-specific wiring.
 - **u-Link NT relevance:** Provide a later export of candidate active regions with size, effective access conditions, confidence, programming/debugging caveats and exact code evidence for user review with [u-Link NT](https://www.usbjtag.com/). No physical hardware programming is implemented or assumed.
 
+
+
+### Standalone script (no extension rebuild needed)
+
+The entry-point `ghidra_scripts/GhidrAssist_SIMCR_MM_Report.java` is now a **standalone GhidraScript**. Its CPU32 mode performs cautious **family reconnaissance**, rather than stopping with an error. A selected device profile gives conditional decoding of immediate writes and reports the corresponding function. Neither mode changes the Ghidra database.
+
+Copy **only the updated Java script** into a Script Manager source directory and refresh the script list. This does not require rebuilding or reinstalling the main GhidrAssist extension. The script has built-in MC68332 SIMCR candidate locations (`0x7FFA00`, `0xFFFA00`) so it still works without any companion file.
+
+To extend it with new devices or register candidates, place `ghidra_scripts/hardware_profiles.tsv` beside the script and edit it. Its rows have seven **TAB-separated** columns:
+
+```text
+processor_id  family  register  absolute_address  width_bits  bit_mask  role
+```
+
+The spaces above are for illustration; actual entries must use TAB characters. Role `SIMCR_MM` enables *conditional* bit decoding and requires a documented, low-byte MM mask in a 16-bit register. Role `OTHER` records an access without making up bit semantics. Processor profiles must be based on documented evidence; do not copy MC68332's addresses to every CPU32 device. The optional TSV is **additional** to the built-in MC68332 profile; adding rows expands the selectable devices and families. An incorrect or conflicting row raises an error instead of being silently accepted.
+
+**Interpreting CPU32 mode:** a hit means "this instruction refers to an address used by a documented candidate device", not "this binary uses that exact chip". With the initial catalog, CPU32 uses only MC68332 candidate addresses; the scope becomes broader as verified profiles are added. Results include the containing function, existing Ghidra symbol if any, matching candidate registers and limitations. Indirect writes and actual runtime paths are not resolved yet.
 
 ### First field-test record (2026-10-20)
 
