@@ -175,8 +175,17 @@ public final class SimcrMmAnalyzer {
         for (Object o : objects) if (o instanceof Register) return false;
         String representation = insn.getDefaultOperandRepresentation(op);
         if (representation == null || representation.isBlank() ||
-            representation.contains("#") || representation.contains("(") ||
-            representation.contains("[") || representation.contains("%")) return false;
+            representation.contains("#") || representation.contains("[") ||
+            representation.contains("%")) return false;
+        // Absolute 68k operands may appear as ($FFFA00).L; parentheses
+        // are not by themselves a sign of register-indirect addressing.
+        String upper = representation.toUpperCase(Locale.ROOT);
+        for (String reg : new String[]{"A0","A1","A2","A3","A4","A5","A6","A7","PC",
+                "SP","D0","D1","D2","D3","D4","D5","D6","D7"}) {
+            if (upper.matches(".*(^|[^A-Z0-9])" + reg + "($|[^A-Z0-9]).*")) {
+                return false;
+            }
+        }
         return true;
     }
 
@@ -223,7 +232,7 @@ public final class SimcrMmAnalyzer {
         Effect effect = Effect.UNKNOWN;
         String explanation = "Immediate value alone does not determine MM.";
         String mn = insn.getMnemonicString().toUpperCase(Locale.ROOT);
-        boolean word = mn.endsWith(".W") || (!mn.contains(".") && !mn.startsWith("B"));
+        boolean word = mn.endsWith(".W");
         if (m.equals("MOVE") && word) {
             effect = mmBit ? Effect.SET_MM : Effect.CLEAR_MM;
             explanation = "16-bit immediate overwrites SIMCR, fixing the MM bit.";
@@ -239,12 +248,9 @@ public final class SimcrMmAnalyzer {
         } else if (m.equals("ANDI") && word) {
             effect = Effect.PRESERVE_MM;
             explanation = "AND mask preserves MM.";
-        } else if (m.equals("BSET") && immediate == 6) {
-            effect = Effect.SET_MM;
-            explanation = "Bit set on MM (bit 6); verify bit-operation size.";
-        } else if (m.equals("BCLR") && immediate == 6) {
-            effect = Effect.CLEAR_MM;
-            explanation = "Bit clear on MM (bit 6); verify bit-operation size.";
+        } else if (m.equals("BSET") || m.equals("BCLR")) {
+            explanation = "68k bit operations on memory are byte-sized; a write at SIMCR " +
+                "base addresses the high byte, not MM in the low byte (+1).";
         } else if (m.equals("EORI") && word && !mmBit) {
             effect = Effect.PRESERVE_MM;
             explanation = "XOR mask excludes MM.";
