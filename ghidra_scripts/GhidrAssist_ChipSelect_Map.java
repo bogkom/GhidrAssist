@@ -47,7 +47,28 @@ public class GhidrAssist_ChipSelect_Map extends GhidraScript {
     private static final class Window {
         final String id;
         final long first,last;
-        Window(String s,long f,long l){id=s;first=f;last=l;}
+        final int rw, space, byteField, portBits;
+        Window(String s,long f,long l,int rw,int space,int byteField,int portBits){
+            id=s;first=f;last=l;
+            this.rw=rw;this.space=space;
+            this.byteField=byteField;this.portBits=portBits;
+        }
+    }
+    private static boolean distinctBusSpaces(int x,int y){
+        if(x==y)return false;
+        if(x==3&&y!=0)return false;
+        if(y==3&&x!=0)return false;
+        return true;
+    }
+    private static String intersectionReason(Window a,Window b){
+        if((a.rw&b.rw)==0)
+            return "read/write conditions DISJOINT; not simultaneous selects for one transfer";
+        if(distinctBusSpaces(a.space,b.space))
+            return "CPU/user/supervisor SPACE DISJOINT; not simultaneous for one function code";
+        if(a.portBits==16&&b.portBits==16&&
+            ((a.byteField==1&&b.byteField==2)||(a.byteField==2&&b.byteField==1)))
+            return "LOWER/UPPER byte lanes; complementary for single byte transfers";
+        return "could overlap on the same bus cycle; verify priorities and external wiring";
     }
     private static String hex(long v,int len) {
         return String.format(Locale.ROOT,"0x%0"+len+"X",v);
@@ -140,9 +161,24 @@ public class GhidrAssist_ChipSelect_Map extends GhidraScript {
             case 1 -> "read";case 2 -> "write";case 3 -> "read+write";
             default -> "reserved R/W encoding";
         };
-        return "BYTE="+byteField+(byteField==0?" (disabled if 16-bit port)":"")+
-            ", R/W="+mode+", SPACE="+((opt>>4)&3)+
-            ", IPL="+((opt>>1)&7)+", DSACK="+((opt>>6)&15)+
+        String byteName=switch(byteField) {
+            case 0 -> "DISABLED";
+            case 1 -> "LOWER (16-bit port)";
+            case 2 -> "UPPER (16-bit port)";
+            default -> "BOTH (16-bit port)";
+        };
+        int space=(opt>>4)&3;
+        String spaceName=switch(space) {
+            case 0 -> "CPU";
+            case 1 -> "USER";
+            case 2 -> "SUPERVISOR";
+            default -> "USER_OR_SUPERVISOR";
+        };
+        int dsack=(opt>>6)&15;
+        String wait=dsack<=13?dsack+" WAIT":dsack==14?"FAST TERMINATION":"EXTERNAL DSACK";
+        return "BYTE="+byteField+" ["+byteName+"]"+
+            ", R/W="+mode+", SPACE="+space+" ["+spaceName+"]"+
+            ", IPL="+((opt>>1)&7)+", DSACK="+dsack+" ["+wait+"]"+
             ", MODE="+((opt>>15)&1)+", STRB="+((opt>>10)&1)+
             ", AVEC="+(opt&1);
     }
@@ -282,18 +318,28 @@ public class GhidrAssist_ChipSelect_Map extends GhidraScript {
                         (cs==-1 && pin.contains("reset mode"));
                     // Keep even possibly disabled matches for overlap investigation.
                     // CSOR BYTE is not a universal enable flag (8-bit ports differ).
-                    if(possible && or!=null)
-                        windows.add(new Window(label,start,end));
+                    if(possible && or!=null) {
+                        int opt=or.intValue(), byteField=(opt>>13)&3, rw=(opt>>11)&3;
+                        if(byteField!=0 && rw!=0) {
+                            int portBits=pin.startsWith("CS 16-bit")?16:8;
+                            windows.add(new Window(label,start,end,rw,
+                                (opt>>4)&3,byteField,portBits));
+                        }else {
+                            println("       no asserted-CS hypothesis: disabled BYTE or reserved R/W");
+                        }
+                    }
                 }
                 for(int i=0;i<windows.size();i++)
                     for(int j=i+1;j<windows.size();j++){
                         Window a=windows.get(i),b=windows.get(j);
                         if(a.first<=b.last && b.first<=a.last)
-                            println("    OVERLAP CANDIDATE "+a.id+"/"+b.id+" "+
+                            println("    SHARED ADDRESS RANGE "+a.id+"/"+b.id+" "+
                                 hex(Math.max(a.first,b.first),6)+".."+
                                 hex(Math.min(a.last,b.last),6)+
-                                " ; FC/RW/priority/board wiring unresolved");
+                                " ; "+intersectionReason(a,b));
                     }
+                println("    Conditional windows depend on CPU/function code, BYTE lane, R/W, pin mode and MM.");
+                println("    Internal module/RAM hits can suppress external CS assertions; board wiring remains unknown.");
                 println("    These windows do not prove active flash, RAM, or any u-Link NT access.");
             }
         }
