@@ -52,6 +52,16 @@ The spaces above are for illustration; actual entries must use TAB characters. R
 
 **Interpreting CPU32 mode:** a hit means "this instruction refers to an address used by a documented candidate device", not "this binary uses that exact chip". With the initial catalog, CPU32 uses only MC68332 candidate addresses; the scope becomes broader as verified profiles are added. Results include the containing function, existing Ghidra symbol if any, matching candidate registers and limitations. Indirect writes and actual runtime paths are not resolved yet.
 
+### Second field-test milestone: extended MC68332 register search
+
+After the initial CPU32 reconnaissance test on `ECU_FLASH 512KB.bin` identified three potential SIMCR/MM write sites in functions `fun_reset`, `configure_sim_qsm_tpu_and_chip_selects` and `app_initialize_hardware`, the optional `ghidra_scripts/hardware_profiles.tsv` catalog was populated with additional **documented MC68332 register-address candidates**.
+
+The catalog adds SYNCR, CSPAR0/1, CSBARBT/CSORBT, CSBAR0..10/CSOR0..10, TRAMMCR/TRAMBAR, QSMCR and TPUMCR, at both MM=0 and MM=1 locations, using Appendix D of the [MC68332 User's Manual](https://www.nxp.com/docs/en/user-guide/MC68332UM.pdf). This is an **exploratory index**, not an instruction that firmware uses MC68332 or that any chip select is active.
+
+To test without recompilation: download **only** `ghidra_scripts/hardware_profiles.tsv` from GitHub, copy it **beside the existing working Java script** in the Script Manager source directory, and run the script in `CPU32` mode. Verify that output includes `Additional hardware catalog:` with the loaded file path and new-entry count; if that line does not appear, the TSV is in the wrong directory. The Java script and extension do not need to be replaced.
+
+This milestone only catalogs accesses; **do not** treat immediate words written to CSBAR or CSOR as a final map. The future path-aware decoder must combine CSBAR size/base, CSOR enable/access conditions, CSPAR pin mode, bus function codes, and firmware execution phase (and recognize indirect writes). `VBR` is a CPU control register, not a memory-mapped SIM register and must be analyzed separately.
+
 ### First field-test record (2026-10-20)
 
 - Program: `ECU_FLASH 512KB.bin`; Ghidra language `68000:BE:32:CPU32`; device profile **manually selected** as `MC68332` for a provisional test, **not confirmed hardware identification**.
