@@ -29,8 +29,11 @@ public final class ChipSelectModelSelfTest {
             "CS0/1 byte lane split");
         ok(ChipSelectModel.overlap(csboot,cs3)==ChipSelectModel.Overlap.DIFFERENT_READ_WRITE,
             "boot and CS3 have separate R/W conditions");
-        ok(ChipSelectModel.overlap(cs4,csboot)==ChipSelectModel.Overlap.DIFFERENT_SPACE,
-            "CS4 is CPU space, boot is normal user/supervisor space");
+        ok(ChipSelectModel.overlap(cs4,csboot)==ChipSelectModel.Overlap.DIFFERENT_READ_WRITE,
+            "CS4/BOOT are R/W-disjoint; evaluate this before bus-space checks");
+        ok(ChipSelectModel.overlap(
+                d.window(4,0x03f8,0x7800,0x2f7f),csboot)==ChipSelectModel.Overlap.DIFFERENT_SPACE,
+            "when R/W overlaps, CPU space differs from normal program/data space");
         ok(cs7.hypotheticalAccess(0xff8800,false,true,false)==ChipSelectModel.Match.CONDITIONAL_MATCH,
             "conditional read from candidate external CAN base");
         ok(cs7.hypotheticalAccess(0xff8800,false,true,true)==ChipSelectModel.Match.ADDRESS_ONLY,
