@@ -138,9 +138,20 @@ public final class HardwareInventoryService {
         // constants that might accidentally equal internal-module addresses.
         InstructionIterator iterator=program.getListing().getInstructions(true);
         int scanned=0;
+        StringBuilder vbrEvidence=new StringBuilder();
+        int vbrCount=0;
         while(iterator.hasNext()){
             monitor.checkCancelled();
             Instruction i=iterator.next();scanned++;
+            if(mnemonic(i).equals("MOVEC") &&
+                    i.toString().toUpperCase(Locale.ROOT).contains("VBR")){
+                Function f=program.getFunctionManager().getFunctionContaining(i.getAddress());
+                vbrEvidence.append("- `").append(i.getAddress()).append("` `")
+                    .append(i).append("` — ")
+                    .append(f==null?"<unrecognized>":f.getName())
+                    .append("; control register operation, VBR base UNKNOWN without flow analysis\n");
+                vbrCount++;
+            }
             int last=i.getNumOperands()-1;
             if(last<0)continue;
             long addr=referenceDestination(i,last);
@@ -212,6 +223,9 @@ public final class HardwareInventoryService {
                 md.append("\n");
             }
         }
+        md.append("## VBR control register evidence (not memory-mapped SIM)\n\n")
+          .append("- Candidate MOVEC VBR instructions: ").append(vbrCount).append("\n")
+          .append(vbrEvidence).append("\n");
         md.append("## Important limitations\n\n")
           .append("1. Site order is address order, **not a proven execution trace**. Last-write-wins cannot be assumed across branches/calls.\n")
           .append("2. No constant propagation across register pointers, indirect writes, loops or interprocedural paths. Unknown writes invalidate values.\n")
