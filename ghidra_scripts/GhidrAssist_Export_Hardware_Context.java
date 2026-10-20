@@ -84,9 +84,9 @@ public class GhidrAssist_Export_Hardware_Context extends GhidraScript {
         StringBuilder md=new StringBuilder();
         StringBuilder names=new StringBuilder("address,existing_name,proposed_name,profile,register,evidence_count,status\n");
         md.append("# Hardware register hypotheses — local Ghidra evidence\n\n")
-          .append("- Program: \`").append(clean(currentProgram.getName())).append("\`\n")
-          .append("- Ghidra ISA: \`").append(currentProgram.getLanguageID()).append("\`\n")
-          .append("- User-selected reference: \`").append(selected).append("\`\n")
+          .append("- Program: `").append(clean(currentProgram.getName())).append("`\n")
+          .append("- Ghidra ISA: `").append(currentProgram.getLanguageID()).append("`\n")
+          .append("- User-selected reference: `").append(selected).append("`\n")
           .append("- CPU identification: **NOT PROVEN**; hardware matches are conditional\n")
           .append("- Source for MC68332 mapping: [MC68332 User Manual](https://www.nxp.com/docs/en/user-guide/MC68332UM.pdf); match register and bit-field details against the original PDF\n")
           .append("- Critical: current MM state, CSPAR pin assignments, CSOR bus conditions, path execution and physical wiring are unresolved\n")
@@ -112,17 +112,17 @@ public class GhidrAssist_Export_Hardware_Context extends GhidraScript {
                 if(insn==null)continue;
                 Function function=currentProgram.getFunctionManager()
                     .getFunctionContaining(insn.getAddress());
-                lines.add("- \`"+insn.getAddress()+"\` \`"+clean(insn.toString())+
-                    "\` — "+(r.getReferenceType().isWrite()?"write reference":"read/other reference")+
-                    "; Ghidra function \`"+(function==null?"?":clean(function.getName()))+"\`");
+                lines.add("- `"+insn.getAddress()+"` `"+clean(insn.toString())+
+                    "` — "+(r.getReferenceType().isWrite()?"write reference":"read/other reference")+
+                    "; Ghidra function `"+(function==null?"?":clean(function.getName()))+"`");
             }
             if(lines.isEmpty())continue;
             hitRegisters++;
             totalRefs+=lines.size();
             for(Candidate c:pair.getValue()){
                 md.append("| ").append(clean(c.device)).append(" | ")
-                  .append(clean(c.register)).append(" | \`").append(hex(c.address))
-                  .append("\` | \`").append(clean(existing)).append("\` | ")
+                  .append(clean(c.register)).append(" | `").append(hex(c.address))
+                  .append("` | `").append(clean(existing)).append("` | ")
                   .append(lines.size()).append(" |\n");
                 String proposal=proposed(c);
                 boolean userName=!existing.isBlank()&&!existing.startsWith("DAT_")&&
@@ -140,7 +140,7 @@ public class GhidrAssist_Export_Hardware_Context extends GhidraScript {
                     if(!userName)previewCount++;
                 }
             }
-            evidence.append("### \`").append(hex(pair.getKey())).append("\` — ");
+            evidence.append("### `").append(hex(pair.getKey())).append("` — ");
             for(Candidate c:pair.getValue()) evidence.append(c.device).append("/")
                 .append(c.register).append(" ");
             evidence.append("\n\n");
