@@ -1,0 +1,6 @@
+# Optional additions to GhidrAssist_SIMCR_MM_Report.java (UTF-8, TAB-separated)
+# Seven fields: processor_id<TAB>family<TAB>register<TAB>absolute_address<TAB>width_bits<TAB>bit_mask<TAB>role
+# role: SIMCR_MM (verified SIMCR/MM semantics, MM bit must be in low byte) or OTHER (generic read/write evidence only).
+# Do NOT add unverified model-specific addresses. The Java script already contains both MC68332 SIMCR candidates.
+# Duplicate identical rows are ignored; conflicting rows stop with an explicit error.
+# To add a confirmed device, append its documented register addresses below, one physical address per row.
