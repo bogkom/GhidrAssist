@@ -1,6 +1,6 @@
 # Hardware Analysis — seven-stage implementation ledger
 
-Status: **IN PROGRESS**; branch `feature/hardware-analysis-seven-stages`.
+Status: **IN PROGRESS — several implemented components, not seven fully validated stages**; branch `feature/hardware-analysis-seven-stages`.
 Last planned baseline: `master` commit `c64cff446f5b54e780ba1a83b3386ce1dd296369`.
 Owner-facing rule: **no requests for manual script tests until all seven areas have implementation and automated validations**. Work must remain restartable by checking branch commits and GitHub Actions.
 
@@ -13,6 +13,25 @@ Owner-facing rule: **no requests for manual script tests until all seven areas h
 | 5 | Safe naming workflow | preview-only CSV | Collision-safe proposal and explicit review; **never** auto-apply uncertain processor names |
 | 6 | UI and RAG context | GhidrAssist existing tabs and Markdown RAG | Integrated read-only hardware report view and source-backed, locally exportable context |
 | 7 | PDF manuals / register tables | PDFBox page-indexed RAG with uncertainty flags | Table candidate extraction with explicit page and “unverified layout” provenance, no invented semantics |
+
+## Implemented in this branch — restart checkpoint
+
+- **Stage 1/4:** `ChipSelectModel.java` implements conditional MC68332 CSBAR base/size, CSPAR pin assignments, CSOR BYTE/RW/SPACE and overlap classification with synthetic regressions. It **does not** compute live runtime states or execution history.
+- **Stage 2:** `SimcrMmAnalyzer.java` now includes width-correct direct `CLR.W` and `CLR.B` MM clear candidate classification; broader indirect/CFG propagation remains open.
+- **Stage 3:** `FirmwarePatternScanner.java` and its synthetic self-test decode only raw 68k `MOVE.W`, `MOVE.L`, `CLR.W` absolute-long patterns and `MOVEC ...,VBR`. Their matches require Ghidra disassembly validation; **no private firmware is stored in public CI**.
+- **Stage 4:** `HardwareInventoryService.java` gives user/profile-labeled read-only Ghidra evidence, conditional per-function CS snapshots and VBR sightings. No dynamic lifetime or predecessor-state claims.
+- **Stage 5:** `HardwareNamingReview.java` and integrated hardware report produce **CSV-only**, globally collision-checked label suggestions. CPU32-only mode emits no MCU-specific labels. There is no name-application code.
+- **Stage 6:** `HardwareAnalysisTab.java` is added to the extension's tab panel. It runs the scanner with a SwingWorker, exports a Markdown report for manual RAG ingestion and CSV for name review. No API credits or Ghidra project changes.
+- **Stage 7:** `ManualRegisterHints.java` adds page-scoped, **explicitly unverified** register/address text-row candidates to RAG PDF indexing when table layout is ambiguous. It never converts candidates into hardware profiles automatically.
+- CI: `hardware-profile-tests.yml` tests all pure-Java models; `hardware-extension-build.yml` builds the entire GhidrAssist extension against verified Ghidra 12.1.4. Ghidra script API build remains independent.
+
+### Original firmware private validation (outside public CI)
+
+In the private 524,288-byte test BIN, an even-offset raw byte search found **506** candidate Motorola `33 FC` patterns whose absolute long destination is in `0xFFF000–0xFFFFFF`. This is **not** 506 disassembled instructions or actual executed writes: raw patterns can occur in data and are an independent regression inventory only. Known earlier SIMCR/TRAMBAR/CSBAR7/VBR bytes matched at 13 previously recorded locations. The private file itself is never published in this repo.
+
+### Still genuinely unfinished
+
+Full multi-basic-block constant propagation, branch-aware state transitions, reset path selection, MM write-once timing, peripheral RAM relocation, chip-select bus function codes and physical wiring validation, robust PDF table geometry, and optional reversible **manually approved** renaming. Tests against the user's installed Ghidra session are still outstanding; do not describe all seven stages as complete.
 
 ## Verified test firmware facts
 
