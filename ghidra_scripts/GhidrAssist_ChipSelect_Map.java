@@ -280,7 +280,9 @@ public class GhidrAssist_ChipSelect_Map extends GhidraScript {
                         ", OR="+evidence.get("CSOR"+suffix));
                     boolean possible=pin.startsWith("CS ") ||
                         (cs==-1 && pin.contains("reset mode"));
-                    if(possible && or!=null && (((or>>13)&3)!=0))
+                    // Keep even possibly disabled matches for overlap investigation.
+                    // CSOR BYTE is not a universal enable flag (8-bit ports differ).
+                    if(possible && or!=null)
                         windows.add(new Window(label,start,end));
                 }
                 for(int i=0;i<windows.size();i++)
