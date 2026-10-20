@@ -16,6 +16,7 @@ Copy the new files from the GitHub `ghidra_scripts` directory into an **enabled 
 | `GhidrAssist_ChipSelect_Map.java` | Conditional MC68332 CSBAR, CSOR and CSPAR candidate windows per function, overlaps, direct callers, VBR sites | No |
 | `GhidrAssist_Pcode_Address_Probe.java` | P-code constant STORE addresses, conservative local address-register pointers, VBR instruction sites | No |
 | `GhidrAssist_Export_Hardware_Context.java` | Generate a Markdown evidence report suitable for manual GhidrAssist RAG import and a CSV of **review-only** candidate labels | No |
+| `GhidrAssist_MCU_Clues.java` | Compare 2 KiB versus 3.5 KiB TPURAM placement and correlate conditional CS7 `0xFF8800` windows with external CC770/82527-compatible CAN evidence | No |
 
 When testing this batch, run the three **new, uniquely named scripts** against the same Ghidra program and send their logs or generated report. There is no need to reinstall or compile the GhidrAssist extension for these script-only changes. The export script **asks you to select a destination**; it writes the Markdown and adjacent `_name_preview.csv` only after the selection. It asks confirmation before replacing either existing file. None of the scripts alters the Ghidra database.
 
@@ -71,4 +72,4 @@ The [MC68332 User's Manual, section 4.8 and tables 4-20 through 4-22](https://ww
 | 6. UI and RAG/AI | Markdown report importable in existing RAG | Native UI, evidence-backed search at analysis time, source-page citations and automatic context routing |
 | 7. Robust PDF knowledge | Existing PDF page-aware indexing from earlier work remains | Verified table/relation extraction, address and bit-field parsing with provenance, OCR optionally later |
 
-The batch is **not** a claim that all seven milestones are finished. At most it advances prototypes in several areas simultaneously. The separate reminder for reviewing dynamic chip-select maps with u-Link NT remains gated on confirmed completion of the majority of phases, including full stage 4.
+Further CPU model and external CAN evidence is in [ECU411 MCU/CAN clues](hardware-evidence-ecu411.md). The batch is **not** a claim that all seven milestones are finished. At most it advances prototypes in several areas simultaneously. The separate reminder for reviewing dynamic chip-select maps with u-Link NT remains gated on confirmed completion of the majority of phases, including full stage 4.

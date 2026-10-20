@@ -44,5 +44,6 @@ jobs:
             ghidra_scripts/GhidrAssist_SIMCR_MM_Report.java \
             ghidra_scripts/GhidrAssist_ChipSelect_Map.java \
             ghidra_scripts/GhidrAssist_Pcode_Address_Probe.java \
-            ghidra_scripts/GhidrAssist_Export_Hardware_Context.java
+            ghidra_scripts/GhidrAssist_Export_Hardware_Context.java \
+            ghidra_scripts/GhidrAssist_MCU_Clues.java
           echo "Standalone script API compilation passed"
