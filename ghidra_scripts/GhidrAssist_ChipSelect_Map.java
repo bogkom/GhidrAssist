@@ -66,6 +66,21 @@ public class GhidrAssist_ChipSelect_Map extends GhidraScript {
             !text.toUpperCase(Locale.ROOT).matches(
                 ".*(?<![A-Z0-9])(?:A[0-7]|D[0-7]|PC|SP)(?![A-Z0-9]).*");
     }
+    private static boolean isStoreSite(Instruction i,long target) {
+        String op=baseMnemonic(i);
+        if(!(op.equals("MOVE")||op.equals("CLR")||op.equals("ORI")||
+             op.equals("ANDI")||op.equals("EORI")||
+             op.equals("BSET")||op.equals("BCLR"))) return false;
+        int last=i.getNumOperands()-1;
+        if(!absoluteDestination(i,last)) return false;
+        Object[] o=i.getOpObjects(last);
+        if(o==null)return false;
+        for(Object v:o){
+            if(v instanceof Address a && a.getOffset()==target)return true;
+            if(v instanceof Scalar scalar && scalar.getUnsignedValue()==target)return true;
+        }
+        return false;
+    }
     private static Long overwrite(Instruction i) {
         String m=baseMnemonic(i);
         String full=i.getMnemonicString().toUpperCase(Locale.ROOT);
@@ -219,6 +234,11 @@ public class GhidrAssist_ChipSelect_Map extends GhidraScript {
                 for(Hit h:item.getValue()){
                     if(h.mm!=mm)continue;
                     seen++;
+                    if(!isStoreSite(h.instruction,h.target)){
+                        println("    "+h.instruction.getAddress()+" "+h.reg+
+                            " READ/REFERENCE only: "+h.instruction);
+                        continue;
+                    }
                     if(h.constant!=null) {
                         registers.put(h.reg,h.constant);
                         evidence.put(h.reg,h.instruction.getAddress());
