@@ -8,6 +8,8 @@ import ghidra.program.model.listing.Program;
 import ghidra.program.model.scalar.Scalar;
 import ghidra.program.model.symbol.Reference;
 import ghidra.program.model.symbol.ReferenceIterator;
+import ghidra.program.model.symbol.Symbol;
+import ghidra.program.model.symbol.SymbolIterator;
 import ghidra.util.exception.CancelledException;
 import ghidra.util.task.TaskMonitor;
 import java.util.ArrayList;
@@ -51,14 +53,16 @@ public final class HardwareInventoryService {
         public final int uniqueSites,functions;
         public final List<Site> sites;
         public final String markdown;
+        public final String namePreviewCsv;
         private Report(String program,String language,String selection,List<Site> sites,
-                String markdown,int functions){
+                String markdown,String namePreviewCsv,int functions){
             this.program=program;
             this.language=language;
             this.selection=selection;
             this.uniqueSites=sites.size();
             this.sites=List.copyOf(sites);
             this.markdown=markdown;
+            this.namePreviewCsv=namePreviewCsv;
             this.functions=functions;
         }
     }
@@ -232,7 +236,37 @@ public final class HardwareInventoryService {
           .append("3. CSBAR gives only a *potential* window. CSOR, CSPAR, MM, CPU function codes, exception/boot state, bus wiring and external device presence remain separate requirements.\n")
           .append("4. VBR is a CPU control register; read separate VBR analysis. A register address match is not proof of a particular physical MCU.\n")
           .append("5. This report is usable as RAG context with uncertainty preserved; do not automatically rename functions, set memory blocks or program any u-Link NT address from it.\n");
+        Map<Long,String> registerNames=new LinkedHashMap<>();
+        Map<Long,String> existingLabels=new LinkedHashMap<>();
+        Map<Long,Integer> evidenceCounts=new LinkedHashMap<>();
+        for(Site site:sites) {
+            registerNames.putIfAbsent(site.registerAddress,site.register);
+            evidenceCounts.merge(site.registerAddress,1,Integer::sum);
+        }
+        for(long address:registerNames.keySet()) {
+            monitor.checkCancelled();
+            Address pointer=program.getAddressFactory().getDefaultAddressSpace()
+                .getAddress(address);
+            Symbol existing=program.getSymbolTable().getPrimarySymbol(pointer);
+            existingLabels.put(address,existing==null?"":existing.getName());
+        }
+        Set<String> reserved=new HashSet<>();
+        // Global collision detection: a candidate label must not already
+        // exist elsewhere in the program's symbol table.
+        SymbolIterator symbols=program.getSymbolTable().getAllSymbols(true);
+        while(symbols.hasNext()){
+            monitor.checkCancelled();
+            Symbol sym=symbols.next();
+            if(sym!=null && sym.getName()!=null)reserved.add(sym.getName());
+        }
+        String csv=HardwareNamingReview.toCsv(
+            HardwareNamingReview.propose(concreteDevice,"MC68332",
+                registerNames,existingLabels,evidenceCounts,reserved));
+        md.append("\n## Naming review\n\n")
+          .append("Naming is preview-only, exported as separate CSV. ")
+          .append("Generic CPU32 mode deliberately emits no device-specific proposed names. ")
+          .append("A manually selected MCU is still unverified: review before any future application.\n");
         return new Report(program.getName(),program.getLanguageID().toString(),choice,sites,
-            md.toString(),grouped.size());
+            md.toString(),csv,grouped.size());
     }
 }
