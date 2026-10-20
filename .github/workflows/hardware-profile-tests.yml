@@ -54,7 +54,8 @@ jobs:
             src/test/java/ghidrassist/hardware/HardwareProfilesSelfTest.java \
             src/test/java/ghidrassist/hardware/ChipSelectModelSelfTest.java \
             src/test/java/ghidrassist/hardware/FirmwarePatternScannerSelfTest.java \
-            src/test/java/ghidrassist/hardware/HardwareNamingReviewSelfTest.java
+            src/test/java/ghidrassist/hardware/HardwareNamingReviewSelfTest.java \
+            src/test/java/ghidrassist/hardware/ManualRegisterHintsSelfTest.java
           java -cp "$RUNNER_TEMP/hardware-tests" \
             ghidrassist.hardware.HardwareProfilesSelfTest
           java -cp "$RUNNER_TEMP/hardware-tests" \
