@@ -121,6 +121,26 @@ https://github.com/user-attachments/assets/bd79474a-c82f-4083-b432-96625fef1387
 * (Optional) In the Analysis Options tab, set the Reasoning Effort level (None/Low/Medium/High) for models that support extended thinking.
 * Open GhidrAssist with the GhidrAssist option in the Windows menu and start exploring.
 
+## Build from Source (Ghidra 12.1.4)
+
+For users building from the GitHub source ZIP rather than installing a prebuilt extension:
+
+- **Tested build environment:** Ghidra 12.1.4 with Gradle 9.7.1.
+- **Gradle is not bundled in this repository.** GhidrAssist uses the extension build scripts supplied by the selected Ghidra installation. The required Gradle version depends on that Ghidra version; inspect `Ghidra/application.properties`.
+- **Recommended:** Use Ghidra's own Gradle wrapper. You do not need to install Gradle system-wide.
+- **Alternatives:** Use a compatible system-wide Gradle, or install a separate Gradle distribution in your home directory.
+
+From the extracted source directory on Linux/macOS:
+
+```bash
+export GHIDRA_INSTALL_DIR="/absolute/path/to/ghidra_12.1.4_PUBLIC"
+"$GHIDRA_INSTALL_DIR/support/gradle/gradlew" --no-daemon clean buildExtension
+```
+
+Run the command from the root of the extracted **GhidrAssist source** directory. The installable extension ZIP is generated in `dist/`. The GitHub **Code → Download ZIP** source archive is *not* itself an installable Ghidra extension.
+
+See [Building from Source](docs/getting-started.md#building-from-source-ghidra-1214) for prerequisite checks, Gradle installation choices, and troubleshooting.
+
 ## LLM Setup
 
 GhidrAssist works with any OpenAI v1-compatible API. Setup details are provider-specific - here are some helpful resources:
