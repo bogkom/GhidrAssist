@@ -25,7 +25,7 @@ For the markdown: go to GhidrAssist's RAG tab and manually add the generated `.m
 
 1. The selected Ghidra ISA `68000:BE:32:CPU32` is **not a processor identification**. The MCU-specific meaning of 0xFFFA00 and other addresses remains conditional on the real chip.
 2. A **CSBAR** value specifies candidate base/size only. For MC68332, the BLKSZ table is 2/8/16/64/128/256/512/1024 KiB and base address is selected by ADDR[23:11].
-3. **CSOR** constrains byte-lane, R/W, function code/address space, timing and bus response. **CSPAR** assigns pins to CS output or alternate/discrete function. Decode all together; boot CS has distinct reset rules. For an 8-bit port the BYTE field has special relevance and must not be used as a universal enable bit.
+3. **CSOR** constrains byte-lane, R/W, function code/address space, timing and bus response. **CSPAR** assigns pins to CS output or alternate/discrete function. Decode all together; boot CS has distinct reset rules. The CSOR BYTE field is relevant to 16-bit port handling and must not be used as a universal enable bit for every port.
 4. MM is write-once after reset on MC68332. Reports group candidate register writes **within individual disassembled functions only**, in Listing order; they do not prove reset order, branch reachability or last-write-wins across actual execution paths.
 5. Possible address-window **overlap is not a definitive conflict**, since bus function codes, R/W, priorities, reset state and pin modes may make windows mutually exclusive.
 6. VBR is a CPU control register, not the SIM memory map. It must be resolved separately. Likewise, TRAMBAR and other movable internal regions require verified bit-field decoding.
