@@ -37,6 +37,7 @@ and hardware wiring are **not automatically proven**.
 - [Seven-stage implementation ledger and current checkpoint](hardware-seven-stage-progress.md)
 - [Hardware Analysis](hardware-analysis.md) and [Review / Apply](hardware-review-apply.md)
 - [Source-backed MC68332 profiles](hardware-sourced-profiles.md)
+- [Recommended CPU32/MC683xx RAG manuals: editions, split appendices and page indexes](rag-cpu32-manual-catalog.md)
 - [Indexed addressing](hardware-indexed-addressing.md) and [MM write candidate history](hardware-mm-write-history.md)
 - [Function naming review](hardware-function-naming-review.md) and [AI/RAG evidence selection](hardware-rag-relevance.md)
 

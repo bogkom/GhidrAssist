@@ -23,7 +23,7 @@ public final class ManualModuleTable {
     private static final Pattern TITLE = Pattern.compile(
         "(?is)\\bTable\\s+D[-–]1\\s+Module\\s+Address\\s+Map\\b");
     private static final Pattern NAME = Pattern.compile(
-        "[A-Z][A-Z0-9/]*(?: [A-Z][A-Z0-9/]*){0,3}");
+        "[A-Z][A-Z0-9/]*(?: [A-Z0-9/()]+){0,4}");
     private static final Pattern ADDRESS = Pattern.compile(
         "(?i)(?:\\$Y[0-9A-F]{5}|\\$[0-9A-F]{6}|0X[0-9A-F]{6})");
 
@@ -46,6 +46,8 @@ public final class ManualModuleTable {
         /** The MM=1 interpretation of $Yxxxx, or the literal 24-bit base. */
         public final long candidateBase;
         public final boolean mmDependent;
+        /** Model-specific qualifier printed in the table, otherwise unknown. */
+        public final String modelConstraint;
         public final String provenance;
 
         private Candidate(int page, String module, int size, String printed,
@@ -56,6 +58,8 @@ public final class ManualModuleTable {
             baseAsPrinted = printed;
             candidateBase = address;
             mmDependent = dependent;
+            modelConstraint=module.contains("(MC68376 ONLY)") ?
+                "MC68376_ONLY" : "UNSPECIFIED_IN_ROW";
             provenance = "PDF_PAGE_COORDINATES; HEADER_MATCH; DEVICE_UNVERIFIED";
         }
 
@@ -64,6 +68,7 @@ public final class ManualModuleTable {
                 " size_bytes=" + sizeBytes + " base_as_printed=" + baseAsPrinted +
                 " base_if_MM1=0x" + String.format(Locale.ROOT, "%06X", candidateBase) +
                 " mapping=" + (mmDependent ? "MM_DEPENDENT_Y" : "LITERAL") +
+                " model_constraint=" + modelConstraint +
                 " confidence=LAYOUT_ALIGNED_CANDIDATE device=UNVERIFIED";
         }
     }
@@ -98,7 +103,9 @@ public final class ManualModuleTable {
             int bytes;
             try { bytes = Integer.parseInt(size.value); }
             catch (NumberFormatException invalid) { continue; }
-            if (bytes > 4096 || (bytes & (bytes - 1)) != 0) continue;
+            // Non-power-of-two module apertures exist (MC68376 TouCAN:
+            // 384 bytes); 8-bit-word alignment of registers is separate.
+            if (bytes > 4096) continue;
 
             List<String> segments = new ArrayList<>();
             for (int i = 0; i < line.size()-2; i++)

@@ -9,6 +9,7 @@ import java.util.HashMap;
 import java.util.Map;
 import ghidrassist.hardware.ManualRegisterHints;
 import ghidrassist.hardware.ManualModuleTable;
+import ghidrassist.hardware.ManualDocumentScope;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
@@ -45,6 +46,8 @@ public final class RAGPdfExtractor {
             }
             final int count = pdf.getNumberOfPages();
             if (count == 0) throw new IOException("PDF has no pages: " + source.getName());
+            ManualDocumentScope.Identity identity =
+                ManualDocumentScope.fromFilename(source.getName());
             int indexed = 0;
             int blank = 0;
             int suspicious = 0;
@@ -75,6 +78,9 @@ public final class RAGPdfExtractor {
                 // Spatially aligned rows are still unverified device candidates;
                 // never mutate a CPU profile or memory map during ingestion.
                 text += moduleRows;
+                // Metadata comes from the original filename, not inferred MCU
+                // identity; per-page text always retains this distinction.
+                text = identity.evidence(page) + System.lineSeparator() + text;
                 sink.accept(page, text, table);
                 indexed++;
             }
