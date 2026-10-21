@@ -381,6 +381,8 @@ public final class GhidraHardwareFlowService {
                                 Integer.toString(hit.priorMmCandidateMax))
                             .append("; unknown called-code effects=")
                             .append(hit.priorUnknownCall)
+                            .append("; earlier unknown-destination STORE=")
+                            .append(hit.priorUnknownStore)
                             .append("; MM write-once after reset: first successful "+
                                 "write UNKNOWN");
                     }
@@ -403,7 +405,8 @@ public final class GhidraHardwareFlowService {
         StringBuilder out=new StringBuilder();
         out.append("## CFG/P-code hardware evidence (read-only)\n\n")
            .append("Only predecessor-agreed intraprocedural constants survive branch joins. ")
-           .append("Calls invalidate propagated registers and peripheral state; ")
+           .append("Calls and unknown-destination memory stores invalidate "+
+               "previous peripheral constants; ")
            .append("indirect jumps, pointer aliases and real execution are not proven.\n")
            .append("SIMCR write histories are bounded *local* candidate counts, "+
                "NOT counts since the hardware reset. Unresolved indirect writes "+
