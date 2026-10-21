@@ -113,6 +113,50 @@ public final class HardwareDataflowSelfTest {
         ok(disagreeingIndex.snapshots.get(0).effectiveAddress==null,
             "different predecessors must invalidate index address");
 
+        var repeatedMm=HardwareDataflow.analyze(0,List.of(
+            st(0,STORE_DIRECT,null,simcr,0,0x40ca,16,2L),
+            st(2,STORE_DIRECT,null,simcr,0,0x4848,16)
+        ),Set.of(simcr),100);
+        ok(repeatedMm.snapshots.get(0).priorMmCandidateMin==0 &&
+            repeatedMm.snapshots.get(0).priorMmCandidateMax==0,
+            "first local candidate has no prior matched writes");
+        ok(repeatedMm.snapshots.get(1).priorMmCandidateMin==1 &&
+            repeatedMm.snapshots.get(1).priorMmCandidateMax==1,
+            "later site has preceding candidate; not proof of MM write success");
+
+        var forkMm=HardwareDataflow.analyze(0,List.of(
+            st(0,OTHER,null,0,0,null,0,2L,4L),
+            st(2,STORE_DIRECT,null,simcr,0,0x40ca,16,6L),
+            st(4,OTHER,null,0,0,null,0,6L),
+            st(6,STORE_DIRECT,null,simcr,0,0x4848,16)
+        ),Set.of(simcr),100);
+        ok(forkMm.snapshots.get(1).priorMmCandidateMin==0 &&
+            forkMm.snapshots.get(1).priorMmCandidateMax==1,
+            "optional predecessor MM write retained as path range");
+
+        var callMm=HardwareDataflow.analyze(0,List.of(
+            st(0,STORE_DIRECT,null,simcr,0,0x40ca,16,2L),
+            st(2,CALL_BARRIER,null,0,0,null,0,4L),
+            st(4,STORE_DIRECT,null,simcr,0,0x4848,16)
+        ),Set.of(simcr),100);
+        ok(callMm.snapshots.get(1).priorMmCandidateMin==1 &&
+            callMm.snapshots.get(1).priorUnknownCall,
+            "calls make hardware status uncertain, preserving local candidate history");
+
+        var mmLowByte=HardwareDataflow.analyze(0,List.of(
+            st(0,STORE_DIRECT,null,simcr+1,0,0x40,8,2L),
+            st(2,STORE_DIRECT,null,simcr,0,0x40ca,16)
+        ),Set.of(simcr),100);
+        ok(mmLowByte.snapshots.get(1).priorMmCandidateMax==1,
+            "byte write to low MM bit must count as prior candidate");
+
+        var otherPeriph=HardwareDataflow.analyze(0,List.of(
+            st(0,STORE_DIRECT,null,cs7,0,0xff88,16,2L),
+            st(2,STORE_DIRECT,null,simcr,0,0x40ca,16)
+        ),Set.of(simcr,cs7),100);
+        ok(otherPeriph.snapshots.get(1).priorMmCandidateMax==0,
+            "CSBAR is not SIMCR MM write");
+
         var trunc=HardwareDataflow.analyze(0,List.of(
             st(0,STORE_DIRECT,null,simcr,0,0x40ca,16,2L),
             st(2,OTHER,null,0,0,null,0)
