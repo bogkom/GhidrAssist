@@ -83,6 +83,8 @@ public class GhidrAssistUI extends JPanel {
             if (tabbedPane.getSelectedComponent() == settingsTab) {
                 // Load current context when Settings tab is selected
                 controller.handleContextLoad();
+            } else if (tabbedPane.getSelectedComponent() == hardwareAnalysisTab) {
+                hardwareAnalysisTab.refreshAppearance();
             } else if (tabbedPane.getSelectedComponent() == symGraphTab) {
                 // Update binary info when SymGraph tab is selected
                 controller.updateSymGraphBinaryInfo();
