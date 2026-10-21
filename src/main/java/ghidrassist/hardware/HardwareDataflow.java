@@ -27,13 +27,14 @@ public final class HardwareDataflow {
     public static final long MASK24=0xffffffL;
 
     public enum Kind {
-        OTHER, SET_POINTER, ADJUST_POINTER, CLOBBER_POINTER,
+        OTHER, SET_POINTER, COPY_POINTER, ADJUST_POINTER, CLOBBER_POINTER,
         STORE_DIRECT, STORE_INDIRECT, VBR_FROM_REGISTER, VBR_CONSTANT, CALL_BARRIER
     }
     public static final class Step {
         public final long address;
         public final Kind kind;
         public final String register;
+        public final String sourceRegister;
         public final long operand;
         public final long displacement;
         public final Integer literalWord;
@@ -43,7 +44,17 @@ public final class HardwareDataflow {
         public Step(long address,Kind kind,String register,long operand,long displacement,
                     Integer literalWord,int writeBits,Collection<Long> successors,String mnemonic){
             this.address=address;this.kind=Objects.requireNonNull(kind);
-            this.register=register;this.operand=operand;this.displacement=displacement;
+            this.register=register;this.sourceRegister=null;
+            this.operand=operand;this.displacement=displacement;
+            this.literalWord=literalWord;this.writeBits=writeBits;
+            this.successors=List.copyOf(successors);this.mnemonic=mnemonic==null?"":mnemonic;
+        }
+        public Step(long address,Kind kind,String register,String sourceRegister,long operand,
+                    long displacement,Integer literalWord,int writeBits,
+                    Collection<Long> successors,String mnemonic){
+            this.address=address;this.kind=Objects.requireNonNull(kind);
+            this.register=register;this.sourceRegister=sourceRegister;
+            this.operand=operand;this.displacement=displacement;
             this.literalWord=literalWord;this.writeBits=writeBits;
             this.successors=List.copyOf(successors);this.mnemonic=mnemonic==null?"":mnemonic;
         }
@@ -57,9 +68,9 @@ public final class HardwareDataflow {
         public final Long vbr;
         public final Map<Long,Integer> knownPeripheralWords;
         public final boolean indirect;
-        private Snapshot(Step step,Long address,State after) {
+        private Snapshot(Step step,Long address,Integer value,State after) {
             instruction=step.address;kind=step.kind;effectiveAddress=address;
-            writtenWord=step.literalWord;pointerRegister=step.register;
+            writtenWord=value;pointerRegister=step.register;
             vbr=after.vbr;
             knownPeripheralWords=Map.copyOf(after.peripherals);
             indirect=step.kind==Kind.STORE_INDIRECT;
@@ -105,11 +116,22 @@ public final class HardwareDataflow {
         }
         return null;
     }
+    private static Long knownStoreValue(Step step,State s) {
+        if(step.literalWord!=null)return step.literalWord.longValue();
+        return step.sourceRegister==null?null:s.pointers.get(step.sourceRegister);
+    }
     private static State transfer(Step step,State in,Set<Long> targets){
         State s=in.copy();
         switch(step.kind) {
             case SET_POINTER -> {
                 if(step.register!=null)s.pointers.put(step.register,step.operand&MASK24);
+            }
+            case COPY_POINTER -> {
+                if(step.register!=null){
+                    Long source=s.pointers.get(step.sourceRegister);
+                    if(source==null)s.pointers.remove(step.register);
+                    else s.pointers.put(step.register,source);
+                }
             }
             case ADJUST_POINTER -> {
                 if(step.register!=null){
@@ -126,8 +148,9 @@ public final class HardwareDataflow {
                 if(address!=null && targets.contains(address)){
                     // Only full 16-bit immediate overwrites are firm register
                     // constants; BCLR, BSET, MOVE.B and MOVE.L remain unknown.
-                    if(step.writeBits==16 && step.literalWord!=null)
-                        s.peripherals.put(address,step.literalWord&0xffff);
+                    Long known=knownStoreValue(step,in);
+                    if(step.writeBits==16 && known!=null)
+                        s.peripherals.put(address,(int)(known&0xffff));
                     else s.peripherals.remove(address);
                 }
             }
@@ -189,7 +212,9 @@ public final class HardwareDataflow {
                     step.kind==Kind.VBR_CONSTANT||step.kind==Kind.VBR_FROM_REGISTER){
                 Long effective=resolve(step,before);
                 State after=transfer(step,before,targets);
-                found.add(new Snapshot(step,effective,after));
+                Long value=knownStoreValue(step,before);
+                found.add(new Snapshot(step,effective,
+                    step.writeBits==16 && value!=null?(int)(value&0xffff):null,after));
             }
         }
         return new Result(found,input.size(),iterations,truncated,pointers);
