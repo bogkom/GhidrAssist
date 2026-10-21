@@ -33,10 +33,18 @@ public final class HardwareEvidenceCache {
     }
     /** Automatically use a small sourced excerpt only for relevant queries. */
     public static String enrich(Program program,String request){
+        return enrich(program,request,request);
+    }
+    /**
+     * Judge relevance against the original user's words, not an earlier RAG
+     * snippet that may contain unrelated hardware terminology.
+     */
+    public static String enrich(Program program,String request,String userIntent){
         if(request==null)return "";
-        boolean requested=request.toLowerCase(Locale.ROOT).contains("#hardware");
+        String intent=userIntent==null?"":userIntent;
+        boolean requested=intent.toLowerCase(Locale.ROOT).contains("#hardware");
         String cleaned=request.replaceAll("(?i)#hardware\\b","");
-        if(!requested && !HARDWARE_WORDS.matcher(request).find())return request;
+        if(!requested && !HARDWARE_WORDS.matcher(intent).find())return request;
         if(program==null)return cleaned;
         String markdown;
         synchronized(CACHE){markdown=CACHE.get(program);}
@@ -44,7 +52,7 @@ public final class HardwareEvidenceCache {
             return requested ?
                 "[Hardware Analysis was not run for this program. Do not infer results.]\n"+
                 cleaned : cleaned;
-        String selected=HardwareContextSelector.select(markdown,request,9000);
+        String selected=HardwareContextSelector.select(markdown,intent,9000);
         return selected.isBlank()?cleaned:selected+"\n"+cleaned;
     }
 }
