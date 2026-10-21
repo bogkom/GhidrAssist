@@ -187,6 +187,28 @@ public final class HardwareDataflowSelfTest {
         ok(longOverwrite.snapshots.get(2).knownPeripheralWords.containsKey(simcr),
             "known SIMCR value can be re-established after clobber");
 
+        var postIncrement=HardwareDataflow.analyze(0,List.of(
+            st(0,SET_POINTER,"A0",simcr,0,null,0,2L),
+            st(2,STORE_INDIRECT,"A0",0,0,0x40ca,16,4L)
+                .withSideEffects(Set.of("A0")),
+            st(4,STORE_INDIRECT,"A0",0,0,0x4848,16)
+        ),Set.of(simcr),100);
+        ok(postIncrement.snapshots.get(0).effectiveAddress==simcr,
+            "modeled first store uses pre-update base address");
+        ok(postIncrement.snapshots.get(1).effectiveAddress==null,
+            "post-increment base cannot be reused without explicit updated value");
+        ok(postIncrement.snapshots.get(1).priorUnknownStore==false,
+            "unknown second store is a barrier after its own evaluation");
+
+        var inputIncrement=HardwareDataflow.analyze(0,List.of(
+            st(0,SET_POINTER,"A3",simcr,0,null,0,2L),
+            st(2,CLOBBER_POINTER,"D0",0,0,null,0,4L)
+                .withSideEffects(HardwareAutoUpdateRegisters.changedByOperand("(A3)+")),
+            st(4,STORE_INDIRECT,"A3",0,0,0x40ca,16)
+        ),Set.of(simcr),100);
+        ok(inputIncrement.snapshots.get(0).effectiveAddress==null,
+            "source-side pre/post update invalidates A3 even if destination was D0");
+
         var trunc=HardwareDataflow.analyze(0,List.of(
             st(0,STORE_DIRECT,null,simcr,0,0x40ca,16,2L),
             st(2,OTHER,null,0,0,null,0)
