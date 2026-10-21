@@ -49,6 +49,10 @@ public final class HardwareContextSelector {
             segments.add(new Segment(text,score));
         }
         segments.sort(Comparator.comparingInt((Segment s)->s.score).reversed());
+        // A focused register query should not absorb unrelated functions
+        // merely because the context budget has unused space. In particular,
+        // telemetry and other non-hardware segments are not added as filler.
+        boolean matched=segments.stream().anyMatch(s->s.score>0);
         String intro="<<<LOCAL_GHIDRA_HARDWARE_EVIDENCE>>>\n"+
             "Source: GhidrAssist Hardware Analysis of current Ghidra program; "+
             "NOT an ECU hardware readback.\n"+
@@ -59,6 +63,7 @@ public final class HardwareContextSelector {
         StringBuilder out=new StringBuilder(intro);
         int allowance=maxChars-end.length();
         for(Segment item:segments){
+            if(matched && !keywords.isEmpty() && item.score==0)continue;
             if(out.length()+item.text.length()+2>allowance){
                 int available=allowance-out.length()-42;
                 if(available>180 && (item.score>0 || out.length()==intro.length())) {
