@@ -51,10 +51,10 @@ public final class HardwareAnalysisTab extends JPanel {
         "CPU32 — survey MC68332 address hypotheses",
         "MC68332 — user-selected device hypothesis"
     });
-    private final JButton run=new JButton("Analyze current program");
-    private final JButton export=new JButton("Export evidence Markdown for RAG");
-    private final JButton namePreview=new JButton("Export naming review CSV");
-    private final JButton approve=new JButton("Review / Apply hardware definitions...");
+    private final JButton run=new JButton("Analyze");
+    private final JButton export=new JButton("Export MD");
+    private final JButton namePreview=new JButton("Export CSV");
+    private final JButton approve=new JButton("Review / Apply...");
     private final JTextArea report=new JTextArea();
     private final JLabel status=new JLabel("Open a Ghidra program, then analyze candidate MCU registers.");
     private volatile String latestMarkdown;
@@ -65,13 +65,22 @@ public final class HardwareAnalysisTab extends JPanel {
     public HardwareAnalysisTab(GhidrAssistPlugin plugin){
         super(new BorderLayout(5,5));
         this.plugin=plugin;
-        JPanel controls=new JPanel(new FlowLayout(FlowLayout.LEFT,5,3));
-        controls.add(new JLabel("Profile:"));
-        controls.add(selection);
-        controls.add(run);
-        controls.add(export);
-        controls.add(namePreview);
-        controls.add(approve);
+        // Two compact rows remain usable in narrow docked Ghidra windows.
+        JPanel controls=new JPanel(new BorderLayout(0,2));
+        JPanel profileRow=new JPanel(new FlowLayout(FlowLayout.LEFT,5,1));
+        profileRow.add(new JLabel("Profile:"));
+        profileRow.add(selection);
+        JPanel actionRow=new JPanel(new FlowLayout(FlowLayout.LEFT,5,1));
+        actionRow.add(run);
+        actionRow.add(approve);
+        actionRow.add(export);
+        actionRow.add(namePreview);
+        controls.add(profileRow,BorderLayout.NORTH);
+        controls.add(actionRow,BorderLayout.CENTER);
+        run.setToolTipText("Scan the currently active Ghidra program (read-only)");
+        approve.setToolTipText("Review proposed memory regions/registers and apply selected items in an undoable transaction");
+        export.setToolTipText("Export Hardware Evidence as Markdown for RAG");
+        namePreview.setToolTipText("Export review-only hardware label suggestions as CSV");
         approve.setEnabled(false);
         export.setEnabled(false);
         namePreview.setEnabled(false);
