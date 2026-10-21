@@ -148,13 +148,31 @@ public final class GhidraHardwareFlowService {
     }
     private static HardwareDataflow.Step translate(Instruction i,Function function){
         HardwareDataflow.Step modeled=translateCore(i,function);
-        // A source operand such as (A0)+ also changes A0, even if a MOVE
-        // writes to D0. The modeled destination alone is not enough to
-        // preserve a sound pointer constant at the NEXT instruction.
-        LinkedHashSet<String> clobbers=new LinkedHashSet<>();
+        // P-code output varnodes expose implicit and multi-register updates
+        // invisible to the mnemonic parser (EXG, MOVEM load, LINK/UNLK, etc.).
+        // Unknown/partial register definitions invalidate the full A/D
+        // constant. Only an explicitly modeled destination can retain its
+        // newly computed value.
+        LinkedHashSet<String> written=new LinkedHashSet<>();
+        PcodeOp[] pcode=i.getPcode();
+        if(pcode!=null)for(PcodeOp p:pcode) {
+            Varnode out=p.getOutput();
+            if(out==null || !out.isRegister())continue;
+            Register reg=i.getProgram().getLanguage()
+                .getRegister(out.getAddress(),out.getSize());
+            if(reg==null)continue;
+            Register base=reg.getBaseRegister();
+            String name=(base==null?reg:base).getName().toUpperCase(Locale.ROOT);
+            if(name.matches("[AD][0-7]"))written.add(name);
+        }
         for(int slot=0;slot<i.getNumOperands();slot++)
-            clobbers.addAll(HardwareAutoUpdateRegisters.changedByOperand(op(i,slot)));
-        return modeled.withSideEffects(clobbers);
+            written.addAll(HardwareAutoUpdateRegisters.changedByOperand(op(i,slot)));
+        if(modeled.kind==HardwareDataflow.Kind.SET_POINTER ||
+                modeled.kind==HardwareDataflow.Kind.COPY_POINTER ||
+                modeled.kind==HardwareDataflow.Kind.ADJUST_POINTER ||
+                modeled.kind==HardwareDataflow.Kind.CLOBBER_POINTER)
+            written.remove(modeled.register);
+        return modeled.withSideEffects(written);
     }
 
     private static HardwareDataflow.Step translateCore(Instruction i,Function function){
