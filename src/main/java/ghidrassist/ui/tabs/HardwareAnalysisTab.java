@@ -2,11 +2,18 @@ package ghidrassist.ui.tabs;
 
 import ghidrassist.GhidrAssistPlugin;
 import ghidrassist.hardware.HardwareInventoryService;
+import ghidrassist.core.MarkdownHelper;
+import ghidra.app.services.GoToService;
+import ghidra.program.model.address.Address;
 import ghidra.program.model.listing.Program;
 
 import java.awt.BorderLayout;
 import java.awt.FlowLayout;
 import java.awt.Font;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -28,6 +35,8 @@ import javax.swing.filechooser.FileNameExtensionFilter;
  */
 public final class HardwareAnalysisTab extends JPanel {
     private static final long serialVersionUID=1L;
+    private static final Pattern LINK_ADDRESS=Pattern.compile(
+        "(?i)(?<![0-9a-f])(?:FUN_)?(?:0x)?([0-9a-f]{6,8})(?![0-9a-f])");
     private final GhidrAssistPlugin plugin;
     private final JComboBox<String> selection=new JComboBox<>(new String[]{
         "CPU32 — survey MC68332 address hypotheses",
@@ -54,7 +63,13 @@ public final class HardwareAnalysisTab extends JPanel {
         export.setEnabled(false);
         namePreview.setEnabled(false);
         report.setEditable(false);
-        report.setFont(new Font(Font.MONOSPACED,Font.PLAIN,12));
+        refreshAppearance();
+        report.setToolTipText("Double-click an address or FUN_... to navigate in Ghidra Listing");
+        report.addMouseListener(new MouseAdapter(){
+            @Override public void mouseClicked(MouseEvent e){
+                if(e.getClickCount()==2) navigateFromReport(e);
+            }
+        });
         report.setText(
             "Hardware Analysis (READ ONLY)\n\n"+
             "This tab scans existing Ghidra code references to candidate\n"+
@@ -74,6 +89,43 @@ public final class HardwareAnalysisTab extends JPanel {
         namePreview.addActionListener(e->exportNamingPreview());
     }
 
+    /** Uses the very same saved settings as Settings > Response Appearance. */
+    public void refreshAppearance(){
+        String family=MarkdownHelper.getResponseFontFamily();
+        int size=MarkdownHelper.getResponseFontSize();
+        report.setFont(new Font(family==null?Font.MONOSPACED:family,Font.PLAIN,size));
+    }
+    private void navigateFromReport(MouseEvent event){
+        int clicked=report.viewToModel2D(event.getPoint());
+        if(clicked<0)return;
+        String text=report.getText();
+        if(clicked>=text.length())return;
+        int from=text.lastIndexOf('\\n',clicked)+1;
+        int end=text.indexOf('\\n',clicked);
+        if(end<0)end=text.length();
+        Matcher match=LINK_ADDRESS.matcher(text.substring(from,end));
+        while(match.find()){
+            if(clicked-from<match.start()||clicked-from>match.end())continue;
+            Program program=plugin.getCurrentProgram();
+            if(program==null || program!=latestProgram){
+                status.setText("Program changed; rerun Hardware Analysis before navigating.");
+                return;
+            }
+            try{
+                long offset=Long.parseUnsignedLong(match.group(1),16);
+                Address address=program.getAddressFactory().getDefaultAddressSpace()
+                    .getAddress(offset);
+                GoToService service=plugin.getTool().getService(GoToService.class);
+                if(service==null || !service.goTo(address,program))
+                    status.setText("Could not navigate to "+address+
+                        ". Define memory there if the address is not mapped.");
+                else status.setText("Listing: "+address);
+            }catch(Exception ex){
+                status.setText("Address navigation error: "+ex.getMessage());
+            }
+            return;
+        }
+    }
     private void startScan(){
         final Program program=plugin.getCurrentProgram();
         if(program==null){
