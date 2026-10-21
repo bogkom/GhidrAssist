@@ -162,21 +162,16 @@ public final class HardwareApplyService {
         // Existing user-approved register types remain in the original blocks.
         // Fill missing gaps, then join contiguous UNINITIALIZED default blocks.
         List<MemoryBlock> chain=new ArrayList<>(parts);
-        long next=item.address;
+        List<HardwareRegionLayout.Range> existingRanges=new ArrayList<>();
+        for(MemoryBlock part:parts)
+            existingRanges.add(new HardwareRegionLayout.Range(
+                part.getStart().getOffset(),part.getEnd().getOffset()));
         int suffix=0;
-        for(MemoryBlock part:parts){
-            long begin=part.getStart().getOffset();
-            if(begin>next){
-                MemoryBlock gap=m.createUninitializedBlock(item.name+"_GAP_"+(++suffix),
-                    address(p,next),begin-next,false);
-                gap.setRead(true);gap.setWrite(true);gap.setExecute(false);
-                chain.add(gap);
-            }
-            next=part.getEnd().getOffset()+1;
-        }
-        if(next<=item.last()){
-            MemoryBlock gap=m.createUninitializedBlock(item.name+"_GAP_"+(++suffix),
-                address(p,next),item.last()-next+1,false);
+        for(HardwareRegionLayout.Range missing:HardwareRegionLayout.missing(
+                item.address,item.last(),existingRanges)){
+            MemoryBlock gap=m.createUninitializedBlock(
+                item.name+"_GAP_"+(++suffix),address(p,missing.first),
+                missing.length(),false);
             gap.setRead(true);gap.setWrite(true);gap.setExecute(false);
             chain.add(gap);
         }
