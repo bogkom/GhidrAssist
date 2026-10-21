@@ -33,6 +33,16 @@ In the private 524,288-byte test BIN, an even-offset raw byte search found **506
 
 Full multi-basic-block constant propagation, branch-aware state transitions, reset path selection, MM write-once timing, peripheral RAM relocation, chip-select bus function codes and physical wiring validation, robust PDF table geometry, and optional reversible **manually approved** renaming. Tests against the user's installed Ghidra session are still outstanding; do not describe all seven stages as complete.
 
+## Four-area follow-on (PR #12, 2026-10-21)
+
+- **CFG:** bounded intraprocedural constant propagation with conservative branch joins, loop convergence and call barriers (`HardwareDataflow`). Ghidra Listing flow edges and multi-hop **static** caller evidence are consumed by `GhidraHardwareFlowService`. Indirect or exception-dependent execution order is not proven.
+- **Indirect access:** selected A0–A7/D0–D7 immediate constants, copy/arithmetic and simple displacement-based STOREs, plus local P-code constant STORE pointers. Indexed/aliased and unknown branches remain unhandled rather than guessed.
+- **Memory epochs:** snapshots after SIMCR/MM, TRAMBAR, CSBAR, CSOR, CSPAR and VBR candidate sites. CS decoding remains MC68332-*conditional*, pin/RW/SPACE restrictions remain necessary, no live ECU state is claimed.
+- **AI/RAG + names:** `HardwareEvidenceCache` keeps local evidence per Program after an explicit analysis; relevant Query, Agentic and hardware-related Explain Line prompts receive bounded, prominently caveated evidence. Optional `#hardware` forces retrieval. Existing review-only, collision-checking CSV naming remains; no automatic labels.
+- **CI:** `HardwareDataflowSelfTest`, `HardwareContextSelectorSelfTest`, model/address regression and full Ghidra 12.1.4 extension build. Public CI contains synthetic samples only.
+
+**Scope boundary:** the four *implementation tracks* are now represented in code. A fully exact cross-procedure and exception-aware runtime state graph, real-hardware validation and safe flash address inference are **not implemented or proven**. Do not ask for separate manual tests of individual commits; test later as one package after automated validation.
+
 ## Verified test firmware facts
 
 - Private repo: `bogkom/GhidrAssist-Firmware-Tests`, `main`, file `ECU_FLASH 512KB.bin`, 524288 bytes, Git blob SHA `9a27ebc2c216a8888e8d49ab2f7d34ca03ac85f9`.
