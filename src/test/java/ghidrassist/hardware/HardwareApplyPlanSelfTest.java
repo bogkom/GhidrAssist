@@ -28,6 +28,15 @@ public final class HardwareApplyPlanSelfTest {
             x.address==0xfff000L && x.length==2048),"relocated standby TPURAM candidate");
         check(items.stream().anyMatch(x->x.name.equals("HW_MC68332_SIMCR_MM1") &&
             x.address==0xfffa00L && x.length==2),"SIMCR label candidate");
+        check(items.stream().anyMatch(x->x.name.equals("HW_MC68332_RSR_MM1") &&
+            x.address==0xfffa07L && x.length==1 &&
+            x.details.contains("READ_ONLY")),"8-bit RSR with access evidence");
+        check(items.stream().filter(x->x.kind==HardwareApplyPlan.Kind.MEMORY &&
+            (x.name.equals("SIM_REGISTERS_MM1") ||
+             x.name.equals("TPURAM_CONTROL_MM1") ||
+             x.name.equals("QSM_MM1") || x.name.equals("TPU_MM1")))
+            .allMatch(x->x.details.contains("PDF page 215")),
+            "all module proposals carry sourced D-1 metadata");
         check(items.stream().anyMatch(x->x.name.equals("CS7_DEVICE_CANDIDATE") &&
             x.address==0xff8800L && x.length==2048),"CS7 remains candidate");
         check(items.stream().noneMatch(x->x.name.startsWith("CS9") ||
