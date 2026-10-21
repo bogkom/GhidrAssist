@@ -363,7 +363,10 @@ public final class GhidraHardwareFlowService {
                     // A direct tail-jump outside the current Function can
                     // behave like a call to other code without a CALL opcode.
                     // Never classify its effect as a closed/no-store graph.
-                    for(Address destination:insn.getFlows())
+                    Address[] jumpTargets=insn.getFlows();
+                    if(jumpTargets==null || jumpTargets.length==0)
+                        uncertainFlow=true;
+                    else for(Address destination:jumpTargets)
                         if(!fun.getBody().contains(destination))
                             uncertainFlow=true;
                 }
