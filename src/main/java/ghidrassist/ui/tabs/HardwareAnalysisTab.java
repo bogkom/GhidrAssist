@@ -62,10 +62,8 @@ public final class HardwareAnalysisTab extends JPanel {
             "The CPU32 language alone does not identify a physical MCU.\n"+
             "Reported chip-select windows are hypothetical and do not\n"+
             "authorize programming or scanning actual hardware.\n\n"+
-            "After analysis, relevant evidence can be injected into AI queries.
-"+
-            "Use #hardware in a query to request evidence explicitly.
-"+
+            "After analysis, relevant evidence can be injected into AI queries.\n"+
+            "Use #hardware in a query to request evidence explicitly.\n"+
             "No API credits or network are needed for this analysis.");
         add(controls,BorderLayout.NORTH);
         add(new JScrollPane(report),BorderLayout.CENTER);
