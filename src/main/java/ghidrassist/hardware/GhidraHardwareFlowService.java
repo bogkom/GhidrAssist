@@ -200,6 +200,8 @@ public final class GhidraHardwareFlowService {
         Map<Long,Integer> values=hit.knownPeripheralWords;
         StringBuilder report=new StringBuilder();
         int from=0,to=10;
+        if(changed.equals("CSPAR0")){from=-1;to=5;}
+        if(changed.equals("CSPAR1")){from=6;to=10;}
         if(changed.startsWith("CSBAR")||changed.startsWith("CSOR")){
             String suffix=changed.startsWith("CSBAR")?
                 changed.substring(5):changed.substring(4);
