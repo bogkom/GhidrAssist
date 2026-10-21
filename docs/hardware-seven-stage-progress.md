@@ -1,6 +1,6 @@
 # Hardware Analysis — seven-stage implementation ledger
 
-Status as of **2026-10-21, after merged PR #24**: **IN PROGRESS — incremental foundations across all seven areas, not a complete hardware reverse-engineering solution**. Current baseline: `master` commit `2d9b70e2f6d8e97234d35555477a76d976aee26c`. The original `feature/hardware-analysis-seven-stages` branch and older checkpoints below are historical. Check current `master` and merged PRs before implementing any further work.
+Status as of **2026-10-21, after merged PR #29**: **IN PROGRESS — incremental foundations across all seven areas, not a complete hardware reverse-engineering solution**. Current baseline: `master` commit `6716037459d16ce09a279bfe341e2247816e4b75`. The original `feature/hardware-analysis-seven-stages` branch and older checkpoints below are historical. Check current `master` and merged PRs before implementing any further work.
 
 Owner-facing rule: consolidate implementation and automated validations rather than requesting repeated manual Ghidra tests after every small commit. Unverified MCU identity and execution remain explicit.
 
@@ -60,6 +60,18 @@ Detailed docs: [PDF profile metadata](hardware-sourced-profiles.md), [indexed CF
 
 **Current testing rule:** automated synthetic and private raw-fingerprint checks are green, but integrated correctness on the actual *Ghidra program database* (including indirect control flow, Memory.join, typed registers, Undo, and hardware-state inference) still requires a future consolidated integration/regression run. Do not misreport pure-Java tests as full execution-path validation.
 
+## Further changes merged after PR #25 (2026-10-21)
+
+| PR | Scope | Evidence and limitations |
+|---|---|---|
+| [#26](https://github.com/bogkom/GhidrAssist/pull/26) | RAG manual guide, edition/filename-scoped metadata and MC68336/376 D-1 variants | Java + Ghidra 12.1.4 CI passed; TouCAN 384-byte aperture/MC68376-only qualifier remains a **candidate**. [RAG catalog](rag-cpu32-manual-catalog.md) |
+| [#27](https://github.com/bogkom/GhidrAssist/pull/27) | Hardware state soundness after unknown/overlapping STOREs | Java + Ghidra 12.1.4 CI passed; unknown aliases now invalidate stale register constants. [Safety notes](hardware-unknown-store-safety.md) |
+| [#28](https://github.com/bogkom/GhidrAssist/pull/28) | Resizable **Review names...** for function naming, re-preflight, collision controls and Undoable one-transaction approval | Java + Ghidra 12.1.4 CI passed; actual Ghidra UI interaction still needs eventual consolidated hands-on test. [Guide](hardware-function-rename-approval.md) |
+| [#29](https://github.com/bogkom/GhidrAssist/pull/29) | Printed-page candidate metadata alongside physical PDF page, edition-safe source labels | Java + Ghidra 12.1.4 CI passed; header-missing/ambiguous labels remain UNKNOWN. |
+| [private PR #2](https://github.com/bogkom/GhidrAssist-Firmware-Tests/pull/2) | Verified Ghidra 12.1.4 headless decoding of seven ECU411 MOVE.W and four MOVEC VBR sites in a disposable private project | **Private** headless and raw fingerprint workflows passed; no CFG execution, function naming, MCU identification or hardware wiring validation. |
+
+**Remaining high-value tracks (not complete):** broaden verified register/bitfield/reset tables across actual PDF editions with document-specific geometry tests, resolve interprocedural reset/exception paths and bus-state conditions, add local variable/pointer naming with alias/risk controls, and verify Hardware Review/Undo/RAG behavior in a consolidated real Ghidra project test. Firmware identity remains a hypothesis. The published public CI contains no private BIN.
+
 ## Verified test firmware facts
 
 - Private repo: `bogkom/GhidrAssist-Firmware-Tests`, `main`, file `ECU_FLASH 512KB.bin`, 524288 bytes, Git blob SHA `9a27ebc2c216a8888e8d49ab2f7d34ca03ac85f9`.
@@ -70,7 +82,7 @@ Detailed docs: [PDF profile metadata](hardware-sourced-profiles.md), [indexed CF
 
 ## Continuation / incident procedure
 
-1. Inspect current `master`, merged PRs **#18–#24**, and the latest GitHub Actions runs. Do not repeat completed work.
+1. Inspect current `master`, merged PRs **#18–#29**, and the latest GitHub Actions runs. Do not repeat completed work.
 2. Inspect the private `bogkom/GhidrAssist-Firmware-Tests` repository for its merged PR **#1** and private Actions, but never publish or copy `ECU_FLASH 512KB.bin` into this public repository.
 3. Use isolated feature branches and commit a validated implementation batch before PR. Both pure-Java tests and the exact Ghidra 12.1.4 extension build must pass for relevant code changes.
 4. Merge through PR only after successful checks. Never publish a stable GitHub Release without owner approval; keep Ghidra memory/symbol modifications reviewed and undoable.
