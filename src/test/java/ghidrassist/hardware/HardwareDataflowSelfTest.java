@@ -83,6 +83,13 @@ public final class HardwareDataflowSelfTest {
         ),Set.of(simcr),1);
         ok(trunc.truncated,"iteration ceiling surfaced");
         ok(trunc.snapshots.isEmpty(),"truncated fixed point cannot publish uncertain values");
+        java.util.Map<String,Long> memo=java.util.Map.of("A0",0xfffa00L);
+        ok(HardwareDataflow.pcodeInputValue(false,0L,memo.get("missing"))==null,
+            "unknown varnode remains unknown");
+        ok(HardwareDataflow.pcodeInputValue(false,0L,memo.get("A0"))==0xfffa00L,
+            "propagated varnode remains known");
+        ok(HardwareDataflow.pcodeInputValue(true,0x12345678L,null)==0x12345678L,
+            "literal constant remains known");
         System.out.println("HardwareDataflowSelfTest OK");
     }
 }
