@@ -25,6 +25,10 @@ public final class HardwareProfilesSelfTest {
         check(m.absoluteAddress(m.register("SIMCR"), 1) == 0xfffa00L, "SIMCR MM1");
         check(m.absoluteAddress(m.register("CSBAR0"), 1) == 0xfffa4cL, "CSBAR0");
         check(m.absoluteAddress(m.register("CSBAR10"), 1) == 0xfffa74L, "CSBAR10");
+        check(m.absoluteAddress(m.register("TRAMMCR"),1) == 0xfffb00L, "TRAMMCR");
+        check(m.absoluteAddress(m.register("TRAMBAR"),1) == 0xfffb04L, "TRAMBAR");
+        check(m.absoluteAddress(m.register("QSMCR"),1) == 0xfffc00L, "QSMCR");
+        check(m.absoluteAddress(m.register("TPUMCR"),1) == 0xfffe00L, "TPUMCR");
         HardwareProfiles.CsbarWindow a = HardwareProfiles.decodeCsbar(0xfff8);
         check(a.base == 0xfff800L && a.size == 2048 && a.endInclusive == 0xffffffL,
             "2 KiB CSBAR window");
