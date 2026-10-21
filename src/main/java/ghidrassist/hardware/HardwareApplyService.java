@@ -53,6 +53,37 @@ public final class HardwareApplyService {
             notes.add("ALREADY MAPPED: "+item.name+" "+item.location());
             return false;
         }
+        // Upgrade only legacy GhidrAssist uninitialized MMIO blocks, never
+        // arbitrary memory belonging to an imported image or another user.
+        // A previous release mapped QSMCR/TPUMCR as 2-byte blocks and
+        // TPURAM control as 8 bytes. Join a new suffix to preserve typed
+        // register data and existing labels at the original addresses.
+        MemoryBlock existing=m.getBlock(start);
+        if(existing!=null &&
+                existing.getStart().equals(start) &&
+                existing.getName().equals(item.name) &&
+                !existing.isInitialized() &&
+                existing.getSize()<item.length){
+            Address missingStart=existing.getEnd().add(1);
+            if(anyOverlap(m,missingStart,end)){
+                notes.add("SKIP EXPANSION: "+item.name+
+                    " has another overlapping block; no memory modified");
+                return false;
+            }
+            long additional=item.length-existing.getSize();
+            MemoryBlock suffix=m.createUninitializedBlock(
+                item.name+"_EXT",missingStart,additional,false);
+            suffix.setRead(existing.isRead());
+            suffix.setWrite(existing.isWrite());
+            suffix.setExecute(existing.isExecute());
+            MemoryBlock combined=m.join(existing,suffix);
+            // Original block remains the first operand so its name is
+            // retained by the join operation in Ghidra.
+            notes.add("EXTENDED EXISTING BLOCK: "+item.name+
+                " -> "+combined.getStart()+".."+combined.getEnd()+
+                " (typed registers and labels preserved)");
+            return true;
+        }
         if(anyOverlap(m,start,end)){
             notes.add("SKIP PARTIAL OVERLAP: "+item.name+" "+item.location());
             return false;
@@ -122,7 +153,9 @@ public final class HardwareApplyService {
     /**
      * All rows are unchecked by default in UI. Transaction succeeds only
      * after explicit confirmation; failures rollback everything. Skipped
-     * conflicts never clear or resize existing blocks/data.
+     * conflicts never clear or overwrite existing blocks/data.
+     * Only previously created, uninitialized GhidrAssist blocks with
+     * identical names and start addresses may be extended and joined.
      */
     public static Outcome apply(Program program,List<HardwareApplyPlan.Item> approved)
             throws Exception {
