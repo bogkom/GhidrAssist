@@ -11,176 +11,247 @@ import ghidra.program.model.listing.Listing;
 import ghidra.program.model.listing.Program;
 import ghidra.program.model.mem.Memory;
 import ghidra.program.model.mem.MemoryBlock;
+import ghidra.program.model.mem.MemoryBlockType;
 import ghidra.program.model.symbol.SourceType;
 import ghidra.program.model.symbol.Symbol;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 
 /**
- * An EXPLICIT user-approved edit to the Ghidra Program DB. Every operation
- * occurs inside ONE undoable transaction, never in hardware-analysis scanning.
- * Blocks are UNINITIALIZED; no ROM bytes, existing instructions, data or
- * user labels are erased/overwritten.
+ * The read-only preflight is used to default-select safely applicable items.
+ * Actual changes happen ONLY after explicit user confirmation inside one
+ * undoable Ghidra transaction; conflicting user blocks/code are never cleared.
  */
 public final class HardwareApplyService {
     private HardwareApplyService(){}
+
+    public enum State { READY, UPGRADE, ALREADY_PRESENT, BLOCKED, MANUAL_REVIEW }
+    public static final class Decision {
+        public final State state;
+        public final String description;
+        public final boolean selectedByDefault;
+        private Decision(State state,String description,boolean selected) {
+            this.state=state;this.description=description;selectedByDefault=selected;
+        }
+        public boolean allowed(){return state==State.READY||state==State.UPGRADE||
+            state==State.MANUAL_REVIEW;}
+    }
+    private static Decision decide(State state,String reason,boolean selected) {
+        return new Decision(state,reason,selected);
+    }
     public static final class Outcome {
-        public final int changed, skipped;
+        public final int changed,skipped;
         public final List<String> messages;
         Outcome(int changed,int skipped,List<String> messages){
             this.changed=changed;this.skipped=skipped;this.messages=List.copyOf(messages);
         }
     }
-    private static Address address(Program p,long offset){
+    private static Address address(Program p,long offset) {
         return p.getAddressFactory().getDefaultAddressSpace().getAddress(offset);
     }
-    private static boolean anyOverlap(Memory memory,Address start,Address end){
-        for(MemoryBlock block:memory.getBlocks())
-            if(block.getStart().getAddressSpace().equals(start.getAddressSpace()) &&
-                    block.getStart().compareTo(end)<=0 &&
-                    block.getEnd().compareTo(start)>=0)return true;
+    private static boolean covers(Memory m,Address a,Address b) {
+        return m.contains(a)&&m.contains(b)&&m.getBlock(a)==m.getBlock(b);
+    }
+    private static boolean legacyPart(HardwareApplyPlan.Item item,MemoryBlock block){
+        String n=block.getName();
+        long at=block.getStart().getOffset();
+        if(n.equals(item.name) && at==item.address)return true;
+        if(item.name.equals("QSM_MM1"))
+            return (n.equals("QSM_CONTROL_MM1") && at==0xfffc00L) ||
+                (n.equals("QSM_QUEUE_MM1") && at==0xfffd00L);
+        if(item.name.equals("TPU_MM1"))
+            return (n.equals("TPU_CONTROL_MM1") && at==0xfffe00L) ||
+                (n.equals("TPU_PARAM_RAM_MM1") && at==0xffff00L);
         return false;
     }
-    private static boolean covers(Memory m,Address start,Address end){
-        return m.contains(start)&&m.contains(end) &&
-            m.getBlock(start)==m.getBlock(end);
+    private static List<MemoryBlock> overlaps(Program p,HardwareApplyPlan.Item item){
+        Address first=address(p,item.address),last=address(p,item.last());
+        List<MemoryBlock> blocks=new ArrayList<>();
+        for(MemoryBlock b:p.getMemory().getBlocks()) {
+            if(!b.getStart().getAddressSpace().equals(first.getAddressSpace()))continue;
+            if(b.getStart().compareTo(last)<=0 && b.getEnd().compareTo(first)>=0)
+                blocks.add(b);
+        }
+        blocks.sort(Comparator.comparing(MemoryBlock::getStart));
+        return blocks;
     }
-    private static boolean createBlock(Program p,HardwareApplyPlan.Item item,
-                                       List<String> notes)throws Exception{
-        Memory m=p.getMemory();Address start=address(p,item.address);
-        Address end=address(p,item.last());
-        if(covers(m,start,end)){
-            notes.add("ALREADY MAPPED: "+item.name+" "+item.location());
+    private static Decision memoryDecision(Program p,HardwareApplyPlan.Item item){
+        List<MemoryBlock> parts=overlaps(p,item);
+        if(parts.size()==1 && parts.get(0).getStart().getOffset()==item.address &&
+                parts.get(0).getEnd().getOffset()==item.last())
+            return decide(State.ALREADY_PRESENT,"Entire region already mapped as "+
+                parts.get(0).getName(),false);
+        for(MemoryBlock block:parts){
+            if(block.getStart().getOffset()<item.address ||
+                    block.getEnd().getOffset()>item.last() ||
+                    block.isInitialized() || block.isMapped() ||
+                    block.getType()!=MemoryBlockType.DEFAULT ||
+                    !legacyPart(item,block)){
+                return decide(State.BLOCKED,
+                    "Overlaps other memory: "+block.getName()+" at "+
+                    block.getStart()+".."+block.getEnd(),false);
+            }
+        }
+        if(parts.isEmpty()){
+            boolean speculative=item.name.startsWith("CS") ||
+                item.name.equals("TPURAM_2K_CANDIDATE");
+            return decide(speculative?State.MANUAL_REVIEW:State.READY,
+                speculative?"External device/relocation not confirmed":
+                    "MC68332 module region; uninitialized block",
+                !speculative);
+        }
+        return decide(State.UPGRADE,"Extend/join "+parts.size()+
+            " existing GhidrAssist block(s), preserving typed data",true);
+    }
+    private static Decision registerDecision(Program p,HardwareApplyPlan.Item item,
+                                              List<HardwareApplyPlan.Item> all){
+        Address first=address(p,item.address),last=address(p,item.last());
+        Memory m=p.getMemory();
+        if(covers(m,first,last)) {
+            if(!p.getListing().isUndefined(first,last))
+                return decide(State.ALREADY_PRESENT,"Data or code already defined",false);
+            Symbol old=p.getSymbolTable().getPrimarySymbol(first);
+            if(old!=null && old.getSource()!=SourceType.DEFAULT)
+                return decide(State.BLOCKED,"Existing non-default label: "+old.getName(),false);
+            return decide(State.READY,"Mapped, undefined and no user symbol",true);
+        }
+        for(HardwareApplyPlan.Item candidate:all){
+            if(candidate.kind!=HardwareApplyPlan.Kind.MEMORY)continue;
+            if(candidate.address<=item.address && candidate.last()>=item.last()){
+                Decision parent=memoryDecision(p,candidate);
+                if(parent.state==State.READY || parent.state==State.UPGRADE)
+                    return decide(State.READY,"Will be mapped by "+
+                        candidate.name+" if its row remains selected",true);
+                if(parent.state==State.MANUAL_REVIEW)
+                    return decide(State.MANUAL_REVIEW,
+                        "Depends on manually approved "+candidate.name,false);
+            }
+        }
+        return decide(State.BLOCKED,"No safe mapped memory for register",false);
+    }
+    /** Read-only status for one row, reusable in both the UI and apply guard. */
+    public static Decision preflight(Program p,HardwareApplyPlan.Item item,
+                                     List<HardwareApplyPlan.Item> plan){
+        if(p==null||item==null)throw new IllegalArgumentException("Missing program or item");
+        if(item.kind==HardwareApplyPlan.Kind.MEMORY)return memoryDecision(p,item);
+        if(item.kind==HardwareApplyPlan.Kind.REGISTER)return registerDecision(p,item,plan);
+        Address a=address(p,item.address),b=address(p,item.last());
+        if(!covers(p.getMemory(),a,b) || !p.getListing().isUndefined(a,b))
+            return decide(State.BLOCKED,
+                "VBR location unmapped or contains defined code/data; never overwrite",false);
+        return decide(State.MANUAL_REVIEW,"VBR runtime address has not been proven",false);
+    }
+    private static boolean createRegion(Program p,HardwareApplyPlan.Item item,
+                                        List<String> notes)throws Exception {
+        Decision check=memoryDecision(p,item);
+        if(!check.allowed()){
+            notes.add("SKIP "+item.name+": "+check.description);
             return false;
         }
-        // Upgrade only legacy GhidrAssist uninitialized MMIO blocks, never
-        // arbitrary memory belonging to an imported image or another user.
-        // A previous release mapped QSMCR/TPUMCR as 2-byte blocks and
-        // TPURAM control as 8 bytes. Join a new suffix to preserve typed
-        // register data and existing labels at the original addresses.
-        MemoryBlock existing=m.getBlock(start);
-        if(existing!=null &&
-                existing.getStart().equals(start) &&
-                existing.getName().equals(item.name) &&
-                !existing.isInitialized() &&
-                existing.getSize()<item.length){
-            Address missingStart=existing.getEnd().add(1);
-            if(anyOverlap(m,missingStart,end)){
-                notes.add("SKIP EXPANSION: "+item.name+
-                    " has another overlapping block; no memory modified");
-                return false;
-            }
-            long additional=item.length-existing.getSize();
-            MemoryBlock suffix=m.createUninitializedBlock(
-                item.name+"_EXT",missingStart,additional,false);
-            suffix.setRead(existing.isRead());
-            suffix.setWrite(existing.isWrite());
-            suffix.setExecute(existing.isExecute());
-            MemoryBlock combined=m.join(existing,suffix);
-            // Original block remains the first operand so its name is
-            // retained by the join operation in Ghidra.
-            notes.add("EXTENDED EXISTING BLOCK: "+item.name+
-                " -> "+combined.getStart()+".."+combined.getEnd()+
-                " (typed registers and labels preserved)");
+        Memory m=p.getMemory();
+        List<MemoryBlock> parts=overlaps(p,item);
+        if(parts.isEmpty()){
+            MemoryBlock b=m.createUninitializedBlock(item.name,address(p,item.address),
+                item.length,false);
+            b.setRead(true);b.setWrite(true);b.setExecute(false);
+            notes.add("NEW MODULE REGION "+item.name+" "+item.location());
             return true;
         }
-        if(anyOverlap(m,start,end)){
-            notes.add("SKIP PARTIAL OVERLAP: "+item.name+" "+item.location());
-            return false;
+        // Existing user-approved register types remain in the original blocks.
+        // Fill missing gaps, then join contiguous UNINITIALIZED default blocks.
+        List<MemoryBlock> chain=new ArrayList<>(parts);
+        long next=item.address;
+        int suffix=0;
+        for(MemoryBlock part:parts){
+            long begin=part.getStart().getOffset();
+            if(begin>next){
+                MemoryBlock gap=m.createUninitializedBlock(item.name+"_GAP_"+(++suffix),
+                    address(p,next),begin-next,false);
+                gap.setRead(true);gap.setWrite(true);gap.setExecute(false);
+                chain.add(gap);
+            }
+            next=part.getEnd().getOffset()+1;
         }
-        MemoryBlock b=m.createUninitializedBlock(item.name,start,item.length,false);
-        b.setRead(true);b.setWrite(true);b.setExecute(false);
-        notes.add("NEW UNINITIALIZED BLOCK: "+item.name+" "+item.location());
+        if(next<=item.last()){
+            MemoryBlock gap=m.createUninitializedBlock(item.name+"_GAP_"+(++suffix),
+                address(p,next),item.last()-next+1,false);
+            gap.setRead(true);gap.setWrite(true);gap.setExecute(false);
+            chain.add(gap);
+        }
+        chain.sort(Comparator.comparing(MemoryBlock::getStart));
+        MemoryBlock combined=chain.get(0);
+        for(int i=1;i<chain.size();i++)combined=m.join(combined,chain.get(i));
+        combined.setName(item.name);
+        notes.add("UPGRADED MODULE REGION "+item.name+" "+item.location()+
+            "; existing register definitions and symbols preserved");
         return true;
     }
     private static boolean defineRegister(Program p,HardwareApplyPlan.Item item,
-                                          List<String> notes)throws Exception{
-        Memory m=p.getMemory();Address start=address(p,item.address);
-        Address end=address(p,item.last());
-        if(!covers(m,start,end)){
-            notes.add("SKIP UNMAPPED (select a memory block first): "+item.name);
+                                          List<String> notes)throws Exception {
+        Address first=address(p,item.address),last=address(p,item.last());
+        if(!covers(p.getMemory(),first,last) ||
+                !p.getListing().isUndefined(first,last)){
+            notes.add("SKIP "+item.name+" (unmapped or already defined)");
             return false;
         }
-        Listing listing=p.getListing();
-        if(!listing.isUndefined(start,end)){
-            notes.add("SKIP CODE/DEFINED DATA: "+item.name);
+        Symbol prior=p.getSymbolTable().getPrimarySymbol(first);
+        if(prior!=null && prior.getSource()!=SourceType.DEFAULT){
+            notes.add("SKIP "+item.name+"; preserve existing symbol "+
+                prior.getName());
             return false;
         }
-        Symbol prior=p.getSymbolTable().getPrimarySymbol(start);
-        if(prior!=null && prior.getSource()!=SourceType.DEFAULT &&
-                !item.name.equals(prior.getName())){
-            notes.add("SKIP EXISTING USER LABEL: "+item.name+" -> "+prior.getName());
-            return false;
-        }
-        DataType dt=item.length==2?WordDataType.dataType:DWordDataType.dataType;
-        listing.createData(start,dt);
-        if(prior==null || !item.name.equals(prior.getName())){
-            // Stable unique name per 24-bit address. Do not rename prior symbol.
-            String proposed=item.name+"_"+Long.toHexString(item.address).toUpperCase();
-            p.getSymbolTable().createLabel(start,proposed,SourceType.USER_DEFINED);
-        }
-        notes.add("DEFINED REGISTER: "+item.name+" at "+start);
+        DataType type=item.length==2?WordDataType.dataType:DWordDataType.dataType;
+        p.getListing().createData(first,type);
+        String name=item.name+"_"+Long.toHexString(item.address).toUpperCase(Locale.ROOT);
+        p.getSymbolTable().createLabel(first,name,SourceType.USER_DEFINED);
+        notes.add("DEFINED REGISTER "+name+" at "+first);
         return true;
     }
     private static boolean defineVbr(Program p,HardwareApplyPlan.Item item,
-                                     List<String> notes)throws Exception{
-        Memory m=p.getMemory();Address start=address(p,item.address);
-        Address end=address(p,item.last());
-        if(!covers(m,start,end)){
-            notes.add("SKIP UNMAPPED VBR: "+item.location()+
-                " (no new vector memory created implicitly)");
-            return false;
-        }
-        if(!p.getListing().isUndefined(start,end)){
-            notes.add("SKIP VBR: defined data or code exists in "+item.location()+
-                ". Nothing is cleared or overwritten.");
+                                     List<String> notes)throws Exception {
+        Address start=address(p,item.address),end=address(p,item.last());
+        if(!covers(p.getMemory(),start,end) ||
+                !p.getListing().isUndefined(start,end)){
+            notes.add("SKIP VBR (unmapped or already typed)");
             return false;
         }
         StructureDataType vectors=new StructureDataType(
-            new CategoryPath("/GhidrAssist/Hardware"),
-            "CPU32_VBR_256_VECTORS",0);
+            new CategoryPath("/GhidrAssist/Hardware"),"CPU32_VBR_256_VECTORS",0);
         for(int i=0;i<256;i++)
             vectors.add(DWordDataType.dataType,4,
                 String.format("vector_%03d",i),
-                "Vector table entry; meaning and runtime VBR unverified");
-        DataType resolved=p.getDataTypeManager().addDataType(vectors,
+                "Vector entry; actual runtime VBR not verified");
+        DataType type=p.getDataTypeManager().addDataType(vectors,
             DataTypeConflictHandler.KEEP_HANDLER);
-        p.getListing().createData(start,resolved);
-        notes.add("CREATED 256-DWORD VBR STRUCTURE at "+start+
-            " (no bytes changed; pointer targets not asserted)");
+        p.getListing().createData(start,type);
+        notes.add("DEFINED VBR STRUCTURE "+item.location());
         return true;
     }
-    /**
-     * All rows are unchecked by default in UI. Transaction succeeds only
-     * after explicit confirmation; failures rollback everything. Skipped
-     * conflicts never clear or overwrite existing blocks/data.
-     * Only previously created, uninitialized GhidrAssist blocks with
-     * identical names and start addresses may be extended and joined.
-     */
     public static Outcome apply(Program program,List<HardwareApplyPlan.Item> approved)
             throws Exception {
         if(program==null||approved==null||approved.isEmpty())
             throw new IllegalArgumentException("Nothing approved");
-        int txn=program.startTransaction("GhidrAssist: Apply approved hardware definitions");
-        boolean committed=false;int changed=0,skipped=0;
-        List<String> notes=new ArrayList<>();
+        int transaction=program.startTransaction("GhidrAssist: Apply hardware definitions");
+        int changed=0,skipped=0;boolean commit=false;
+        List<String> messages=new ArrayList<>();
         try {
-            // Regions first so their separately approved registers can be typed.
-            for(HardwareApplyPlan.Kind kind:HardwareApplyPlan.Kind.values()){
-                for(HardwareApplyPlan.Item item:approved){
+            for(HardwareApplyPlan.Kind kind:HardwareApplyPlan.Kind.values()) {
+                for(HardwareApplyPlan.Item item:approved) {
                     if(item.kind!=kind)continue;
-                    boolean did= switch(kind){
-                        case MEMORY -> createBlock(program,item,notes);
-                        case REGISTER -> defineRegister(program,item,notes);
-                        case VBR_STRUCTURE -> defineVbr(program,item,notes);
+                    boolean applied=switch(kind) {
+                        case MEMORY -> createRegion(program,item,messages);
+                        case REGISTER -> defineRegister(program,item,messages);
+                        case VBR_STRUCTURE -> defineVbr(program,item,messages);
                     };
-                    if(did)changed++;else skipped++;
+                    if(applied)changed++;else skipped++;
                 }
             }
-            committed=true;
-            return new Outcome(changed,skipped,notes);
+            commit=true;
+            return new Outcome(changed,skipped,messages);
         } finally {
-            program.endTransaction(txn,committed);
+            program.endTransaction(transaction,commit);
         }
     }
 }
