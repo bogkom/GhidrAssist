@@ -35,6 +35,9 @@ public final class HardwareDataflow {
         public final Kind kind;
         public final String register;
         public final String sourceRegister;
+        public final String indexRegister;
+        public final int indexBits;
+        public final int indexScale;
         public final long operand;
         public final long displacement;
         public final Integer literalWord;
@@ -45,6 +48,7 @@ public final class HardwareDataflow {
                     Integer literalWord,int writeBits,Collection<Long> successors,String mnemonic){
             this.address=address;this.kind=Objects.requireNonNull(kind);
             this.register=register;this.sourceRegister=null;
+            this.indexRegister=null;this.indexBits=0;this.indexScale=1;
             this.operand=operand;this.displacement=displacement;
             this.literalWord=literalWord;this.writeBits=writeBits;
             this.successors=List.copyOf(successors);this.mnemonic=mnemonic==null?"":mnemonic;
@@ -54,9 +58,30 @@ public final class HardwareDataflow {
                     Collection<Long> successors,String mnemonic){
             this.address=address;this.kind=Objects.requireNonNull(kind);
             this.register=register;this.sourceRegister=sourceRegister;
+            this.indexRegister=null;this.indexBits=0;this.indexScale=1;
             this.operand=operand;this.displacement=displacement;
             this.literalWord=literalWord;this.writeBits=writeBits;
             this.successors=List.copyOf(successors);this.mnemonic=mnemonic==null?"":mnemonic;
+        }
+        /** Indexed STORE: base + displacement + signed .W/.L index * scale. */
+        public Step(long address, String baseRegister, String sourceRegister,
+                String indexRegister, int indexBits, int indexScale,
+                long displacement, Integer literalWord, int writeBits,
+                Collection<Long> successors, String mnemonic) {
+            this.address=address;this.kind=Kind.STORE_INDIRECT;
+            this.register=baseRegister;this.sourceRegister=sourceRegister;
+            if(baseRegister==null || !baseRegister.matches("A[0-7]") ||
+                    indexRegister==null || !indexRegister.matches("[AD][0-7]") ||
+                    (indexBits!=16 && indexBits!=32) ||
+                    (indexScale!=1 && indexScale!=2 &&
+                     indexScale!=4 && indexScale!=8))
+                throw new IllegalArgumentException("Invalid indexed STORE");
+            this.indexRegister=indexRegister;
+            this.indexBits=indexBits;this.indexScale=indexScale;
+            this.operand=0;this.displacement=displacement;
+            this.literalWord=literalWord;this.writeBits=writeBits;
+            this.successors=List.copyOf(successors);
+            this.mnemonic=mnemonic==null?"":mnemonic;
         }
     }
     public static final class Snapshot {
@@ -116,7 +141,18 @@ public final class HardwareDataflow {
         if(step.kind==Kind.STORE_DIRECT) return step.operand&MASK24;
         if(step.kind==Kind.STORE_INDIRECT){
             Long base=s.pointers.get(step.register);
-            return base==null?null:(base+step.displacement)&MASK24;
+            if(base==null)return null;
+            long indexOffset=0;
+            if(step.indexRegister!=null) {
+                Long index=s.pointers.get(step.indexRegister);
+                if(index==null)return null;
+                // A .W index is sign-extended before scaling; for .L, the
+                // stored 24-bit two's-complement value is sufficient modulo
+                // the 24-bit external address bus.
+                long signed=step.indexBits==16?(short)(index&0xffffL):index;
+                indexOffset=signed*step.indexScale;
+            }
+            return (base+step.displacement+indexOffset)&MASK24;
         }
         return null;
     }
