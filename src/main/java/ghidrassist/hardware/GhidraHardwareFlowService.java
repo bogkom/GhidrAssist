@@ -331,6 +331,8 @@ public final class GhidraHardwareFlowService {
         for(HardwareProfiles.Register r:p.registers)
             for(int mm=0;mm<2;mm++)targets.put(p.absoluteAddress(r,mm),r.name);
         StringBuilder detail=new StringBuilder();
+        List<HardwareCallEffects.FunctionNode> staticCalls=new ArrayList<>();
+        List<Long> evidencedFunctions=new ArrayList<>();
         int foundFunctions=0,indirect=0,vbr=0,unresolved=0,visited=0,shown=0;
         boolean limited=false;
         FunctionIterator funs=program.getFunctionManager().getFunctions(true);
@@ -338,11 +340,45 @@ public final class GhidraHardwareFlowService {
             monitor.checkCancelled();
             Function fun=funs.next();
             List<HardwareDataflow.Step> steps=new ArrayList<>();
+            List<Long> directCallees=new ArrayList<>();
+            boolean localStore=false,localVbr=false,uncertainFlow=false;
+            long decodedBytes=0;
             InstructionIterator it=program.getListing().getInstructions(fun.getBody(),true);
             while(it.hasNext()){
                 monitor.checkCancelled();
-                steps.add(translate(it.next(),fun));
+                Instruction insn=it.next();
+                decodedBytes+=insn.getLength();
+                PcodeOp[] ops=insn.getPcode();
+                if(ops!=null)for(PcodeOp op:ops){
+                    if(op.getOpcode()==PcodeOp.STORE)localStore=true;
+                    if(op.getOpcode()==PcodeOp.CALLOTHER)uncertainFlow=true;
+                }
+                String mnemonic=opcode(insn);
+                if(mnemonic.equals("MOVEC") &&
+                        op(insn,insn.getNumOperands()-1).equals("VBR"))
+                    localVbr=true;
+                if(insn.getFlowType().isComputed())
+                    uncertainFlow=true;
+                if(insn.getFlowType().isCall()){
+                    Address[] destinations=insn.getFlows();
+                    if(destinations==null || destinations.length!=1)
+                        uncertainFlow=true;
+                    else {
+                        Function callee=program.getFunctionManager()
+                            .getFunctionAt(destinations[0]);
+                        if(callee==null)uncertainFlow=true;
+                        else directCallees.add(callee.getEntryPoint().getOffset());
+                    }
+                }
+                steps.add(translate(insn,fun));
             }
+            // Undecoded bytes inside the Ghidra function body are not proof
+            // of absence of hidden memory operations/call targets.
+            if(decodedBytes!=fun.getBody().getNumAddresses())
+                uncertainFlow=true;
+            staticCalls.add(new HardwareCallEffects.FunctionNode(
+                fun.getEntryPoint().getOffset(),localStore,localVbr,
+                uncertainFlow,directCallees));
             if(steps.isEmpty())continue;
             HardwareDataflow.Result result=HardwareDataflow.analyze(
                 fun.getEntryPoint().getOffset(),steps,targets.keySet(),
@@ -364,6 +400,7 @@ public final class GhidraHardwareFlowService {
             }
             if(found.isEmpty()&&!result.truncated)continue;
             foundFunctions++;
+            evidencedFunctions.add(fun.getEntryPoint().getOffset());
             if(shown>=350)continue;
             detail.append("### ").append(fun.getName()).append(" at ")
                 .append(fun.getEntryPoint()).append("\n\n");
@@ -440,6 +477,27 @@ public final class GhidraHardwareFlowService {
             }
             detail.append("\n");
         }
+        // This is a call-tree MAY-effect inventory. No callee state is
+        // imported into callers, and none of these paths are known to execute.
+        StringBuilder effects=new StringBuilder();
+        effects.append("## Bounded transitive static-call side-effect inventory\n\n")
+            .append("Potential callee memory STORE and MOVEC VBR effects from "+
+                "recognized function references only. Unknown targets, "+
+                "computed branches, cycles, gaps and limits are explicit. "+
+                "No reset-path or hardware MM latch is inferred.\n\n");
+        int sideEffectsShown=0;
+        for(long entry:evidencedFunctions){
+            if(sideEffectsShown>=60)break;
+            HardwareCallEffects.Summary summary=HardwareCallEffects.summarize(
+                entry,staticCalls,4,100);
+            effects.append("- Function ").append(ChipSelectModel.hex(entry,6))
+                .append(": ").append(summary.description()).append("\n");
+            sideEffectsShown++;
+        }
+        if(evidencedFunctions.size()>sideEffectsShown)
+            effects.append("- Additional functions omitted by 60-row limit.\n");
+        effects.append("\n");
+
         StringBuilder out=new StringBuilder();
         out.append("## CFG/P-code hardware evidence (read-only)\n\n")
            .append("Only predecessor-agreed intraprocedural constants survive branch joins. ")
@@ -455,7 +513,7 @@ public final class GhidraHardwareFlowService {
            .append("- VBR control-register sites: ").append(vbr).append("\n")
            .append("- Unresolved register-based stores: ").append(unresolved).append("\n")
            .append("- Propagation cap reached: ").append(limited).append("\n\n")
-           .append(detail);
+           .append(detail).append(effects);
         if(shown>=350)out.append("\n[Detailed report bounded at 350 sites.]\n");
         return new Report(out.toString(),foundFunctions,indirect,vbr,unresolved,visited,limited);
     }
