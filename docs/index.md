@@ -25,6 +25,21 @@ GhidrAssist is organized into seven tabs, each focused on a specific aspect of L
 | **[SymGraph](tabs/symgraph-tab.md)** | Compare against SymGraph, import shared analysis, and publish your own revisions |
 | **[Settings](tabs/settings-tab.md)** | Configure LLM providers, MCP servers, and plugin options |
 
+## CPU32 / MC683xx Hardware Analysis
+
+The optional Hardware Analysis tab performs read-only register and CFG investigation
+under an **explicitly chosen processor hypothesis**. It supports reviewed,
+undoable module/register definitions, structured PDF candidate evidence,
+conditional chip-select and SIMCR/MM analysis, and source-tagged CSV
+function/register naming proposals. Firmware execution, processor identification
+and hardware wiring are **not automatically proven**.
+
+- [Seven-stage implementation ledger and current checkpoint](hardware-seven-stage-progress.md)
+- [Hardware Analysis](hardware-analysis.md) and [Review / Apply](hardware-review-apply.md)
+- [Source-backed MC68332 profiles](hardware-sourced-profiles.md)
+- [Indexed addressing](hardware-indexed-addressing.md) and [MM write candidate history](hardware-mm-write-history.md)
+- [Function naming review](hardware-function-naming-review.md) and [AI/RAG evidence selection](hardware-rag-relevance.md)
+
 ## Key Features
 
 ### MCP Tool Integration

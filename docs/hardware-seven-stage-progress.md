@@ -1,8 +1,8 @@
 # Hardware Analysis — seven-stage implementation ledger
 
-Status: **IN PROGRESS — several implemented components, not seven fully validated stages**; branch `feature/hardware-analysis-seven-stages`.
-Last planned baseline: `master` commit `c64cff446f5b54e780ba1a83b3386ce1dd296369`.
-Owner-facing rule: **no requests for manual script tests until all seven areas have implementation and automated validations**. Work must remain restartable by checking branch commits and GitHub Actions.
+Status as of **2026-10-21, after merged PR #24**: **IN PROGRESS — incremental foundations across all seven areas, not a complete hardware reverse-engineering solution**. Current baseline: `master` commit `2d9b70e2f6d8e97234d35555477a76d976aee26c`. The original `feature/hardware-analysis-seven-stages` branch and older checkpoints below are historical. Check current `master` and merged PRs before implementing any further work.
+
+Owner-facing rule: consolidate implementation and automated validations rather than requesting repeated manual Ghidra tests after every small commit. Unverified MCU identity and execution remain explicit.
 
 | Stage | Goal | Existing evidence | Exit criteria and caveats |
 |---|---|---|---|
@@ -14,7 +14,7 @@ Owner-facing rule: **no requests for manual script tests until all seven areas h
 | 6 | UI and RAG context | GhidrAssist existing tabs and Markdown RAG | Integrated read-only hardware report view and source-backed, locally exportable context |
 | 7 | PDF manuals / register tables | PDFBox page-indexed RAG with uncertainty flags | Table candidate extraction with explicit page and “unverified layout” provenance, no invented semantics |
 
-## Implemented in this branch — restart checkpoint
+## Historical foundation — original seven-stage branch
 
 - **Stage 1/4:** `ChipSelectModel.java` implements conditional MC68332 CSBAR base/size, CSPAR pin assignments, CSOR BYTE/RW/SPACE and overlap classification with synthetic regressions. It **does not** compute live runtime states or execution history.
 - **Stage 2:** `SimcrMmAnalyzer.java` now includes width-correct direct `CLR.W` and `CLR.B` MM clear candidate classification; broader indirect/CFG propagation remains open.
@@ -25,13 +25,13 @@ Owner-facing rule: **no requests for manual script tests until all seven areas h
 - **Stage 7:** `ManualRegisterHints.java` adds page-scoped, **explicitly unverified** register/address text-row candidates to RAG PDF indexing when table layout is ambiguous. It never converts candidates into hardware profiles automatically.
 - CI: `hardware-profile-tests.yml` tests all pure-Java models; `hardware-extension-build.yml` builds the entire GhidrAssist extension against verified Ghidra 12.1.4. Ghidra script API build remains independent.
 
-### Original firmware private validation (outside public CI)
+### Original firmware evidence and later private-only CI
 
 In the private 524,288-byte test BIN, an even-offset raw byte search found **506** candidate Motorola `33 FC` patterns whose absolute long destination is in `0xFFF000–0xFFFFFF`. This is **not** 506 disassembled instructions or actual executed writes: raw patterns can occur in data and are an independent regression inventory only. Known earlier SIMCR/TRAMBAR/CSBAR7/VBR bytes matched at 13 previously recorded locations. The private file itself is never published in this repo.
 
-### Still genuinely unfinished
+### Still genuinely unfinished (post-PR #24)
 
-Full multi-basic-block constant propagation, branch-aware state transitions, reset path selection, MM write-once timing, peripheral RAM relocation, chip-select bus function codes and physical wiring validation, robust PDF table geometry, and optional reversible **manually approved** renaming. Tests against the user's installed Ghidra session are still outstanding; do not describe all seven stages as complete.
+Exact reset-to-application and interprocedural/exception CFG paths, complete pointer/alias and P-code reasoning, physical CS wiring and active bus-cycle state, a confirmed physical MCU identity, path-sensitive TRAMBAR/CS/VBR memory epochs, broad trustworthy PDF register/bitfield/reset table reconstruction, and a collision-safe undoable **function/variable** rename approval UI. The new bounded SIMCR/MM history counts sites since *function entry*, not accepted writes since hardware reset. Do not describe all seven stages as completed.
 
 ## Four-area follow-on (PR #12, 2026-10-21)
 
@@ -43,6 +43,23 @@ Full multi-basic-block constant propagation, branch-aware state transitions, res
 
 **Scope boundary:** the four *implementation tracks* are now represented in code. A fully exact cross-procedure and exception-aware runtime state graph, real-hardware validation and safe flash address inference are **not implemented or proven**. Do not ask for separate manual tests of individual commits; test later as one package after automated validation.
 
+## Post-PR #18 implementation checkpoint (2026-10-21)
+
+| Change | Merged PR | Verification | Main scope |
+|---|---|---|---|
+| Resizable, bulk-selectable reviewed full MC68332 module regions | [#18](https://github.com/bogkom/GhidrAssist/pull/18) | Previously user-tested and CI passed | D-1 full module apertures, Undo-safe Review / Apply |
+| Coordinate-backed PDF D-1 module candidate extraction | [#19](https://github.com/bogkom/GhidrAssist/pull/19) | Java + Ghidra 12.1.4 CI passed | Candidate-only page evidence for RAG, **not** trusted imported CPU definitions |
+| Source-backed MC68332 module/field/access metadata | [#20](https://github.com/bogkom/GhidrAssist/pull/20) | Java + Ghidra 12.1.4 CI passed | Appendix D-1/D-2, MM write-once metadata, 8-bit RSR, unknown resets remain unknown |
+| Strictly parsed indexed A/D addressing | [#21](https://github.com/bogkom/GhidrAssist/pull/21) | Java + Ghidra 12.1.4 CI passed | CFG-conservative index + scale + displacement; unknown aliases remain unresolved |
+| Private raw ECU411 fingerprints | [private PR #1](https://github.com/bogkom/GhidrAssist-Firmware-Tests/pull/1) | Private GitHub Actions passed | 512 KiB Git blob identity, 7 MOVE.W candidates, 3 SIMCR stores, 4 VBR markers; no private artifacts |
+| Hardware function naming CSV candidate roles | [#22](https://github.com/bogkom/GhidrAssist/pull/22) | Java + Ghidra 12.1.4 CI passed | No renaming; multiple direct writes + collisions + manual MCU selection |
+| Focused AI/RAG evidence sections | [#23](https://github.com/bogkom/GhidrAssist/pull/23) | Java + Ghidra 12.1.4 CI passed | Don't fill focused queries with irrelevant hardware/telemetry sections |
+| Function-local MM write candidate path counts | [#24](https://github.com/bogkom/GhidrAssist/pull/24) | Java + Ghidra 12.1.4 CI passed | Bounded 0/1/2+ earlier SIMCR candidate sites, call uncertainty, **not** reset-relative verification |
+
+Detailed docs: [PDF profile metadata](hardware-sourced-profiles.md), [indexed CFG](hardware-indexed-addressing.md), [function naming](hardware-function-naming-review.md), [RAG relevance](hardware-rag-relevance.md), [MM write-once candidate histories](hardware-mm-write-history.md).
+
+**Current testing rule:** automated synthetic and private raw-fingerprint checks are green, but integrated correctness on the actual *Ghidra program database* (including indirect control flow, Memory.join, typed registers, Undo, and hardware-state inference) still requires a future consolidated integration/regression run. Do not misreport pure-Java tests as full execution-path validation.
+
 ## Verified test firmware facts
 
 - Private repo: `bogkom/GhidrAssist-Firmware-Tests`, `main`, file `ECU_FLASH 512KB.bin`, 524288 bytes, Git blob SHA `9a27ebc2c216a8888e8d49ab2f7d34ca03ac85f9`.
@@ -53,10 +70,10 @@ Full multi-basic-block constant propagation, branch-aware state transitions, res
 
 ## Continuation / incident procedure
 
-1. Inspect `feature/hardware-analysis-seven-stages` and last commit; inspect CI.
-2. Read this ledger and the changed files, continue on the same branch.
-3. Make a commit after each completed independent component, rather than a giant uncommitted patch.
-4. Open a PR only after meaningful checks; merge only when the relevant automated checks pass.
-5. If interruption occurs, next assistant may resume by examining last commit/PR without requiring the user to repeat goals.
+1. Inspect current `master`, merged PRs **#18–#24**, and the latest GitHub Actions runs. Do not repeat completed work.
+2. Inspect the private `bogkom/GhidrAssist-Firmware-Tests` repository for its merged PR **#1** and private Actions, but never publish or copy `ECU_FLASH 512KB.bin` into this public repository.
+3. Use isolated feature branches and commit a validated implementation batch before PR. Both pure-Java tests and the exact Ghidra 12.1.4 extension build must pass for relevant code changes.
+4. Merge through PR only after successful checks. Never publish a stable GitHub Release without owner approval; keep Ghidra memory/symbol modifications reviewed and undoable.
+5. Resume from this ledger and the linked files without requiring the owner to restate the seven-point scope.
 
 No MCU identification, verified RAM wiring, active runtime path or u-Link NT programming address may be asserted from static candidate matches.
