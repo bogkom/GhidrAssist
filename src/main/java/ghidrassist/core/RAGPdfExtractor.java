@@ -47,8 +47,20 @@ public final class RAGPdfExtractor {
             }
             final int count = pdf.getNumberOfPages();
             if (count == 0) throw new IOException("PDF has no pages: " + source.getName());
+            // One document identity for ALL page chunks. Bare archive names
+            // such as c5sim.pdf occur in multiple Motorola MCU collections:
+            // sample the first three actual PDF text pages for a matching
+            // "MC683xx USER'S MANUAL" header before assigning a model.
+            StringBuilder headerSample = new StringBuilder();
+            for (int previewPage=1; previewPage<=Math.min(3,count); previewPage++) {
+                LayoutAwareStripper preview = new LayoutAwareStripper();
+                preview.setStartPage(previewPage);
+                preview.setEndPage(previewPage);
+                headerSample.append(preview.getText(pdf)).append('\n');
+            }
             ManualDocumentScope.Identity identity =
-                ManualDocumentScope.fromFilename(source.getName());
+                ManualDocumentScope.fromDocumentEvidence(source.getName(),
+                    headerSample.toString());
             int indexed = 0;
             int blank = 0;
             int suspicious = 0;

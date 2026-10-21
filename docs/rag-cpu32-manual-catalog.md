@@ -71,8 +71,60 @@ This remains text-layer evidence only. Alternative manufacturers' PDFs may
 use different headers; geometry/visual inspection is still necessary before
 auto-importing bitfield tables.
 
+## Actual NXP ZIP files and local naming (2026-10-21 correction)
+
+**Important correction:** identifiers such as `MC68336376UM05` are the
+**publication identifiers on the NXP documentation website**, not a guarantee
+of the names of PDF files extracted from `MC683336_376UM_ZIP`.
+That archive uses short names, for example `c5sim.pdf`, `c8qadc.pdf`
+and `apdreg.pdf` (Appendix D).
+Identically named `c5sim.pdf` files also appear in other Motorola MCU
+collections (the large `MPC500_M68300_CD_ZIP` has one under
+`MC683XX/mc68332/`). **Never infer a device from `c5sim.pdf` alone.**
+
+| Actual ZIP filename / local filename | Optional readable rename | Intended provenance (verify inside PDF) |
+|---|---|---|
+| `c5sim.pdf` from MC683336_376UM_ZIP | `MC68336_68376_05_SIM.pdf` | MC68336/MC68376, SIM, chapter 5 |
+| `c8qadc.pdf` from MC683336_376UM_ZIP | `MC68336_68376_08_QADC.pdf` | MC68336/MC68376, QADC, chapter 8 |
+| `apdreg.pdf` from a checked MC683336_376 manual | `MC68336_68376_D_REGISTERS.pdf` | Appendix D register map, with shared and model-specific rows |
+| register summary file **after checking its cover** | `MC68336_68376_D_REGISTERS.pdf` | MC68336/MC68376 Appendix D, with model-specific row restrictions |
+| TouCAN chapter **after checking its cover** | `MC68336_68376_13_TOUCAN.pdf` | Shared manual chapter, TouCAN only on MC68376 |
+| user's device-specific `MC331_SIM.pdf` | Keep original or use `MC68331_SIM.pdf` | MC68331 SIM chapter **only when the actual PDF confirms this** |
+| generic `SIMRM.pdf`, `QSMRM.pdf` | Keep manufacturer's name | Generic module manuals, do not misleadingly label as MC68331-only |
+
+You **do not need to rename** a short ZIP filename to index it when it
+is the only file with that basename. **However, the current Lucene document
+store keys files by basename** and rejects two different source paths named
+`c5sim.pdf`. If you import manuals from more than one CPU archive, assign
+unique descriptive names (for example `MC68332_05_SIM.pdf` and
+`MC68336_68376_05_SIM.pdf`) **after inspecting the PDF header**. This
+avoids accidental replacement and makes the document list more readable.
+
+GhidrAssist
+now samples the first three PDF text pages, looks for a clearly adjacent
+`MC683xx ... USER'S MANUAL` header and records an explicitly marked
+`PDF_HEADER_MATCH; ARCHIVE_FILENAME_NOT_UNIQUE` source identity. Missing or
+ambiguous text headers leave the short name `UNKNOWN`. Local user-declared
+filenames use `LOCAL_FILENAME_ALIAS` until a compatible page header is found.
+A mismatch such as `MC331_SIM.pdf` containing an MC68336/376 manual is
+recorded as `FILENAME_HEADER_MODEL_CONFLICT` and no device is assigned.
+
+For revision/mask-specific documentation, retain the precise manufacturer
+name and edition in a provenance note or distinct local library; aliases
+do not verify the manual edition or register reset values.
+
+### MC68375 — intentionally unverified model-specific documentation
+
+MC68375 appears in third-party automotive ECU module documentation, but a
+separate official NXP MC68375 register user manual and applicable revision
+have not been verified for this catalog. Keep `MC68375` in the comparison
+inventory as **DOCUMENTATION_UNVERIFIED** rather than silently inheriting
+MC68376's TouCAN, QADC, register masks or MM mapping. An optional local
+`MC68375_*.pdf` filename is only a user-supplied label
+(`NO_PRIMARY_MANUAL_VERIFIED`), not a trusted register source.
+
 ## Version / provenance checklist when collecting PDFs
 
-Use the original manufacturer basename when possible (the index's filename collisions are not silently merged). For another revision with the same name, retain it in a clearly named local version folder and review the application’s same-name handling before indexing it alongside the earlier edition. A renamed variant should initially remain UNKNOWN in automatic filename-scoping, rather than pretending to have the original document's verified revision.
+Use the original manufacturer basename when possible (the index's filename collisions are not silently merged). For another revision with the same name, retain it in a clearly named local version folder and review the application’s same-name handling before indexing it alongside the earlier edition. A renamed variant can now receive a **local alias candidate** when it follows a supported pattern, but must retain explicit uncertainty until its internal PDF header and revision agree. Unsupported names remain UNKNOWN.
 
 Never infer that **MC68331**, **MC68332**, **MC68336**, and **MC68376** have interchangeable peripheral register tables merely because CPU32 instruction semantics overlap.

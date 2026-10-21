@@ -73,6 +73,10 @@ MC68332	CPU32	QSMCR	0xFFFC00	16	0x0000	OTHER
 MC68332	CPU32	TPUMCR	0x7FFE00	16	0x0000	OTHER
 MC68332	CPU32	TPUMCR	0xFFFE00	16	0x0000	OTHER
 
+# MC68375: cited in third-party ECU service documentation, but no model-specific
+# official register map verified here. DO NOT infer from MC68376 and DO NOT add
+# SIMCR/MM or peripheral addresses without sourced model/revision evidence.
+# This inventory includes MC68375 as an OPEN DOCUMENTATION CANDIDATE only.
 # Additional documented CPU32 MCU models; similarities are NOT CPU identification.
 # MC68331: SIMCR and MM per https://www.nxp.com/docs/en/data-sheet/MC68331TS.pdf
 # MC68336 / MC68376: SIM and QADCMCR per Appendix D,
