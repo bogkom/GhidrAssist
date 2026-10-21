@@ -54,8 +54,10 @@ public final class HardwareInventoryService {
         public final List<Site> sites;
         public final String markdown;
         public final String namePreviewCsv;
+        public final List<HardwareFunctionNamingReview.Proposal> functionProposals;
         private Report(String program,String language,String selection,List<Site> sites,
-                String markdown,String namePreviewCsv,int functions){
+                String markdown,String namePreviewCsv,int functions,
+                List<HardwareFunctionNamingReview.Proposal> functionProposals){
             this.program=program;
             this.language=language;
             this.selection=selection;
@@ -64,6 +66,7 @@ public final class HardwareInventoryService {
             this.markdown=markdown;
             this.namePreviewCsv=namePreviewCsv;
             this.functions=functions;
+            this.functionProposals=List.copyOf(functionProposals);
         }
     }
 
@@ -291,6 +294,6 @@ public final class HardwareInventoryService {
             .analyze(program,monitor);
         md.append("\n\n").append(flow.markdown);
         return new Report(program.getName(),program.getLanguageID().toString(),choice,sites,
-            md.toString(),csv,grouped.size());
+            md.toString(),csv,grouped.size(),functionProposals);
     }
 }
