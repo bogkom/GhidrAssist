@@ -64,6 +64,19 @@ public final class HardwareDataflowSelfTest {
         ok(loop.snapshots.get(0).effectiveAddress==null,
             "loop with clobbered pointer must not retain stale constant");
         ok(!loop.truncated,"bounded loop converges");
+        var copied=HardwareDataflow.analyze(0,List.of(
+            st(0,SET_POINTER,"D0",simcr,0,null,0,2L),
+            new HardwareDataflow.Step(2,COPY_POINTER,"A1","D0",0,0,null,0,
+                List.of(4L),"MOVE.L D0,A1"),
+            st(4,SET_POINTER,"D2",0x40ca,0,null,0,6L),
+            new HardwareDataflow.Step(6,STORE_INDIRECT,"A1","D2",0,0,null,16,
+                List.of(),"MOVE.W D2,(A1)")
+        ),Set.of(simcr),100);
+        ok(copied.snapshots.get(0).effectiveAddress==simcr,
+            "D-register to A-register pointer copy");
+        ok(copied.snapshots.get(0).writtenWord==0x40ca,
+            "register-sourced MOVE.W constant propagation");
+
         var trunc=HardwareDataflow.analyze(0,List.of(
             st(0,OTHER,null,0,0,null,0,2L),
             st(2,OTHER,null,0,0,null,0)
