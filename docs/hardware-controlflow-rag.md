@@ -8,7 +8,7 @@
 
 - Repeated loops converge through a bounded worklist, with a truncation flag when the bound is reached.
 - Unrecognized calls invalidate A/D pointer constants, chip-select configuration and VBR; the called function is never automatically treated as an inlined continuation.
-- Static caller XREFs and calling function names are evidence of possible call order, **not** proof of runtime execution.
+- Static caller XREFs and bounded **multi-hop ancestor chains** (maximum three levels, five paths) are evidence of possible call order, **not** proof of runtime execution.
 - Unknown indirect jumps, exception entry, interprocedural register values, condition-dependent branch pruning and the real reset path remain **unresolved**.
 - The in-Ghidra Hardware Analysis report now includes this section after the existing per-function direct register inventory.
 
