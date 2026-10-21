@@ -56,6 +56,21 @@ PDF references are edition-specific, not fixed constants applicable to alternate
 - Module table extraction admits non-power-of-two widths, especially **TouCAN 384 bytes** from the 68336/376 table; the `(MC68376 Only)` restriction is retained in extracted candidate evidence.
 - All detected PDF geometry rows remain non-actionable until checked against source diagrams and a deliberately chosen CPU profile.
 
+## Printed page label enhancement
+
+On import, a PDF page chunk now includes both `pdf_page` (1-based physical PDF
+page) and, where a manufacturer's **User's Manual header** contains a clear
+page label, `printed_page=D-1` or `printed_page=5-1` with the flag
+`PDF_TEXT_HEADER_CANDIDATE`. If missing or ambiguous, `printed_page=UNKNOWN`
+is explicitly recorded. The detector never promotes `Table D-1` in body
+text into a printed page index. Unlike a PDF page number, a printed page
+label is relative to the manual's original layout and may be shared by both
+a full book and its separately published chapter.
+
+This remains text-layer evidence only. Alternative manufacturers' PDFs may
+use different headers; geometry/visual inspection is still necessary before
+auto-importing bitfield tables.
+
 ## Version / provenance checklist when collecting PDFs
 
 Use the original manufacturer basename when possible (the index's filename collisions are not silently merged). For another revision with the same name, retain it in a clearly named local version folder and review the application’s same-name handling before indexing it alongside the earlier edition. A renamed variant should initially remain UNKNOWN in automatic filename-scoping, rather than pretending to have the original document's verified revision.
