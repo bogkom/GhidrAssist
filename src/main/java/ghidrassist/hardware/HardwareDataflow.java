@@ -97,6 +97,8 @@ public final class HardwareDataflow {
         public final int priorMmCandidateMin, priorMmCandidateMax;
         /** Calls may mutate MCU state outside this function. */
         public final boolean priorUnknownCall;
+        /** May have an unrecognized write with an unknown effective address. */
+        public final boolean priorUnknownStore;
         private Snapshot(Step step,Long address,Integer value,State before,State after) {
             instruction=step.address;kind=step.kind;effectiveAddress=address;
             writtenWord=value;pointerRegister=step.register;
@@ -106,6 +108,7 @@ public final class HardwareDataflow {
             priorMmCandidateMin=before.mmCandidateMin;
             priorMmCandidateMax=before.mmCandidateMax;
             priorUnknownCall=before.crossedUnknownCall;
+            priorUnknownStore=before.crossedUnknownStore;
         }
     }
     public static final class Result {
@@ -126,11 +129,13 @@ public final class HardwareDataflow {
         private Long vbr;
         private int mmCandidateMin, mmCandidateMax;
         private boolean crossedUnknownCall;
+        private boolean crossedUnknownStore;
         private State copy(){
             State s=new State();s.pointers.putAll(pointers);
             s.peripherals.putAll(peripherals);s.vbr=vbr;
             s.mmCandidateMin=mmCandidateMin;s.mmCandidateMax=mmCandidateMax;
-            s.crossedUnknownCall=crossedUnknownCall;return s;
+            s.crossedUnknownCall=crossedUnknownCall;
+            s.crossedUnknownStore=crossedUnknownStore;return s;
         }
         private static <K,V> void intersect(Map<K,V> before,Map<K,V> incoming){
             before.entrySet().removeIf(e->!Objects.equals(incoming.get(e.getKey()),e.getValue()));
@@ -143,11 +148,13 @@ public final class HardwareDataflow {
             mmCandidateMin=Math.min(mmCandidateMin,rhs.mmCandidateMin);
             mmCandidateMax=Math.max(mmCandidateMax,rhs.mmCandidateMax);
             crossedUnknownCall |= rhs.crossedUnknownCall;
+            crossedUnknownStore |= rhs.crossedUnknownStore;
             return !pointers.equals(b.pointers)||!peripherals.equals(b.peripherals)||
                     !Objects.equals(vbr,b.vbr)||
                     mmCandidateMin!=b.mmCandidateMin||
                     mmCandidateMax!=b.mmCandidateMax||
-                    crossedUnknownCall!=b.crossedUnknownCall;
+                    crossedUnknownCall!=b.crossedUnknownCall ||
+                    crossedUnknownStore!=b.crossedUnknownStore;
         }
     }
     public static Long pcodeInputValue(boolean constant,long literal,Long propagated){
@@ -220,13 +227,38 @@ public final class HardwareDataflow {
                     s.mmCandidateMin=Math.min(2,in.mmCandidateMin+1);
                     s.mmCandidateMax=Math.min(2,in.mmCandidateMax+1);
                 }
-                if(address!=null && targets.contains(address)){
-                    // Only full 16-bit immediate overwrites are firm register
-                    // constants; BCLR, BSET, MOVE.B and MOVE.L remain unknown.
-                    Long known=knownStoreValue(step,in);
-                    if(step.writeBits==16 && known!=null)
-                        s.peripherals.put(address,(int)(known&0xffff));
-                    else s.peripherals.remove(address);
+                if(address==null) {
+                    // Unknown pointer/alias can target ANY tracked MMIO.
+                    // Otherwise a stale CSBAR value would masquerade as
+                    // a valid later hardware configuration.
+                    s.peripherals.clear();
+                    s.crossedUnknownStore=true;
+                } else {
+                    // Peripheral snapshots model whole 16-bit registers.
+                    // Any overlapping byte, word, long or unknown-size write
+                    // invalidates the full register value. Reintroduce a
+                    // constant only for an aligned, complete 16-bit write
+                    // with a fully known source.
+                    int bytes = switch(step.writeBits) {
+                        case 8 -> 1;
+                        case 16 -> 2;
+                        case 32 -> 4;
+                        default -> 0;
+                    };
+                    if(bytes==0) {
+                        s.peripherals.clear();
+                        s.crossedUnknownStore=true;
+                    } else {
+                        long last=address+bytes-1;
+                        s.peripherals.keySet().removeIf(reg ->
+                            address<=reg+1 && reg<=last);
+                        if(step.writeBits==16 && targets.contains(address) &&
+                                (address&1)==0) {
+                            Long known=knownStoreValue(step,in);
+                            if(known!=null)
+                                s.peripherals.put(address,(int)(known&0xffff));
+                        }
+                    }
                 }
             }
             case VBR_CONSTANT -> s.vbr=step.operand&MASK24;
