@@ -35,6 +35,33 @@ public final class ManualModuleTableSelfTest {
             found.get(3).candidateBase==0xfffe00L,"QSM/TPU");
         ok(found.stream().allMatch(c->c.pdfPage==215 && c.mmDependent &&
             c.provenance.contains("DEVICE_UNVERIFIED")),"provenance and uncertainty");
+        // MC68336/376 uses a separately published Appendix D, which is
+        // PDF page 1 in MC68336376UMD but PDF page 319 in the full manual.
+        // Table D-1 contains a non-power-of-two 384-byte TouCAN aperture
+        // restricted to the MC68376 device (not MC68336).
+        List<ManualModuleTable.Word> newer=new ArrayList<>();
+        row(newer,80,"SIM","128","$YFFA00");
+        row(newer,100,"SRAM","8","$YFFB40");
+        row(newer,120,"MRM (MC68376 Only)","32","$YFF820");
+        row(newer,140,"QADC","512","$YFF200");
+        row(newer,160,"QSM","512","$YFFC00");
+        row(newer,180,"CTM4","256","$YFF400");
+        row(newer,200,"TPU","512","$YFFE00");
+        row(newer,220,"TPURAM","64","$YFFB00");
+        row(newer,240,"TouCAN (MC68376 Only)","384","$YFF080");
+        var chapter=ManualModuleTable.parsePage(1,caption,newer);
+        var combined=ManualModuleTable.parsePage(319,caption,newer);
+        ok(chapter.size()==9 && combined.size()==9,
+            "MC68336/376 D-1 nine documented apertures");
+        ok(chapter.get(8).sizeBytes==384 &&
+            chapter.get(8).candidateBase==0xfff080L &&
+            chapter.get(8).modelConstraint.equals("MC68376_ONLY"),
+            "TouCAN 384-byte aperture is MC68376-only");
+        ok(chapter.get(2).module.contains("MRM") &&
+            chapter.get(2).modelConstraint.equals("MC68376_ONLY"),
+            "MRM applicability is not common to MC68336");
+        ok(combined.get(0).pdfPage==319 && chapter.get(0).pdfPage==1,
+            "printed D-1 has different 1-based PDF page in book vs chapter");
         ok(ManualModuleTable.parsePage(215,"other page",glyphs).isEmpty(),
             "title required");
         List<ManualModuleTable.Word> collided=new ArrayList<>(glyphs);
