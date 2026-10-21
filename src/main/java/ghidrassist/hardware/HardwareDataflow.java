@@ -64,6 +64,7 @@ public final class HardwareDataflow {
             this.operand=operand;this.displacement=displacement;
             this.literalWord=literalWord;this.writeBits=writeBits;
             this.successors=List.copyOf(successors);this.mnemonic=mnemonic==null?"":mnemonic;
+            this.sideEffectRegisters=Set.of();
         }
         /** Indexed STORE: base + displacement + signed .W/.L index * scale. */
         public Step(long address, String baseRegister, String sourceRegister,
