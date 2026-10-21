@@ -13,6 +13,7 @@ on:
       - 'src/main/java/ghidrassist/hardware/ManualRegisterHints.java'
       - 'src/main/java/ghidrassist/hardware/ManualModuleTable.java'
       - 'src/main/java/ghidrassist/hardware/ManualDocumentScope.java'
+      - 'src/main/java/ghidrassist/hardware/ManualPrintedPage.java'
       - 'src/main/java/ghidrassist/hardware/HardwareNamingReview.java'
       - 'src/main/java/ghidrassist/hardware/HardwareFunctionNamingReview.java'
       - 'src/main/java/ghidrassist/hardware/HardwareFunctionRenamePolicy.java'
@@ -27,6 +28,7 @@ on:
       - 'src/test/java/ghidrassist/hardware/ManualRegisterHintsSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/ManualModuleTableSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/ManualDocumentScopeSelfTest.java'
+      - 'src/test/java/ghidrassist/hardware/ManualPrintedPageSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/HardwareNamingReviewSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/HardwareFunctionNamingReviewSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/HardwareFunctionRenamePolicySelfTest.java'
@@ -44,6 +46,7 @@ on:
       - 'src/main/java/ghidrassist/hardware/ManualRegisterHints.java'
       - 'src/main/java/ghidrassist/hardware/ManualModuleTable.java'
       - 'src/main/java/ghidrassist/hardware/ManualDocumentScope.java'
+      - 'src/main/java/ghidrassist/hardware/ManualPrintedPage.java'
       - 'src/main/java/ghidrassist/hardware/HardwareNamingReview.java'
       - 'src/main/java/ghidrassist/hardware/HardwareFunctionNamingReview.java'
       - 'src/main/java/ghidrassist/hardware/HardwareFunctionRenamePolicy.java'
@@ -58,6 +61,7 @@ on:
       - 'src/test/java/ghidrassist/hardware/ManualRegisterHintsSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/ManualModuleTableSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/ManualDocumentScopeSelfTest.java'
+      - 'src/test/java/ghidrassist/hardware/ManualPrintedPageSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/HardwareNamingReviewSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/HardwareFunctionNamingReviewSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/HardwareFunctionRenamePolicySelfTest.java'
@@ -89,6 +93,7 @@ jobs:
             src/main/java/ghidrassist/hardware/ManualRegisterHints.java \
             src/main/java/ghidrassist/hardware/ManualModuleTable.java \
             src/main/java/ghidrassist/hardware/ManualDocumentScope.java \
+            src/main/java/ghidrassist/hardware/ManualPrintedPage.java \
             src/main/java/ghidrassist/hardware/HardwareNamingReview.java \
             src/main/java/ghidrassist/hardware/HardwareFunctionNamingReview.java \
             src/main/java/ghidrassist/hardware/HardwareFunctionRenamePolicy.java \
@@ -106,6 +111,7 @@ jobs:
             src/test/java/ghidrassist/hardware/ManualRegisterHintsSelfTest.java \
             src/test/java/ghidrassist/hardware/ManualModuleTableSelfTest.java \
             src/test/java/ghidrassist/hardware/ManualDocumentScopeSelfTest.java \
+            src/test/java/ghidrassist/hardware/ManualPrintedPageSelfTest.java \
             src/test/java/ghidrassist/hardware/HardwareDataflowSelfTest.java \
             src/test/java/ghidrassist/hardware/HardwareIndexedAddressSelfTest.java \
             src/test/java/ghidrassist/hardware/HardwareContextSelectorSelfTest.java \
@@ -123,6 +129,8 @@ jobs:
             ghidrassist.hardware.ManualModuleTableSelfTest
           java -cp "$RUNNER_TEMP/hardware-tests" \
             ghidrassist.hardware.ManualDocumentScopeSelfTest
+          java -cp "$RUNNER_TEMP/hardware-tests" \
+            ghidrassist.hardware.ManualPrintedPageSelfTest
           java -cp "$RUNNER_TEMP/hardware-tests" \
             ghidrassist.hardware.HardwareNamingReviewSelfTest
           java -cp "$RUNNER_TEMP/hardware-tests" \
