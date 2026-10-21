@@ -262,10 +262,29 @@ public final class HardwareInventoryService {
         String csv=HardwareNamingReview.toCsv(
             HardwareNamingReview.propose(concreteDevice,"MC68332",
                 registerNames,existingLabels,evidenceCounts,reserved));
+        // Function roles require separate, direct WRITE evidence across
+        // multiple distinct register names. Existing user names are preserved.
+        // Proposals share the seven-column register CSV and remain review-only.
+        List<HardwareFunctionNamingReview.Observation> functionWrites=new ArrayList<>();
+        for(Site site:sites) {
+            if(!site.write)continue;
+            Function function=program.getFunctionManager().getFunctionContaining(site.pc);
+            if(function==null)continue;
+            functionWrites.add(new HardwareFunctionNamingReview.Observation(
+                function.getEntryPoint().getOffset(),function.getName(),
+                site.pc.getOffset(),site.register,true));
+        }
+        List<HardwareFunctionNamingReview.Proposal> functionProposals =
+            HardwareFunctionNamingReview.propose(concreteDevice,functionWrites,reserved);
+        csv+=HardwareFunctionNamingReview.toCsvRows(functionProposals);
         md.append("\n## Naming review\n\n")
           .append("Naming is preview-only, exported as separate CSV. ")
           .append("Generic CPU32 mode deliberately emits no device-specific proposed names. ")
-          .append("A manually selected MCU is still unverified: review before any future application.\n");
+          .append("A manually selected MCU is still unverified: review before any future application.\n")
+          .append("Candidate function roles: ").append(functionProposals.size())
+          .append(" (direct multi-register write evidence only; no renaming performed).\n")
+          .append("Function rows in the same CSV have register column FUNCTION_ROLE; ")
+          .append("unknown/indirect-only roles and runtime reachability remain unresolved.\n");
         // A second, conservative CFG pass supplies address-register and
         // conditional branch-join evidence. No binary bytes or labels are changed.
         GhidraHardwareFlowService.Report flow=new GhidraHardwareFlowService()
