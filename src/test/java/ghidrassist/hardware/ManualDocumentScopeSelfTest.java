@@ -32,6 +32,9 @@ public final class ManualDocumentScopeSelfTest {
         ok(own331.applicableModels().equals("MC68331") &&
            own331.confidence().contains("LOCAL_FILENAME_ALIAS"),
            "user's MC331 module prefix is a declaration, not verified identity");
+        ok(ManualDocumentScope.fromFilename("MC68332_05_SIM.pdf")
+            .applicableModels().equals("MC68332"),
+            "unique MC68332 chapter alias is recognized");
         var own336=ManualDocumentScope.fromFilename("MC68336_68376_05_SIM.pdf");
         ok(own336.applicableModels().equals("MC68336+MC68376") &&
            own336.editionPart().startsWith("SPLIT_05"),
