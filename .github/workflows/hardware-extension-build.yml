@@ -4,10 +4,13 @@ on:
   push:
     branches:
       - feature/hardware-analysis-seven-stages
+      - feature/hardware-controlflow-rag-integration
     paths:
       - 'src/main/java/ghidrassist/hardware/**'
       - 'src/main/java/ghidrassist/ui/**'
       - 'src/main/java/ghidrassist/core/RAGPdfExtractor.java'
+      - 'src/main/java/ghidrassist/core/TabController.java'
+      - 'src/main/java/ghidrassist/services/QueryService.java'
       - 'src/test/java/ghidrassist/hardware/**'
       - '.github/workflows/hardware-extension-build.yml'
   pull_request:
@@ -15,6 +18,8 @@ on:
       - 'src/main/java/ghidrassist/hardware/**'
       - 'src/main/java/ghidrassist/ui/**'
       - 'src/main/java/ghidrassist/core/RAGPdfExtractor.java'
+      - 'src/main/java/ghidrassist/core/TabController.java'
+      - 'src/main/java/ghidrassist/services/QueryService.java'
       - '.github/workflows/hardware-extension-build.yml'
 
 jobs:
