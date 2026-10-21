@@ -157,6 +157,36 @@ public final class HardwareDataflowSelfTest {
         ok(otherPeriph.snapshots.get(1).priorMmCandidateMax==0,
             "CSBAR is not SIMCR MM write");
 
+        var unknownStore=HardwareDataflow.analyze(0,List.of(
+            st(0,STORE_DIRECT,null,cs7,0,0xff88,16,2L),
+            st(2,STORE_INDIRECT,"A1",0,0,null,16,4L),
+            st(4,STORE_DIRECT,null,simcr,0,0x40ca,16)
+        ),Set.of(simcr,cs7),100);
+        ok(unknownStore.snapshots.get(1).knownPeripheralWords.isEmpty(),
+            "unknown-destination memory store invalidates previous CSBAR state");
+        ok(unknownStore.snapshots.get(2).priorUnknownStore,
+            "later SIMCR carries unknown write alias evidence");
+
+        var partialStore=HardwareDataflow.analyze(0,List.of(
+            st(0,STORE_DIRECT,null,simcr,0,0x40ca,16,2L),
+            st(2,STORE_DIRECT,null,simcr+1,0,0x00,8,4L),
+            st(4,STORE_DIRECT,null,cs7,0,0xff88,16)
+        ),Set.of(simcr,cs7),100);
+        ok(!partialStore.snapshots.get(1).knownPeripheralWords.containsKey(simcr),
+            "low-byte update invalidates earlier SIMCR word constant");
+        ok(partialStore.snapshots.get(2).knownPeripheralWords.containsKey(cs7),
+            "unrelated full-width write remains tracked");
+
+        var longOverwrite=HardwareDataflow.analyze(0,List.of(
+            st(0,STORE_DIRECT,null,cs7,0,0x1234,16,2L),
+            st(2,STORE_DIRECT,null,cs7-2,0,null,32,4L),
+            st(4,STORE_DIRECT,null,simcr,0,0x40ca,16)
+        ),Set.of(simcr,cs7),100);
+        ok(!longOverwrite.snapshots.get(1).knownPeripheralWords.containsKey(cs7),
+            "overlapping 32-bit write invalidates known CSBAR state");
+        ok(longOverwrite.snapshots.get(2).knownPeripheralWords.containsKey(simcr),
+            "known SIMCR value can be re-established after clobber");
+
         var trunc=HardwareDataflow.analyze(0,List.of(
             st(0,STORE_DIRECT,null,simcr,0,0x40ca,16,2L),
             st(2,OTHER,null,0,0,null,0)
