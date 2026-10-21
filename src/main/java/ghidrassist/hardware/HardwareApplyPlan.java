@@ -40,26 +40,20 @@ public final class HardwareApplyPlan {
         List<Item> items=new ArrayList<>();
         add(items,Kind.MEMORY,"SIM_REGISTERS_MM1",0xfffa00,0x80,
             "128-byte uninitialized peripheral region; not proof of MC68332");
-        // Motorola/NXP MC68332 User's Manual, Appendix D, Table D-7
-        // (MM=1). Only documented registers/queue RAM are mapped; "NOT USED"
-        // gaps must NOT become synthetic MMIO registers.
-        // Legacy short blocks (0x8, 0x2, 0x2 bytes) are safely extended
-        // by HardwareApplyService when these items are approved again.
+        // MC68332 Appendix D, REGISTER SUMMARY, page D-1:
+        // Module Size(Bytes) Base Address, MM=1:
+        // SIM 128 FFFA00; TPURAM 64 FFFB00;
+        // QSM 512 FFFC00; TPU 512 FFFE00.
+        // Unimplemented offsets within module ranges are reserved, NOT
+        // automatically typed as registers. This is a memory region definition.
         add(items,Kind.MEMORY,"TPURAM_CONTROL_MM1",0xfffb00,0x40,
-            "MC68332UM D-7: TPURAM control 0xFFFB00-0xFFFB3F; "+
-            "TRAMMCR/TRAMTST/TRAMBAR and unused tail, not relocated RAM");
-        add(items,Kind.MEMORY,"QSM_CONTROL_MM1",0xfffc00,0x20,
-            "MC68332UM D-7: QSM control/SCI/QSPI 0xFFFC00-0xFFFC1F; "+
-            "0xFFFC20-0xFFFCFF is NOT USED and remains unmapped");
-        add(items,Kind.MEMORY,"QSM_QUEUE_MM1",0xfffd00,0x50,
-            "MC68332UM D-7: QSPI receive 0x20, transmit 0x20, command 0x10; "+
-            "0xFFFD50-0xFFFDFF remains unmapped");
-        add(items,Kind.MEMORY,"TPU_CONTROL_MM1",0xfffe00,0x28,
-            "MC68332UM D-7: TPU control/status registers 0xFFFE00-0xFFFE27; "+
-            "0xFFFE28-0xFFFEFF remains unmapped");
-        add(items,Kind.MEMORY,"TPU_PARAM_RAM_MM1",0xffff00,0x100,
-            "MC68332UM D-7: 16-channel TPU Parameter RAM 0xFFFF00-0xFFFFFF; "+
-            "not the relocatable standby TPURAM");
+            "MC68332 Appendix D-1: complete 64-byte TPURAM module MMIO aperture");
+        add(items,Kind.MEMORY,"QSM_MM1",0xfffc00,0x200,
+            "MC68332 Appendix D-1: complete 512-byte QSM aperture; "+
+            "reserved bytes remain undefined, queue RAM lies within region");
+        add(items,Kind.MEMORY,"TPU_MM1",0xfffe00,0x200,
+            "MC68332 Appendix D-1: complete 512-byte TPU aperture; "+
+            "reserved bytes remain undefined, parameter RAM lies within region");
         add(items,Kind.MEMORY,"TPURAM_2K_CANDIDATE",0xfff000,0x800,
             "2KiB candidate relocated TPU RAM at TRAMBAR=0xFFF0");
         add(items,Kind.MEMORY,"CS7_DEVICE_CANDIDATE",0xff8800,0x800,

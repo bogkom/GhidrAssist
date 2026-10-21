@@ -34,6 +34,15 @@ import javax.swing.JTextField;
 import javax.swing.JCheckBox;
 import javax.swing.table.DefaultTableModel;
 import java.awt.Dimension;
+import java.awt.Dialog;
+import java.awt.Window;
+import java.awt.Toolkit;
+import javax.swing.JDialog;
+import javax.swing.SwingUtilities;
+import javax.swing.JTextField;
+import javax.swing.table.DefaultTableCellRenderer;
+import javax.swing.event.DocumentListener;
+import javax.swing.event.DocumentEvent;
 import java.util.List;
 import java.util.ArrayList;
 import javax.swing.filechooser.FileNameExtensionFilter;
@@ -263,111 +272,227 @@ public final class HardwareAnalysisTab extends JPanel {
      * Zero rows are preselected; only explicit checkmarks are applied. Ghidra
      * records changes in one undoable transaction.
      */
+    /**
+     * Resizable review dialog. The user already selected a concrete MCU
+     * hypothesis; preflight automatically checks only genuinely safe,
+     * actionable rows. Conflicts, existing work, external peripherals,
+     * relocated RAM and unverified VBR are unchecked.
+     */
     private void reviewHardwareChanges(){
         Program program=plugin.getCurrentProgram();
         if(program==null || latestProgram!=program || latestMarkdown==null){
-            status.setText("Run Hardware Analysis on this active program first.");
+            status.setText("Run Hardware Analysis on the active program first.");
             return;
         }
         if(!latestConcrete){
             JOptionPane.showMessageDialog(this,
-                "Only CPU32 was selected for the previous analysis.\n"+
-                "Select 'MC68332 — user-selected device hypothesis' and rerun analysis\n"+
-                "before creating device-specific memory blocks and register data.",
-                "Concrete profile required",JOptionPane.WARNING_MESSAGE);
+                "Select the MC68332 profile and rerun Analyze before"+
+                " approving MCU-specific memory and registers.",
+                "Concrete CPU profile required",JOptionPane.WARNING_MESSAGE);
             return;
         }
-        String vbrRaw=JOptionPane.showInputDialog(this,
-            "VBR base address for an OPTIONAL 256 x 32-bit vector structure\n"+
-            "(hexadecimal, 4-byte aligned; 000000 is only a candidate).\n"+
-            "Leave the VBR structure unchecked if you are unsure.",
-            "000000");
-        if(vbrRaw==null)return;
-        final List<HardwareApplyPlan.Item> proposals;
-        try {
-            String digits=vbrRaw.trim().replaceFirst("(?i)^0x","");
-            proposals=HardwareApplyPlan.mc68332Mm1Candidates(
-                Long.parseUnsignedLong(digits,16));
-        }catch(Exception e){
-            JOptionPane.showMessageDialog(this,"Invalid VBR address: "+e.getMessage(),
-                "Invalid address",JOptionPane.WARNING_MESSAGE);
-            return;
-        }
-
-        DefaultTableModel model=new DefaultTableModel(
-            new Object[]{"Apply","Kind","Candidate","Range","Why / limitations"},0){
-            @Override public Class<?> getColumnClass(int col){
-                return col==0?Boolean.class:String.class;
+        final List<HardwareApplyPlan.Item> candidates=
+            new ArrayList<>(HardwareApplyPlan.mc68332Mm1Candidates(0));
+        final List<HardwareApplyService.Decision> decisions=new ArrayList<>();
+        for(HardwareApplyPlan.Item item:candidates)
+            decisions.add(HardwareApplyService.preflight(program,item,candidates));
+        final DefaultTableModel model=new DefaultTableModel(
+            new Object[]{"Apply","Status","Type","Definition",
+                         "Address range","Evidence / preflight result"},0){
+            @Override public Class<?> getColumnClass(int index){
+                return index==0?Boolean.class:String.class;
             }
-            @Override public boolean isCellEditable(int row,int col){return col==0;}
+            @Override public boolean isCellEditable(int row,int col){
+                return col==0 && decisions.get(row).allowed();
+            }
         };
-        for(HardwareApplyPlan.Item item:proposals)
-            model.addRow(new Object[]{false,item.kind.name(),item.name,
-                item.location(),item.details});
-        JTable table=new JTable(model);
-        table.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
-        table.getColumnModel().getColumn(0).setPreferredWidth(55);
-        table.getColumnModel().getColumn(1).setPreferredWidth(100);
-        table.getColumnModel().getColumn(2).setPreferredWidth(230);
-        table.getColumnModel().getColumn(3).setPreferredWidth(160);
-        table.getColumnModel().getColumn(4).setPreferredWidth(580);
-        JScrollPane scroll=new JScrollPane(table);
-        scroll.setPreferredSize(new Dimension(960,420));
-
-        JLabel warning=new JLabel("<html><b>Nothing selected by default.</b> "+
-            "MC68332 and MM=1 are user-approved hypotheses, not detected facts.<br>"+
-            "Blocks are uninitialized; occupied code/data/user labels are never cleared. "+
-            "VBR is only typed if its full range is undefined.</html>");
-        JPanel pane=new JPanel(new BorderLayout(5,5));
-        pane.add(warning,BorderLayout.NORTH);
-        pane.add(scroll,BorderLayout.CENTER);
-        if(JOptionPane.showConfirmDialog(this,pane,
-                "Review hardware definitions (Ghidra DB transaction / Undo)",
-                JOptionPane.OK_CANCEL_OPTION,JOptionPane.PLAIN_MESSAGE)!=
-                JOptionPane.OK_OPTION)return;
-        List<HardwareApplyPlan.Item> accepted=new ArrayList<>();
-        for(int i=0;i<model.getRowCount();i++)
-            if(Boolean.TRUE.equals(model.getValueAt(i,0)))accepted.add(proposals.get(i));
-        if(accepted.isEmpty()){
-            status.setText("Nothing selected. No program changes.");
-            return;
+        for(int i=0;i<candidates.size();i++){
+            HardwareApplyPlan.Item item=candidates.get(i);
+            HardwareApplyService.Decision d=decisions.get(i);
+            model.addRow(new Object[]{
+                d.selectedByDefault,d.state.name(),item.kind.name(),
+                item.name,item.location(),d.description+" — "+item.details
+            });
         }
+
+        JTable table=new JTable(model);
+        table.setRowHeight(Math.max(25,table.getFont().getSize()+9));
+        table.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
+        int[] widths={65,135,100,260,180,640};
+        for(int i=0;i<widths.length;i++)
+            table.getColumnModel().getColumn(i).setPreferredWidth(widths[i]);
+        JScrollPane scroll=new JScrollPane(table);
+        JLabel introduction=new JLabel("<html><b>MC68332 / MM=1 — review before editing Ghidra</b>"+
+            "<br>Applicable internal module/register definitions are preselected. "+
+            "Already defined or conflicting items are not. "+
+            "Unverified VBR and external chip selects require manual selection. "+
+            "Reserved module bytes remain undefined.</html>");
+        introduction.setBorder(BorderFactory.createEmptyBorder(8,10,8,10));
+
+        JTextField vbrField=new JTextField("000000",9);
+        JLabel vbrNotice=new JLabel("VBR is optional; runtime base must be verified.");
+        final int vbrIndex=candidates.size()-1;
+        Runnable updateVbr=()->{
+            String digits=vbrField.getText().trim().replaceFirst("(?i)^0x","");
+            try{
+                long value=Long.parseUnsignedLong(digits,16);
+                List<HardwareApplyPlan.Item> updated=
+                    HardwareApplyPlan.mc68332Mm1Candidates(value);
+                HardwareApplyPlan.Item item=updated.get(vbrIndex);
+                candidates.set(vbrIndex,item);
+                HardwareApplyService.Decision d=
+                    HardwareApplyService.preflight(program,item,candidates);
+                decisions.set(vbrIndex,d);
+                model.setValueAt(d.state.name(),vbrIndex,1);
+                model.setValueAt(item.location(),vbrIndex,4);
+                model.setValueAt(d.description+" — "+item.details,vbrIndex,5);
+                if(!d.allowed())model.setValueAt(false,vbrIndex,0);
+                vbrNotice.setText("VBR: "+d.description);
+            }catch(Exception ex){
+                model.setValueAt(false,vbrIndex,0);
+                vbrNotice.setText("Invalid VBR base — hexadecimal and 4-byte aligned");
+            }
+        };
+        vbrField.getDocument().addDocumentListener(new DocumentListener(){
+            public void insertUpdate(DocumentEvent e){updateVbr.run();}
+            public void removeUpdate(DocumentEvent e){updateVbr.run();}
+            public void changedUpdate(DocumentEvent e){updateVbr.run();}
+        });
+
+        JPanel vbrPanel=new JPanel(new FlowLayout(FlowLayout.LEFT,8,3));
+        vbrPanel.add(new JLabel("Optional VBR base (hex):"));
+        vbrPanel.add(vbrField);
+        vbrPanel.add(vbrNotice);
+
+        JButton selectSafe=new JButton("Select applicable");
+        JButton deselect=new JButton("Clear selection");
+        JButton apply=new JButton("Apply selected...");
+        JButton cancel=new JButton("Cancel");
+        JLabel countLabel=new JLabel();
+        Runnable updateCount=()->{
+            int selected=0,blocked=0,existing=0;
+            for(int i=0;i<model.getRowCount();i++){
+                if(Boolean.TRUE.equals(model.getValueAt(i,0)))selected++;
+                if(decisions.get(i).state==HardwareApplyService.State.BLOCKED)blocked++;
+                if(decisions.get(i).state==HardwareApplyService.State.ALREADY_PRESENT)existing++;
+            }
+            countLabel.setText(selected+" selected, "+existing+
+                " existing, "+blocked+" blocked");
+        };
+        model.addTableModelListener(e->updateCount.run());
+        updateCount.run();
+        selectSafe.addActionListener(e->{
+            for(int i=0;i<candidates.size();i++){
+                HardwareApplyService.State state=decisions.get(i).state;
+                model.setValueAt(state==HardwareApplyService.State.READY||
+                    state==HardwareApplyService.State.UPGRADE,i,0);
+            }
+        });
+        deselect.addActionListener(e->{
+            for(int i=0;i<candidates.size();i++)model.setValueAt(false,i,0);
+        });
+
+        JPanel row=new JPanel(new FlowLayout(FlowLayout.LEFT,7,5));
+        row.add(selectSafe);row.add(deselect);row.add(countLabel);
+        row.add(apply);row.add(cancel);
+        JPanel footer=new JPanel(new BorderLayout());
+        footer.add(vbrPanel,BorderLayout.NORTH);
+        footer.add(row,BorderLayout.SOUTH);
+        JPanel content=new JPanel(new BorderLayout(5,5));
+        content.add(introduction,BorderLayout.NORTH);
+        content.add(scroll,BorderLayout.CENTER);
+        content.add(footer,BorderLayout.SOUTH);
+        content.setBorder(BorderFactory.createEmptyBorder(5,5,5,5));
+
+        Window owner=SwingUtilities.getWindowAncestor(this);
+        JDialog dialog=new JDialog(owner,
+            "Review / Apply hardware definitions",Dialog.ModalityType.APPLICATION_MODAL);
+        dialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
+        dialog.setContentPane(content);
+        Dimension screen=Toolkit.getDefaultToolkit().getScreenSize();
+        dialog.setSize(Math.min(1220,Math.max(700,screen.width-100)),
+            Math.min(740,Math.max(460,screen.height-130)));
+        dialog.setMinimumSize(new Dimension(690,420));
+        dialog.setResizable(true);
+        dialog.setLocationRelativeTo(this);
+
+        final List<HardwareApplyPlan.Item> accepted=new ArrayList<>();
+        cancel.addActionListener(e->dialog.dispose());
+        apply.addActionListener(e->{
+            if(table.isEditing())table.getCellEditor().stopCellEditing();
+            accepted.clear();
+            for(int i=0;i<candidates.size();i++){
+                if(!Boolean.TRUE.equals(model.getValueAt(i,0)))continue;
+                HardwareApplyService.Decision d=decisions.get(i);
+                if(!d.allowed()){
+                    JOptionPane.showMessageDialog(dialog,
+                        "Blocked item: "+candidates.get(i).name+
+                        "\n"+d.description,
+                        "Cannot select conflict",JOptionPane.WARNING_MESSAGE);
+                    return;
+                }
+                if(i==vbrIndex){
+                    try {
+                        String digits=vbrField.getText().trim().replaceFirst("(?i)^0x","");
+                        candidates.set(i,HardwareApplyPlan.mc68332Mm1Candidates(
+                            Long.parseUnsignedLong(digits,16)).get(i));
+                    }catch(Exception exception){
+                        JOptionPane.showMessageDialog(dialog,
+                            "VBR base is invalid; correct or deselect its row.",
+                            "Invalid VBR",JOptionPane.WARNING_MESSAGE);
+                        return;
+                    }
+                }
+                accepted.add(candidates.get(i));
+            }
+            if(accepted.isEmpty()){
+                JOptionPane.showMessageDialog(dialog,
+                    "Nothing is selected; the Ghidra project will remain unchanged.",
+                    "No definitions to apply",JOptionPane.INFORMATION_MESSAGE);
+                return;
+            }
+            dialog.dispose();
+        });
+        dialog.setVisible(true);
+        if(accepted.isEmpty())return;
         if(program!=plugin.getCurrentProgram()){
             status.setText("Active program changed; no definitions applied.");
             return;
         }
-        int answer=JOptionPane.showConfirmDialog(this,
-            "Apply "+accepted.size()+" selected definitions in one undoable "+
-            "Ghidra transaction?\n"+
-            "This will MODIFY the current Ghidra program database.\n"+
-            "It does NOT modify the firmware binary on disk or connected hardware.\n"+
-            "Never apply MC68332-specific labels without accepting that hypothesis.",
-            "Final confirmation: write to Ghidra project",
+        int confirm=JOptionPane.showConfirmDialog(this,
+            "Apply "+accepted.size()+" approved definition(s) in ONE undoable"+
+            " Ghidra transaction?\n"+
+            "This modifies only the current Ghidra project, not firmware on disk.\n"+
+            "The selected MC68332 profile is a USER ASSUMPTION.\n"+
+            "Existing code, typed data and user-defined symbols will not be erased.",
+            "Final confirmation: modify Ghidra database",
             JOptionPane.YES_NO_OPTION,JOptionPane.WARNING_MESSAGE);
-        if(answer!=JOptionPane.YES_OPTION)return;
+        if(confirm!=JOptionPane.YES_OPTION)return;
         try{
-            HardwareApplyService.Outcome outcome=HardwareApplyService.apply(program,accepted);
-            StringBuilder sb=new StringBuilder();
-            sb.append("Definitions applied: ").append(outcome.changed)
-                .append("; safely skipped: ").append(outcome.skipped)
-                .append("\n\n");
-            for(String message:outcome.messages)sb.append(message).append("\n");
-            JTextArea details=new JTextArea(sb.toString(),16,90);
-            details.setEditable(false);
-            JOptionPane.showMessageDialog(this,new JScrollPane(details),
-                "Hardware definitions result — use Ghidra Undo to reverse",
+            HardwareApplyService.Outcome outcome=
+                HardwareApplyService.apply(program,accepted);
+            StringBuilder details=new StringBuilder();
+            details.append("Changed: ").append(outcome.changed)
+                .append("; skipped: ").append(outcome.skipped).append("\n\n");
+            for(String line:outcome.messages)details.append(line).append("\n");
+            JTextArea result=new JTextArea(details.toString(),18,95);
+            result.setEditable(false);
+            JOptionPane.showMessageDialog(this,new JScrollPane(result),
+                "Review / Apply result — Ghidra Undo is available",
                 JOptionPane.INFORMATION_MESSAGE);
             status.setText(outcome.changed+" changed, "+outcome.skipped+
-                " skipped. Rerun Hardware Analysis to refresh references and evidence.");
+                " skipped. Rerun Analyze to refresh evidence.");
             ghidrassist.hardware.HardwareEvidenceCache.clear(program);
             latestMarkdown=null;latestNameCsv=null;
-            approve.setEnabled(false);export.setEnabled(false);namePreview.setEnabled(false);
+            approve.setEnabled(false);export.setEnabled(false);
+            namePreview.setEnabled(false);
         }catch(Exception ex){
-            ghidra.util.Msg.error(this,"Hardware definition transaction rolled back",ex);
+            ghidra.util.Msg.error(this,
+                "Hardware Apply failed; transaction rolled back",ex);
             JOptionPane.showMessageDialog(this,
-                "No definitions committed — the transaction was rolled back.\n"+
+                "Transaction rolled back — no changes committed.\n"+
                 ex.getClass().getSimpleName()+": "+ex.getMessage(),
-                "Hardware definitions error",JOptionPane.ERROR_MESSAGE);
+                "Apply error",JOptionPane.ERROR_MESSAGE);
         }
     }
 

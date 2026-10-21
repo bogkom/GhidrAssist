@@ -1,38 +1,34 @@
-# Hardware Analysis: typography, Listing navigation and explicit Ghidra project edits
+# Hardware Analysis — resizable Review / Apply and full MC68332 module regions
 
-The Hardware Analysis tab now uses the same saved font family and size as **Settings → Response Appearance**; switching back to the tab refreshes the appearance. Double-click on a hexadecimal address or `FUN_...` function address in the report to navigate using Ghidra's GoToService. Navigating to unmapped addresses may require an approved memory definition first.
+The **Review / Apply…** dialog is resizable. It displays proposed actions, their source and current status, including **READY**, **UPGRADE**, **ALREADY_PRESENT**, **BLOCKED**, or **MANUAL_REVIEW**. Selecting a concrete **MC68332** profile is explicit acceptance of the MCU hypothesis, not automatic proof of the CPU type.
 
-## Explicit review (opt-in)
+Applicable and non-conflicting internal module regions and register definitions are **selected by default**. Definitions already present in the project or blocked by pre-existing memory, data, code or user symbols are never selected. External CS7/CS8 devices, relocated TPU RAM and the VBR base remain manual decisions. **Select applicable** and **Clear selection** change multiple checkboxes at once; no project changes happen until the user presses **Apply selected…** and confirms again. There is also a field for the optional VBR address, with immediate validity feedback.
 
-The existing **Analyze current program** button remains entirely read-only. A separate **Review / Apply hardware definitions...** button becomes available after analysis. You must explicitly choose **MC68332 — user-selected device hypothesis** and rerun analysis before applying its MCU-specific definitions. This is a **manual assumption**, not MCU detection.
+## MC68332 Appendix D-1: full module apertures
 
-The review table contains individually checkable items (all unchecked by default), with a compact action bar ordered **Analyze**, **Review / Apply**, **Export MD**, **Export CSV**:
-- source-backed uninitialized memory regions from **MC68332 User's Manual, Appendix D, Table D-7** (MM=1), proposed 2KiB relocated TPURAM and external CS7/CS8 candidate windows;
-- the register-control and RAM ranges are *separate*; addresses explicitly marked "NOT USED" are not silently mapped as valid registers;
+The official *MC68332 User's Manual*, **Appendix D REGISTER SUMMARY, page D-1**, gives the following **module sizes** rather than only the size of the implemented register subranges. For **MM=1**, the Y bit in the manual is selected accordingly.
 
-| Item | MM=1 range | Size | Note |
-|---|---|---:|---|
-| `TPURAM_CONTROL_MM1` | `FFFB00–FFFB3F` | `0x40` | TPURAM control module, including unused slots |
-| `QSM_CONTROL_MM1` | `FFFC00–FFFC1F` | `0x20` | QSM/SCI/QSPI registers |
-| `QSM_QUEUE_MM1` | `FFFD00–FFFD4F` | `0x50` | Receive/transmit/command queue RAM |
-| `TPU_CONTROL_MM1` | `FFFE00–FFFE27` | `0x28` | TPU registers |
-| `TPU_PARAM_RAM_MM1` | `FFFF00–FFFFFF` | `0x100` | TPU Parameter RAM |
-| `TPURAM_2K_CANDIDATE` | `FFF000–FFF7FF` | `0x800` | Independently mapped standby TPURAM array |
+| Module | Size (bytes) | MM=1 base | Full allocated address range | GhidrAssist |
+|---|---:|---|---|---|
+| SIM | 128 (`0x80`) | `0xFFFA00` | `0xFFFA00–0xFFFA7F` | `SIM_REGISTERS_MM1` |
+| TPURAM control | 64 (`0x40`) | `0xFFFB00` | `0xFFFB00–0xFFFB3F` | `TPURAM_CONTROL_MM1` |
+| QSM | 512 (`0x200`) | `0xFFFC00` | `0xFFFC00–0xFFFDFF` | `QSM_MM1` |
+| TPU | 512 (`0x200`) | `0xFFFE00` | `0xFFFE00–0xFFFFFF` | `TPU_MM1` |
 
-QSM spans `FFFC00–FFFDFF` and TPU spans `FFFE00–FFFFFF` in the overall chip module map. **They are not entirely occupied by implemented registers/RAM.** In particular, `FFFC20–FFFCFF`, `FFFD50–FFFDFF`, and `FFFE28–FFFEFF` remain unmapped by the proposed plan. The precise field labels and implemented bytes within queue/parameter RAM require additional work. Source: [official MC68332 User's Manual, table D-7](https://www.nxp.com/docs/en/user-guide/MC68332UM.pdf).
-- individual MM=1 16-bit register data types and labels, which can be applied only where memory has already been mapped or one of the selected blocks creates it;
-- an optional 256×32-bit `CPU32_VBR_256_VECTORS` data structure at a **manually entered, four-byte-aligned** VBR address.
+Source: [NXP MC68332 User's Manual, Appendix D](https://www.nxp.com/docs/en/user-guide/MC68332UM.pdf). The detailed register table D-7 identifies implemented register locations, reserved holes and RAM subregions. **Full memory-block extent does not imply that every byte is an implemented hardware register**: such bytes remain undefined/untyped.
 
-The UI presents the selected count and asks for an additional confirmation that it will modify the current **Ghidra program database**. All changes are performed inside a **single undoable Ghidra transaction**. If an exception occurs, it rolls back the whole transaction. Conflicting items are skipped without clearing existing bytes, instructions, user labels or data. Exception: if a legacy **uninitialized** GhidrAssist block has exactly the target name and start, but is shorter (e.g. 2-byte QSMCR/TPUMCR or 8-byte TPURAM control), the extension creates an adjacent uninitialized suffix and joins it into the original block in the same undoable transaction. Occupied suffixes and arbitrary user blocks are never extended.
+Other optional hardware hypotheses are separate: relocated `TPURAM_2K_CANDIDATE` at `0xFFF000–0xFFF7FF`, and external `CS7_DEVICE_CANDIDATE` / `CS8_DEVICE_CANDIDATE`. Neither the manual selection nor a static CSBAR write proves a device is actually present. VBR requires a manually entered, verified base and 1024 entirely undefined mapped bytes; no existing code is replaced.
 
-**Ghidra address spaces versus memory blocks:** ordinary MMIO regions and TPURAM should normally be modelled as uninitialized blocks inside the existing processor address space. Overlay address spaces are needed only after demonstrating alternative memory mappings and must not be invented from CPU32 language selection. GhidrAssist deliberately does not create a CS9 1MiB block or overlapping CS0/CS1 blocks from static evidence.
+## Upgrade previous GhidrAssist memory maps
 
-## Limitations and interpretation
+The 2026-10-21 interim builds proposed shorter blocks for QSM/TPU and separate queue or parameter memory blocks. The latest **Review / Apply** handles both original short and intermediate split layouts.
 
-- Mapping a proposed memory block is not proof that a chip physically exists there or that CPU's MM bit was set.
-- New memory blocks and typed registers make symbols and known static references easier to inspect. They **do not automatically resolve** accesses through unknown pointer expressions or prove all XREFs. Ghidra analysis/ref refresh may still be necessary.
-- Applying the optional VBR structure requires an entirely undefined existing 1024-byte region; if Listing has already defined bytes as data/code, the VBR apply action **skips**, rather than clearing or overwriting them.
-- Review approval is explicit **per item**; default selection is none. Applying changes clears the cached evidence, so run Hardware Analysis again after edits.
-- Always use Ghidra's **Undo** (or a saved project snapshot) to roll back accepted changes. The imported BIN is never rewritten by GhidrAssist.
-- This initial transaction-based implementation needs actual Ghidra runtime validation; passing Ghidra API compilation is not a substitute for exercising the dialog and undo workflow.
+- `QSM_CONTROL_MM1` at `0xFFFC00` and `QSM_QUEUE_MM1` at `0xFFFD00` can be combined with uninitialized gap blocks into a single full `QSM_MM1` 512-byte block.
+- `TPU_CONTROL_MM1` at `0xFFFE00` and `TPU_PARAM_RAM_MM1` at `0xFFFF00` can be combined analogously into `TPU_MM1` 512-byte block.
+- `TPURAM_CONTROL_MM1` may be extended from 8 bytes to 64 bytes if still a GhidrAssist-created, uninitialized block.
 
+The migration is conservative: only recognized GhidrAssist-owned names and exact start addresses are eligible. Initialized, overlapping user memory blocks or unknown objects are shown as **BLOCKED** and are not selected. Existing register types and labels are not cleared. Changes and expansions are performed in **one Ghidra Program transaction**; exceptions roll back the transaction. Ghidra's Undo can reverse completed changes. The original BIN is never overwritten.
+
+A normal scan remains **read-only**. Mapping blocks may help Ghidra resolve static references but will not automatically solve arbitrary indirect pointer analysis. Re-run Analyze after applying definitions; if necessary, run Ghidra Auto Analyze to update XREFs.
+
+**Testing status:** GitHub Actions compiles the complete extension against Ghidra 12.1.4 and tests the pure-Java register and gap-planning logic. This does **not** constitute a runtime test of Ghidra's Memory.join, dialog events or Undo against a particular project. For first deployment, use a saved backup/copy of the Ghidra project.
