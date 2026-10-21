@@ -14,6 +14,7 @@ on:
       - 'src/main/java/ghidrassist/hardware/HardwareNamingReview.java'
       - 'src/main/java/ghidrassist/hardware/HardwareContextSelector.java'
       - 'src/main/java/ghidrassist/hardware/HardwareDataflow.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareApplyPlan.java'
       - 'src/test/java/ghidrassist/hardware/HardwareProfilesSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/ChipSelectModelSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/FirmwarePatternScannerSelfTest.java'
@@ -21,6 +22,7 @@ on:
       - 'src/test/java/ghidrassist/hardware/HardwareNamingReviewSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/HardwareContextSelectorSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/HardwareDataflowSelfTest.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareApplyPlanSelfTest.java'
       - '.github/workflows/hardware-profile-tests.yml'
   pull_request:
     paths:
@@ -31,6 +33,7 @@ on:
       - 'src/main/java/ghidrassist/hardware/HardwareNamingReview.java'
       - 'src/main/java/ghidrassist/hardware/HardwareContextSelector.java'
       - 'src/main/java/ghidrassist/hardware/HardwareDataflow.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareApplyPlan.java'
       - 'src/test/java/ghidrassist/hardware/HardwareProfilesSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/ChipSelectModelSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/FirmwarePatternScannerSelfTest.java'
@@ -38,6 +41,7 @@ on:
       - 'src/test/java/ghidrassist/hardware/HardwareNamingReviewSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/HardwareContextSelectorSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/HardwareDataflowSelfTest.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareApplyPlanSelfTest.java'
       - '.github/workflows/hardware-profile-tests.yml'
 
 jobs:
@@ -62,13 +66,15 @@ jobs:
             src/main/java/ghidrassist/hardware/HardwareNamingReview.java \
             src/main/java/ghidrassist/hardware/HardwareDataflow.java \
             src/main/java/ghidrassist/hardware/HardwareContextSelector.java \
+            src/main/java/ghidrassist/hardware/HardwareApplyPlan.java \
             src/test/java/ghidrassist/hardware/HardwareProfilesSelfTest.java \
             src/test/java/ghidrassist/hardware/ChipSelectModelSelfTest.java \
             src/test/java/ghidrassist/hardware/FirmwarePatternScannerSelfTest.java \
             src/test/java/ghidrassist/hardware/HardwareNamingReviewSelfTest.java \
             src/test/java/ghidrassist/hardware/ManualRegisterHintsSelfTest.java \
             src/test/java/ghidrassist/hardware/HardwareDataflowSelfTest.java \
-            src/test/java/ghidrassist/hardware/HardwareContextSelectorSelfTest.java
+            src/test/java/ghidrassist/hardware/HardwareContextSelectorSelfTest.java \
+            src/test/java/ghidrassist/hardware/HardwareApplyPlanSelfTest.java
           java -cp "$RUNNER_TEMP/hardware-tests" \
             ghidrassist.hardware.HardwareProfilesSelfTest
           java -cp "$RUNNER_TEMP/hardware-tests" \
@@ -83,3 +89,5 @@ jobs:
             ghidrassist.hardware.HardwareDataflowSelfTest
           java -cp "$RUNNER_TEMP/hardware-tests" \
             ghidrassist.hardware.HardwareContextSelectorSelfTest
+          java -cp "$RUNNER_TEMP/hardware-tests" \
+            ghidrassist.hardware.HardwareApplyPlanSelfTest
