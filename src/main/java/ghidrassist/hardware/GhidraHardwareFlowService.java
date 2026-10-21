@@ -167,12 +167,9 @@ public final class GhidraHardwareFlowService {
         }
         for(int slot=0;slot<i.getNumOperands();slot++)
             written.addAll(HardwareAutoUpdateRegisters.changedByOperand(op(i,slot)));
-        if(modeled.kind==HardwareDataflow.Kind.SET_POINTER ||
-                modeled.kind==HardwareDataflow.Kind.COPY_POINTER ||
-                modeled.kind==HardwareDataflow.Kind.ADJUST_POINTER ||
-                modeled.kind==HardwareDataflow.Kind.CLOBBER_POINTER)
-            written.remove(modeled.register);
-        return modeled.withSideEffects(written);
+        return modeled.withSideEffects(
+            HardwareAutoUpdateRegisters.unmodeledOutputs(
+                modeled.kind,modeled.register,written));
     }
 
     private static HardwareDataflow.Step translateCore(Instruction i,Function function){
