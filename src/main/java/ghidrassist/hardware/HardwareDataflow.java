@@ -93,12 +93,19 @@ public final class HardwareDataflow {
         public final Long vbr;
         public final Map<Long,Integer> knownPeripheralWords;
         public final boolean indirect;
-        private Snapshot(Step step,Long address,Integer value,State after) {
+        /** Number of potential SIMCR writes on paths since FUNCTION entry, saturated at 2+. */
+        public final int priorMmCandidateMin, priorMmCandidateMax;
+        /** Calls may mutate MCU state outside this function. */
+        public final boolean priorUnknownCall;
+        private Snapshot(Step step,Long address,Integer value,State before,State after) {
             instruction=step.address;kind=step.kind;effectiveAddress=address;
             writtenWord=value;pointerRegister=step.register;
             vbr=after.vbr;
             knownPeripheralWords=Map.copyOf(after.peripherals);
             indirect=step.kind==Kind.STORE_INDIRECT;
+            priorMmCandidateMin=before.mmCandidateMin;
+            priorMmCandidateMax=before.mmCandidateMax;
+            priorUnknownCall=before.crossedUnknownCall;
         }
     }
     public static final class Result {
@@ -117,9 +124,13 @@ public final class HardwareDataflow {
         private final Map<String,Long> pointers=new HashMap<>();
         private final Map<Long,Integer> peripherals=new HashMap<>();
         private Long vbr;
+        private int mmCandidateMin, mmCandidateMax;
+        private boolean crossedUnknownCall;
         private State copy(){
             State s=new State();s.pointers.putAll(pointers);
-            s.peripherals.putAll(peripherals);s.vbr=vbr;return s;
+            s.peripherals.putAll(peripherals);s.vbr=vbr;
+            s.mmCandidateMin=mmCandidateMin;s.mmCandidateMax=mmCandidateMax;
+            s.crossedUnknownCall=crossedUnknownCall;return s;
         }
         private static <K,V> void intersect(Map<K,V> before,Map<K,V> incoming){
             before.entrySet().removeIf(e->!Objects.equals(incoming.get(e.getKey()),e.getValue()));
@@ -129,8 +140,14 @@ public final class HardwareDataflow {
             intersect(pointers,rhs.pointers);
             intersect(peripherals,rhs.peripherals);
             if(!Objects.equals(vbr,rhs.vbr))vbr=null;
+            mmCandidateMin=Math.min(mmCandidateMin,rhs.mmCandidateMin);
+            mmCandidateMax=Math.max(mmCandidateMax,rhs.mmCandidateMax);
+            crossedUnknownCall |= rhs.crossedUnknownCall;
             return !pointers.equals(b.pointers)||!peripherals.equals(b.peripherals)||
-                    !Objects.equals(vbr,b.vbr);
+                    !Objects.equals(vbr,b.vbr)||
+                    mmCandidateMin!=b.mmCandidateMin||
+                    mmCandidateMax!=b.mmCandidateMax||
+                    crossedUnknownCall!=b.crossedUnknownCall;
         }
     }
     public static Long pcodeInputValue(boolean constant,long literal,Long propagated){
@@ -160,6 +177,20 @@ public final class HardwareDataflow {
         if(step.literalWord!=null)return step.literalWord.longValue();
         return step.sourceRegister==null?null:s.pointers.get(step.sourceRegister);
     }
+    /**
+     * Addresses are only *candidate* SIMCR aliases for the chosen MC68332
+     * profile. A static site is not evidence that MM is mapped there, that
+     * the code executes, or that the MM write-once latch is still available.
+     */
+    private static boolean candidateSimcrStore(Step step, Long address) {
+        if (address==null) return false;
+        boolean word=step.writeBits==16 &&
+            (address==0x7ffa00L || address==0xfffa00L);
+        boolean lowByte=step.writeBits==8 &&
+            (address==0x7ffa01L || address==0xfffa01L);
+        return word || lowByte;
+    }
+
     private static State transfer(Step step,State in,Set<Long> targets){
         State s=in.copy();
         switch(step.kind) {
@@ -185,6 +216,10 @@ public final class HardwareDataflow {
             }
             case STORE_DIRECT,STORE_INDIRECT -> {
                 Long address=resolve(step,in);
+                if(candidateSimcrStore(step,address)) {
+                    s.mmCandidateMin=Math.min(2,in.mmCandidateMin+1);
+                    s.mmCandidateMax=Math.min(2,in.mmCandidateMax+1);
+                }
                 if(address!=null && targets.contains(address)){
                     // Only full 16-bit immediate overwrites are firm register
                     // constants; BCLR, BSET, MOVE.B and MOVE.L remain unknown.
@@ -200,6 +235,7 @@ public final class HardwareDataflow {
                 // A call may change any peripheral or register; no summary
                 // means constants cannot cross this boundary.
                 s.pointers.clear();s.peripherals.clear();s.vbr=null;
+                s.crossedUnknownCall=true;
             }
             default -> {}
         }
@@ -258,7 +294,8 @@ public final class HardwareDataflow {
                 State after=transfer(step,before,targets);
                 Long value=knownStoreValue(step,before);
                 found.add(new Snapshot(step,effective,
-                    step.writeBits==16 && value!=null?(int)(value&0xffff):null,after));
+                    step.writeBits==16 && value!=null?(int)(value&0xffff):null,
+                    before,after));
             }
         }
         return new Result(found,input.size(),iterations,truncated,pointers);

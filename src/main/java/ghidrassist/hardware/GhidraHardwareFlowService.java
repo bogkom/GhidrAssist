@@ -368,9 +368,22 @@ public final class GhidraHardwareFlowService {
                             ChipSelectModel.hex(hit.writtenWord,4));
                     int mm=hit.effectiveAddress<0x800000?0:1;
                     long base=mm==0?0x7ff000L:0xfff000L;
-                    if(name.equals("SIMCR")&&hit.writtenWord!=null)
-                        detail.append(" ; candidate MM=")
-                            .append((hit.writtenWord&0x40)!=0?1:0);
+                    if(name.equals("SIMCR")) {
+                        if(hit.writtenWord!=null)
+                            detail.append(" ; candidate MM=")
+                                .append((hit.writtenWord&0x40)!=0?1:0);
+                        detail.append(" ; earlier matched SIMCR writes within FUNCTION "+
+                            "CFG (0/1/2+): ")
+                            .append(hit.priorMmCandidateMin==2?"2+":
+                                Integer.toString(hit.priorMmCandidateMin))
+                            .append("..")
+                            .append(hit.priorMmCandidateMax==2?"2+":
+                                Integer.toString(hit.priorMmCandidateMax))
+                            .append("; unknown called-code effects=")
+                            .append(hit.priorUnknownCall)
+                            .append("; MM write-once after reset: first successful "+
+                                "write UNKNOWN");
+                    }
                     if(name.startsWith("CSBAR")||name.startsWith("CSOR")||
                             name.startsWith("CSPAR")){
                         detail.append("\n").append(csEpoch(hit,name,base,mm));
@@ -391,7 +404,10 @@ public final class GhidraHardwareFlowService {
         out.append("## CFG/P-code hardware evidence (read-only)\n\n")
            .append("Only predecessor-agreed intraprocedural constants survive branch joins. ")
            .append("Calls invalidate propagated registers and peripheral state; ")
-           .append("indirect jumps, pointer aliases and real execution are not proven.\n\n")
+           .append("indirect jumps, pointer aliases and real execution are not proven.\n")
+           .append("SIMCR write histories are bounded *local* candidate counts, "+
+               "NOT counts since the hardware reset. Unresolved indirect writes "+
+               "and callers can add unknown writes; MM bit is write-once after reset.\n\n")
            .append("- Evidence functions: ").append(foundFunctions).append("\n")
            .append("- Reachable instruction nodes: ").append(visited).append("\n")
            .append("- Register-indirect matched writes: ").append(indirect).append("\n")
