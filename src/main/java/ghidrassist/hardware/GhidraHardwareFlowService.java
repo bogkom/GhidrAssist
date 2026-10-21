@@ -147,6 +147,17 @@ public final class GhidraHardwareFlowService {
         };
     }
     private static HardwareDataflow.Step translate(Instruction i,Function function){
+        HardwareDataflow.Step modeled=translateCore(i,function);
+        // A source operand such as (A0)+ also changes A0, even if a MOVE
+        // writes to D0. The modeled destination alone is not enough to
+        // preserve a sound pointer constant at the NEXT instruction.
+        LinkedHashSet<String> clobbers=new LinkedHashSet<>();
+        for(int slot=0;slot<i.getNumOperands();slot++)
+            clobbers.addAll(HardwareAutoUpdateRegisters.changedByOperand(op(i,slot)));
+        return modeled.withSideEffects(clobbers);
+    }
+
+    private static HardwareDataflow.Step translateCore(Instruction i,Function function){
         String m=opcode(i), full=i.getMnemonicString().toUpperCase(Locale.ROOT);
         List<Long> next=edges(i,function);
         int last=i.getNumOperands()-1;

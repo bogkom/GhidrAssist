@@ -44,6 +44,7 @@ public final class HardwareDataflow {
         public final int writeBits;
         public final List<Long> successors;
         public final String mnemonic;
+        public final Set<String> sideEffectRegisters;
         public Step(long address,Kind kind,String register,long operand,long displacement,
                     Integer literalWord,int writeBits,Collection<Long> successors,String mnemonic){
             this.address=address;this.kind=Objects.requireNonNull(kind);
@@ -52,6 +53,7 @@ public final class HardwareDataflow {
             this.operand=operand;this.displacement=displacement;
             this.literalWord=literalWord;this.writeBits=writeBits;
             this.successors=List.copyOf(successors);this.mnemonic=mnemonic==null?"":mnemonic;
+            this.sideEffectRegisters=Set.of();
         }
         public Step(long address,Kind kind,String register,String sourceRegister,long operand,
                     long displacement,Integer literalWord,int writeBits,
@@ -62,6 +64,7 @@ public final class HardwareDataflow {
             this.operand=operand;this.displacement=displacement;
             this.literalWord=literalWord;this.writeBits=writeBits;
             this.successors=List.copyOf(successors);this.mnemonic=mnemonic==null?"":mnemonic;
+            this.sideEffectRegisters=Set.of();
         }
         /** Indexed STORE: base + displacement + signed .W/.L index * scale. */
         public Step(long address, String baseRegister, String sourceRegister,
@@ -82,6 +85,24 @@ public final class HardwareDataflow {
             this.literalWord=literalWord;this.writeBits=writeBits;
             this.successors=List.copyOf(successors);
             this.mnemonic=mnemonic==null?"":mnemonic;
+            this.sideEffectRegisters=Set.of();
+        }
+        private Step(Step original,Collection<String> sideEffects) {
+            this.address=original.address;this.kind=original.kind;
+            this.register=original.register;this.sourceRegister=original.sourceRegister;
+            this.indexRegister=original.indexRegister;
+            this.indexBits=original.indexBits;this.indexScale=original.indexScale;
+            this.operand=original.operand;this.displacement=original.displacement;
+            this.literalWord=original.literalWord;this.writeBits=original.writeBits;
+            this.successors=original.successors;this.mnemonic=original.mnemonic;
+            for(String reg:sideEffects)
+                if(reg==null || !reg.matches("[AD][0-7]"))
+                    throw new IllegalArgumentException("Invalid register side effect");
+            this.sideEffectRegisters=Set.copyOf(sideEffects);
+        }
+        public Step withSideEffects(Collection<String> updatedRegisters) {
+            if(updatedRegisters==null || updatedRegisters.isEmpty())return this;
+            return new Step(this,updatedRegisters);
         }
     }
     public static final class Snapshot {
@@ -271,6 +292,11 @@ public final class HardwareDataflow {
             }
             default -> {}
         }
+        // Apply implicit auto-index changes AFTER interpreting the current
+        // instruction's effective address (post-increment uses old A register).
+        // The pre-decrement form is unresolved unless modeled separately, but
+        // in either case a stale pointer must not survive to a later STORE.
+        for(String reg:step.sideEffectRegisters)s.pointers.remove(reg);
         return s;
     }
     /**
