@@ -912,7 +912,9 @@ public class TabController {
         // Add user query to conversation history and ensure we have a session
         final String processedQuery;
         try {
-            processedQuery = ghidrassist.core.QueryProcessor.processMacrosInQuery(query, plugin);
+            processedQuery = ghidrassist.hardware.HardwareEvidenceCache.enrich(
+                plugin.getCurrentProgram(),
+                ghidrassist.core.QueryProcessor.processMacrosInQuery(query, plugin));
             queryService.addUserQuery(processedQuery);
             queryService.beginReActRun(reactRunId, processedQuery);
         } catch (Exception e) {
