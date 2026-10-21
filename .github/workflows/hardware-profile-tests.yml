@@ -5,17 +5,22 @@ on:
     branches:
       - feature/hardware-analysis
       - feature/hardware-analysis-seven-stages
+      - feature/hardware-controlflow-rag-integration
     paths:
       - 'src/main/java/ghidrassist/hardware/HardwareProfiles.java'
       - 'src/main/java/ghidrassist/hardware/ChipSelectModel.java'
       - 'src/main/java/ghidrassist/hardware/FirmwarePatternScanner.java'
       - 'src/main/java/ghidrassist/hardware/ManualRegisterHints.java'
       - 'src/main/java/ghidrassist/hardware/HardwareNamingReview.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareContextSelector.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareDataflow.java'
       - 'src/test/java/ghidrassist/hardware/HardwareProfilesSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/ChipSelectModelSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/FirmwarePatternScannerSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/ManualRegisterHintsSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/HardwareNamingReviewSelfTest.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareContextSelectorSelfTest.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareDataflowSelfTest.java'
       - '.github/workflows/hardware-profile-tests.yml'
   pull_request:
     paths:
@@ -24,11 +29,15 @@ on:
       - 'src/main/java/ghidrassist/hardware/FirmwarePatternScanner.java'
       - 'src/main/java/ghidrassist/hardware/ManualRegisterHints.java'
       - 'src/main/java/ghidrassist/hardware/HardwareNamingReview.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareContextSelector.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareDataflow.java'
       - 'src/test/java/ghidrassist/hardware/HardwareProfilesSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/ChipSelectModelSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/FirmwarePatternScannerSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/ManualRegisterHintsSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/HardwareNamingReviewSelfTest.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareContextSelectorSelfTest.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareDataflowSelfTest.java'
       - '.github/workflows/hardware-profile-tests.yml'
 
 jobs:
@@ -51,11 +60,15 @@ jobs:
             src/main/java/ghidrassist/hardware/FirmwarePatternScanner.java \
             src/main/java/ghidrassist/hardware/ManualRegisterHints.java \
             src/main/java/ghidrassist/hardware/HardwareNamingReview.java \
+            src/main/java/ghidrassist/hardware/HardwareDataflow.java \
+            src/main/java/ghidrassist/hardware/HardwareContextSelector.java \
             src/test/java/ghidrassist/hardware/HardwareProfilesSelfTest.java \
             src/test/java/ghidrassist/hardware/ChipSelectModelSelfTest.java \
             src/test/java/ghidrassist/hardware/FirmwarePatternScannerSelfTest.java \
             src/test/java/ghidrassist/hardware/HardwareNamingReviewSelfTest.java \
-            src/test/java/ghidrassist/hardware/ManualRegisterHintsSelfTest.java
+            src/test/java/ghidrassist/hardware/ManualRegisterHintsSelfTest.java \
+            src/test/java/ghidrassist/hardware/HardwareDataflowSelfTest.java \
+            src/test/java/ghidrassist/hardware/HardwareContextSelectorSelfTest.java
           java -cp "$RUNNER_TEMP/hardware-tests" \
             ghidrassist.hardware.HardwareProfilesSelfTest
           java -cp "$RUNNER_TEMP/hardware-tests" \
@@ -66,3 +79,7 @@ jobs:
             ghidrassist.hardware.ManualRegisterHintsSelfTest
           java -cp "$RUNNER_TEMP/hardware-tests" \
             ghidrassist.hardware.HardwareNamingReviewSelfTest
+          java -cp "$RUNNER_TEMP/hardware-tests" \
+            ghidrassist.hardware.HardwareDataflowSelfTest
+          java -cp "$RUNNER_TEMP/hardware-tests" \
+            ghidrassist.hardware.HardwareContextSelectorSelfTest

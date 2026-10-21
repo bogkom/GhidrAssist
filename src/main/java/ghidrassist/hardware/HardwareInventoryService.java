@@ -266,6 +266,11 @@ public final class HardwareInventoryService {
           .append("Naming is preview-only, exported as separate CSV. ")
           .append("Generic CPU32 mode deliberately emits no device-specific proposed names. ")
           .append("A manually selected MCU is still unverified: review before any future application.\n");
+        // A second, conservative CFG pass supplies address-register and
+        // conditional branch-join evidence. No binary bytes or labels are changed.
+        GhidraHardwareFlowService.Report flow=new GhidraHardwareFlowService()
+            .analyze(program,monitor);
+        md.append("\n\n").append(flow.markdown);
         return new Report(program.getName(),program.getLanguageID().toString(),choice,sites,
             md.toString(),csv,grouped.size());
     }

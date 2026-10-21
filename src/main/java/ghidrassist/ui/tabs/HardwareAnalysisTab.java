@@ -62,7 +62,9 @@ public final class HardwareAnalysisTab extends JPanel {
             "The CPU32 language alone does not identify a physical MCU.\n"+
             "Reported chip-select windows are hypothetical and do not\n"+
             "authorize programming or scanning actual hardware.\n\n"+
-            "No AI provider, API credits or online access are required.");
+            "After analysis, relevant evidence can be injected into AI queries.\n"+
+            "Use #hardware in a query to request evidence explicitly.\n"+
+            "No API credits or network are needed for this analysis.");
         add(controls,BorderLayout.NORTH);
         add(new JScrollPane(report),BorderLayout.CENTER);
         status.setBorder(BorderFactory.createEmptyBorder(4,8,5,8));
@@ -82,6 +84,7 @@ public final class HardwareAnalysisTab extends JPanel {
         final boolean concrete=selection.getSelectedIndex()==1;
         run.setEnabled(false);export.setEnabled(false);namePreview.setEnabled(false);
         latestMarkdown=null;latestNameCsv=null;latestProgram=null;
+        ghidrassist.hardware.HardwareEvidenceCache.clear(program);
         status.setText("Scanning references and disassembled instructions. Read-only.");
         SwingWorker<HardwareInventoryService.Report,Void> worker=
                 new SwingWorker<>() {
@@ -101,6 +104,7 @@ public final class HardwareAnalysisTab extends JPanel {
                     latestMarkdown=finished.markdown;
                     latestNameCsv=finished.namePreviewCsv;
                     latestProgram=program;
+                    ghidrassist.hardware.HardwareEvidenceCache.publish(program, finished.markdown);
                     report.setText(finished.markdown);
                     report.setCaretPosition(0);
                     export.setEnabled(true);

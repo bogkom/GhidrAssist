@@ -678,6 +678,12 @@ public class TabController {
                         viewType.equals("DECOMPILER")
                 );
 
+                // Reuse local hardware evidence only if this line itself
+                // mentions relevant registers. Do not infer hardware context
+                // from unrelated prior RAG snippets or other programs.
+                prompt = ghidrassist.hardware.HardwareEvidenceCache.enrich(
+                    program, prompt, lineContext.getCurrentLine());
+
                 // Create LLM API and send request
                 APIProviderConfig providerConfig = GhidrAssistPlugin.getCurrentProviderConfig();
                 if (providerConfig == null) {
@@ -912,7 +918,9 @@ public class TabController {
         // Add user query to conversation history and ensure we have a session
         final String processedQuery;
         try {
-            processedQuery = ghidrassist.core.QueryProcessor.processMacrosInQuery(query, plugin);
+            processedQuery = ghidrassist.hardware.HardwareEvidenceCache.enrich(
+                plugin.getCurrentProgram(),
+                ghidrassist.core.QueryProcessor.processMacrosInQuery(query, plugin));
             queryService.addUserQuery(processedQuery);
             queryService.beginReActRun(reactRunId, processedQuery);
         } catch (Exception e) {

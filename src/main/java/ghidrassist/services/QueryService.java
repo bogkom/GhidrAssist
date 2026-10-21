@@ -143,6 +143,12 @@ public class QueryService {
             }
         }
 
+        // Hardware evidence is a bounded, sourced, program-local snapshot.
+        // It is injected only after the user has run Hardware Analysis and
+        // the query is hardware-related (or uses the explicit #hardware macro).
+        processedQuery = ghidrassist.hardware.HardwareEvidenceCache.enrich(
+            plugin.getCurrentProgram(), processedQuery, query);
+
         // Add user message to message store and database
         addUserMessage(processedQuery, messageStore.getCurrentProviderType(), null);
 

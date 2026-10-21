@@ -1,0 +1,395 @@
+package ghidrassist.hardware;
+
+import ghidra.program.model.address.Address;
+import ghidra.program.model.lang.Register;
+import ghidra.program.model.listing.Function;
+import ghidra.program.model.listing.FunctionIterator;
+import ghidra.program.model.listing.Instruction;
+import ghidra.program.model.listing.InstructionIterator;
+import ghidra.program.model.listing.Program;
+import ghidra.program.model.pcode.PcodeOp;
+import ghidra.program.model.pcode.Varnode;
+import ghidra.program.model.scalar.Scalar;
+import ghidra.program.model.symbol.Reference;
+import ghidra.program.model.symbol.ReferenceIterator;
+import ghidra.util.exception.CancelledException;
+import ghidra.util.task.TaskMonitor;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+/**
+ * Intraprocedural Ghidra Listing CFG translation with conservative abstract
+ * values for A0..A7 and D0..D7. No MCU detection, no database writes,
+ * no physical/program execution and no interprocedural call state.
+ */
+public final class GhidraHardwareFlowService {
+    private static final Pattern REG=Pattern.compile("(?<![A-Z0-9])([AD][0-7])(?![A-Z0-9])");
+    private static final Pattern OFFSET=Pattern.compile("(?<![A-Z0-9])(-?0[Xx][0-9A-F]+|-?[0-9]+)(?![A-Z0-9])");
+    public static final class Report {
+        public final String markdown;
+        public final int functions,indirect,vbr,unresolved,visited;
+        public final boolean limited;
+        Report(String md,int fn,int indirect,int vbr,int unresolved,int visited,boolean limited){
+            markdown=md;functions=fn;this.indirect=indirect;this.vbr=vbr;
+            this.unresolved=unresolved;this.visited=visited;this.limited=limited;
+        }
+    }
+    private static String opcode(Instruction i){
+        String name=i.getMnemonicString().toUpperCase(Locale.ROOT);
+        int dot=name.indexOf('.');
+        return dot<0?name:name.substring(0,dot);
+    }
+    private static String op(Instruction i,int slot){
+        if(slot<0||slot>=i.getNumOperands())return "";
+        String s=i.getDefaultOperandRepresentation(slot);
+        return s==null?"":s.toUpperCase(Locale.ROOT).trim();
+    }
+    private static String plainReg(Instruction i,int slot){
+        String s=op(i,slot);
+        return s.matches("[AD][0-7]")?s:null;
+    }
+    private static String indirectReg(Instruction i,int slot){
+        String s=op(i,slot);
+        if(!s.contains("(")||!s.contains(")")||s.contains("[")||
+                s.contains("+")||s.contains("-(")||s.contains("PC"))return null;
+        Matcher m=REG.matcher(s);
+        if(!m.find())return null;
+        String a=m.group(1);
+        return a.startsWith("A")&&!m.find()?a:null;
+    }
+    private static long displacement(Instruction i,int slot){
+        String s=op(i,slot);
+        Matcher m=OFFSET.matcher(s);
+        while(m.find()){
+            try{return Long.decode(m.group(1));}
+            catch(NumberFormatException e){return 0;}
+        }
+        return 0;
+    }
+    private static Long immediate(Instruction i,int slot){
+        if(!op(i,slot).startsWith("#"))return null;
+        Scalar s=i.getScalar(slot);
+        return s==null?null:s.getUnsignedValue();
+    }
+    private static Long absolute(Instruction i,int slot){
+        if(op(i,slot).isEmpty()||op(i,slot).startsWith("#")||
+                indirectReg(i,slot)!=null)return null;
+        Object[] objects=i.getOpObjects(slot);
+        if(objects==null)return null;
+        for(Object o:objects)if(o instanceof Register)return null;
+        for(Object o:objects)if(o instanceof Address a)
+            return a.getOffset()&HardwareDataflow.MASK24;
+        return null;
+    }
+    private static Long value(Varnode v,Map<Varnode,Long> constants){
+        if(v==null)return null;
+        return v.isConstant()?v.getOffset():constants.get(v);
+    }
+    private static Long pcodeStore(Instruction i){
+        Map<Varnode,Long> computed=new HashMap<>();
+        Long one=null;
+        PcodeOp[] ops=i.getPcode();
+        if(ops==null)return null;
+        for(PcodeOp p:ops){
+            Long result=null;int k=p.getOpcode();
+            if(k==PcodeOp.STORE && p.getNumInputs()>=3){
+                Long ptr=value(p.getInput(1),computed);
+                if(ptr!=null){
+                    if(one!=null && !one.equals(ptr))return null;
+                    one=ptr;
+                }
+            } else if((k==PcodeOp.COPY||k==PcodeOp.INT_ZEXT||
+                    k==PcodeOp.INT_SEXT) && p.getNumInputs()>0){
+                result=value(p.getInput(0),computed);
+            } else if((k==PcodeOp.INT_ADD||k==PcodeOp.INT_SUB) &&
+                    p.getNumInputs()>1){
+                Long a=value(p.getInput(0),computed),b=value(p.getInput(1),computed);
+                if(a!=null&&b!=null)result=k==PcodeOp.INT_ADD?a+b:a-b;
+            }
+            Varnode out=p.getOutput();
+            if(out!=null){
+                if(result!=null)computed.put(out,result&HardwareDataflow.MASK24);
+                else computed.remove(out);
+            }
+        }
+        return one==null?null:one&HardwareDataflow.MASK24;
+    }
+    private static List<Long> edges(Instruction i,Function fun){
+        LinkedHashSet<Long> out=new LinkedHashSet<>();
+        Address fall=i.getFallThrough();
+        if(fall!=null && fun.getBody().contains(fall))out.add(fall.getOffset());
+        if(!i.getFlowType().isCall())for(Address flow:i.getFlows())
+            if(fun.getBody().contains(flow))out.add(flow.getOffset());
+        return new ArrayList<>(out);
+    }
+    private static boolean writesMemory(String mnemonic){
+        return switch(mnemonic){
+            case "MOVE","CLR","ANDI","ORI","EORI","BCLR","BSET","ADD","SUB",
+                "ADDI","SUBI","NEG","NOT" -> true;
+            default -> false;
+        };
+    }
+    private static HardwareDataflow.Step translate(Instruction i,Function function){
+        String m=opcode(i), full=i.getMnemonicString().toUpperCase(Locale.ROOT);
+        List<Long> next=edges(i,function);
+        int last=i.getNumOperands()-1;
+        long pc=i.getAddress().getOffset();
+        if(i.getFlowType().isCall())
+            return new HardwareDataflow.Step(pc,HardwareDataflow.Kind.CALL_BARRIER,
+                null,0,0,null,0,next,full);
+        if(m.equals("MOVEC") && op(i,last).equals("VBR"))
+            return new HardwareDataflow.Step(pc,HardwareDataflow.Kind.VBR_FROM_REGISTER,
+                plainReg(i,0),0,0,null,0,next,full);
+        String dst=plainReg(i,last),src=plainReg(i,0);
+        Long imm=i.getNumOperands()==2?immediate(i,0):null;
+        if(dst!=null){
+            // MOVE.W into Dn preserves unknown upper bits; it must not be
+            // promoted to a full 24-bit address-register/constant value.
+            boolean fullOverwrite=m.equals("MOVEQ")||
+                full.endsWith(".L")||m.equals("MOVEA");
+            if((m.equals("MOVE")||m.equals("MOVEA")||m.equals("MOVEQ"))&&
+                    imm!=null&&fullOverwrite){
+                long v=imm;
+                if(m.equals("MOVEQ")&&(v&0x80)!=0)v|=0xffffff00L;
+                if(m.equals("MOVEA")&&full.endsWith(".W")&&(v&0x8000)!=0)
+                    v|=0xffff0000L;
+                return new HardwareDataflow.Step(pc,HardwareDataflow.Kind.SET_POINTER,
+                    dst,v,0,null,0,next,full);
+            }
+            if(m.equals("LEA") && i.getNumOperands()==2){
+                Long addr=absolute(i,0);
+                if(addr!=null)return new HardwareDataflow.Step(pc,
+                    HardwareDataflow.Kind.SET_POINTER,dst,addr,0,null,0,next,full);
+            }
+            if((m.equals("MOVE")||m.equals("MOVEA"))&&src!=null &&
+                    full.endsWith(".L")){
+                return new HardwareDataflow.Step(pc,HardwareDataflow.Kind.COPY_POINTER,
+                    dst,src,0,0,null,0,next,full);
+            }
+            if(imm!=null&&(m.equals("ADDA")||m.equals("SUBA")||
+                    m.equals("ADDQ")||m.equals("SUBQ"))){
+                long signed=imm;
+                if((m.equals("ADDA")||m.equals("SUBA"))&&
+                        full.endsWith(".W")&&(signed&0x8000L)!=0)
+                    signed|=0xffff0000L;
+                return new HardwareDataflow.Step(pc,HardwareDataflow.Kind.ADJUST_POINTER,
+                    dst,m.startsWith("SUB")?-signed:signed,0,null,0,next,full);
+            }
+            return new HardwareDataflow.Step(pc,HardwareDataflow.Kind.CLOBBER_POINTER,
+                dst,0,0,null,0,next,full);
+        }
+        if(last>=0&&writesMemory(m)){
+            Long address=absolute(i,last);
+            String pointer=indirectReg(i,last);
+            Integer word=null;String from=m.equals("MOVE")?src:null;
+            int width=full.endsWith(".W")?16:full.endsWith(".L")?32:
+                full.endsWith(".B")?8:0;
+            if(width==16&&m.equals("CLR"))word=0;
+            if(width==16&&m.equals("MOVE")&&imm!=null)word=(int)(imm&0xffff);
+            if(!m.equals("MOVE"))from=null;
+            if(address==null && pointer==null)address=pcodeStore(i);
+            if(address!=null)return new HardwareDataflow.Step(pc,
+                HardwareDataflow.Kind.STORE_DIRECT,null,from,address,0,word,width,next,full);
+            if(pointer!=null)return new HardwareDataflow.Step(pc,
+                HardwareDataflow.Kind.STORE_INDIRECT,pointer,from,0,
+                displacement(i,last),word,width,next,full);
+        }
+        return new HardwareDataflow.Step(pc,HardwareDataflow.Kind.OTHER,
+            null,0,0,null,0,next,full);
+    }
+    private static String csEpoch(HardwareDataflow.Snapshot hit,String changed,
+            long base,int mm){
+        Map<Long,Integer> values=hit.knownPeripheralWords;
+        StringBuilder report=new StringBuilder();
+        int from=0,to=10;
+        if(changed.equals("CSPAR0")){from=-1;to=5;}
+        if(changed.equals("CSPAR1")){from=6;to=10;}
+        if(changed.startsWith("CSBAR")||changed.startsWith("CSOR")){
+            String suffix=changed.startsWith("CSBAR")?
+                changed.substring(5):changed.substring(4);
+            int cs=suffix.equals("BT")?-1:Integer.parseInt(suffix);
+            from=cs;to=cs;
+        }
+        ChipSelectModel.Decoder model=new ChipSelectModel.Decoder(
+            "MC68332","MC68332 mapping hypothesis; CFG local only");
+        for(int cs=from;cs<=to;cs++){
+            String suffix=cs<0?"BT":String.valueOf(cs);
+            long offset=cs<0?0:4L*(cs+1);
+            Integer bar=values.get(base+0xa48+offset);
+            Integer or=values.get(base+0xa4a+offset);
+            Integer par=values.get(base+(cs<=5?0xa44:0xa46));
+            if(bar==null)continue;
+            ChipSelectModel.Window win=model.window(cs,bar,or,par);
+            report.append("  - snapshot after write, address-map candidate MM=")
+                .append(mm).append(": ").append(win.toSummary()).append("\n");
+        }
+        return report.toString();
+    }
+    private static final class CallerFrame {
+        final Function function;
+        final String chain;
+        final int depth;
+        final LinkedHashSet<Long> seen;
+        CallerFrame(Function f,String chain,int depth,LinkedHashSet<Long> seen){
+            function=f;this.chain=chain;this.depth=depth;this.seen=seen;
+        }
+    }
+    private static String callerAncestors(Program program,Function function){
+        // Direct-call XREF chains are possibilities only. They do not resolve
+        // dynamic dispatch, indirect calls, reset vectors or branch conditions.
+        java.util.ArrayDeque<CallerFrame> frontier=new java.util.ArrayDeque<>();
+        LinkedHashSet<Long> initial=new LinkedHashSet<>();
+        initial.add(function.getEntryPoint().getOffset());
+        frontier.add(new CallerFrame(function,function.getName(),0,initial));
+        StringBuilder lines=new StringBuilder();
+        int found=0;
+        while(!frontier.isEmpty() && found<5){
+            CallerFrame at=frontier.removeFirst();
+            if(at.depth>=3)continue;
+            ReferenceIterator refs=program.getReferenceManager()
+                .getReferencesTo(at.function.getEntryPoint());
+            int cap=0;
+            while(refs.hasNext() && cap++<80 && found<5){
+                Reference ref=refs.next();
+                if(!ref.getReferenceType().isCall())continue;
+                Function caller=program.getFunctionManager()
+                    .getFunctionContaining(ref.getFromAddress());
+                if(caller==null)continue;
+                long id=caller.getEntryPoint().getOffset();
+                if(at.seen.contains(id))continue;
+                String path=caller.getName()+" [call site "+ref.getFromAddress()+"] -> "+at.chain;
+                lines.append("  - possible static-call ancestor chain (depth ")
+                    .append(at.depth+1).append("): ").append(path).append("\n");
+                found++;
+                LinkedHashSet<Long> branch=new LinkedHashSet<>(at.seen);
+                branch.add(id);
+                frontier.add(new CallerFrame(caller,path,at.depth+1,branch));
+            }
+        }
+        return lines.toString();
+    }
+    public Report analyze(Program program,TaskMonitor monitor)throws CancelledException{
+        if(program==null)throw new IllegalArgumentException("Open Ghidra program required");
+        if(monitor==null)monitor=TaskMonitor.DUMMY;
+        Map<Long,String> targets=new LinkedHashMap<>();
+        HardwareProfiles.Profile p=HardwareProfiles.mc68332();
+        for(HardwareProfiles.Register r:p.registers)
+            for(int mm=0;mm<2;mm++)targets.put(p.absoluteAddress(r,mm),r.name);
+        StringBuilder detail=new StringBuilder();
+        int foundFunctions=0,indirect=0,vbr=0,unresolved=0,visited=0,shown=0;
+        boolean limited=false;
+        FunctionIterator funs=program.getFunctionManager().getFunctions(true);
+        while(funs.hasNext()){
+            monitor.checkCancelled();
+            Function fun=funs.next();
+            List<HardwareDataflow.Step> steps=new ArrayList<>();
+            InstructionIterator it=program.getListing().getInstructions(fun.getBody(),true);
+            while(it.hasNext()){
+                monitor.checkCancelled();
+                steps.add(translate(it.next(),fun));
+            }
+            if(steps.isEmpty())continue;
+            HardwareDataflow.Result result=HardwareDataflow.analyze(
+                fun.getEntryPoint().getOffset(),steps,targets.keySet(),
+                Math.min(30000,Math.max(300,steps.size()*20)));
+            visited+=result.reachedNodes;
+            limited|=result.truncated;
+            List<HardwareDataflow.Snapshot> found=new ArrayList<>();
+            for(HardwareDataflow.Snapshot hit:result.snapshots){
+                if(hit.kind==HardwareDataflow.Kind.VBR_FROM_REGISTER){
+                    found.add(hit);vbr++;
+                } else if(hit.effectiveAddress!=null &&
+                        targets.containsKey(hit.effectiveAddress)){
+                    found.add(hit);
+                    if(hit.indirect)indirect++;
+                } else if(hit.kind==HardwareDataflow.Kind.STORE_INDIRECT &&
+                        hit.effectiveAddress==null){
+                    unresolved++;
+                }
+            }
+            if(found.isEmpty()&&!result.truncated)continue;
+            foundFunctions++;
+            if(shown>=350)continue;
+            detail.append("### ").append(fun.getName()).append(" at ")
+                .append(fun.getEntryPoint()).append("\n\n");
+            int callers=0;
+            ReferenceIterator refs=program.getReferenceManager()
+                .getReferencesTo(fun.getEntryPoint());
+            StringBuilder callerSites=new StringBuilder();
+            while(refs.hasNext()){
+                Reference reference=refs.next();
+                if(!reference.getReferenceType().isCall())continue;
+                callers++;
+                if(callers<=6){
+                    Function caller=program.getFunctionManager()
+                        .getFunctionContaining(reference.getFromAddress());
+                    callerSites.append("- Static caller reference ")
+                        .append(reference.getFromAddress()).append(" in ")
+                        .append(caller==null?"UNKNOWN":caller.getName())
+                        .append(" (not proof of runtime execution)\n");
+                }
+            }
+            detail.append(callerAncestors(program,fun));
+            detail.append("- CFG nodes reached: ").append(result.reachedNodes)
+                .append("; direct call references: ").append(callers)
+                .append("; propagation limit: ").append(result.truncated).append("\n")
+                .append(callerSites);
+            for(HardwareDataflow.Snapshot hit:found){
+                if(shown++>=350)break;
+                detail.append("- PC ")
+                    .append(ChipSelectModel.hex(hit.instruction,6)).append(": ");
+                if(hit.kind==HardwareDataflow.Kind.VBR_FROM_REGISTER){
+                    detail.append("MOVEC to VBR; source inferred value ")
+                        .append(hit.vbr==null?"UNKNOWN":ChipSelectModel.hex(hit.vbr,6));
+                }else{
+                    String name=targets.get(hit.effectiveAddress);
+                    detail.append(name).append(" at ")
+                        .append(ChipSelectModel.hex(hit.effectiveAddress,6))
+                        .append(hit.indirect?" [A-register indirect]":" [direct/P-code]")
+                        .append(" value ")
+                        .append(hit.writtenWord==null?"UNKNOWN":
+                            ChipSelectModel.hex(hit.writtenWord,4));
+                    int mm=hit.effectiveAddress<0x800000?0:1;
+                    long base=mm==0?0x7ff000L:0xfff000L;
+                    if(name.equals("SIMCR")&&hit.writtenWord!=null)
+                        detail.append(" ; candidate MM=")
+                            .append((hit.writtenWord&0x40)!=0?1:0);
+                    if(name.startsWith("CSBAR")||name.startsWith("CSOR")||
+                            name.startsWith("CSPAR")){
+                        detail.append("\n").append(csEpoch(hit,name,base,mm));
+                    }
+                    if(name.equals("TRAMBAR") && hit.writtenWord!=null){
+                        long ramBase=((long)(hit.writtenWord&0xfff8)<<8)&0xffffffL;
+                        detail.append(" ; possible MC68332 TPURAM=")
+                            .append(ChipSelectModel.hex(ramBase,6)).append("..")
+                            .append(ChipSelectModel.hex(ramBase+2047,6))
+                            .append(" [not active until MCU/reset state verified]");
+                    }
+                }
+                detail.append("\n");
+            }
+            detail.append("\n");
+        }
+        StringBuilder out=new StringBuilder();
+        out.append("## CFG/P-code hardware evidence (read-only)\n\n")
+           .append("Only predecessor-agreed intraprocedural constants survive branch joins. ")
+           .append("Calls invalidate propagated registers and peripheral state; ")
+           .append("indirect jumps, pointer aliases and real execution are not proven.\n\n")
+           .append("- Evidence functions: ").append(foundFunctions).append("\n")
+           .append("- Reachable instruction nodes: ").append(visited).append("\n")
+           .append("- Register-indirect matched writes: ").append(indirect).append("\n")
+           .append("- VBR control-register sites: ").append(vbr).append("\n")
+           .append("- Unresolved register-based stores: ").append(unresolved).append("\n")
+           .append("- Propagation cap reached: ").append(limited).append("\n\n")
+           .append(detail);
+        if(shown>=350)out.append("\n[Detailed report bounded at 350 sites.]\n");
+        return new Report(out.toString(),foundFunctions,indirect,vbr,unresolved,visited,limited);
+    }
+}
