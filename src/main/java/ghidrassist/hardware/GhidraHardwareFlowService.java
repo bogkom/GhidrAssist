@@ -359,6 +359,14 @@ public final class GhidraHardwareFlowService {
                     localVbr=true;
                 if(insn.getFlowType().isComputed())
                     uncertainFlow=true;
+                if(insn.getFlowType().isJump()) {
+                    // A direct tail-jump outside the current Function can
+                    // behave like a call to other code without a CALL opcode.
+                    // Never classify its effect as a closed/no-store graph.
+                    for(Address destination:insn.getFlows())
+                        if(!fun.getBody().contains(destination))
+                            uncertainFlow=true;
+                }
                 if(insn.getFlowType().isCall()){
                     Address[] destinations=insn.getFlows();
                     if(destinations==null || destinations.length!=1)
