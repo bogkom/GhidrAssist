@@ -8,6 +8,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Map;
 import ghidrassist.hardware.ManualRegisterHints;
+import ghidrassist.hardware.ManualModuleTable;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
@@ -58,7 +59,9 @@ public final class RAGPdfExtractor {
                     blank++;
                     continue;
                 }
-                boolean table = stripper.hasPossibleTable();
+                String moduleRows = ManualModuleTable.evidenceTail(page, raw,
+                    stripper.positionedWords(), 64);
+                boolean table = stripper.hasPossibleTable() || !moduleRows.isEmpty();
                 if (table) {
                     suspicious++;
                     text = "[POSSIBLE TABLE / COLUMNS: LAYOUT NOT VERIFIED; CHECK ORIGINAL PDF PAGE]"
@@ -69,6 +72,9 @@ public final class RAGPdfExtractor {
                 if (table) {
                     text += ManualRegisterHints.evidenceTail(page, text, 12);
                 }
+                // Spatially aligned rows are still unverified device candidates;
+                // never mutate a CPU profile or memory map during ingestion.
+                text += moduleRows;
                 sink.accept(page, text, table);
                 indexed++;
             }
@@ -113,6 +119,50 @@ public final class RAGPdfExtractor {
                 int y = Math.round(pos.getYDirAdj() * 2f);
                 visualRows.computeIfAbsent(y, unused -> new ArrayList<>()).add(pos);
             }
+        }
+
+        /**
+         * Convert PDFBox glyph positions into page-local words without
+         * discarding coordinates. Only the independent module-table parser
+         * may decide whether three cells form an aligned row.
+         */
+        List<ManualModuleTable.Word> positionedWords() {
+            List<ManualModuleTable.Word> words = new ArrayList<>();
+            for (List<TextPosition> row : visualRows.values()) {
+                row.sort(Comparator.comparingDouble(TextPosition::getXDirAdj));
+                StringBuilder token = new StringBuilder();
+                float start = 0f, right = 0f, y = 0f;
+                for (TextPosition pos : row) {
+                    String part = pos.getUnicode();
+                    if (part == null || part.isEmpty()) continue;
+                    float x = pos.getXDirAdj();
+                    float end = x + pos.getWidthDirAdj();
+                    float widthOfSpace = pos.getWidthOfSpace();
+                    if (!Float.isFinite(widthOfSpace) || widthOfSpace <= 0)
+                        widthOfSpace = 3f;
+                    if (token.length() > 0 && x - right > Math.max(1.8f, widthOfSpace * 0.75f)) {
+                        words.add(new ManualModuleTable.Word(token.toString(), start, right, y));
+                        token.setLength(0);
+                    }
+                    for (int i=0; i<part.length(); i++) {
+                        char ch=part.charAt(i);
+                        if (Character.isWhitespace(ch)) {
+                            if (token.length() > 0) {
+                                words.add(new ManualModuleTable.Word(
+                                    token.toString(), start, Math.max(right, x), y));
+                                token.setLength(0);
+                            }
+                        } else {
+                            if (token.length() == 0) { start=x; y=pos.getYDirAdj(); }
+                            token.append(ch);
+                        }
+                    }
+                    right = end;
+                }
+                if (token.length() > 0)
+                    words.add(new ManualModuleTable.Word(token.toString(), start, right, y));
+            }
+            return words;
         }
 
         boolean hasPossibleTable() {
