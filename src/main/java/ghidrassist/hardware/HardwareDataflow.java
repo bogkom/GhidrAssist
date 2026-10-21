@@ -201,6 +201,10 @@ public final class HardwareDataflow {
             }
         }
         boolean truncated=!queue.isEmpty();
+        // An unfinished fixed point may still have branch-dependent constants
+        // from predecessors not yet visited. Publishing them as evidence would
+        // be unsound. Return only the truncation marker, never inferred values.
+        if(truncated)return new Result(List.of(),input.size(),iterations,true,Map.of());
         List<Snapshot> found=new ArrayList<>();
         Map<Long,Map<String,Long>> pointers=new LinkedHashMap<>();
         for(Step step:graph.values()){
