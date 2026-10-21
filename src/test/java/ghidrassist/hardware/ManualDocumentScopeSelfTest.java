@@ -67,6 +67,13 @@ public final class ManualDocumentScopeSelfTest {
         ok(ManualDocumentScope.fromDocumentEvidence("MC331_SIM.pdf",h336)
              .confidence().equals("FILENAME_HEADER_MODEL_CONFLICT"),
            "custom MC331 label conflicting with actual document is rejected");
+        ok(ManualDocumentScope.fromDocumentEvidence("apdreg.pdf",
+            "MC68336/376 REGISTER SUMMARY MOTOROLA\\nUSER’S MANUAL Rev 1 D-1")
+            .editionPart().equals("SPLIT_D"),
+            "vendor apdreg basename resolves via verified Appendix D header");
+        ok(ManualDocumentScope.fromDocumentEvidence("apdreg.pdf","")
+             .documentId().equals("UNKNOWN"),
+            "apdreg without source header is ambiguous across manuals");
         ok(ManualDocumentScope.fromDocumentEvidence("c5sim.pdf","")
              .documentId().equals("UNKNOWN"),
            "unrecognized raw filename stays unknown without a vendor header");
