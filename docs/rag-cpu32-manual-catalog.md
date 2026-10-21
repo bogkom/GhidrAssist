@@ -90,7 +90,15 @@ collections (the large `MPC500_M68300_CD_ZIP` has one under
 | user's device-specific `MC331_SIM.pdf` | Keep original or use `MC68331_SIM.pdf` | MC68331 SIM chapter **only when the actual PDF confirms this** |
 | generic `SIMRM.pdf`, `QSMRM.pdf` | Keep manufacturer's name | Generic module manuals, do not misleadingly label as MC68331-only |
 
-You **do not need to rename** short ZIP filenames to index them. GhidrAssist
+You **do not need to rename** a short ZIP filename to index it when it
+is the only file with that basename. **However, the current Lucene document
+store keys files by basename** and rejects two different source paths named
+`c5sim.pdf`. If you import manuals from more than one CPU archive, assign
+unique descriptive names (for example `MC68332_05_SIM.pdf` and
+`MC68336_68376_05_SIM.pdf`) **after inspecting the PDF header**. This
+avoids accidental replacement and makes the document list more readable.
+
+GhidrAssist
 now samples the first three PDF text pages, looks for a clearly adjacent
 `MC683xx ... USER'S MANUAL` header and records an explicitly marked
 `PDF_HEADER_MATCH; ARCHIVE_FILENAME_NOT_UNIQUE` source identity. Missing or
