@@ -96,26 +96,32 @@ public final class GhidraHardwareFlowService {
         if(v.isConstant())return HardwareDataflow.pcodeInputValue(true,v.getOffset(),null);
         return HardwareDataflow.pcodeInputValue(false,0L,constants.get(v));
     }
+    /** Any unsupported memory mutation becomes a barrier instead of OTHER. */
+    private static boolean hasPcodeStore(Instruction instruction) {
+        PcodeOp[] ops=instruction.getPcode();
+        if(ops==null)return false;
+        for(PcodeOp p:ops)if(p.getOpcode()==PcodeOp.STORE)return true;
+        return false;
+    }
+
+    /** Only one fully resolved P-code memory write yields an address. */
     private static Long pcodeStore(Instruction i){
         Map<Varnode,Long> computed=new HashMap<>();
-        Long one=null;
+        List<Long> destinations=new ArrayList<>();
         PcodeOp[] ops=i.getPcode();
         if(ops==null)return null;
         for(PcodeOp p:ops){
             Long result=null;int k=p.getOpcode();
-            if(k==PcodeOp.STORE && p.getNumInputs()>=3){
-                Long ptr=value(p.getInput(1),computed);
-                if(ptr!=null){
-                    if(one!=null && !one.equals(ptr))return null;
-                    one=ptr;
-                }
+            if(k==PcodeOp.STORE){
+                Long ptr=p.getNumInputs()>=3?value(p.getInput(1),computed):null;
+                destinations.add(ptr==null?null:ptr&HardwareDataflow.MASK24);
             } else if((k==PcodeOp.COPY||k==PcodeOp.INT_ZEXT||
                     k==PcodeOp.INT_SEXT) && p.getNumInputs()>0){
                 result=value(p.getInput(0),computed);
             } else if((k==PcodeOp.INT_ADD||k==PcodeOp.INT_SUB) &&
                     p.getNumInputs()>1){
-                Long a=value(p.getInput(0),computed),b=value(p.getInput(1),computed);
-                if(a!=null&&b!=null)result=k==PcodeOp.INT_ADD?a+b:a-b;
+                Long x=value(p.getInput(0),computed),y=value(p.getInput(1),computed);
+                if(x!=null&&y!=null)result=k==PcodeOp.INT_ADD?x+y:x-y;
             }
             Varnode out=p.getOutput();
             if(out!=null){
@@ -123,7 +129,7 @@ public final class GhidraHardwareFlowService {
                 else computed.remove(out);
             }
         }
-        return one==null?null:one&HardwareDataflow.MASK24;
+        return HardwarePcodeStoreSafety.uniqueTarget(destinations);
     }
     private static List<Long> edges(Instruction i,Function fun){
         LinkedHashSet<Long> out=new LinkedHashSet<>();
@@ -211,6 +217,12 @@ public final class GhidraHardwareFlowService {
                 HardwareDataflow.Kind.STORE_INDIRECT,pointer,from,0,
                 displacement(i,last),word,width,next,full);
         }
+        // Includes unmodeled MOVEM, stack/predecrement and other P-code
+        // STORE operations. Unknown alias may overwrite an earlier SIMCR,
+        // CSBAR or TRAMBAR value and must invalidate peripheral snapshots.
+        if(hasPcodeStore(i))
+            return new HardwareDataflow.Step(pc,
+                HardwareDataflow.Kind.STORE_INDIRECT,null,0,0,null,0,next,full);
         return new HardwareDataflow.Step(pc,HardwareDataflow.Kind.OTHER,
             null,0,0,null,0,next,full);
     }
