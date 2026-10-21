@@ -10,6 +10,7 @@ import java.util.Map;
 import ghidrassist.hardware.ManualRegisterHints;
 import ghidrassist.hardware.ManualModuleTable;
 import ghidrassist.hardware.ManualDocumentScope;
+import ghidrassist.hardware.ManualPrintedPage;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
@@ -80,7 +81,12 @@ public final class RAGPdfExtractor {
                 text += moduleRows;
                 // Metadata comes from the original filename, not inferred MCU
                 // identity; per-page text always retains this distinction.
-                text = identity.evidence(page) + System.lineSeparator() + text;
+                // "Printed D-1" can mean PDF page 215 or page 1 depending
+                // on the physical document edition and split chapter.
+                // Record only header-supported labels, never body table IDs.
+                String printed=ManualPrintedPage.fromText(raw).evidence();
+                text = identity.evidence(page) + " " + printed +
+                    System.lineSeparator() + text;
                 sink.accept(page, text, table);
                 indexed++;
             }
