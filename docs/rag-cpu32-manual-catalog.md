@@ -76,7 +76,8 @@ auto-importing bitfield tables.
 **Important correction:** identifiers such as `MC68336376UM05` are the
 **publication identifiers on the NXP documentation website**, not a guarantee
 of the names of PDF files extracted from `MC683336_376UM_ZIP`.
-That archive uses short names, for example `c5sim.pdf` and `c8qadc.pdf`.
+That archive uses short names, for example `c5sim.pdf`, `c8qadc.pdf`
+and `apdreg.pdf` (Appendix D).
 Identically named `c5sim.pdf` files also appear in other Motorola MCU
 collections (the large `MPC500_M68300_CD_ZIP` has one under
 `MC683XX/mc68332/`). **Never infer a device from `c5sim.pdf` alone.**
@@ -85,6 +86,7 @@ collections (the large `MPC500_M68300_CD_ZIP` has one under
 |---|---|---|
 | `c5sim.pdf` from MC683336_376UM_ZIP | `MC68336_68376_05_SIM.pdf` | MC68336/MC68376, SIM, chapter 5 |
 | `c8qadc.pdf` from MC683336_376UM_ZIP | `MC68336_68376_08_QADC.pdf` | MC68336/MC68376, QADC, chapter 8 |
+| `apdreg.pdf` from a checked MC683336_376 manual | `MC68336_68376_D_REGISTERS.pdf` | Appendix D register map, with shared and model-specific rows |
 | register summary file **after checking its cover** | `MC68336_68376_D_REGISTERS.pdf` | MC68336/MC68376 Appendix D, with model-specific row restrictions |
 | TouCAN chapter **after checking its cover** | `MC68336_68376_13_TOUCAN.pdf` | Shared manual chapter, TouCAN only on MC68376 |
 | user's device-specific `MC331_SIM.pdf` | Keep original or use `MC68331_SIM.pdf` | MC68331 SIM chapter **only when the actual PDF confirms this** |
