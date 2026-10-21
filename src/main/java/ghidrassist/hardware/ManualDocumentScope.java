@@ -23,6 +23,8 @@ public final class ManualDocumentScope {
         "^MC68336_68376_(0[1-9]|1[0-3]|[ABCD])_([A-Z0-9_-]{2,48})\\.PDF$");
     private static final Pattern LEGACY_CHAPTER=Pattern.compile(
         "^C(0?[1-9]|1[0-3])([A-Z][A-Z0-9_-]{1,32})\\.PDF$");
+    private static final Pattern LEGACY_APPENDIX=Pattern.compile(
+        "^AP([A-D])([A-Z][A-Z0-9_-]{1,32})\\.PDF$");
     private static final Pattern MODEL_HEADER=Pattern.compile(
         "(?is)(MC68336\\s*/\\s*376|MC68331|MC68332|MC68375)" +
         "[^\\n\\r]{0,100}(?:\\R[^\\n\\r]{0,70})?" +
@@ -127,6 +129,13 @@ public final class ManualDocumentScope {
         }
         String base=filename==null?"":filename.toUpperCase(Locale.ROOT)
             .replaceAll("^.*[/\\\\]","");
+        Matcher appendix=LEGACY_APPENDIX.matcher(base);
+        if(appendix.matches()){
+            String part=appendix.group(1);
+            return new Identity("PDF_HEADER_"+headerModel+"_APPENDIX_"+part,
+                headerModel,"SPLIT_"+part,
+                "PDF_HEADER_MATCH; ARCHIVE_FILENAME_NOT_UNIQUE");
+        }
         Matcher legacy=LEGACY_CHAPTER.matcher(base);
         if(legacy.matches()){
             String chapter=legacy.group(1);
