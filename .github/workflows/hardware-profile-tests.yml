@@ -19,6 +19,7 @@ on:
       - 'src/main/java/ghidrassist/hardware/HardwareFunctionRenamePolicy.java'
       - 'src/main/java/ghidrassist/hardware/HardwareContextSelector.java'
       - 'src/main/java/ghidrassist/hardware/HardwareDataflow.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareAutoUpdateRegisters.java'
       - 'src/main/java/ghidrassist/hardware/HardwarePcodeStoreSafety.java'
       - 'src/main/java/ghidrassist/hardware/HardwareIndexedAddress.java'
       - 'src/main/java/ghidrassist/hardware/HardwareApplyPlan.java'
@@ -35,6 +36,7 @@ on:
       - 'src/test/java/ghidrassist/hardware/HardwareFunctionRenamePolicySelfTest.java'
       - 'src/test/java/ghidrassist/hardware/HardwareContextSelectorSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/HardwareDataflowSelfTest.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareAutoUpdateRegistersSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/HardwarePcodeStoreSafetySelfTest.java'
       - 'src/test/java/ghidrassist/hardware/HardwareIndexedAddressSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/HardwareApplyPlanSelfTest.java'
@@ -54,6 +56,7 @@ on:
       - 'src/main/java/ghidrassist/hardware/HardwareFunctionRenamePolicy.java'
       - 'src/main/java/ghidrassist/hardware/HardwareContextSelector.java'
       - 'src/main/java/ghidrassist/hardware/HardwareDataflow.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareAutoUpdateRegisters.java'
       - 'src/main/java/ghidrassist/hardware/HardwarePcodeStoreSafety.java'
       - 'src/main/java/ghidrassist/hardware/HardwareIndexedAddress.java'
       - 'src/main/java/ghidrassist/hardware/HardwareApplyPlan.java'
@@ -70,6 +73,7 @@ on:
       - 'src/test/java/ghidrassist/hardware/HardwareFunctionRenamePolicySelfTest.java'
       - 'src/test/java/ghidrassist/hardware/HardwareContextSelectorSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/HardwareDataflowSelfTest.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareAutoUpdateRegistersSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/HardwarePcodeStoreSafetySelfTest.java'
       - 'src/test/java/ghidrassist/hardware/HardwareIndexedAddressSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/HardwareApplyPlanSelfTest.java'
@@ -102,6 +106,7 @@ jobs:
             src/main/java/ghidrassist/hardware/HardwareFunctionNamingReview.java \
             src/main/java/ghidrassist/hardware/HardwareFunctionRenamePolicy.java \
             src/main/java/ghidrassist/hardware/HardwareDataflow.java \
+            src/main/java/ghidrassist/hardware/HardwareAutoUpdateRegisters.java \
             src/main/java/ghidrassist/hardware/HardwarePcodeStoreSafety.java \
             src/main/java/ghidrassist/hardware/HardwareIndexedAddress.java \
             src/main/java/ghidrassist/hardware/HardwareContextSelector.java \
@@ -118,6 +123,7 @@ jobs:
             src/test/java/ghidrassist/hardware/ManualDocumentScopeSelfTest.java \
             src/test/java/ghidrassist/hardware/ManualPrintedPageSelfTest.java \
             src/test/java/ghidrassist/hardware/HardwareDataflowSelfTest.java \
+            src/test/java/ghidrassist/hardware/HardwareAutoUpdateRegistersSelfTest.java \
             src/test/java/ghidrassist/hardware/HardwarePcodeStoreSafetySelfTest.java \
             src/test/java/ghidrassist/hardware/HardwareIndexedAddressSelfTest.java \
             src/test/java/ghidrassist/hardware/HardwareContextSelectorSelfTest.java \
@@ -145,6 +151,8 @@ jobs:
             ghidrassist.hardware.HardwareFunctionRenamePolicySelfTest
           java -cp "$RUNNER_TEMP/hardware-tests" \
             ghidrassist.hardware.HardwareDataflowSelfTest
+          java -cp "$RUNNER_TEMP/hardware-tests" \
+            ghidrassist.hardware.HardwareAutoUpdateRegistersSelfTest
           java -cp "$RUNNER_TEMP/hardware-tests" \
             ghidrassist.hardware.HardwarePcodeStoreSafetySelfTest
           java -cp "$RUNNER_TEMP/hardware-tests" \
