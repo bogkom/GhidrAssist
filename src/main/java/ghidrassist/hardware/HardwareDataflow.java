@@ -108,6 +108,10 @@ public final class HardwareDataflow {
                     !Objects.equals(vbr,b.vbr);
         }
     }
+    public static Long pcodeInputValue(boolean constant,long literal,Long propagated){
+        if(constant)return Long.valueOf(literal);
+        return propagated;
+    }
     private static Long resolve(Step step,State s) {
         if(step.kind==Kind.STORE_DIRECT) return step.operand&MASK24;
         if(step.kind==Kind.STORE_INDIRECT){

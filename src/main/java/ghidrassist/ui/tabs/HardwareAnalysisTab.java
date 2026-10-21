@@ -112,8 +112,16 @@ public final class HardwareAnalysisTab extends JPanel {
                     status.setText("Read-only: "+finished.uniqueSites+
                         " candidate sites in "+finished.functions+" functions. No database edits.");
                 }catch(Exception ex){
-                    report.setText("Hardware analysis failed:\n"+ex+"\n\nNo program changes.");
-                    status.setText("Analysis failed; check Ghidra logs.");
+                    Throwable root=ex;
+                    while(root.getCause()!=null && root.getCause()!=root)
+                        root=root.getCause();
+                    ghidra.util.Msg.error(HardwareAnalysisTab.this,
+                        "Hardware Analysis failed; detailed stack trace follows",ex);
+                    report.setText("Hardware analysis failed:\n"+
+                        root.getClass().getSimpleName()+": "+root.getMessage()+
+                        "\n\nFull stack trace is in Ghidra Application Log."+
+                        "\nNo program changes.");
+                    status.setText("Analysis failed; inspect Ghidra Application Log.");
                 }
             }
         };

@@ -90,7 +90,11 @@ public final class GhidraHardwareFlowService {
     }
     private static Long value(Varnode v,Map<Varnode,Long> constants){
         if(v==null)return null;
-        return v.isConstant()?v.getOffset():constants.get(v);
+        // A missing dataflow constant is UNKNOWN, not zero or an error.
+        // Primitive long vs boxed Long in a ternary expression would unbox
+        // the null returned by Map.get() and crash on normal P-code.
+        if(v.isConstant())return HardwareDataflow.pcodeInputValue(true,v.getOffset(),null);
+        return HardwareDataflow.pcodeInputValue(false,0L,constants.get(v));
     }
     private static Long pcodeStore(Instruction i){
         Map<Varnode,Long> computed=new HashMap<>();
