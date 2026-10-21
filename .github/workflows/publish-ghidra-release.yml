@@ -56,16 +56,16 @@ jobs:
           set -euo pipefail
           shopt -s nullglob
           packages=(dist/ghidra_12.1.4_PUBLIC_*_GhidrAssist.zip)
-          if (( \${#packages[@]} != 1 )); then
+          if (( ${#packages[@]} != 1 )); then
             echo "::error::Expected one Ghidra 12.1.4 extension ZIP in dist/"
             exit 1
           fi
-          unzip -tq "\${packages[0]}"
-          (cd dist && sha256sum "$(basename "\${packages[0]}")" > SHA256SUMS.txt)
-          ls -lh "\${packages[0]}" dist/SHA256SUMS.txt
+          unzip -tq "${packages[0]}"
+          (cd dist && sha256sum "$(basename "${packages[0]}")" > SHA256SUMS.txt)
+          ls -lh "${packages[0]}" dist/SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: GhidrAssist-release-candidate-\${{ github.run_id }}
+          name: GhidrAssist-release-candidate-${{ github.run_id }}
           path: |
             dist/ghidra_12.1.4_PUBLIC_*_GhidrAssist.zip
             dist/SHA256SUMS.txt
@@ -86,14 +86,14 @@ jobs:
           persist-credentials: false
       - uses: actions/download-artifact@v4
         with:
-          name: GhidrAssist-release-candidate-\${{ github.run_id }}
+          name: GhidrAssist-release-candidate-${{ github.run_id }}
           path: release-assets
       - name: Validate manual release request
         shell: bash
         env:
-          RELEASE_VERSION: \${{ inputs.version }}
-          RELEASE_STAGE: \${{ inputs.release_stage }}
-          GH_TOKEN: \${{ github.token }}
+          RELEASE_VERSION: ${{ inputs.version }}
+          RELEASE_STAGE: ${{ inputs.release_stage }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           if [[ ! "$RELEASE_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)\.[0-9]+)?$ ]]; then
@@ -118,7 +118,7 @@ jobs:
           fi
           shopt -s nullglob
           files=(release-assets/ghidra_12.1.4_PUBLIC_*_GhidrAssist.zip)
-          if (( \${#files[@]} != 1 )) || [[ ! -f release-assets/SHA256SUMS.txt ]]; then
+          if (( ${#files[@]} != 1 )) || [[ ! -f release-assets/SHA256SUMS.txt ]]; then
             echo "::error::Missing extension ZIP or SHA256SUMS"
             exit 1
           fi
@@ -126,9 +126,9 @@ jobs:
       - name: Publish GitHub Release with verified ZIP
         shell: bash
         env:
-          GH_TOKEN: \${{ github.token }}
-          RELEASE_VERSION: \${{ inputs.version }}
-          RELEASE_STAGE: \${{ inputs.release_stage }}
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ inputs.version }}
+          RELEASE_STAGE: ${{ inputs.release_stage }}
         run: |
           set -euo pipefail
           shopt -s nullglob
@@ -138,8 +138,8 @@ jobs:
             options+=(--prerelease --latest=false)
           fi
           gh release create "$RELEASE_VERSION" \
-            "\${packages[0]}" release-assets/SHA256SUMS.txt \
+            "${packages[0]}" release-assets/SHA256SUMS.txt \
             --target "$GITHUB_SHA" \
             --title "GhidrAssist $RELEASE_VERSION (Ghidra 12.1.4)" \
             --generate-notes \
-            "\${options[@]}"
+            "${options[@]}"
