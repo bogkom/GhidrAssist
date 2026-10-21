@@ -78,9 +78,9 @@ public final class HardwareDataflowSelfTest {
             "register-sourced MOVE.W constant propagation");
 
         var trunc=HardwareDataflow.analyze(0,List.of(
-            st(0,OTHER,null,0,0,null,0,2L),
+            st(0,STORE_DIRECT,null,simcr,0,0x40ca,16,2L),
             st(2,OTHER,null,0,0,null,0)
-        ),Set.of(),1);
+        ),Set.of(simcr),1);
         ok(trunc.truncated,"iteration ceiling surfaced");
         ok(trunc.snapshots.isEmpty(),"truncated fixed point cannot publish uncertain values");
         System.out.println("HardwareDataflowSelfTest OK");
