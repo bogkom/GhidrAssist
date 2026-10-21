@@ -150,7 +150,12 @@ public final class GhidraHardwareFlowService {
         String dst=plainReg(i,last),src=plainReg(i,0);
         Long imm=i.getNumOperands()==2?immediate(i,0):null;
         if(dst!=null){
-            if((m.equals("MOVE")||m.equals("MOVEA")||m.equals("MOVEQ"))&&imm!=null){
+            // MOVE.W into Dn preserves unknown upper bits; it must not be
+            // promoted to a full 24-bit address-register/constant value.
+            boolean fullOverwrite=m.equals("MOVEQ")||
+                full.endsWith(".L")||m.equals("MOVEA");
+            if((m.equals("MOVE")||m.equals("MOVEA")||m.equals("MOVEQ"))&&
+                    imm!=null&&fullOverwrite){
                 long v=imm;
                 if(m.equals("MOVEQ")&&(v&0x80)!=0)v|=0xffffff00L;
                 if(m.equals("MOVEA")&&full.endsWith(".W")&&(v&0x8000)!=0)
@@ -164,14 +169,18 @@ public final class GhidraHardwareFlowService {
                     HardwareDataflow.Kind.SET_POINTER,dst,addr,0,null,0,next,full);
             }
             if((m.equals("MOVE")||m.equals("MOVEA"))&&src!=null &&
-                    (full.endsWith(".W")||full.endsWith(".L"))){
+                    full.endsWith(".L")){
                 return new HardwareDataflow.Step(pc,HardwareDataflow.Kind.COPY_POINTER,
                     dst,src,0,0,null,0,next,full);
             }
             if(imm!=null&&(m.equals("ADDA")||m.equals("SUBA")||
                     m.equals("ADDQ")||m.equals("SUBQ"))){
+                long signed=imm;
+                if((m.equals("ADDA")||m.equals("SUBA"))&&
+                        full.endsWith(".W")&&(signed&0x8000L)!=0)
+                    signed|=0xffff0000L;
                 return new HardwareDataflow.Step(pc,HardwareDataflow.Kind.ADJUST_POINTER,
-                    dst,m.startsWith("SUB")?-imm:imm,0,null,0,next,full);
+                    dst,m.startsWith("SUB")?-signed:signed,0,null,0,next,full);
             }
             return new HardwareDataflow.Step(pc,HardwareDataflow.Kind.CLOBBER_POINTER,
                 dst,0,0,null,0,next,full);
