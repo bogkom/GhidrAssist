@@ -195,6 +195,32 @@ public final class GhidraHardwareFlowService {
         return new HardwareDataflow.Step(pc,HardwareDataflow.Kind.OTHER,
             null,0,0,null,0,next,full);
     }
+    private static String csEpoch(HardwareDataflow.Snapshot hit,String changed,
+            long base,int mm){
+        Map<Long,Integer> values=hit.knownPeripheralWords;
+        StringBuilder report=new StringBuilder();
+        int from=0,to=10;
+        if(changed.startsWith("CSBAR")||changed.startsWith("CSOR")){
+            String suffix=changed.startsWith("CSBAR")?
+                changed.substring(5):changed.substring(4);
+            int cs=suffix.equals("BT")?-1:Integer.parseInt(suffix);
+            from=cs;to=cs;
+        }
+        ChipSelectModel.Decoder model=new ChipSelectModel.Decoder(
+            "MC68332","MC68332 mapping hypothesis; CFG local only");
+        for(int cs=from;cs<=to;cs++){
+            String suffix=cs<0?"BT":String.valueOf(cs);
+            long offset=cs<0?0:4L*(cs+1);
+            Integer bar=values.get(base+0xa48+offset);
+            Integer or=values.get(base+0xa4a+offset);
+            Integer par=values.get(base+(cs<=5?0xa44:0xa46));
+            if(bar==null)continue;
+            ChipSelectModel.Window win=model.window(cs,bar,or,par);
+            report.append("  - snapshot after write, address-map candidate MM=")
+                .append(mm).append(": ").append(win.toSummary()).append("\n");
+        }
+        return report.toString();
+    }
     public Report analyze(Program program,TaskMonitor monitor)throws CancelledException{
         if(program==null)throw new IllegalArgumentException("Open Ghidra program required");
         if(monitor==null)monitor=TaskMonitor.DUMMY;
@@ -242,10 +268,24 @@ public final class GhidraHardwareFlowService {
             int callers=0;
             ReferenceIterator refs=program.getReferenceManager()
                 .getReferencesTo(fun.getEntryPoint());
-            while(refs.hasNext())if(refs.next().getReferenceType().isCall())callers++;
+            StringBuilder callerSites=new StringBuilder();
+            while(refs.hasNext()){
+                Reference reference=refs.next();
+                if(!reference.getReferenceType().isCall())continue;
+                callers++;
+                if(callers<=6){
+                    Function caller=program.getFunctionManager()
+                        .getFunctionContaining(reference.getFromAddress());
+                    callerSites.append("- Static caller reference ")
+                        .append(reference.getFromAddress()).append(" in ")
+                        .append(caller==null?"UNKNOWN":caller.getName())
+                        .append(" (not proof of runtime execution)\n");
+                }
+            }
             detail.append("- CFG nodes reached: ").append(result.reachedNodes)
                 .append("; direct call references: ").append(callers)
-                .append("; propagation limit: ").append(result.truncated).append("\n");
+                .append("; propagation limit: ").append(result.truncated).append("\n")
+                .append(callerSites);
             for(HardwareDataflow.Snapshot hit:found){
                 if(shown++>=350)break;
                 detail.append("- PC ")
@@ -266,18 +306,16 @@ public final class GhidraHardwareFlowService {
                     if(name.equals("SIMCR")&&hit.writtenWord!=null)
                         detail.append(" ; candidate MM=")
                             .append((hit.writtenWord&0x40)!=0?1:0);
-                    if(name.startsWith("CSBAR") && hit.writtenWord!=null){
-                        int cs=name.endsWith("BT")?-1:
-                            Integer.parseInt(name.substring(5));
-                        String suffix=cs<0?"BT":String.valueOf(cs);
-                        long offset=cs<0?0:4L*(cs+1);
-                        Integer or=hit.knownPeripheralWords.get(base+0xa4a+offset);
-                        Integer spar=hit.knownPeripheralWords.get(
-                            base+(cs<=5?0xa44:0xa46));
-                        ChipSelectModel.Window win=new ChipSelectModel.Decoder(
-                            "MC68332","manual hypothesis").window(cs,
-                            hit.writtenWord,or,spar);
-                        detail.append(" ; candidate ").append(win.toSummary());
+                    if(name.startsWith("CSBAR")||name.startsWith("CSOR")||
+                            name.startsWith("CSPAR")){
+                        detail.append("\n").append(csEpoch(hit,name,base,mm));
+                    }
+                    if(name.equals("TRAMBAR") && hit.writtenWord!=null){
+                        long ramBase=((long)(hit.writtenWord&0xfff8)<<8)&0xffffffL;
+                        detail.append(" ; possible MC68332 TPURAM=")
+                            .append(ChipSelectModel.hex(ramBase,6)).append("..")
+                            .append(ChipSelectModel.hex(ramBase+2047,6))
+                            .append(" [not active until MCU/reset state verified]");
                     }
                 }
                 detail.append("\n");
