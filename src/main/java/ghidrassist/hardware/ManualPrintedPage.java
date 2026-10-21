@@ -25,8 +25,7 @@ public final class ManualPrintedPage {
         // where "Table D-1" and section cross-references are common.
         int cap=Math.min(12,rows.length);
         for(int i=0;i<cap;i++){
-            if(!rows[i].contains("USER'S MANUAL") &&
-                    !rows[i].contains("REGISTER SUMMARY"))continue;
+            if(!rows[i].contains("USER'S MANUAL"))continue;
             // Require the page label in the actual header line or immediately
             // adjacent. If two candidates appear, publish UNKNOWN.
             String near=(i>0?rows[i-1]:"")+" "+rows[i]+" "+
