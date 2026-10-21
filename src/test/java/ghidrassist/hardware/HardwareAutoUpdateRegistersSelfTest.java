@@ -20,6 +20,23 @@ public final class HardwareAutoUpdateRegistersSelfTest {
             .isEmpty(),"invalid PC auto increment not treated as A register");
         ok(HardwareAutoUpdateRegisters.changedByOperand("-(D0)")
             .isEmpty(),"data register cannot predecrement address");
+        var clobbers=HardwareAutoUpdateRegisters.unmodeledOutputs(
+            HardwareDataflow.Kind.OTHER,null,Set.of("A0","D1"));
+        ok(clobbers.equals(Set.of("A0","D1")),
+            "unmodeled EXG/D-register P-code outputs invalidate all affected registers");
+        var modeled=HardwareAutoUpdateRegisters.unmodeledOutputs(
+            HardwareDataflow.Kind.SET_POINTER,"A0",Set.of("A0","D1"));
+        ok(modeled.equals(Set.of("D1")),
+            "only the proven SET_POINTER value survives other register side effects");
+        ok(HardwareAutoUpdateRegisters.unmodeledOutputs(
+            HardwareDataflow.Kind.STORE_INDIRECT,"A0",Set.of("A0"))
+                .equals(Set.of("A0")),
+            "post-increment STORE cannot preserve stale base register");
+        boolean rejected=false;
+        try{HardwareAutoUpdateRegisters.unmodeledOutputs(
+            HardwareDataflow.Kind.OTHER,null,Set.of("UNKNOWN"));}
+        catch(IllegalArgumentException expected){rejected=true;}
+        ok(rejected,"unexpected P-code register IDs are not silently accepted");
         System.out.println("HardwareAutoUpdateRegistersSelfTest OK");
     }
 }
