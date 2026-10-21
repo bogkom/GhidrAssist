@@ -2,6 +2,7 @@ package ghidrassist.hardware;
 
 import ghidra.program.model.address.Address;
 import ghidra.program.model.data.CategoryPath;
+import ghidra.program.model.data.ByteDataType;
 import ghidra.program.model.data.DataType;
 import ghidra.program.model.data.DataTypeConflictHandler;
 import ghidra.program.model.data.DWordDataType;
@@ -197,7 +198,12 @@ public final class HardwareApplyService {
                 prior.getName());
             return false;
         }
-        DataType type=item.length==2?WordDataType.dataType:DWordDataType.dataType;
+        DataType type=switch(item.length) {
+            case 1 -> ByteDataType.dataType;
+            case 2 -> WordDataType.dataType;
+            case 4 -> DWordDataType.dataType;
+            default -> throw new IllegalArgumentException("Unsupported register length: "+item.length);
+        };
         p.getListing().createData(first,type);
         String name=item.name+"_"+Long.toHexString(item.address).toUpperCase(Locale.ROOT);
         p.getSymbolTable().createLabel(first,name,SourceType.USER_DEFINED);
