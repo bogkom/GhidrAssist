@@ -82,6 +82,7 @@ public final class HardwareDataflowSelfTest {
             st(2,OTHER,null,0,0,null,0)
         ),Set.of(),1);
         ok(trunc.truncated,"iteration ceiling surfaced");
+        ok(trunc.snapshots.isEmpty(),"truncated fixed point cannot publish uncertain values");
         System.out.println("HardwareDataflowSelfTest OK");
     }
 }
