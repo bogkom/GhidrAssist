@@ -41,6 +41,7 @@ and hardware wiring are **not automatically proven**.
 - [Indexed addressing](hardware-indexed-addressing.md) and [MM write candidate history](hardware-mm-write-history.md)
 - [Function naming review](hardware-function-naming-review.md) and [AI/RAG evidence selection](hardware-rag-relevance.md)
 - [Undoable function renaming approval](hardware-function-rename-approval.md) and [unknown MMIO STORE safety](hardware-unknown-store-safety.md)
+- [P-code STORE alias safety](hardware-pcode-store-alias-safety.md), [68k auto-index handling](hardware-autoindex-safety.md), [P-code A/D register writes](hardware-pcode-register-defs.md) and [bounded static call effects](hardware-static-call-effects.md)
 
 ## Key Features
 
