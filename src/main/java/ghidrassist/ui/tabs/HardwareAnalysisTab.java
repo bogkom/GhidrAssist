@@ -4,6 +4,9 @@ import ghidrassist.GhidrAssistPlugin;
 import ghidrassist.hardware.HardwareInventoryService;
 import ghidrassist.hardware.HardwareApplyPlan;
 import ghidrassist.hardware.HardwareApplyService;
+import ghidrassist.hardware.HardwareFunctionNamingReview;
+import ghidrassist.hardware.HardwareFunctionRenamePolicy;
+import ghidrassist.hardware.HardwareFunctionRenameService;
 import ghidrassist.core.MarkdownHelper;
 import ghidra.app.services.GoToService;
 import ghidra.program.model.address.Address;
@@ -64,12 +67,14 @@ public final class HardwareAnalysisTab extends JPanel {
     private final JButton export=new JButton("Export MD");
     private final JButton namePreview=new JButton("Export CSV");
     private final JButton approve=new JButton("Review / Apply...");
+    private final JButton reviewNames=new JButton("Review names...");
     private final JTextArea report=new JTextArea();
     private final JLabel status=new JLabel("Open a Ghidra program, then analyze candidate MCU registers.");
     private volatile String latestMarkdown;
     private volatile String latestNameCsv;
     private volatile Program latestProgram;
     private volatile boolean latestConcrete;
+    private volatile List<HardwareFunctionNamingReview.Proposal> latestFunctionProposals=List.of();
 
     public HardwareAnalysisTab(GhidrAssistPlugin plugin){
         super(new BorderLayout(5,5));
@@ -79,6 +84,7 @@ public final class HardwareAnalysisTab extends JPanel {
         JPanel profileRow=new JPanel(new FlowLayout(FlowLayout.LEFT,5,1));
         profileRow.add(new JLabel("Profile:"));
         profileRow.add(selection);
+        profileRow.add(reviewNames);
         JPanel actionRow=new JPanel(new FlowLayout(FlowLayout.LEFT,5,1));
         actionRow.add(run);
         actionRow.add(approve);
@@ -91,6 +97,8 @@ public final class HardwareAnalysisTab extends JPanel {
         export.setToolTipText("Export Hardware Evidence as Markdown for RAG");
         namePreview.setToolTipText("Export review-only hardware label suggestions as CSV");
         approve.setEnabled(false);
+        reviewNames.setEnabled(false);
+        reviewNames.setToolTipText("Review function role names and apply explicitly approved, collision-free proposals in one Undo transaction");
         export.setEnabled(false);
         namePreview.setEnabled(false);
         report.setEditable(false);
@@ -119,6 +127,7 @@ public final class HardwareAnalysisTab extends JPanel {
         export.addActionListener(e->exportMarkdown());
         namePreview.addActionListener(e->exportNamingPreview());
         approve.addActionListener(e->reviewHardwareChanges());
+        reviewNames.addActionListener(e->reviewFunctionNames());
     }
 
     /** Uses the very same saved settings as Settings > Response Appearance. */
@@ -168,6 +177,8 @@ public final class HardwareAnalysisTab extends JPanel {
         final boolean concrete=selection.getSelectedIndex()==1;
         run.setEnabled(false);export.setEnabled(false);namePreview.setEnabled(false);
         approve.setEnabled(false);
+        reviewNames.setEnabled(false);
+        latestFunctionProposals=List.of();
         latestMarkdown=null;latestNameCsv=null;latestProgram=null;
         ghidrassist.hardware.HardwareEvidenceCache.clear(program);
         status.setText("Scanning references and disassembled instructions. Read-only.");
@@ -190,7 +201,10 @@ public final class HardwareAnalysisTab extends JPanel {
                     latestNameCsv=finished.namePreviewCsv;
                     latestProgram=program;
                     latestConcrete=concrete;
+                    latestFunctionProposals=finished.functionProposals;
                     approve.setEnabled(true);
+                    reviewNames.setEnabled(concrete && latestFunctionProposals.stream()
+                        .anyMatch(p->p.status==ghidrassist.hardware.HardwareNamingReview.Status.REVIEW_REQUIRED));
                     ghidrassist.hardware.HardwareEvidenceCache.publish(program, finished.markdown);
                     report.setText(finished.markdown);
                     report.setCaretPosition(0);
@@ -267,6 +281,150 @@ public final class HardwareAnalysisTab extends JPanel {
                 "Export error",JOptionPane.ERROR_MESSAGE);
         }
     }
+    /**
+     * Separate, opt-in function naming approval, keeping the Memory Review
+     * unaffected. Preflight is rechecked under a single undoable transaction.
+     */
+    private void reviewFunctionNames() {
+        final Program program=plugin.getCurrentProgram();
+        if(program==null || latestProgram!=program || latestMarkdown==null ||
+                !latestConcrete) {
+            status.setText("Choose MC68332 and analyze the active program before reviewing names.");
+            return;
+        }
+        final List<HardwareFunctionNamingReview.Proposal> proposals=
+            List.copyOf(latestFunctionProposals);
+        if(proposals.isEmpty()){
+            status.setText("No function role naming candidates in current analysis.");
+            return;
+        }
+        final List<HardwareFunctionRenamePolicy.Decision> decisions=new ArrayList<>();
+        for(var p:proposals)
+            decisions.add(HardwareFunctionRenameService.preflight(program,p));
+
+        DefaultTableModel model=new DefaultTableModel(new Object[]{
+            "Apply","Status","Function address","Current name",
+            "Proposed name","Write evidence / role"},0){
+            @Override public Class<?> getColumnClass(int col) {
+                return col==0?Boolean.class:String.class;
+            }
+            @Override public boolean isCellEditable(int row,int col) {
+                return col==0 &&
+                    decisions.get(row)==HardwareFunctionRenamePolicy.Decision.READY;
+            }
+        };
+        for(int i=0;i<proposals.size();i++) {
+            var p=proposals.get(i);
+            boolean ready=decisions.get(i)==HardwareFunctionRenamePolicy.Decision.READY;
+            model.addRow(new Object[]{ready,decisions.get(i).name(),
+                String.format("0x%08X",p.functionAddress),p.currentName,
+                p.proposedName,p.writeSites+" sites; "+p.role+"; "+p.registers});
+        }
+        JTable table=new JTable(model);
+        table.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
+        table.setRowHeight(Math.max(25,table.getFont().getSize()+9));
+        int[] sizes={62,175,150,205,410,490};
+        for(int i=0;i<sizes.length;i++)
+            table.getColumnModel().getColumn(i).setPreferredWidth(sizes[i]);
+        JPanel content=new JPanel(new BorderLayout(6,6));
+        content.setBorder(BorderFactory.createEmptyBorder(7,7,7,7));
+        content.add(new JLabel("<html><b>Candidate function names — MC68332 hypothesis</b>"+
+            "<br>Only Ghidra-generated function names and multi-register direct writes "+
+            "are eligible. Collisions/stale names are blocked. No change until final confirmation.</html>"),
+            BorderLayout.NORTH);
+        content.add(new JScrollPane(table),BorderLayout.CENTER);
+        JButton selectSafe=new JButton("Select applicable");
+        JButton clear=new JButton("Clear selection");
+        JButton apply=new JButton("Apply selected...");
+        JButton cancel=new JButton("Cancel");
+        JLabel total=new JLabel();
+        Runnable refresh=()->{
+            int selected=0;
+            for(int i=0;i<model.getRowCount();i++)
+                if(Boolean.TRUE.equals(model.getValueAt(i,0)))selected++;
+            total.setText(selected+" function(s) selected");
+        };
+        model.addTableModelListener(e->refresh.run());
+        refresh.run();
+        selectSafe.addActionListener(e->{
+            for(int i=0;i<proposals.size();i++)
+                model.setValueAt(decisions.get(i)==HardwareFunctionRenamePolicy.Decision.READY,i,0);
+        });
+        clear.addActionListener(e->{
+            for(int i=0;i<proposals.size();i++)model.setValueAt(false,i,0);
+        });
+        JPanel actions=new JPanel(new FlowLayout(FlowLayout.LEFT,7,5));
+        actions.add(selectSafe);actions.add(clear);actions.add(total);
+        actions.add(apply);actions.add(cancel);
+        content.add(actions,BorderLayout.SOUTH);
+        Window owner=SwingUtilities.getWindowAncestor(this);
+        JDialog dialog=new JDialog(owner,"Review function name candidates",
+            Dialog.ModalityType.APPLICATION_MODAL);
+        dialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
+        dialog.setContentPane(content);
+        Dimension screen=Toolkit.getDefaultToolkit().getScreenSize();
+        dialog.setSize(Math.min(1240,Math.max(740,screen.width-100)),
+            Math.min(740,Math.max(470,screen.height-130)));
+        dialog.setMinimumSize(new Dimension(720,420));
+        dialog.setResizable(true);
+        dialog.setLocationRelativeTo(this);
+        List<HardwareFunctionNamingReview.Proposal> selected=new ArrayList<>();
+        cancel.addActionListener(e->dialog.dispose());
+        apply.addActionListener(e->{
+            if(table.isEditing())table.getCellEditor().stopCellEditing();
+            selected.clear();
+            for(int i=0;i<proposals.size();i++){
+                if(!Boolean.TRUE.equals(model.getValueAt(i,0)))continue;
+                if(decisions.get(i)!=HardwareFunctionRenamePolicy.Decision.READY){
+                    JOptionPane.showMessageDialog(dialog,
+                        "This function is no longer eligible for renaming.",
+                        "Preflight blocked",JOptionPane.WARNING_MESSAGE);
+                    return;
+                }
+                selected.add(proposals.get(i));
+            }
+            if(selected.isEmpty()){
+                JOptionPane.showMessageDialog(dialog,"No functions selected.",
+                    "Naming review",JOptionPane.INFORMATION_MESSAGE);
+                return;
+            }
+            dialog.dispose();
+        });
+        dialog.setVisible(true);
+        if(selected.isEmpty())return;
+        if(plugin.getCurrentProgram()!=program || latestProgram!=program){
+            status.setText("Program changed; no functions renamed.");
+            return;
+        }
+        int confirm=JOptionPane.showConfirmDialog(this,
+            "Rename "+selected.size()+" function(s) in ONE undoable transaction?\n"+
+            "Names remain explicit MC68332 CANDIDATES, not hardware identification.\n"+
+            "Stale function names or symbol collisions abort the entire transaction.\n"+
+            "No bytes or external devices are modified.",
+            "Final confirmation — change Ghidra function names",
+            JOptionPane.YES_NO_OPTION,JOptionPane.WARNING_MESSAGE);
+        if(confirm!=JOptionPane.YES_OPTION)return;
+        try{
+            var outcome=HardwareFunctionRenameService.apply(program,selected);
+            JOptionPane.showMessageDialog(this,
+                "Renamed "+outcome.renamed()+" function(s). Ghidra Undo is available.\n"+
+                "Rerun Hardware Analysis to regenerate evidence.",
+                "Function names updated",JOptionPane.INFORMATION_MESSAGE);
+            status.setText(outcome.renamed()+" function names applied (undoable). Reanalyze.");
+            ghidrassist.hardware.HardwareEvidenceCache.clear(program);
+            latestProgram=null;latestMarkdown=null;latestNameCsv=null;
+            latestFunctionProposals=List.of();
+            reviewNames.setEnabled(false);approve.setEnabled(false);
+            export.setEnabled(false);namePreview.setEnabled(false);
+        }catch(Exception ex){
+            ghidra.util.Msg.error(this,"Reviewed function rename failed and rolled back",ex);
+            JOptionPane.showMessageDialog(this,
+                "No function names committed; entire transaction rolled back.\n"+
+                ex.getClass().getSimpleName()+": "+ex.getMessage(),
+                "Rename error",JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
     /**
      * Mutating action deliberately separate from the read-only analyzer.
      * Zero rows are preselected; only explicit checkmarks are applied. Ghidra
@@ -486,6 +644,8 @@ public final class HardwareAnalysisTab extends JPanel {
             latestMarkdown=null;latestNameCsv=null;
             approve.setEnabled(false);export.setEnabled(false);
             namePreview.setEnabled(false);
+            reviewNames.setEnabled(false);
+            latestFunctionProposals=List.of();
         }catch(Exception ex){
             ghidra.util.Msg.error(this,
                 "Hardware Apply failed; transaction rolled back",ex);
