@@ -65,7 +65,8 @@ public final class ManualDocumentScope {
         Matcher split=SPLIT_336.matcher(base);
         if(split.matches()) {
             String part=split.group(1);
-            return known("MC68336376UM"+part,"MC68336+MC68376",
+            return known("MC68336376UM"+part,
+                part.equals("13")?"MC68376":"MC68336+MC68376",
                 "SPLIT_"+part);
         }
         if(base.equals("MC68332TS.PDF"))
