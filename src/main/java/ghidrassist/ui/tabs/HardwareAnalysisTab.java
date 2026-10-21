@@ -114,8 +114,8 @@ public final class HardwareAnalysisTab extends JPanel {
         if(clicked<0)return;
         String text=report.getText();
         if(clicked>=text.length())return;
-        int from=text.lastIndexOf('\\n',clicked)+1;
-        int end=text.indexOf('\\n',clicked);
+        int from=text.lastIndexOf('\n',clicked)+1;
+        int end=text.indexOf('\n',clicked);
         if(end<0)end=text.length();
         Matcher match=LINK_ADDRESS.matcher(text.substring(from,end));
         while(match.find()){
