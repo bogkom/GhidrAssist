@@ -38,34 +38,30 @@ public final class HardwareApplyPlan {
         if(vbrAddress<0 || vbrAddress>0xfffffc || (vbrAddress&3)!=0)
             throw new IllegalArgumentException("VBR must be 4-byte aligned and in 24-bit space");
         List<Item> items=new ArrayList<>();
-        add(items,Kind.MEMORY,"SIM_REGISTERS_MM1",0xfffa00,0x80,
-            "128-byte uninitialized peripheral region; not proof of MC68332");
-        // MC68332 Appendix D, REGISTER SUMMARY, page D-1:
-        // Module Size(Bytes) Base Address, MM=1:
-        // SIM 128 FFFA00; TPURAM 64 FFFB00;
-        // QSM 512 FFFC00; TPU 512 FFFE00.
-        // Unimplemented offsets within module ranges are reserved, NOT
-        // automatically typed as registers. This is a memory region definition.
-        add(items,Kind.MEMORY,"TPURAM_CONTROL_MM1",0xfffb00,0x40,
-            "MC68332 Appendix D-1: complete 64-byte TPURAM module MMIO aperture");
-        add(items,Kind.MEMORY,"QSM_MM1",0xfffc00,0x200,
-            "MC68332 Appendix D-1: complete 512-byte QSM aperture; "+
-            "reserved bytes remain undefined, queue RAM lies within region");
-        add(items,Kind.MEMORY,"TPU_MM1",0xfffe00,0x200,
-            "MC68332 Appendix D-1: complete 512-byte TPU aperture; "+
-            "reserved bytes remain undefined, parameter RAM lies within region");
+        // Source-backed aperture rows from MC68332UM Appendix D Table D-1.
+        // Never infer the physical CPU from a Ghidra language selection.
+        HardwareProfiles.Profile selected = HardwareProfiles.mc68332();
+        for (HardwareProfiles.ModuleRegion region : selected.modules) {
+            add(items,Kind.MEMORY,region.blockName,
+                HardwareProfiles.INTERNAL_BASE_MM1 + region.offset,
+                region.sizeBytes, "MC68332 hypothesis; " + region.sourcePage +
+                    "; reserved offsets remain untyped");
+        }
         add(items,Kind.MEMORY,"TPURAM_2K_CANDIDATE",0xfff000,0x800,
             "2KiB candidate relocated TPU RAM at TRAMBAR=0xFFF0");
         add(items,Kind.MEMORY,"CS7_DEVICE_CANDIDATE",0xff8800,0x800,
             "Only a candidate external chip select, device type UNKNOWN");
         add(items,Kind.MEMORY,"CS8_DEVICE_CANDIDATE",0xff8000,0x800,
             "Only a candidate external chip select, device type UNKNOWN");
-        for(HardwareProfiles.Register register:HardwareProfiles.mc68332().registers){
+        for(HardwareProfiles.Register register:selected.registers){
             long at=HardwareProfiles.INTERNAL_BASE_MM1+register.offset;
             add(items,Kind.REGISTER,"HW_MC68332_"+register.name+"_MM1",at,
                 register.widthBits/8,
                 "Source-backed candidate: "+register.module+
-                "; explicitly selected MCU profile; no auto-rename of other symbols");
+                "; "+register.sourcePage+"; access="+register.access+
+                "; write="+register.writePolicy+"; reset="+
+                (register.resetValue==null?"UNVERIFIED":register.resetValue)+
+                "; explicitly selected MCU hypothesis; no auto-rename of other symbols");
         }
         add(items,Kind.VBR_STRUCTURE,"CPU32_VBR_256_VECTORS",vbrAddress,256*4,
             "256 x 32-bit vector entries at USER-SUPPLIED VBR base; "+
