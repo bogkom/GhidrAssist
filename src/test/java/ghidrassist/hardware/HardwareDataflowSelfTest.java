@@ -77,6 +77,42 @@ public final class HardwareDataflowSelfTest {
         ok(copied.snapshots.get(0).writtenWord==0x40ca,
             "register-sourced MOVE.W constant propagation");
 
+        var indexed=HardwareDataflow.analyze(0,List.of(
+            st(0,SET_POINTER,"A0",0xfffa00,0,null,0,2L),
+            st(2,SET_POINTER,"D1",0xffff,0,null,0,4L),
+            new HardwareDataflow.Step(4,"A0",null,"D1",16,2,
+                2,0x1234,16,List.of(6L),"MOVE.W #0x1234,2(A0,D1.W*2)"),
+            st(6,SET_POINTER,"D1",0,0,null,0,8L),
+            new HardwareDataflow.Step(8,"A0",null,"D1",32,1,
+                0x68,0x5678,16,List.of(),"MOVE.W #0x5678,0x68(A0,D1.L)")
+        ),Set.of(simcr,cs7),100);
+        ok(indexed.snapshots.size()==2,"two indexed writes");
+        ok(indexed.snapshots.get(0).effectiveAddress==simcr &&
+            indexed.snapshots.get(0).writtenWord==0x1234,
+            "signed word index and displacement resolve SIMCR");
+        ok(indexed.snapshots.get(1).effectiveAddress==cs7,
+            "long index + base + displacement resolves CSBAR7");
+
+        var unknownIndex=HardwareDataflow.analyze(0,List.of(
+            st(0,SET_POINTER,"A0",simcr,0,null,0,2L),
+            new HardwareDataflow.Step(2,"A0",null,"D0",16,1,0,
+                0x40ca,16,List.of(),"unknown D0")
+        ),Set.of(simcr),100);
+        ok(unknownIndex.snapshots.get(0).effectiveAddress==null &&
+            unknownIndex.snapshots.get(0).knownPeripheralWords.isEmpty(),
+            "unknown index is unresolved, not zero");
+
+        var disagreeingIndex=HardwareDataflow.analyze(0,List.of(
+            st(0,SET_POINTER,"A0",simcr,0,null,0,2L),
+            st(2,OTHER,null,0,0,null,0,4L,6L),
+            st(4,SET_POINTER,"D0",0,0,null,0,8L),
+            st(6,SET_POINTER,"D0",2,0,null,0,8L),
+            new HardwareDataflow.Step(8,"A0",null,"D0",16,1,0,
+                0x40ca,16,List.of(),"branch-dependent index")
+        ),Set.of(simcr,simcr+2),100);
+        ok(disagreeingIndex.snapshots.get(0).effectiveAddress==null,
+            "different predecessors must invalidate index address");
+
         var trunc=HardwareDataflow.analyze(0,List.of(
             st(0,STORE_DIRECT,null,simcr,0,0x40ca,16,2L),
             st(2,OTHER,null,0,0,null,0)
