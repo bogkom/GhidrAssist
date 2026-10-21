@@ -17,6 +17,8 @@ public final class ManualDocumentScope {
         "^MC68336376UM(0[1-9]|1[0-3]|[ABCD]|TOC|LOF|LOT|IX|COVER)\\.PDF$");
     private static final Pattern LOCAL_331 = Pattern.compile(
         "^MC(?:68331|331)_([A-Z0-9_-]{2,48})\\.PDF$");
+    private static final Pattern LOCAL_332 = Pattern.compile(
+        "^MC68332_([A-Z0-9_-]{2,48})\\.PDF$");
     private static final Pattern LOCAL_336 = Pattern.compile(
         "^MC68336_68376_(0[1-9]|1[0-3]|[ABCD])_([A-Z0-9_-]{2,48})\\.PDF$");
     private static final Pattern LEGACY_CHAPTER=Pattern.compile(
@@ -45,6 +47,10 @@ public final class ManualDocumentScope {
         if(local331.matches())
             return alias("MC68331_LOCAL_"+local331.group(1),"MC68331",
                 "LOCAL_"+local331.group(1));
+        Matcher local332=LOCAL_332.matcher(base);
+        if(local332.matches())
+            return alias("MC68332_LOCAL_"+local332.group(1),"MC68332",
+                "LOCAL_"+local332.group(1));
         Matcher local336=LOCAL_336.matcher(base);
         if(local336.matches()) {
             String part=local336.group(1), module=local336.group(2);
