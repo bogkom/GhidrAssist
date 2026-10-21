@@ -15,6 +15,7 @@ on:
       - 'src/main/java/ghidrassist/hardware/HardwareNamingReview.java'
       - 'src/main/java/ghidrassist/hardware/HardwareContextSelector.java'
       - 'src/main/java/ghidrassist/hardware/HardwareDataflow.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareIndexedAddress.java'
       - 'src/main/java/ghidrassist/hardware/HardwareApplyPlan.java'
       - 'src/main/java/ghidrassist/hardware/HardwareRegionLayout.java'
       - 'src/test/java/ghidrassist/hardware/HardwareProfilesSelfTest.java'
@@ -25,6 +26,7 @@ on:
       - 'src/test/java/ghidrassist/hardware/HardwareNamingReviewSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/HardwareContextSelectorSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/HardwareDataflowSelfTest.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareIndexedAddressSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/HardwareApplyPlanSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/HardwareRegionLayoutSelfTest.java'
       - '.github/workflows/hardware-profile-tests.yml'
@@ -38,6 +40,7 @@ on:
       - 'src/main/java/ghidrassist/hardware/HardwareNamingReview.java'
       - 'src/main/java/ghidrassist/hardware/HardwareContextSelector.java'
       - 'src/main/java/ghidrassist/hardware/HardwareDataflow.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareIndexedAddress.java'
       - 'src/main/java/ghidrassist/hardware/HardwareApplyPlan.java'
       - 'src/main/java/ghidrassist/hardware/HardwareRegionLayout.java'
       - 'src/test/java/ghidrassist/hardware/HardwareProfilesSelfTest.java'
@@ -48,6 +51,7 @@ on:
       - 'src/test/java/ghidrassist/hardware/HardwareNamingReviewSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/HardwareContextSelectorSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/HardwareDataflowSelfTest.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareIndexedAddressSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/HardwareApplyPlanSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/HardwareRegionLayoutSelfTest.java'
       - '.github/workflows/hardware-profile-tests.yml'
@@ -74,6 +78,7 @@ jobs:
             src/main/java/ghidrassist/hardware/ManualModuleTable.java \
             src/main/java/ghidrassist/hardware/HardwareNamingReview.java \
             src/main/java/ghidrassist/hardware/HardwareDataflow.java \
+            src/main/java/ghidrassist/hardware/HardwareIndexedAddress.java \
             src/main/java/ghidrassist/hardware/HardwareContextSelector.java \
             src/main/java/ghidrassist/hardware/HardwareApplyPlan.java \
             src/main/java/ghidrassist/hardware/HardwareRegionLayout.java \
@@ -84,6 +89,7 @@ jobs:
             src/test/java/ghidrassist/hardware/ManualRegisterHintsSelfTest.java \
             src/test/java/ghidrassist/hardware/ManualModuleTableSelfTest.java \
             src/test/java/ghidrassist/hardware/HardwareDataflowSelfTest.java \
+            src/test/java/ghidrassist/hardware/HardwareIndexedAddressSelfTest.java \
             src/test/java/ghidrassist/hardware/HardwareContextSelectorSelfTest.java \
             src/test/java/ghidrassist/hardware/HardwareApplyPlanSelfTest.java \
             src/test/java/ghidrassist/hardware/HardwareRegionLayoutSelfTest.java
@@ -101,6 +107,8 @@ jobs:
             ghidrassist.hardware.HardwareNamingReviewSelfTest
           java -cp "$RUNNER_TEMP/hardware-tests" \
             ghidrassist.hardware.HardwareDataflowSelfTest
+          java -cp "$RUNNER_TEMP/hardware-tests" \
+            ghidrassist.hardware.HardwareIndexedAddressSelfTest
           java -cp "$RUNNER_TEMP/hardware-tests" \
             ghidrassist.hardware.HardwareContextSelectorSelfTest
           java -cp "$RUNNER_TEMP/hardware-tests" \
