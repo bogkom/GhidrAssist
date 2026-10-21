@@ -15,6 +15,7 @@ on:
       - 'src/main/java/ghidrassist/hardware/ManualDocumentScope.java'
       - 'src/main/java/ghidrassist/hardware/HardwareNamingReview.java'
       - 'src/main/java/ghidrassist/hardware/HardwareFunctionNamingReview.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareFunctionRenamePolicy.java'
       - 'src/main/java/ghidrassist/hardware/HardwareContextSelector.java'
       - 'src/main/java/ghidrassist/hardware/HardwareDataflow.java'
       - 'src/main/java/ghidrassist/hardware/HardwareIndexedAddress.java'
@@ -28,6 +29,7 @@ on:
       - 'src/test/java/ghidrassist/hardware/ManualDocumentScopeSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/HardwareNamingReviewSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/HardwareFunctionNamingReviewSelfTest.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareFunctionRenamePolicySelfTest.java'
       - 'src/test/java/ghidrassist/hardware/HardwareContextSelectorSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/HardwareDataflowSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/HardwareIndexedAddressSelfTest.java'
@@ -44,6 +46,7 @@ on:
       - 'src/main/java/ghidrassist/hardware/ManualDocumentScope.java'
       - 'src/main/java/ghidrassist/hardware/HardwareNamingReview.java'
       - 'src/main/java/ghidrassist/hardware/HardwareFunctionNamingReview.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareFunctionRenamePolicy.java'
       - 'src/main/java/ghidrassist/hardware/HardwareContextSelector.java'
       - 'src/main/java/ghidrassist/hardware/HardwareDataflow.java'
       - 'src/main/java/ghidrassist/hardware/HardwareIndexedAddress.java'
@@ -57,6 +60,7 @@ on:
       - 'src/test/java/ghidrassist/hardware/ManualDocumentScopeSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/HardwareNamingReviewSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/HardwareFunctionNamingReviewSelfTest.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareFunctionRenamePolicySelfTest.java'
       - 'src/test/java/ghidrassist/hardware/HardwareContextSelectorSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/HardwareDataflowSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/HardwareIndexedAddressSelfTest.java'
@@ -87,6 +91,7 @@ jobs:
             src/main/java/ghidrassist/hardware/ManualDocumentScope.java \
             src/main/java/ghidrassist/hardware/HardwareNamingReview.java \
             src/main/java/ghidrassist/hardware/HardwareFunctionNamingReview.java \
+            src/main/java/ghidrassist/hardware/HardwareFunctionRenamePolicy.java \
             src/main/java/ghidrassist/hardware/HardwareDataflow.java \
             src/main/java/ghidrassist/hardware/HardwareIndexedAddress.java \
             src/main/java/ghidrassist/hardware/HardwareContextSelector.java \
@@ -97,6 +102,7 @@ jobs:
             src/test/java/ghidrassist/hardware/FirmwarePatternScannerSelfTest.java \
             src/test/java/ghidrassist/hardware/HardwareNamingReviewSelfTest.java \
             src/test/java/ghidrassist/hardware/HardwareFunctionNamingReviewSelfTest.java \
+            src/test/java/ghidrassist/hardware/HardwareFunctionRenamePolicySelfTest.java \
             src/test/java/ghidrassist/hardware/ManualRegisterHintsSelfTest.java \
             src/test/java/ghidrassist/hardware/ManualModuleTableSelfTest.java \
             src/test/java/ghidrassist/hardware/ManualDocumentScopeSelfTest.java \
@@ -121,6 +127,8 @@ jobs:
             ghidrassist.hardware.HardwareNamingReviewSelfTest
           java -cp "$RUNNER_TEMP/hardware-tests" \
             ghidrassist.hardware.HardwareFunctionNamingReviewSelfTest
+          java -cp "$RUNNER_TEMP/hardware-tests" \
+            ghidrassist.hardware.HardwareFunctionRenamePolicySelfTest
           java -cp "$RUNNER_TEMP/hardware-tests" \
             ghidrassist.hardware.HardwareDataflowSelfTest
           java -cp "$RUNNER_TEMP/hardware-tests" \
