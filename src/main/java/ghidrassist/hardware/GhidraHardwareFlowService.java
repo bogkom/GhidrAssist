@@ -192,13 +192,19 @@ public final class GhidraHardwareFlowService {
         if(last>=0&&writesMemory(m)){
             Long address=absolute(i,last);
             String pointer=indirectReg(i,last);
+            HardwareIndexedAddress.Expression indexed =
+                HardwareIndexedAddress.parse(op(i,last));
             Integer word=null;String from=m.equals("MOVE")?src:null;
             int width=full.endsWith(".W")?16:full.endsWith(".L")?32:
                 full.endsWith(".B")?8:0;
             if(width==16&&m.equals("CLR"))word=0;
             if(width==16&&m.equals("MOVE")&&imm!=null)word=(int)(imm&0xffff);
             if(!m.equals("MOVE"))from=null;
-            if(address==null && pointer==null)address=pcodeStore(i);
+            if(address==null && pointer==null && indexed==null)
+                address=pcodeStore(i);
+            if(indexed!=null)return new HardwareDataflow.Step(pc,
+                indexed.base(),from,indexed.index(),indexed.indexBits(),
+                indexed.scale(),indexed.displacement(),word,width,next,full);
             if(address!=null)return new HardwareDataflow.Step(pc,
                 HardwareDataflow.Kind.STORE_DIRECT,null,from,address,0,word,width,next,full);
             if(pointer!=null)return new HardwareDataflow.Step(pc,
@@ -356,7 +362,7 @@ public final class GhidraHardwareFlowService {
                     String name=targets.get(hit.effectiveAddress);
                     detail.append(name).append(" at ")
                         .append(ChipSelectModel.hex(hit.effectiveAddress,6))
-                        .append(hit.indirect?" [A-register indirect]":" [direct/P-code]")
+                        .append(hit.indirect?" [CFG-resolved indirect/indexed candidate]":" [direct/P-code]")
                         .append(" value ")
                         .append(hit.writtenWord==null?"UNKNOWN":
                             ChipSelectModel.hex(hit.writtenWord,4));
