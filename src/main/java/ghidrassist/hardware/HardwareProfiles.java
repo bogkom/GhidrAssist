@@ -117,6 +117,12 @@ public final class HardwareProfiles {
             r.add(reg("SIM", "CSBAR" + cs, offset, 16, source));
             r.add(reg("SIM", "CSOR" + cs, offset + 2, 16, source));
         }
+        // Distinct internal modules; these register-address entries are
+        // MC68332-only hypotheses and are NOT CPU32 family-wide guarantees.
+        r.add(reg("TPURAM", "TRAMMCR", 0x0b00, 16, MC68332_MANUAL));
+        r.add(reg("TPURAM", "TRAMBAR", 0x0b04, 16, MC68332_MANUAL));
+        r.add(reg("QSM", "QSMCR", 0x0c00, 16, MC68332_MANUAL));
+        r.add(reg("TPU", "TPUMCR", 0x0e00, 16, MC68332_MANUAL));
         return new Profile("MC68332", "CPU32", true, r);
     }
 
