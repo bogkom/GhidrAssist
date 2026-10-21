@@ -232,6 +232,49 @@ public final class GhidraHardwareFlowService {
         }
         return report.toString();
     }
+    private static final class CallerFrame {
+        final Function function;
+        final String chain;
+        final int depth;
+        final LinkedHashSet<Long> seen;
+        CallerFrame(Function f,String chain,int depth,LinkedHashSet<Long> seen){
+            function=f;this.chain=chain;this.depth=depth;this.seen=seen;
+        }
+    }
+    private static String callerAncestors(Program program,Function function){
+        // Direct-call XREF chains are possibilities only. They do not resolve
+        // dynamic dispatch, indirect calls, reset vectors or branch conditions.
+        java.util.ArrayDeque<CallerFrame> frontier=new java.util.ArrayDeque<>();
+        LinkedHashSet<Long> initial=new LinkedHashSet<>();
+        initial.add(function.getEntryPoint().getOffset());
+        frontier.add(new CallerFrame(function,function.getName(),0,initial));
+        StringBuilder lines=new StringBuilder();
+        int found=0;
+        while(!frontier.isEmpty() && found<5){
+            CallerFrame at=frontier.removeFirst();
+            if(at.depth>=3)continue;
+            ReferenceIterator refs=program.getReferenceManager()
+                .getReferencesTo(at.function.getEntryPoint());
+            int cap=0;
+            while(refs.hasNext() && cap++<80 && found<5){
+                Reference ref=refs.next();
+                if(!ref.getReferenceType().isCall())continue;
+                Function caller=program.getFunctionManager()
+                    .getFunctionContaining(ref.getFromAddress());
+                if(caller==null)continue;
+                long id=caller.getEntryPoint().getOffset();
+                if(at.seen.contains(id))continue;
+                String path=caller.getName()+" [call site "+ref.getFromAddress()+"] -> "+at.chain;
+                lines.append("  - possible static-call ancestor chain (depth ")
+                    .append(at.depth+1).append("): ").append(path).append("\n");
+                found++;
+                LinkedHashSet<Long> branch=new LinkedHashSet<>(at.seen);
+                branch.add(id);
+                frontier.add(new CallerFrame(caller,path,at.depth+1,branch));
+            }
+        }
+        return lines.toString();
+    }
     public Report analyze(Program program,TaskMonitor monitor)throws CancelledException{
         if(program==null)throw new IllegalArgumentException("Open Ghidra program required");
         if(monitor==null)monitor=TaskMonitor.DUMMY;
@@ -293,6 +336,7 @@ public final class GhidraHardwareFlowService {
                         .append(" (not proof of runtime execution)\n");
                 }
             }
+            detail.append(callerAncestors(program,fun));
             detail.append("- CFG nodes reached: ").append(result.reachedNodes)
                 .append("; direct call references: ").append(callers)
                 .append("; propagation limit: ").append(result.truncated).append("\n")
