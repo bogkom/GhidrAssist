@@ -149,3 +149,7 @@ The new search/excerpt behavior works on *existing* Lucene indexes. Changes to
 PDF extraction-time identity/printed-page metadata apply when a document is
 reindexed. Unknown and locally renamed PDF aliases must still be verified
 against the manual cover, edition and model applicability.
+
+For an exact phrase in **Search Documents / Keyword**, enclose text in double
+quotes, e.g. `"Table D-1 Module Address Map"`. Unquoted searches remain
+broader and may return a contents-page reference among other relevant pages.

@@ -474,7 +474,14 @@ public class RAGEngine {
             BooleanQuery.Builder queryBuilder = new BooleanQuery.Builder();
 
             QueryParser contentParser = new QueryParser("content", analyzer);
-            Query contentQuery = contentParser.parse(QueryParser.escape(queryStr));
+            // Quoted input is an exact Lucene phrase; unquoted text keeps
+            // the existing broad token matching (with source-aware reranking).
+            String clean = queryStr == null ? "" : queryStr.strip();
+            boolean exactPhrase = clean.length() >= 2 &&
+                clean.startsWith("\"") && clean.endsWith("\"");
+            Query contentQuery = contentParser.parse(exactPhrase
+                ? "\"" + QueryParser.escape(clean.substring(1, clean.length()-1)) + "\""
+                : QueryParser.escape(queryStr));
             queryBuilder.add(new BoostQuery(contentQuery, 2.0f), BooleanClause.Occur.SHOULD);
 
             QueryParser filenameParser = new QueryParser("filename", analyzer);

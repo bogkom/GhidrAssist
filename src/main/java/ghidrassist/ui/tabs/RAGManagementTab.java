@@ -90,6 +90,7 @@ public class RAGManagementTab extends JPanel {
 
         // Search components
         queryField = new JTextField(20);
+        queryField.setToolTipText("Put text in double quotes to find an exact phrase");
         searchTypeCombo = new JComboBox<>(new String[]{"Hybrid", "Semantic", "Keyword"});
         searchButton = new JButton("Search");
         resultsHeaderLabel = new JLabel(" ");

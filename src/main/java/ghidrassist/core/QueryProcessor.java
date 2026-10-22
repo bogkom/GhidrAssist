@@ -72,7 +72,7 @@ public class QueryProcessor {
         // Hardware addresses require literal evidence rather than nearest-neighbor
         // semantic ranking. Unrelated prose continues to use hybrid search.
         boolean precise = java.util.regex.Pattern.compile(
-            "(?iu)(?:\\b(?:0x[0-9a-f]{4,8}|[0-9a-f]{6,8}|SIMCR|TPURAM|CSPAR|CSBAR|QSM|TOUCAN)\\b|\\$[0-9a-fy]{5,8})")
+            "(?iu)(?:\\b(?:0x[0-9a-f]{4,8}|Y[0-9a-f]{5}|[0-9a-f]{6,8}|SIMCR|TPURAM|CSPAR|CSBAR|QSM|TOUCAN)\\b|\\$[0-9a-fy]{5,8})")
             .matcher(query).find();
         List<SearchResult> results = precise ?
             RAGEngine.search(query, MAX_SEARCH_RESULTS, RAGLibraries.active(plugin.getCurrentProgram())) :
