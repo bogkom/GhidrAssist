@@ -38,6 +38,7 @@ and hardware wiring are **not automatically proven**.
 - [Hardware Analysis](hardware-analysis.md) and [Review / Apply](hardware-review-apply.md)
 - [Source-backed MC68332 profiles](hardware-sourced-profiles.md)
 - [Recommended CPU32/MC683xx RAG manuals: editions, split appendices and page indexes](rag-cpu32-manual-catalog.md)
+- [CPU32 NXP manual downloader for RAG — CLI and Ghidra button](rag-cpu32-download-tool.md)
 - [Indexed addressing](hardware-indexed-addressing.md) and [MM write candidate history](hardware-mm-write-history.md)
 - [Function naming review](hardware-function-naming-review.md) and [AI/RAG evidence selection](hardware-rag-relevance.md)
 - [Undoable function renaming approval](hardware-function-rename-approval.md) and [unknown MMIO STORE safety](hardware-unknown-store-safety.md)
