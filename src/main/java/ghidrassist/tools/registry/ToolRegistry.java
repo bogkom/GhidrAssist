@@ -40,6 +40,10 @@ public class ToolRegistry implements ToolExecutor {
     private Program currentProgram;
     private Address currentAddress;
     private volatile ToolExecutionObserver executionObserver;
+    // Per-registry, bounded evidence retained across ReAct iterations. A normal
+    // query registry and each ReAct orchestrator have separate instances.
+    private final java.util.LinkedHashMap<String,String> toolObservations =
+        new java.util.LinkedHashMap<>();
     private volatile ToolApprovalService approvalService;
     private volatile IntSupplier activeSessionSupplier = () -> -1;
     private volatile Supplier<String> programHashSupplier = () -> null;
@@ -194,6 +198,7 @@ public class ToolRegistry implements ToolExecutor {
                                     Msg.warn(this, "Tool returned error: " + toolName + " - " + safeResult.getErrorMessage());
                                 } else {
                                     Msg.info(this, "Tool completed: " + toolName);
+                                    rememberSuccessfulRead(toolName, args, safeResult.getContent());
                                 }
                                 if (executionObserver != null && sessionId > 0) {
                                     if (safeResult.isError()) {
@@ -212,6 +217,32 @@ public class ToolRegistry implements ToolExecutor {
             Msg.warn(this, "No provider found for tool: " + toolName);
             return CompletableFuture.completedFuture(ToolResult.error("Unknown tool: " + toolName));
         });
+    }
+
+    /** Only successful read-only observations; bounded to eight distinct queries. */
+    private synchronized void rememberSuccessfulRead(String name, JsonObject args, String content) {
+        if (name == null || content == null) return;
+        String local=name.toLowerCase(java.util.Locale.ROOT);
+        if (!(local.contains("get_") || local.contains("list_") ||
+                local.contains("search_"))) return;
+        String key=name+" "+(args==null?"{}":args.toString());
+        // Put recent data last even when the same read was attempted again.
+        toolObservations.remove(key);
+        String concise=content.length()>2200?content.substring(0,2200)+" [output truncated]":content;
+        toolObservations.put(key,concise);
+        while(toolObservations.size()>8)
+            toolObservations.remove(toolObservations.keySet().iterator().next());
+    }
+
+    /** Raw tool-result evidence for ReAct planning and final synthesis. */
+    public synchronized String getRecentToolEvidence() {
+        if (toolObservations.isEmpty()) return "";
+        StringBuilder text=new StringBuilder("Actual successful tool responses (NOT model guesses):\n");
+        for (var entry: toolObservations.entrySet()) {
+            text.append("TOOL ").append(entry.getKey()).append("\n")
+                .append(entry.getValue()).append("\n");
+        }
+        return text.toString();
     }
 
     public void setExecutionObserver(ToolExecutionObserver executionObserver) {

@@ -475,7 +475,8 @@ public class ReActOrchestrator {
             objective,
             currentIteration == 1 ? initialContext : null,  // Only include context on first iteration
             todoManager.formatForPrompt(),
-            findings.formatForPrompt(50, 500),  // Top 50, max 500 chars per finding
+            findings.formatForPrompt(50, 500) + "\n" + toolRegistry.getRecentToolEvidence(),
+            // Use real returned tool data alongside LLM-generated findings,
             currentIteration
         );
 
@@ -623,7 +624,7 @@ public class ReActOrchestrator {
     ) {
         String synthesisPrompt = ReActPrompts.getSynthesisPrompt(
             objective,
-            findings.formatDetailed(),
+            findings.formatDetailed() + "\n" + toolRegistry.getRecentToolEvidence(),
             todoManager.getCompletedSummary(),
             findings.formatIterationSummaries()
         );
@@ -704,7 +705,7 @@ public class ReActOrchestrator {
     ) {
         String reflectionPrompt = ReActPrompts.getReflectionPrompt(
             objective,
-            findings.formatForPrompt(),
+            findings.formatForPrompt() + "\n" + toolRegistry.getRecentToolEvidence(),
             todoManager.formatForPrompt()
         );
 
