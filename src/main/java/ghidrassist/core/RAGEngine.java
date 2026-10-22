@@ -640,7 +640,7 @@ public class RAGEngine {
             doc.get("source_path"), doc.get("source_type"), page, uncertain);
     }
 
-    private static SearchResult enrichVectorResult(VectorSearchResult vector, String query) {
+    private static SearchResult enrichVectorResult(VectorSearchResult vector, String userQuery) {
         try {
             indexLock.lock();
             try (DirectoryReader reader = DirectoryReader.open(indexWriter)) {
@@ -652,7 +652,7 @@ public class RAGEngine {
                 TopDocs hits = searcher.search(query, 1);
                 if (hits.scoreDocs.length == 0) throw new IOException("Search result vanished: " + vector.getFilename());
                 Document doc = searcher.storedFields().document(hits.scoreDocs[0].doc);
-                return sourceSearchResult(doc, RAGExcerptSelector.select(doc.get("content"), query), vector.getScore());
+                return sourceSearchResult(doc, RAGExcerptSelector.select(doc.get("content"), userQuery), vector.getScore());
             } finally { indexLock.unlock(); }
         } catch (IOException ex) {
             throw new java.io.UncheckedIOException("Unable to fetch RAG source metadata", ex);
