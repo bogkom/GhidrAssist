@@ -1314,6 +1314,70 @@ public class TabController {
 
 
     /**
+     * User-requested, local-only manual acquisition. Never indexes downloaded
+     * PDFs automatically, so library and document scope remain user-selected.
+     */
+    public void handleDownloadCpu32Manuals() {
+        JFileChooser folderChooser = new JFileChooser();
+        folderChooser.setDialogTitle("Choose CPU32 documentation download directory");
+        folderChooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
+        folderChooser.setSelectedFile(new File(System.getProperty("user.home"),
+            "Dokumentacja/GhidrAssist-RAG"));
+        if (folderChooser.showSaveDialog(ragManagementTab) != JFileChooser.APPROVE_OPTION)
+            return;
+        final java.nio.file.Path target = folderChooser.getSelectedFile().toPath();
+        int useZip = JOptionPane.showConfirmDialog(ragManagementTab,
+            "Do you already have NXP MC683336_376UM_ZIP.zip?\n" +
+            "YES: also rename matching PDFs from that local ZIP.\n" +
+            "NO: download only direct PDFs listed in the GitHub CPU32 catalog.\n\n" +
+            "Some NXP files are login-gated or listed only on product pages.\n" +
+            "They will be reported rather than downloaded from guessed URLs.\n" +
+            "Files are NEVER indexed automatically.",
+            "CPU32 documentation acquisition",
+            JOptionPane.YES_NO_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE);
+        if (useZip == JOptionPane.CANCEL_OPTION ||
+                useZip == JOptionPane.CLOSED_OPTION) return;
+        java.nio.file.Path chosenArchive = null;
+        if (useZip == JOptionPane.YES_OPTION) {
+            JFileChooser zipChooser = new JFileChooser();
+            zipChooser.setDialogTitle("Select original NXP MC683336_376UM_ZIP archive");
+            zipChooser.setFileSelectionMode(JFileChooser.FILES_ONLY);
+            if (zipChooser.showOpenDialog(ragManagementTab) != JFileChooser.APPROVE_OPTION)
+                return;
+            chosenArchive = zipChooser.getSelectedFile().toPath();
+        }
+        final java.nio.file.Path archive = chosenArchive;
+        Task task = new Task("Download official CPU32 RAG manuals", true, false, true) {
+            @Override public void run(TaskMonitor monitor) {
+                try {
+                    monitor.setMessage("Fetching official NXP PDFs to " + target);
+                    Cpu32ManualDownloadRunner.Outcome report =
+                        Cpu32ManualDownloadRunner.run(target, archive);
+                    SwingUtilities.invokeLater(() -> {
+                        String message = "Download process exit code: " + report.exitCode() +
+                            "\nDownloaded PDFs are in: " + target +
+                            "\nDetailed results: " + report.report() +
+                            "\nExecution log: " + report.log() +
+                            "\n\nAdd Documents can now import the downloaded PDFs into a " +
+                            "user-selected RAG library.";
+                        if (report.exitCode() == 0)
+                            Msg.showInfo(this, ragManagementTab, "CPU32 Manuals", message);
+                        else
+                            Msg.showError(this, ragManagementTab, "CPU32 Download Issues",
+                                message + "\nSome files may require NXP login.");
+                    });
+                } catch (Exception ex) {
+                    SwingUtilities.invokeLater(() -> Msg.showError(this,
+                        ragManagementTab, "CPU32 Manual Download Failed",
+                        ex.getMessage() +
+                        "\nCheck that Python 3 is installed and the output folder is writable."));
+                }
+            }
+        };
+        new TaskLauncher(task, plugin.getTool().getToolFrame());
+    }
+
+    /**
      * Handle adding documents to RAG index.
      */
     public void handleAddDocuments() {

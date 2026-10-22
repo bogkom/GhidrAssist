@@ -1,0 +1,32 @@
+name: CPU32 RAG document downloader self-tests
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'src/main/resources/rag_cpu32_downloader.py'
+      - 'tests/test_rag_cpu32_downloader.py'
+      - '.github/workflows/rag-cpu32-downloader-tests.yml'
+  pull_request:
+    paths:
+      - 'src/main/resources/rag_cpu32_downloader.py'
+      - 'tests/test_rag_cpu32_downloader.py'
+      - '.github/workflows/rag-cpu32-downloader-tests.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  downloader:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Verify bundled CPU32 downloader and ZIP extraction without internet
+        run: |
+          set -euo pipefail
+          python3 -m py_compile src/main/resources/rag_cpu32_downloader.py
+          python3 -m unittest discover -s tests -p test_rag_cpu32_downloader.py -v

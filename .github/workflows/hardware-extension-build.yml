@@ -69,6 +69,24 @@ jobs:
           ( cd dist && sha256sum "$(basename "${packages[0]}")" > SHA256SUMS.txt )
           printf 'Extension package: %s\n' "${packages[0]}"
           ls -lh "${packages[0]}" dist/SHA256SUMS.txt
+      - name: Assert CPU32 downloader resource is in the installable extension
+        shell: bash
+        run: |
+          set -euo pipefail
+          package="$(find dist -maxdepth 1 -type f -name 'ghidra_12.1.4_PUBLIC_*_GhidrAssist.zip' -print -quit)"
+          test -n "$package"
+          found=0
+          while IFS= read -r member; do
+            [[ "$member" == *GhidrAssist*.jar ]] || continue
+            unzip -p "$package" "$member" > "$RUNNER_TEMP/GhidrAssist-packaged.jar"
+            if jar tf "$RUNNER_TEMP/GhidrAssist-packaged.jar" \
+                | grep -Fxq 'rag_cpu32_downloader.py'; then
+              echo "Downloader resource packaged in $member"
+              found=1
+              break
+            fi
+          done < <(unzip -Z1 "$package")
+          test "$found" -eq 1
       - name: Publish GhidrAssist extension ZIP (Actions artifact)
         uses: actions/upload-artifact@v4
         with:

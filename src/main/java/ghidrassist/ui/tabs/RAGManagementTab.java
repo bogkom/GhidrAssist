@@ -22,6 +22,7 @@ public class RAGManagementTab extends JPanel {
     private DefaultTableModel documentTableModel;
     private JLabel statsLabel;
     private JButton addButton;
+    private JButton downloadCpuManualsButton;
     private JButton refreshButton;
     private JButton deleteButton;
     private JButton clearIndexButton;
@@ -54,6 +55,9 @@ public class RAGManagementTab extends JPanel {
     private void initializeComponents() {
         // Document Management components
         addButton = new JButton("Add Documents");
+        downloadCpuManualsButton = new JButton("Download CPU32 manuals...");
+        downloadCpuManualsButton.setToolTipText(
+            "Download source-verified NXP manuals to a local folder; RAG indexing remains manual");
         refreshButton = new JButton("Refresh");
         deleteButton = new JButton("Delete");
         clearIndexButton = new JButton("Clear Index");
@@ -103,7 +107,10 @@ public class RAGManagementTab extends JPanel {
         // Toolbar row: Add button + stats
         JPanel toolbarPanel = new JPanel(new BorderLayout());
         toolbarPanel.setBorder(BorderFactory.createEmptyBorder(2, 5, 2, 5));
-        toolbarPanel.add(addButton, BorderLayout.WEST);
+        JPanel documentActions = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 0));
+        documentActions.add(addButton);
+        documentActions.add(downloadCpuManualsButton);
+        toolbarPanel.add(documentActions, BorderLayout.WEST);
         toolbarPanel.add(statsLabel, BorderLayout.EAST);
 
         // Top section (header + toolbar)
@@ -195,6 +202,7 @@ public class RAGManagementTab extends JPanel {
 
     private void setupListeners() {
         addButton.addActionListener(e -> controller.handleAddDocuments());
+        downloadCpuManualsButton.addActionListener(e -> controller.handleDownloadCpu32Manuals());
         deleteButton.addActionListener(e -> {
             int selectedRow = documentTable.getSelectedRow();
             if (selectedRow >= 0) {
