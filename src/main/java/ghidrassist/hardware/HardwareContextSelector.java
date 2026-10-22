@@ -65,7 +65,10 @@ public final class HardwareContextSelector {
                 String register=rm.group(1).toUpperCase(Locale.ROOT);
                 if(!requested.contains(register))continue;
                 String pc=site.group(1)!=null?site.group(1):site.group(2);
-                // Listing and P-code display the same address with different\n                // zero-padding (00002bca vs 0x002BCA). Normalize numerically\n                // before deduplicating, retaining the first Listing row.\n                String key=Long.toUnsignedString(Long.parseUnsignedLong(pc,16),16)+"/"+register;
+                // Listing and P-code display the same address with different
+                // zero-padding (00002bca vs 0x002BCA). Normalize numerically
+                // before deduplicating, retaining the first Listing row.
+                String key=Long.toUnsignedString(Long.parseUnsignedLong(pc,16),16)+"/"+register;
                 matched.putIfAbsent(key,line.strip());
             }
             if(!matched.isEmpty()) {

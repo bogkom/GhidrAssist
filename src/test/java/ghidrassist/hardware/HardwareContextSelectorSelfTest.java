@@ -57,11 +57,11 @@ public final class HardwareContextSelectorSelfTest {
             "complete coverage and bounded size");
         String doubled="# Hardware Evidence\n"+
             "### FUN_00002bc0 @ 00002bc0\n"+
-            "- \`00002bca\` SIMCR \`0xFFFA00\` — WRITE; 0x40CA; move.w #0x40ca,(0x00fffa00).l\n"+
+            "- `00002bca` SIMCR `0xFFFA00` — WRITE; 0x40CA; move.w #0x40ca,(0x00fffa00).l\n"+
             "### FUN_00009c96 @ 00009c96\n"+
-            "- \`00009c98\` SIMCR \`0xFFFA00\` — WRITE; 0x4848; move.w #0x4848,(0x00fffa00).l\n"+
+            "- `00009c98` SIMCR `0xFFFA00` — WRITE; 0x4848; move.w #0x4848,(0x00fffa00).l\n"+
             "### FUN_0006e968 @ 0006e968\n"+
-            "- \`0006e96c\` SIMCR \`0xFFFA00\` — WRITE; 0x40CA; move.w #0x40ca,(0x00fffa00).l\n"+
+            "- `0006e96c` SIMCR `0xFFFA00` — WRITE; 0x40CA; move.w #0x40ca,(0x00fffa00).l\n"+
             "## CFG/P-code hardware evidence\n"+
             "### FUN_00002bc0 at 00002bc0\n"+
             "- PC 0x002BCA: SIMCR at 0xFFFA00 [direct/P-code] value 0x40CA\n"+
