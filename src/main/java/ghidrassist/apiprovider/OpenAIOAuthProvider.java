@@ -891,7 +891,17 @@ public class OpenAIOAuthProvider extends APIProvider implements FunctionCallingP
         payload.addProperty("instructions", CodexInstructions.INSTRUCTIONS);
         payload.addProperty("store", false);
         payload.addProperty("stream", true);  // REQUIRED by Codex API
-        
+
+        // Respect Settings > Reasoning Effort for ChatGPT OAuth/Codex,
+        // just as the other reasoning-capable providers do. Without this,
+        // Low/Medium/High silently used the server default.
+        ReasoningConfig reasoning = getReasoningConfig();
+        if (reasoning != null && reasoning.isEnabled()) {
+            JsonObject reasoningOptions = new JsonObject();
+            reasoningOptions.addProperty("effort", reasoning.getEffortString());
+            payload.add("reasoning", reasoningOptions);
+        }
+
         // Add tools if present
         if (tools != null && !tools.isEmpty()) {
             payload.add("tools", translateToolsToFormat(tools));
