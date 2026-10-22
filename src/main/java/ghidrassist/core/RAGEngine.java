@@ -504,7 +504,9 @@ public class RAGEngine {
                 if(content==null)continue;
                 double lexical=RAGExcerptSelector.evidenceScore(content,queryStr);
                 double bm25=hit.score/(hit.score+1.0);
-                double ranking=Math.min(0.999,bm25+Math.min(0.16,lexical*0.016));
+                // Keep score below 1 without saturating distinct high-quality
+                // candidates into ties (the full table must beat the TOC).
+                double ranking=0.55*bm25+0.45*(lexical/(lexical+5.0));
                 candidates.add(sourceSearchResult(doc,
                     RAGExcerptSelector.select(content,queryStr),ranking));
             }

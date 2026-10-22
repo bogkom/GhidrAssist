@@ -128,3 +128,24 @@ MC68376's TouCAN, QADC, register masks or MM mapping. An optional local
 Use the original manufacturer basename when possible (the index's filename collisions are not silently merged). For another revision with the same name, retain it in a clearly named local version folder and review the application’s same-name handling before indexing it alongside the earlier edition. A renamed variant can now receive a **local alias candidate** when it follows a supported pattern, but must retain explicit uncertainty until its internal PDF header and revision agree. Unsupported names remain UNKNOWN.
 
 Never infer that **MC68331**, **MC68332**, **MC68336**, and **MC68376** have interchangeable peripheral register tables merely because CPU32 instruction semantics overlap.
+
+
+## Source-aware RAG retrieval / interface update (October 2026)
+
+The RAG search index already holds entire source PDF pages. New retrieval strips
+repeated synthetic metadata from the excerpt budget, looks for concentrated
+query matches in source text and keeps a contiguous, bounded source excerpt.
+It does not create imaginary lines or assert that text-layout table columns
+are verified. Queries with specific module registers or memory addresses use
+lexical retrieval rather than semantic-only proximity.
+
+Keyword searches can show several matching pages of one document. The
+document table supports sorting by `Library`; the active-library checklist
+has a resizable split pane and two columns. Search result excerpts are
+selectable/copyable, with a button to view the exact indexed page content.
+The PDF-opening behavior remains unchanged (Firefox supports `#page=N`).
+
+The new search/excerpt behavior works on *existing* Lucene indexes. Changes to
+PDF extraction-time identity/printed-page metadata apply when a document is
+reindexed. Unknown and locally renamed PDF aliases must still be verified
+against the manual cover, edition and model applicability.
