@@ -39,6 +39,11 @@ public final class ManualDocumentScopeSelfTest {
         ok(own336.applicableModels().equals("MC68336+MC68376") &&
            own336.editionPart().startsWith("SPLIT_05"),
            "readable locally renamed 336/376 section 5");
+        var legacyCan=ManualDocumentScope.fromFilename("MC68336_13_TouCAN.pdf");
+        ok(legacyCan.documentId().equals("MC68336376UM13") &&
+           legacyCan.applicableModels().equals("MC68376") &&
+           legacyCan.confidence().contains("LOCAL_FILENAME_ALIAS"),
+           "short local TouCAN chapter name remains an unverified alias");
         var ownCan=ManualDocumentScope.fromFilename("MC68336_68376_13_TOUCAN.pdf");
         ok(ownCan.applicableModels().equals("MC68376"),
            "TouCAN chapter only describes MC68376 peripheral");

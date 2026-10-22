@@ -43,6 +43,7 @@ public class RAGManagementTab extends JPanel {
 
     // Split pane
     private JSplitPane mainSplitPane;
+    private JSplitPane libraryDocumentSplitPane;
 
     public RAGManagementTab(TabController controller) {
         super(new BorderLayout());
@@ -63,7 +64,7 @@ public class RAGManagementTab extends JPanel {
         clearIndexButton = new JButton("Clear Index");
         moveDocumentButton = new JButton("Move Document");
         libraryCheckboxPanel = new JPanel();
-        libraryCheckboxPanel.setLayout(new BoxLayout(libraryCheckboxPanel, BoxLayout.Y_AXIS));
+        libraryCheckboxPanel.setLayout(new GridLayout(0, 2, 8, 2));
         libraryManagementCombo = new JComboBox<>();
         addLibraryButton = new JButton("New");
         renameLibraryButton = new JButton("Rename");
@@ -80,6 +81,7 @@ public class RAGManagementTab extends JPanel {
         };
         documentTable = new JTable(documentTableModel);
         documentTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        documentTable.setAutoCreateRowSorter(true);
         documentTable.setRowHeight(20);
         documentTable.getColumnModel().getColumn(0).setPreferredWidth(200);
         documentTable.getColumnModel().getColumn(1).setPreferredWidth(120);
@@ -121,7 +123,8 @@ public class RAGManagementTab extends JPanel {
         JPanel librarySection = new JPanel(new BorderLayout(4, 4));
         librarySection.setBorder(BorderFactory.createTitledBorder("Active libraries (check one or more)"));
         JScrollPane libScroll = new JScrollPane(libraryCheckboxPanel);
-        libScroll.setPreferredSize(new Dimension(350, 105));
+        libScroll.setPreferredSize(new Dimension(350, 130));
+        libScroll.setMinimumSize(new Dimension(175, 54));
         librarySection.add(libScroll, BorderLayout.CENTER);
         JPanel libraryControls = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 1));
         libraryControls.add(libraryManagementCombo);
@@ -129,7 +132,7 @@ public class RAGManagementTab extends JPanel {
         libraryControls.add(renameLibraryButton);
         libraryControls.add(deleteLibraryButton);
         librarySection.add(libraryControls, BorderLayout.SOUTH);
-        docTopPanel.add(librarySection, BorderLayout.SOUTH);
+        // The library panel is independently resizable below the toolbar.
 
         // Bottom buttons
         JPanel docButtonPanel = new JPanel(new BorderLayout());
@@ -145,7 +148,11 @@ public class RAGManagementTab extends JPanel {
 
         // Assemble document management panel
         documentManagementPanel.add(docTopPanel, BorderLayout.NORTH);
-        documentManagementPanel.add(new JScrollPane(documentTable), BorderLayout.CENTER);
+        libraryDocumentSplitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT,
+                librarySection, new JScrollPane(documentTable));
+        libraryDocumentSplitPane.setResizeWeight(0.24);
+        libraryDocumentSplitPane.setOneTouchExpandable(true);
+        documentManagementPanel.add(libraryDocumentSplitPane, BorderLayout.CENTER);
         documentManagementPanel.add(docButtonPanel, BorderLayout.SOUTH);
 
         // === BOTTOM SECTION: Search Documents ===
@@ -206,7 +213,7 @@ public class RAGManagementTab extends JPanel {
         deleteButton.addActionListener(e -> {
             int selectedRow = documentTable.getSelectedRow();
             if (selectedRow >= 0) {
-                String filename = (String) documentTableModel.getValueAt(selectedRow, 0);
+                String filename = (String) documentTableModel.getValueAt(documentTable.convertRowIndexToModel(selectedRow), 0);
                 controller.handleDeleteDocument(filename);
             }
         });
@@ -363,18 +370,16 @@ public class RAGManagementTab extends JPanel {
         metaLabel.setForeground(Color.GRAY);
         metaLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-        // Content preview (truncated)
-        String snippet = result.getSnippet();
-        if (snippet != null && snippet.length() > 150) {
-            snippet = snippet.substring(0, 150) + "...";
-        }
-        // Replace newlines with spaces for display
-        if (snippet != null) {
-            snippet = snippet.replace("\n", " ").replace("\r", "");
-        }
-        JLabel contentLabel = new JLabel("<html>" + escapeHtml(snippet != null ? snippet : "") + "</html>");
-        contentLabel.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 11));
-        contentLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        // Selectable, copyable text with preserved line breaks.
+        JTextArea excerpt = new JTextArea(result.getSnippet() == null ? "" : result.getSnippet());
+        excerpt.setEditable(false);
+        excerpt.setLineWrap(true);
+        excerpt.setWrapStyleWord(true);
+        excerpt.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 11));
+        excerpt.setRows(5);
+        JScrollPane excerptScroll = new JScrollPane(excerpt);
+        excerptScroll.setAlignmentX(Component.LEFT_ALIGNMENT);
+        excerptScroll.setPreferredSize(new Dimension(560, 100));
 
         panel.add(titleLabel);
         panel.add(Box.createVerticalStrut(2));
@@ -385,20 +390,41 @@ public class RAGManagementTab extends JPanel {
             caution.setAlignmentX(Component.LEFT_ALIGNMENT);
             panel.add(caution);
         }
+        JPanel actions = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+        actions.setAlignmentX(Component.LEFT_ALIGNMENT);
+        JButton inspect = new JButton("View full indexed page / Copy");
+        inspect.addActionListener(e -> showIndexedPage(result));
+        actions.add(inspect);
         if (result.getSourcePath() != null && !result.getSourcePath().isBlank()) {
             JButton openSource = new JButton(result.getPageNumber() > 0
                 ? "Open source PDF - page " + result.getPageNumber() : "Open source document");
-            openSource.setAlignmentX(Component.LEFT_ALIGNMENT);
             openSource.addActionListener(e -> controller.handleOpenRAGSource(result));
-            panel.add(openSource);
+            actions.add(openSource);
         }
-        panel.add(Box.createVerticalStrut(2));
-        panel.add(contentLabel);
+        panel.add(actions);
+        panel.add(excerptScroll);
 
         // Set max width
-        panel.setMaximumSize(new Dimension(Integer.MAX_VALUE, panel.getPreferredSize().height + 20));
+        panel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 240));
 
         return panel;
+    }
+
+    private void showIndexedPage(SearchResult result) {
+        try {
+            String content = ghidrassist.core.RAGEngine.getIndexedChunkContent(
+                result.getFilename(), result.getChunkId());
+            JTextArea full = new JTextArea(content, 28, 95);
+            full.setEditable(false);
+            full.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+            full.setCaretPosition(0);
+            JOptionPane.showMessageDialog(this, new JScrollPane(full),
+                result.getFilename() + " / PDF page " + result.getPageNumber(),
+                JOptionPane.INFORMATION_MESSAGE);
+        } catch (java.io.IOException ex) {
+            JOptionPane.showMessageDialog(this, "Unable to read indexed page: " + ex.getMessage(),
+                "RAG index error", JOptionPane.ERROR_MESSAGE);
+        }
     }
 
     /**
@@ -434,7 +460,7 @@ public class RAGManagementTab extends JPanel {
     public String getSelectedDocument() {
         int selectedRow = documentTable.getSelectedRow();
         if (selectedRow >= 0) {
-            return (String) documentTableModel.getValueAt(selectedRow, 0);
+            return (String) documentTableModel.getValueAt(documentTable.convertRowIndexToModel(selectedRow), 0);
         }
         return null;
     }

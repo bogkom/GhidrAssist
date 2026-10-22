@@ -27,6 +27,16 @@ public final class ManualPrintedPageSelfTest {
             "ambiguous page must not be guessed");
         ok(ManualPrintedPage.fromText("").label().equals("UNKNOWN"),
             "blank PDF page no printed label");
+        var footer=ManualPrintedPage.fromText(
+            "Table D-1 Module Address Map\\nSIM 128 $YFFA00\\nQSM 512 $YFFC00\\n"+
+            "MC68332 REGISTER SUMMARY\\nUSER’S MANUAL    |    D-1\\n"+
+            "For More Information On This Product");
+        ok(footer.label().equals("D-1"),"MC68332 bottom-of-page folio");
+        var toucan=ManualPrintedPage.fromText(
+            "Table 13-9 Interrupt Sources and Vector Addresses\\n"+
+            "MC68336/376 CAN 2.0B CONTROLLER MODULE MOTOROLA\\n"+
+            "USER’S MANUAL Rev. 15 Oct 2000 13-20");
+        ok(toucan.label().equals("13-20"),"TouCAN bottom folio");
         System.out.println("ManualPrintedPageSelfTest OK");
     }
 }
