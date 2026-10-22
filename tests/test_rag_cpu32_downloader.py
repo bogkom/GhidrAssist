@@ -54,17 +54,21 @@ class ManualDownloaderTests(unittest.TestCase):
             root = Path(t)
             archive = root / "MC683336_376UM_ZIP.zip"
             with zipfile.ZipFile(archive, "w") as z:
-                z.writestr("../c5sim.pdf", PDF)
+                z.writestr("first/c5sim.pdf", PDF)
                 z.writestr("sections/c8qadc.pdf", PDF)
                 z.writestr("appendix/apdreg.pdf", PDF)
                 z.writestr("../../../evil.pdf", PDF)
                 z.writestr("sections/c5sim.pdf", PDF)
+                z.writestr("c4cpu.pdf", PDF)
             rows = []
             mod.extract_zip(archive, root / "out", rows)
             self.assertTrue((root / "out/MC68336-376/MC68336_68376_05_SIM.pdf").exists())
             self.assertTrue((root / "out/MC68336-376/MC68336_68376_08_QADC.pdf").exists())
             self.assertTrue((root / "out/MC68336-376/MC68336_68376_D_REGISTERS.pdf").exists())
             self.assertFalse((root / "evil.pdf").exists())
+            self.assertTrue((root / "out/TO_REVIEW/MC68336_68376_UNMAPPED_c4cpu.pdf").exists())
+            self.assertEqual(sum(r.get("status") == "SKIPPED_UNSAFE_ZIP_PATH"
+                                 for r in rows), 1)
             self.assertEqual(
                 sum(r.get("status") == "DUPLICATE_ARCHIVE_ENTRY_SKIPPED" for r in rows), 1
             )
