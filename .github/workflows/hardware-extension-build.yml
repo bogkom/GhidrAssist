@@ -17,6 +17,7 @@ on:
       - 'src/main/java/ghidrassist/core/TabController.java'
       - 'src/main/resources/rag_cpu32_downloader.py'
       - 'src/main/java/ghidrassist/services/QueryService.java'
+      - 'src/main/java/ghidrassist/apiprovider/OpenAIOAuthProvider.java'
       - 'src/test/java/ghidrassist/hardware/**'
       - '.github/workflows/hardware-extension-build.yml'
   pull_request:
@@ -30,6 +31,7 @@ on:
       - 'src/main/java/ghidrassist/core/TabController.java'
       - 'src/main/resources/rag_cpu32_downloader.py'
       - 'src/main/java/ghidrassist/services/QueryService.java'
+      - 'src/main/java/ghidrassist/apiprovider/OpenAIOAuthProvider.java'
       - '.github/workflows/hardware-extension-build.yml'
 
 jobs:
