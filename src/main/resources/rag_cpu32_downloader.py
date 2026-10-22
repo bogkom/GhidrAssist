@@ -137,7 +137,7 @@ def fetch_pdf(url: str) -> bytes:
 def save_named(output: Path, library: str, filename: str, doc_id: str,
                data: bytes, source: str, records: list[dict], verify: str) -> None:
     if (library in (".", "..") or not re.fullmatch(r"[A-Za-z0-9_-]{2,50}", library)
-            or not re.fullmatch(r"[A-Za-z0-9_-]{2,96}\\.pdf", filename, re.I)):
+            or not re.fullmatch(r"[A-Za-z0-9_-]{2,96}\.pdf", filename, re.I)):
         raise ValueError("Unsafe PDF destination name")
     destination = output / library / filename
     record = {
@@ -177,13 +177,13 @@ def classify_local_pdf(filename: str) -> tuple[str, str, str]:
     if ident in ALIASES:
         library, name = ALIASES[ident]
         return library, name, "CANONICAL_FILENAME_CANDIDATE"
-    short = re.fullmatch(r"MC(?:68331|331)_([A-Za-z0-9_-]{2,50})\\.pdf", basename, re.I)
+    short = re.fullmatch(r"MC(?:68331|331)_([A-Za-z0-9_-]{2,50})\.pdf", basename, re.I)
     if short:
         return "MC68331", "MC68331_" + short.group(1).upper() + ".pdf", "LOCAL_MCU_PREFIX_UNVERIFIED"
-    m332 = re.fullmatch(r"MC68332_([A-Za-z0-9_-]{2,50})\\.pdf", basename, re.I)
+    m332 = re.fullmatch(r"MC68332_([A-Za-z0-9_-]{2,50})\.pdf", basename, re.I)
     if m332:
         return "MC68332", "MC68332_" + m332.group(1).upper() + ".pdf", "LOCAL_MCU_PREFIX_UNVERIFIED"
-    m336 = re.fullmatch(r"MC68336_68376_([A-Za-z0-9_-]{2,50})\\.pdf", basename, re.I)
+    m336 = re.fullmatch(r"MC68336_68376_([A-Za-z0-9_-]{2,50})\.pdf", basename, re.I)
     if m336:
         suffix = m336.group(1).upper()
         lib = "MC68376-only" if suffix.startswith("13_") else "MC68336-376"
