@@ -22,6 +22,7 @@ import java.util.Date;
 import ghidra.util.Msg;
 import ghidrassist.core.MarkdownHelper;
 import ghidrassist.core.TabController;
+import ghidrassist.ui.common.MousePasteSupport;
 import ghidrassist.core.streaming.RenderUpdate;
 import ghidrassist.core.streaming.StreamingScrollManager;
 import ghidrassist.mcp2.server.MCPServerRegistry;
@@ -43,6 +44,7 @@ public class QueryTab extends JPanel {
     private JTextPane responseTextPane;  // Changed from JEditorPane for better performance
     private StyledDocument responseDocument;
     private JTextArea queryTextArea;
+    private Color queryTextColor;
     private JCheckBox useRAGCheckBox;
     private JCheckBox useMCPCheckBox;
     private JCheckBox useAgenticCheckBox;
@@ -143,6 +145,7 @@ public class QueryTab extends JPanel {
         queryTextArea.setLineWrap(true);
         queryTextArea.setWrapStyleWord(true);
         addHintTextToQueryTextArea();
+        MousePasteSupport.install(queryTextArea, this::clearQueryHintBeforePaste);
 
         submitButton = new JButton("Submit");
         newButton = new JButton("New");
@@ -195,6 +198,9 @@ public class QueryTab extends JPanel {
         markdownEditArea.setFont(new Font("Monospaced", Font.PLAIN, 12));
         markdownEditArea.setLineWrap(true);
         markdownEditArea.setWrapStyleWord(true);
+        // Preserve the existing response/edit context menu while supporting
+        // Linux PRIMARY selection paste using the middle mouse button.
+        MousePasteSupport.installMiddleClick(markdownEditArea, null);
 
         // Setup card layout for switching between view and edit modes
         contentLayout = new CardLayout();
@@ -426,7 +432,7 @@ public class QueryTab extends JPanel {
     }
 
     private void addHintTextToQueryTextArea() {
-        Color fgColor = queryTextArea.getForeground();
+        queryTextColor = queryTextArea.getForeground();
         queryTextArea.setText(QUERY_HINT_TEXT);
         queryTextArea.setForeground(Color.GRAY);
         
@@ -435,7 +441,7 @@ public class QueryTab extends JPanel {
             public void focusGained(java.awt.event.FocusEvent e) {
                 if (queryTextArea.getText().equals(QUERY_HINT_TEXT)) {
                     queryTextArea.setText("");
-                    queryTextArea.setForeground(fgColor);
+                    queryTextArea.setForeground(queryTextColor);
                 }
             }
 
@@ -447,6 +453,14 @@ public class QueryTab extends JPanel {
                 }
             }
         });
+    }
+
+    /** A mouse-menu paste should replace the placeholder, not append to it. */
+    private void clearQueryHintBeforePaste() {
+        if (QUERY_HINT_TEXT.equals(queryTextArea.getText())) {
+            queryTextArea.setText("");
+            queryTextArea.setForeground(queryTextColor);
+        }
     }
 
     /**
@@ -966,10 +980,13 @@ public class QueryTab extends JPanel {
             }
         });
 
-        JMenuItem paste = new JMenuItem("Paste");
+        JMenuItem paste = new JMenuItem("Paste into Query");
         paste.addActionListener(e -> {
             if (isEditMode) {
                 markdownEditArea.paste();
+            } else {
+                // The transcript is read-only: paste into the editable message box.
+                MousePasteSupport.pasteFromClipboard(queryTextArea, this::clearQueryHintBeforePaste);
             }
         });
 
@@ -982,11 +999,14 @@ public class QueryTab extends JPanel {
         contextMenu.addSeparator();
         contextMenu.add(paste);
 
-        // Show paste only in edit mode
+        // From the read-only transcript, Paste targets the query input.
         contextMenu.addPopupMenuListener(new javax.swing.event.PopupMenuListener() {
             @Override
             public void popupMenuWillBecomeVisible(javax.swing.event.PopupMenuEvent e) {
-                paste.setEnabled(isEditMode);
+                paste.setText(isEditMode ? "Paste" : "Paste into Query");
+                paste.setEnabled(isEditMode
+                    ? markdownEditArea.isEditable() && markdownEditArea.isEnabled()
+                    : queryTextArea.isEditable() && queryTextArea.isEnabled());
             }
             @Override
             public void popupMenuWillBecomeInvisible(javax.swing.event.PopupMenuEvent e) {}
