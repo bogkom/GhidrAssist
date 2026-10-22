@@ -54,6 +54,10 @@ ALIASES["MC68336376UMD"] = (
 # MC683336_376UM_ZIP archive; never infer CPU from a short basename in isolation.
 ZIP_NAMES = {
     "apdreg.pdf": "MC68336376UMD",
+    "c1intro.pdf": "MC68336376UM01",
+    "c2nomen.pdf": "MC68336376UM02",
+    "c3over.pdf": "MC68336376UM03",
+    "c4cpu.pdf": "MC68336376UM04",
     "c5sim.pdf": "MC68336376UM05",
     "c8qadc.pdf": "MC68336376UM08",
     "c9qsm.pdf": "MC68336376UM09",
