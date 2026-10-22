@@ -55,6 +55,27 @@ public final class HardwareContextSelectorSelfTest {
             "all three SIMCR write sites must survive before long function details");
         ok(full.contains("3 of 3 matched sites") && full.length()<=1200,
             "complete coverage and bounded size");
+        String doubled="# Hardware Evidence\n"+
+            "### FUN_00002bc0 @ 00002bc0\n"+
+            "- \`00002bca\` SIMCR \`0xFFFA00\` — WRITE; 0x40CA; move.w #0x40ca,(0x00fffa00).l\n"+
+            "### FUN_00009c96 @ 00009c96\n"+
+            "- \`00009c98\` SIMCR \`0xFFFA00\` — WRITE; 0x4848; move.w #0x4848,(0x00fffa00).l\n"+
+            "### FUN_0006e968 @ 0006e968\n"+
+            "- \`0006e96c\` SIMCR \`0xFFFA00\` — WRITE; 0x40CA; move.w #0x40ca,(0x00fffa00).l\n"+
+            "## CFG/P-code hardware evidence\n"+
+            "### FUN_00002bc0 at 00002bc0\n"+
+            "- PC 0x002BCA: SIMCR at 0xFFFA00 [direct/P-code] value 0x40CA\n"+
+            "### FUN_00009c96 at 00009c96\n"+
+            "- PC 0x009C98: SIMCR at 0xFFFA00 [direct/P-code] value 0x4848\n"+
+            "### FUN_0006e968 at 0006e968\n"+
+            "- PC 0x06E96C: SIMCR at 0xFFFA00 [direct/P-code] value 0x40CA\n";
+        String deduped=HardwareContextSelector.select(doubled,"#hardware SIMCR MM",2000);
+        ok(deduped.contains("matched unique instruction/register sites=3"),
+            "Listing and P-code must not double-count the same instruction");
+        ok(deduped.contains("3 of 3 matched sites included"),
+            "coverage must count actual unique sites");
+        ok(!deduped.contains("PC 0x002BCA:"),
+            "prefer original disassembly evidence over repeated P-code entry");
         System.out.println("HardwareContextSelectorSelfTest OK");
     }
 }
