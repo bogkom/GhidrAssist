@@ -140,6 +140,8 @@ def save_named(output: Path, library: str, filename: str, doc_id: str,
             or not re.fullmatch(r"[A-Za-z0-9_-]{2,96}\.pdf", filename, re.I)):
         raise ValueError("Unsafe PDF destination name")
     destination = output / library / filename
+    if destination.parent.is_symlink() or destination.is_symlink():
+        raise ValueError("Unsafe symlink in PDF output destination")
     record = {
         "document": doc_id, "library": library, "filename": filename,
         "source": source, "provenance": verify, "sha256": sha256(data),
@@ -197,6 +199,8 @@ def classify_local_pdf(filename: str) -> tuple[str, str, str]:
 def import_pdf_directory(source: Path, output: Path, records: list[dict]) -> None:
     if not source.is_dir():
         raise ValueError("Selected PDF source folder does not exist")
+    if source.resolve() == output.resolve():
+        raise ValueError("PDF input folder and destination must differ")
     processed = 0
     for root, dirs, files in os.walk(source, followlinks=False):
         dirs[:] = sorted(d for d in dirs if not (Path(root) / d).is_symlink()
@@ -229,7 +233,12 @@ def extract_zip(archive: Path, output: Path, records: list[dict]) -> None:
         for item in zip_file.infolist():
             if item.is_dir():
                 continue
-            original = Path(item.filename.replace("\\", "/")).name.lower()
+            components = item.filename.replace("\\", "/").split("/")
+            if any(component in (".", "..") for component in components):
+                records.append({"source": archive.name + ":" + item.filename,
+                                "status": "SKIPPED_UNSAFE_ZIP_PATH"})
+                continue
+            original = components[-1].lower()
             doc_id = ZIP_NAMES.get(original)
             if doc_id is None:
                 # Older ZIP revisions sometimes change suffix spelling.
@@ -239,7 +248,28 @@ def extract_zip(archive: Path, output: Path, records: list[dict]) -> None:
                     expected = CHAPTERS.get(chapter)
                     if expected is not None and expected.lower() in match.group(2):
                         doc_id = "MC68336376UM" + chapter
+            if doc_id is None and not original.endswith(".pdf"):
+                continue
             if doc_id is None:
+                # Unknown sections are preserved but quarantined, not assigned
+                # automatic MC68336/376 hardware register authority.
+                safe = re.sub(r"[^a-z0-9_-]+", "_",
+                              Path(original).stem.lower())[:42] or "document"
+                if item.file_size > MAX_PDF or item.compress_size > MAX_PDF:
+                    records.append({"source": archive.name + ":" + item.filename,
+                                    "status": "PDF_TOO_LARGE"})
+                    continue
+                try:
+                    with zip_file.open(item) as stream:
+                        data = stream.read(MAX_PDF + 1)
+                    save_named(output, "TO_REVIEW",
+                               "MC68336_68376_UNMAPPED_" + safe + ".pdf",
+                               "UNMAPPED_" + safe.upper(), data,
+                               archive.name + ":" + item.filename, records,
+                               "ZIP_CHAPTER_UNKNOWN; VERIFY_MODEL_AND_CONTENT")
+                except Exception as exc:
+                    records.append({"source": archive.name + ":" + item.filename,
+                                    "status": "FAILED", "error": str(exc)})
                 continue
             if doc_id in used:
                 records.append({"document": doc_id, "source": archive.name,
