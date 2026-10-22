@@ -87,8 +87,10 @@ class ManualDownloaderTests(unittest.TestCase):
             (source / "c5sim.pdf").write_bytes(PDF)
             (source / "not_a_pdf.pdf").write_bytes(b"<html>fake</html>")
             dest = root / "output"
+            # Three valid PDFs are saved; the fake HTML is rejected and
+            # reported, so the overall code is partial success (1).
             self.assertEqual(mod.main(["--offline", "--pdf-dir", str(source),
-                                       "--output", str(dest)]), 0)
+                                       "--output", str(dest)]), 1)
             self.assertTrue((dest / "MC68331/MC68331_SIM.pdf").exists())
             self.assertTrue((dest / "MC68336-376/MC68336_68376_05_SIM.pdf").exists())
             self.assertTrue((dest / "TO_REVIEW/UNVERIFIED_c5sim.pdf").exists())
