@@ -204,6 +204,16 @@ def classify_local_pdf(filename: str) -> tuple[str, str, str]:
     m332 = re.fullmatch(r"MC68332_([A-Za-z0-9_-]{2,50})\.pdf", basename, re.I)
     if m332:
         return "MC68332", "MC68332_" + m332.group(1).upper() + ".pdf", "LOCAL_MCU_PREFIX_UNVERIFIED"
+    # Reimporting older GhidrAssist TO_REVIEW files is safe only because
+    # our own ZIP extraction assigned this distinctive family prefix.
+    legacy = re.fullmatch(
+        r"MC68336_68376_UNMAPPED_([A-Za-z0-9_-]{2,42})\.pdf",
+        basename, re.I)
+    if legacy:
+        doc_id = ZIP_NAMES.get(legacy.group(1).lower() + ".pdf")
+        if doc_id is not None:
+            library, filename = ALIASES[doc_id]
+            return library, filename, "LEGACY_NXP_ZIP_FILENAME_HINT; VERIFY_PDF_COVER"
     m336 = re.fullmatch(r"MC68336_68376_([A-Za-z0-9_-]{2,50})\.pdf", basename, re.I)
     if m336:
         suffix = m336.group(1).upper()
