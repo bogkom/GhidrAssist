@@ -21,6 +21,12 @@ public final class Cpu32ManualDownloadRunner {
 
     public static Outcome run(Path destination, Path archive)
             throws IOException, InterruptedException {
+        return run(destination, archive, null, true);
+    }
+
+    public static Outcome run(Path destination, Path archive,
+            Path localPdfDirectory, boolean attemptOnline)
+            throws IOException, InterruptedException {
         if (destination == null) throw new IllegalArgumentException("Missing output folder");
         Files.createDirectories(destination);
         Path script = Files.createTempFile("ghidrassist-rag-cpu32-", ".py");
@@ -42,6 +48,15 @@ public final class Cpu32ManualDownloadRunner {
                 command.add("--zip");
                 command.add(archive.toAbsolutePath().toString());
             }
+            if (localPdfDirectory != null) {
+                if (!Files.isDirectory(localPdfDirectory))
+                    throw new IOException("Local manual directory not found: " +
+                        localPdfDirectory);
+                command.add("--pdf-dir");
+                command.add(localPdfDirectory.toAbsolutePath().toString());
+            }
+            if (!attemptOnline)
+                command.add("--offline");
             Path log = destination.resolve("download_process.log");
             ProcessBuilder builder = new ProcessBuilder(command);
             builder.redirectErrorStream(true);
