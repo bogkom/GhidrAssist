@@ -35,17 +35,15 @@ ALIASES = {
     "MC68336376UM": ("MC68336-376", "MC68336376UM.pdf"),
 }
 CHAPTERS = {
-    "05": "SIM",
-    "08": "QADC",
-    "09": "QSM",
-    "10": "CTM4",
-    "11": "TPU",
-    "12": "TPURAM",
+    "01": "INTRO", "02": "NOMENCLATURE", "03": "OVERVIEW",
+    "04": "CPU32", "05": "SIM", "06": "SRAM",
+    "07": "MRM", "08": "QADC", "09": "QSM",
+    "10": "CTM4", "11": "TPU", "12": "TPURAM",
     "13": "TOUCAN",
 }
 for chapter, module in CHAPTERS.items():
     ALIASES["MC68336376UM" + chapter] = (
-        "MC68376-only" if chapter == "13" else "MC68336-376",
+        "MC68376-only" if chapter in ("07", "13") else "MC68336-376",
         f"MC68336_68376_{chapter}_{module}.pdf",
     )
 ALIASES["MC68336376UMD"] = (
@@ -56,14 +54,39 @@ ALIASES["MC68336376UMD"] = (
 # MC683336_376UM_ZIP archive; never infer CPU from a short basename in isolation.
 ZIP_NAMES = {
     "apdreg.pdf": "MC68336376UMD",
+    "c1intro.pdf": "MC68336376UM01",
+    "c2nomen.pdf": "MC68336376UM02",
+    "c3over.pdf": "MC68336376UM03",
+    "c4cpu.pdf": "MC68336376UM04",
     "c5sim.pdf": "MC68336376UM05",
     "c8qadc.pdf": "MC68336376UM08",
     "c9qsm.pdf": "MC68336376UM09",
+    "c10ctm.pdf": "MC68336376UM10",
     "c10ctm4.pdf": "MC68336376UM10",
     "c11tpu.pdf": "MC68336376UM11",
     "c12tpu.pdf": "MC68336376UM12",
+    "c12tram.pdf": "MC68336376UM12",
     "c13can.pdf": "MC68336376UM13",
+    "c13tcan.pdf": "MC68336376UM13",
     "c13toucan.pdf": "MC68336376UM13",
+}
+# Device-specific chapter labels from the *actual* NXP MC68332 ZIP.
+# These short basenames also occur in other devices' manual archives.
+MC332_CHAPTERS = {
+    "c1intro.pdf": ("01", "INTRO"),
+    "c2nomen.pdf": ("02", "NOMENCLATURE"),
+    "c3over.pdf": ("03", "OVERVIEW"),
+    "c4cpu.pdf": ("04", "CPU32"),
+    "c5sim.pdf": ("05", "SIM"),
+    "c6qsm.pdf": ("06", "QSM"),
+    "c7tpu.pdf": ("07", "TPU"),
+    "c8tram.pdf": ("08", "TPURAM"),
+    "apdreg.pdf": ("D", "REGISTERS"),
+}
+# Generic references are shared-family material, not MC68331-only material.
+COMMON_REFS = {
+    "CPU32RM", "SIMRM", "TPURM", "QSMRM", "GPTRM",
+    "CTMRM", "QADCRM", "ADCRM", "SCIMRM", "MCCIRM",
 }
 CATALOG_LINK = re.compile(r"\[[^\]]+\]\((https://www\.nxp\.com/[^)\s]+\.pdf)\)", re.I)
 
@@ -185,6 +208,16 @@ def classify_local_pdf(filename: str) -> tuple[str, str, str]:
     m332 = re.fullmatch(r"MC68332_([A-Za-z0-9_-]{2,50})\.pdf", basename, re.I)
     if m332:
         return "MC68332", "MC68332_" + m332.group(1).upper() + ".pdf", "LOCAL_MCU_PREFIX_UNVERIFIED"
+    # Reimporting older GhidrAssist TO_REVIEW files is safe only because
+    # our own ZIP extraction assigned this distinctive family prefix.
+    legacy = re.fullmatch(
+        r"MC68336_68376_UNMAPPED_([A-Za-z0-9_-]{2,42})\.pdf",
+        basename, re.I)
+    if legacy:
+        doc_id = ZIP_NAMES.get(legacy.group(1).lower() + ".pdf")
+        if doc_id is not None:
+            library, filename = ALIASES[doc_id]
+            return library, filename, "LEGACY_NXP_ZIP_FILENAME_HINT; VERIFY_PDF_COVER"
     m336 = re.fullmatch(r"MC68336_68376_([A-Za-z0-9_-]{2,50})\.pdf", basename, re.I)
     if m336:
         suffix = m336.group(1).upper()
@@ -194,6 +227,53 @@ def classify_local_pdf(filename: str) -> tuple[str, str, str]:
     # filename with source hash prefix; user can inspect document and move it.
     clean = re.sub(r"[^A-Za-z0-9_-]+", "_", Path(basename).stem)[:45] or "DOCUMENT"
     return "TO_REVIEW", "UNVERIFIED_" + clean + ".pdf", "DOCUMENT_SCOPE_UNKNOWN"
+
+
+def archive_context(parts: tuple[str, ...]) -> str | None:
+    """Trust only an exact matching directory token as an archive hint.
+    Folder hints are provenance, NOT verified PDF contents or CPU identity.
+    """
+    tokens = {re.sub(r"[^a-z0-9]", "", p.casefold()) for p in parts}
+    if "mc68332" in tokens:
+        return "MC68332"
+    if "mc68331" in tokens or "mc331" in tokens:
+        return "MC68331"
+    if tokens & {"mc683336376umzip", "mc68336376umzip",
+                 "mc6833676", "mc68336376", "mc6833676um",
+                 "mc68336376um", "mc68336376umzip"}:
+        return "MC68336-376"
+    if "mc68336" in tokens and "mc68376" in tokens:
+        return "MC68336-376"
+    return None
+
+
+def classify_scoped_source(path: Path, root: Path) -> tuple[str, str, str] | None:
+    """Recognize device-specific NXP split chapters only with a scoped folder."""
+    relative = path.relative_to(root)
+    scope = archive_context(relative.parts[:-1])
+    stem = path.name.lower()
+    if scope == "MC68332" and stem in MC332_CHAPTERS:
+        chapter, module = MC332_CHAPTERS[stem]
+        return ("MC68332", f"MC68332_{chapter}_{module}.pdf",
+                "NXP_MC68332_FOLDER_HINT; VERIFY_PDF_COVER")
+    if scope == "MC68336-376" and stem in ZIP_NAMES:
+        doc_id = ZIP_NAMES[stem]
+        library, filename = ALIASES[doc_id]
+        return library, filename, "NXP_MC68336_376_FOLDER_HINT; VERIFY_PDF_COVER"
+    return None
+
+
+def preserve_conflict(output: Path, filename: str, data: bytes,
+                      source: str, records: list[dict]) -> None:
+    safe = re.sub(r"[^A-Za-z0-9_-]+", "_", Path(filename).stem)[:54]
+    digest = sha256(data)[:16]
+    target = f"COLLISION_{safe}_{digest}.pdf"
+    save_named(output, "TO_REVIEW", target, "COLLISION",
+               data, source, records,
+               "DIFFERENT_PDF_SAME_OUTPUT_NAME; REVIEW_SOURCE_AND_REVISION")
+    if records[-1].get("status") in ("SAVED", "ALREADY_PRESENT"):
+        records[-1]["status"] = "COLLISION_PRESERVED_FOR_REVIEW"
+        print(f"[REVIEW COLLISION] {target}; original document left untouched")
 
 
 def import_pdf_directory(source: Path, output: Path, records: list[dict]) -> None:
@@ -216,12 +296,37 @@ def import_pdf_directory(source: Path, output: Path, records: list[dict]) -> Non
                 records.append({"source": str(file_path), "status": "PDF_TOO_LARGE"})
                 continue
             try:
-                library, target, provenance = classify_local_pdf(name)
+                scoped = classify_scoped_source(file_path, source)
+                if scoped is not None:
+                    library, target, provenance = scoped
+                else:
+                    library, target, provenance = classify_local_pdf(name)
+                    if library == "TO_REVIEW":
+                        # Do not copy unrelated CPU08, MPC555, debugger or
+                        # programmer manuals into one CPU32 RAG collection.
+                        # Keep ambiguous chapter names in quarantine.
+                        if not re.fullmatch(r"(?:c\d{1,2}[a-z0-9_-]*|ap[a-e][a-z0-9_-]*|"
+                                            r"mc68\d{3,5}[a-z0-9_-]*)\.pdf",
+                                            name.lower()):
+                            records.append({"source": str(file_path),
+                                            "status": "SKIPPED_OUT_OF_SCOPE"})
+                            continue
+                data = file_path.read_bytes()
+                if not pdf_ok(data):
+                    records.append({"source": str(file_path),
+                                    "status": "INVALID_PDF"})
+                    continue
+                target_file = output / library / target
+                if (target_file.exists() and not target_file.is_symlink()
+                        and sha256(target_file.read_bytes()) != sha256(data)):
+                    preserve_conflict(output, target, data, str(file_path), records)
+                    continue
                 save_named(output, library, target, target[:-4].upper(),
-                           file_path.read_bytes(), str(file_path), records,
+                           data, str(file_path), records,
                            provenance + "; CHECK_COVER_AND_MODEL")
             except Exception as exc:
-                records.append({"source": str(file_path), "status": "FAILED", "error": str(exc)})
+                records.append({"source": str(file_path), "status": "FAILED",
+                                "error": str(exc)})
 
 
 def extract_zip(archive: Path, output: Path, records: list[dict]) -> None:
@@ -408,7 +513,7 @@ def main(argv: list[str] | None = None) -> int:
                 for x in records)
     failed = sum(x.get("status") in ("FAILED", "ZIP_FAILED", "INVALID_PDF",
                                    "CONFLICT_NOT_OVERWRITTEN",
-                                   "LOCAL_FOLDER_FAILED") for x in records)
+                                   "LOCAL_FOLDER_FAILED", "COLLISION_PRESERVED_FOR_REVIEW") for x in records)
     print(f"RESULT saved/present={saved}, issues={failed}; report: {output/'download_report.json'}")
     if saved == 0:
         print("No verified PDFs available. Supply an official local NXP ZIP "+
