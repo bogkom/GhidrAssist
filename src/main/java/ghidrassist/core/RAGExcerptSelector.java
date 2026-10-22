@@ -55,7 +55,7 @@ public final class RAGExcerptSelector {
         if((q.contains("csbar") || q.contains("chip-select") || q.contains("chip select")) &&
             body.contains("chip-select base address registers")) result+=7;
         if((q.contains("csor") || q.contains("csbar")) &&
-            body.contains("qs pi")) result-=3;
+            body.contains("qspi") && !body.contains("chip-select option registers")) result-=3;
         if(q.contains("module address map") &&
             body.contains("table d-1 module address map")) result+=5;
         if((q.contains("table d-1") || q.contains("yffa00") || q.contains("yffb00")) &&
@@ -70,6 +70,7 @@ public final class RAGExcerptSelector {
         String body=sourceBody(stored).strip();
         if(body.length()<=maxChars) return body;
         String lower=body.toLowerCase(Locale.ROOT);
+        String focus=query==null?"":query.toLowerCase(Locale.ROOT);
         List<String> terms=terms(query);
         LinkedHashSet<Integer> starts=new LinkedHashSet<>();
         starts.add(0);
@@ -88,9 +89,9 @@ public final class RAGExcerptSelector {
             String window=lower.substring(start,Math.min(body.length(),start+maxChars));
             double score=0;
             for(String term:terms) if(window.contains(term))score++;
-            if((lower.contains("chip-select") || lower.contains("csor")) &&
+            if((focus.contains("chip-select") || focus.contains("chip select") || focus.contains("csor")) &&
                 window.contains("table 4-22") && window.contains("dsack")) score+=10;
-            if((lower.contains("chip-select") || lower.contains("csbar")) &&
+            if((focus.contains("chip-select") || focus.contains("chip select") || focus.contains("csbar")) &&
                 window.contains("chip-select base address registers")) score+=6;
             if(window.contains("table d-1 module address map") &&
                 window.contains("sim 128") && window.contains("qsm 512"))score+=8;
