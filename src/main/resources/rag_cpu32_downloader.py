@@ -231,6 +231,18 @@ def main(argv: list[str] | None = None) -> int:
         for archive in args.archives:
             print("PLAN ZIP", archive)
         return 0
+    # Product-only catalog entries are deliberately not converted into
+    # guessed URLs, and remain visible in the machine-readable report.
+    if not args.offline:
+        known_direct = {doc_id for doc_id, url in urls}
+        for doc_id in sorted(set(ALIASES).difference(known_direct)):
+            records.append({
+                "document": doc_id,
+                "status": "NO_VERIFIED_DIRECT_URL",
+                "source": "catalog only (product page, not direct PDF)",
+                "note": "Manual manufacturer download or authenticated NXP session required",
+            })
+            print(f"[MANUAL DOWNLOAD] {doc_id}: no verified direct PDF URL")
     for archive in args.archives:
         try:
             extract_zip(archive.expanduser(), output, records)
