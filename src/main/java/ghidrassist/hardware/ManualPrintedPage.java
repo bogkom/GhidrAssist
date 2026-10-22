@@ -21,15 +21,17 @@ public final class ManualPrintedPage {
     public static Hint fromText(String text) {
         if(text==null || text.isBlank())return new Hint("UNKNOWN","UNVERIFIED");
         String[] rows=text.replace('’','\'').toUpperCase(Locale.ROOT).split("\\R");
-        // PDF text should be in visual/header order. Do not search the body
-        // where "Table D-1" and section cross-references are common.
-        int cap=Math.min(12,rows.length);
-        for(int i=0;i<cap;i++){
+        // Manufacturer folio is often at the bottom of the extracted page.
+        // Search the top and bottom only; never scan the body for Table D-1.
+        int head=Math.min(12,rows.length);
+        int tail=Math.max(head,rows.length-12);
+        for(int i=0;i<rows.length;i++){
+            if(i>=head && i<tail)continue;
             if(!rows[i].contains("USER'S MANUAL"))continue;
             // Require the page label in the actual header line or immediately
             // adjacent. If two candidates appear, publish UNKNOWN.
             String near=(i>0?rows[i-1]:"")+" "+rows[i]+" "+
-                (i+1<cap?rows[i+1]:"");
+                (i+1<rows.length?rows[i+1]:"");
             Matcher m=PAGE.matcher(near);
             String one=null;
             while(m.find()){

@@ -14,6 +14,8 @@ on:
       - 'src/main/java/ghidrassist/hardware/ManualModuleTable.java'
       - 'src/main/java/ghidrassist/hardware/ManualDocumentScope.java'
       - 'src/main/java/ghidrassist/hardware/ManualPrintedPage.java'
+      - 'src/main/java/ghidrassist/core/RAGExcerptSelector.java'
+      - 'src/test/java/ghidrassist/core/RAGExcerptSelectorSelfTest.java'
       - 'src/main/java/ghidrassist/hardware/HardwareNamingReview.java'
       - 'src/main/java/ghidrassist/hardware/HardwareFunctionNamingReview.java'
       - 'src/main/java/ghidrassist/hardware/HardwareFunctionRenamePolicy.java'
@@ -53,6 +55,8 @@ on:
       - 'src/main/java/ghidrassist/hardware/ManualModuleTable.java'
       - 'src/main/java/ghidrassist/hardware/ManualDocumentScope.java'
       - 'src/main/java/ghidrassist/hardware/ManualPrintedPage.java'
+      - 'src/main/java/ghidrassist/core/RAGExcerptSelector.java'
+      - 'src/test/java/ghidrassist/core/RAGExcerptSelectorSelfTest.java'
       - 'src/main/java/ghidrassist/hardware/HardwareNamingReview.java'
       - 'src/main/java/ghidrassist/hardware/HardwareFunctionNamingReview.java'
       - 'src/main/java/ghidrassist/hardware/HardwareFunctionRenamePolicy.java'
@@ -106,6 +110,8 @@ jobs:
             src/main/java/ghidrassist/hardware/ManualModuleTable.java \
             src/main/java/ghidrassist/hardware/ManualDocumentScope.java \
             src/main/java/ghidrassist/hardware/ManualPrintedPage.java \
+            src/main/java/ghidrassist/core/RAGExcerptSelector.java \
+            src/test/java/ghidrassist/core/RAGExcerptSelectorSelfTest.java \
             src/main/java/ghidrassist/hardware/HardwareNamingReview.java \
             src/main/java/ghidrassist/hardware/HardwareFunctionNamingReview.java \
             src/main/java/ghidrassist/hardware/HardwareFunctionRenamePolicy.java \
@@ -149,6 +155,8 @@ jobs:
             ghidrassist.hardware.ManualDocumentScopeSelfTest
           java -cp "$RUNNER_TEMP/hardware-tests" \
             ghidrassist.hardware.ManualPrintedPageSelfTest
+          java -cp "$RUNNER_TEMP/hardware-tests" \
+            ghidrassist.core.RAGExcerptSelectorSelfTest
           java -cp "$RUNNER_TEMP/hardware-tests" \
             ghidrassist.hardware.HardwareNamingReviewSelfTest
           java -cp "$RUNNER_TEMP/hardware-tests" \
