@@ -80,6 +80,47 @@ Terminal alternatives:
     python3 rag_cpu32_downloader.py --offline \
       --pdf-dir "/path/to/downloaded-manuals" --output "/path/to/destination"
 
+## Correcting partial imports from Oct 22 (PR #39)
+
+The first observed NXP `MC683336_376UM_ZIP` import saved **24 PDFs,
+0 errors**, but placed recognized module chapters such as `c10ctm.pdf`,
+`c12tram.pdf` and `c13tcan.pdf` in `TO_REVIEW`. The real archive also
+contains introductory chapters `c1intro.pdf` through `c4cpu.pdf`,
+`c6sram.pdf`, `c7mrm.pdf`, and appendices or index pages.
+The corrected ZIP parser explicitly recognizes **chapters 01–13**, including
+`07_MRM` and `13_TOUCAN` as **MC68376-only** candidates, while
+keeping unknown non-register publications out of canonical profile mappings.
+
+The subsequent **Import PDF folder** on a broad Motorola documentation tree
+recorded 365 new PDFs, 13 already-present, 96 same-name collisions and 1
+invalid PDF. This occurred because generic short names, such as `c5sim.pdf`,
+occur in unrelated manuals. The log does not prove PDF integrity, MCU model or
+correct revision in the 365 files.
+
+The corrected local importer:
+- Identifies short chapter names only when the parent directory itself has
+  an explicit MC68332 or MC68336/376 manual/ZIP context. This is a **folder
+  hint** that needs a matching PDF cover before trusted RAG use.
+- Leaves standalone ambiguous short names in `TO_REVIEW`; skips unrelated
+  manuals such as `MPC555UserManual.pdf` instead of copying every document
+  from a large archive into CPU32 RAG staging.
+- Preserves a differently-contented PDF with the same resulting name under
+  `TO_REVIEW/COLLISION_..._<SHA256>.pdf`, without overwriting either PDF.
+  Such collisions are reported as review-required, not successful trusted
+  imports.
+- Recognizes legacy `MC68336_68376_UNMAPPED_c10ctm.pdf` and similar
+  output names from the earlier GhidrAssist ZIP import as chapter candidates.
+
+**No files are deleted or modified in the source directories.** To obtain a
+cleaner library, choose a **fresh, empty destination directory** and reimport
+the original NXP ZIP first. Avoid indexing the entire old `TO_REVIEW`
+directory; it contains unrelated processors, duplicate chapter names and
+unverified manuals. The separate `MC68F375` label must not be promoted
+to a verified `MC68375` register profile.
+
+For audit, compare the selected documents with the original manufacturer's
+manual and revision before adding them to the model-specific RAG library.
+
 ## Security and known limitations
 
 - Only direct HTTPS PDF links to official NXP from the current
