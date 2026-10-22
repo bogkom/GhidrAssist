@@ -137,7 +137,7 @@ public class QueryService {
 
         if (useRAG) {
             try {
-                processedQuery = QueryProcessor.appendRAGContext(processedQuery, plugin);
+                processedQuery = QueryProcessor.appendRAGContext(processedQuery, plugin, query);
             } catch (Exception e) {
                 throw new Exception("Failed to perform RAG search: " + e.getMessage(), e);
             }

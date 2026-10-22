@@ -18,7 +18,7 @@ public final class HardwareBitMath {
     private static final Pattern DECOMPILED_SIMCR=Pattern.compile(
         "(?im)\\b(?:_?DAT_)(?:00)?(fffa00|7ffa00)\\s*=\\s*(0x[0-9a-f]+)\\s*;");
     private static final Pattern LITERAL_SIMCR=Pattern.compile(
-        "(?i)\\b(?:0x)?(?:fffa00|7ffa00)\\b");
+        "(?i)(?:00)?(?:fffa00|7ffa00)\\b");
 
     public static String annotate(String context) {
         if(context==null || context.isBlank() || !LITERAL_SIMCR.matcher(context).find())

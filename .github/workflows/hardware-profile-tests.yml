@@ -20,6 +20,10 @@ on:
       - 'src/main/java/ghidrassist/hardware/HardwareFunctionNamingReview.java'
       - 'src/main/java/ghidrassist/hardware/HardwareFunctionRenamePolicy.java'
       - 'src/main/java/ghidrassist/hardware/HardwareContextSelector.java'
+      - 'src/main/java/ghidrassist/core/RAGQueryFocus.java'
+      - 'src/test/java/ghidrassist/core/RAGQueryFocusSelfTest.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareBitMath.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareBitMathSelfTest.java'
       - 'src/main/java/ghidrassist/hardware/HardwareDataflow.java'
       - 'src/main/java/ghidrassist/hardware/HardwareCallEffects.java'
       - 'src/main/java/ghidrassist/hardware/HardwareAutoUpdateRegisters.java'
@@ -61,6 +65,10 @@ on:
       - 'src/main/java/ghidrassist/hardware/HardwareFunctionNamingReview.java'
       - 'src/main/java/ghidrassist/hardware/HardwareFunctionRenamePolicy.java'
       - 'src/main/java/ghidrassist/hardware/HardwareContextSelector.java'
+      - 'src/main/java/ghidrassist/core/RAGQueryFocus.java'
+      - 'src/test/java/ghidrassist/core/RAGQueryFocusSelfTest.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareBitMath.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareBitMathSelfTest.java'
       - 'src/main/java/ghidrassist/hardware/HardwareDataflow.java'
       - 'src/main/java/ghidrassist/hardware/HardwareCallEffects.java'
       - 'src/main/java/ghidrassist/hardware/HardwareAutoUpdateRegisters.java'
@@ -121,6 +129,10 @@ jobs:
             src/main/java/ghidrassist/hardware/HardwarePcodeStoreSafety.java \
             src/main/java/ghidrassist/hardware/HardwareIndexedAddress.java \
             src/main/java/ghidrassist/hardware/HardwareContextSelector.java \
+            src/main/java/ghidrassist/core/RAGQueryFocus.java \
+            src/test/java/ghidrassist/core/RAGQueryFocusSelfTest.java \
+            src/main/java/ghidrassist/hardware/HardwareBitMath.java \
+            src/test/java/ghidrassist/hardware/HardwareBitMathSelfTest.java \
             src/main/java/ghidrassist/hardware/HardwareApplyPlan.java \
             src/main/java/ghidrassist/hardware/HardwareRegionLayout.java \
             src/test/java/ghidrassist/hardware/HardwareProfilesSelfTest.java \
@@ -173,6 +185,10 @@ jobs:
             ghidrassist.hardware.HardwarePcodeStoreSafetySelfTest
           java -cp "$RUNNER_TEMP/hardware-tests" \
             ghidrassist.hardware.HardwareIndexedAddressSelfTest
+          java -cp "$RUNNER_TEMP/hardware-tests" \
+            ghidrassist.hardware.HardwareBitMathSelfTest
+          java -cp "$RUNNER_TEMP/hardware-tests" \
+            ghidrassist.core.RAGQueryFocusSelfTest
           java -cp "$RUNNER_TEMP/hardware-tests" \
             ghidrassist.hardware.HardwareContextSelectorSelfTest
           java -cp "$RUNNER_TEMP/hardware-tests" \

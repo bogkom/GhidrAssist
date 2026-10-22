@@ -69,14 +69,22 @@ public class QueryProcessor {
      * @throws Exception if RAG search fails
      */
     public static String appendRAGContext(String query, GhidrAssistPlugin plugin) throws Exception {
+        return appendRAGContext(query,plugin,query);
+    }
+
+    /** Query the manuals with the user's instruction, never the pasted
+     * disassembly/decompiler dump produced by #func expansion. */
+    public static String appendRAGContext(String query, GhidrAssistPlugin plugin,
+            String originalUserQuery) throws Exception {
+        String searchText=RAGQueryFocus.focus(originalUserQuery);
         // Hardware addresses require literal evidence rather than nearest-neighbor
         // semantic ranking. Unrelated prose continues to use hybrid search.
         boolean precise = java.util.regex.Pattern.compile(
             "(?iu)(?:\\b(?:0x[0-9a-f]{4,8}|Y[0-9a-f]{5}|[0-9a-f]{6,8}|SIMCR|TPURAM|CSPAR|CSBAR|QSM|TOUCAN)\\b|\\$[0-9a-fy]{5,8})")
-            .matcher(query).find();
+            .matcher(searchText).find();
         List<SearchResult> results = precise ?
-            RAGEngine.search(query, MAX_SEARCH_RESULTS, RAGLibraries.active(plugin.getCurrentProgram())) :
-            RAGEngine.hybridSearch(query, MAX_SEARCH_RESULTS, RAGLibraries.active(plugin.getCurrentProgram()));
+            RAGEngine.search(searchText, MAX_SEARCH_RESULTS, RAGLibraries.active(plugin.getCurrentProgram())) :
+            RAGEngine.hybridSearch(searchText, MAX_SEARCH_RESULTS, RAGLibraries.active(plugin.getCurrentProgram()));
         if (results.isEmpty()) {
             return query;
         }

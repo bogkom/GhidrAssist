@@ -15,6 +15,15 @@ import ghidra.program.model.listing.Program;
 import java.awt.BorderLayout;
 import java.awt.FlowLayout;
 import java.awt.Font;
+import java.awt.Color;
+import java.awt.event.KeyEvent;
+import java.awt.event.InputEvent;
+import javax.swing.AbstractAction;
+import javax.swing.JComponent;
+import javax.swing.KeyStroke;
+import javax.swing.UIManager;
+import javax.swing.text.DefaultHighlighter;
+import javax.swing.text.BadLocationException;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.regex.Matcher;
@@ -69,6 +78,13 @@ public final class HardwareAnalysisTab extends JPanel {
     private final JButton approve=new JButton("Review / Apply...");
     private final JButton reviewNames=new JButton("Review names...");
     private final JTextArea report=new JTextArea();
+    private final JTextField reportSearch=new JTextField(21);
+    private final JButton previousHit=new JButton("Previous");
+    private final JButton nextHit=new JButton("Next");
+    private final JCheckBox matchCase=new JCheckBox("Aa");
+    private final JLabel searchCount=new JLabel("0 matches");
+    private final List<int[]> reportHits=new ArrayList<>();
+    private int hitIndex=-1;
     private final JLabel status=new JLabel("Open a Ghidra program, then analyze candidate MCU registers.");
     private volatile String latestMarkdown;
     private volatile String latestNameCsv;
@@ -92,6 +108,37 @@ public final class HardwareAnalysisTab extends JPanel {
         actionRow.add(namePreview);
         controls.add(profileRow,BorderLayout.NORTH);
         controls.add(actionRow,BorderLayout.CENTER);
+        JPanel searchRow=new JPanel(new FlowLayout(FlowLayout.LEFT,5,1));
+        searchRow.add(new JLabel("Find:"));
+        searchRow.add(reportSearch);
+        searchRow.add(previousHit);
+        searchRow.add(nextHit);
+        matchCase.setToolTipText("Case-sensitive report search");
+        searchRow.add(matchCase);
+        searchRow.add(searchCount);
+        controls.add(searchRow,BorderLayout.SOUTH);
+        reportSearch.setToolTipText("Find registers, function names, addresses or values. Ctrl+F to focus.");
+        reportSearch.getDocument().addDocumentListener(new DocumentListener(){
+            public void insertUpdate(DocumentEvent e){updateReportSearch();}
+            public void removeUpdate(DocumentEvent e){updateReportSearch();}
+            public void changedUpdate(DocumentEvent e){updateReportSearch();}
+        });
+        reportSearch.addActionListener(e->stepReportSearch(1));
+        matchCase.addActionListener(e->updateReportSearch());
+        previousHit.addActionListener(e->stepReportSearch(-1));
+        nextHit.addActionListener(e->stepReportSearch(1));
+        reportSearch.getInputMap().put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER,InputEvent.SHIFT_DOWN_MASK),"previousHit");
+        reportSearch.getActionMap().put("previousHit",new AbstractAction(){
+            @Override public void actionPerformed(java.awt.event.ActionEvent e){stepReportSearch(-1);}
+        });
+        getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT)
+            .put(KeyStroke.getKeyStroke(KeyEvent.VK_F,InputEvent.CTRL_DOWN_MASK),"focusReportFind");
+        getActionMap().put("focusReportFind",new AbstractAction(){
+            @Override public void actionPerformed(java.awt.event.ActionEvent e){
+                reportSearch.requestFocusInWindow();
+                reportSearch.selectAll();
+            }
+        });
         run.setToolTipText("Scan the currently active Ghidra program (read-only)");
         approve.setToolTipText("Review proposed memory regions/registers and apply selected items in an undoable transaction");
         export.setToolTipText("Export Hardware Evidence as Markdown for RAG");
@@ -135,6 +182,48 @@ public final class HardwareAnalysisTab extends JPanel {
         String family=MarkdownHelper.getResponseFontFamily();
         int size=MarkdownHelper.getResponseFontSize();
         report.setFont(new Font(family==null?Font.MONOSPACED:family,Font.PLAIN,size));
+    }
+    private void updateReportSearch(){
+        reportHits.clear();
+        hitIndex=-1;
+        report.getHighlighter().removeAllHighlights();
+        String needle=reportSearch.getText();
+        String text=report.getText();
+        if(needle!=null && !needle.isEmpty()){
+            String haystack=matchCase.isSelected()?text:text.toLowerCase(java.util.Locale.ROOT);
+            String query=matchCase.isSelected()?needle:needle.toLowerCase(java.util.Locale.ROOT);
+            int at=0;
+            while((at=haystack.indexOf(query,at))>=0){
+                reportHits.add(new int[]{at,at+needle.length()});
+                try{
+                    // Avoid rendering thousands of Swing highlight shapes at once.
+                    if(reportHits.size()<=2000)
+                        report.getHighlighter().addHighlight(at,at+needle.length(),
+                            new DefaultHighlighter.DefaultHighlightPainter(new Color(255,228,125)));
+                }catch(BadLocationException ignored){}
+                at+=Math.max(1,query.length());
+            }
+        }
+        updateSearchCount();
+    }
+    private void updateSearchCount(){
+        int total=reportHits.size();
+        searchCount.setText(total==0?"0 matches":
+            ((hitIndex<0?0:hitIndex+1)+" / "+total+
+            (total>2000?" (first 2000 highlighted)":"")));
+        previousHit.setEnabled(total>0);
+        nextHit.setEnabled(total>0);
+    }
+    private void stepReportSearch(int delta){
+        if(reportHits.isEmpty())return;
+        hitIndex=Math.floorMod(hitIndex+delta,reportHits.size());
+        int offset=reportHits.get(hitIndex)[0];
+        report.setCaretPosition(offset);
+        try{
+            java.awt.geom.Rectangle2D r=report.modelToView2D(offset);
+            if(r!=null)report.scrollRectToVisible(r.getBounds());
+        }catch(BadLocationException ignored){}
+        updateSearchCount();
     }
     private void navigateFromReport(MouseEvent event){
         int clicked=report.viewToModel2D(event.getPoint());
@@ -181,6 +270,9 @@ public final class HardwareAnalysisTab extends JPanel {
         latestFunctionProposals=List.of();
         latestMarkdown=null;latestNameCsv=null;latestProgram=null;
         ghidrassist.hardware.HardwareEvidenceCache.clear(program);
+        report.getHighlighter().removeAllHighlights();
+        reportHits.clear();
+        updateSearchCount();
         status.setText("Scanning references and disassembled instructions. Read-only.");
         SwingWorker<HardwareInventoryService.Report,Void> worker=
                 new SwingWorker<>() {
@@ -208,6 +300,7 @@ public final class HardwareAnalysisTab extends JPanel {
                     ghidrassist.hardware.HardwareEvidenceCache.publish(program, finished.markdown);
                     report.setText(finished.markdown);
                     report.setCaretPosition(0);
+                    updateReportSearch();
                     export.setEnabled(true);
                     namePreview.setEnabled(true);
                     status.setText("Read-only: "+finished.uniqueSites+
