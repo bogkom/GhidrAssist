@@ -35,17 +35,15 @@ ALIASES = {
     "MC68336376UM": ("MC68336-376", "MC68336376UM.pdf"),
 }
 CHAPTERS = {
-    "05": "SIM",
-    "08": "QADC",
-    "09": "QSM",
-    "10": "CTM4",
-    "11": "TPU",
-    "12": "TPURAM",
+    "01": "INTRO", "02": "NOMENCLATURE", "03": "OVERVIEW",
+    "04": "CPU32", "05": "SIM", "06": "SRAM",
+    "07": "MRM", "08": "QADC", "09": "QSM",
+    "10": "CTM4", "11": "TPU", "12": "TPURAM",
     "13": "TOUCAN",
 }
 for chapter, module in CHAPTERS.items():
     ALIASES["MC68336376UM" + chapter] = (
-        "MC68376-only" if chapter == "13" else "MC68336-376",
+        "MC68376-only" if chapter in ("07", "13") else "MC68336-376",
         f"MC68336_68376_{chapter}_{module}.pdf",
     )
 ALIASES["MC68336376UMD"] = (
@@ -59,11 +57,32 @@ ZIP_NAMES = {
     "c5sim.pdf": "MC68336376UM05",
     "c8qadc.pdf": "MC68336376UM08",
     "c9qsm.pdf": "MC68336376UM09",
+    "c10ctm.pdf": "MC68336376UM10",
     "c10ctm4.pdf": "MC68336376UM10",
     "c11tpu.pdf": "MC68336376UM11",
     "c12tpu.pdf": "MC68336376UM12",
+    "c12tram.pdf": "MC68336376UM12",
     "c13can.pdf": "MC68336376UM13",
+    "c13tcan.pdf": "MC68336376UM13",
     "c13toucan.pdf": "MC68336376UM13",
+}
+# Device-specific chapter labels from the *actual* NXP MC68332 ZIP.
+# These short basenames also occur in other devices' manual archives.
+MC332_CHAPTERS = {
+    "c1intro.pdf": ("01", "INTRO"),
+    "c2nomen.pdf": ("02", "NOMENCLATURE"),
+    "c3over.pdf": ("03", "OVERVIEW"),
+    "c4cpu.pdf": ("04", "CPU32"),
+    "c5sim.pdf": ("05", "SIM"),
+    "c6qsm.pdf": ("06", "QSM"),
+    "c7tpu.pdf": ("07", "TPU"),
+    "c8tram.pdf": ("08", "TPURAM"),
+    "apdreg.pdf": ("D", "REGISTERS"),
+}
+# Generic references are shared-family material, not MC68331-only material.
+COMMON_REFS = {
+    "CPU32RM", "SIMRM", "TPURM", "QSMRM", "GPTRM",
+    "CTMRM", "QADCRM", "ADCRM", "SCIMRM", "MCCIRM",
 }
 CATALOG_LINK = re.compile(r"\[[^\]]+\]\((https://www\.nxp\.com/[^)\s]+\.pdf)\)", re.I)
 
