@@ -46,6 +46,40 @@ A report named **download_report.json** stores source URLs, local names,
 SHA-256, size and status for each processed document. The Ghidra launcher
 additionally writes **download_process.log**.
 
+## NXP direct PDF HTTP 404 (verified 2026-10-22)
+
+The first GhidrAssist downloader attempted 13 vendor PDF URLs and obtained
+**0** PDFs (13 HTTP 404). A separate GitHub Actions probe confirmed HTTP 404
+for NXP `/docs/en/user-guide/`, `/reference-manual/` and `/data-sheet/`
+with both GhidrAssist and browser User-Agent strings, including on
+`www.nxp.com.cn`. Cached/indexed PDF search results are not proof that the
+live download endpoint remains available.
+
+When running the new script online, **two independent NXP HTTP 404 results**
+stop further redundant direct-PDF attempts. The report marks the remaining
+entries `SKIPPED_NXP_DIRECT_ENDPOINT_UNAVAILABLE`. This is not a fix for
+NXP's server; no unauthorized mirrors are used.
+
+The RAG UI now explicitly asks for a **source** rather than presenting a
+misleading YES/NO dialog: **Import NXP ZIP (recommended)**, **Import downloaded
+PDF folder** or **Try NXP online**. The first two are offline and avoid
+NXP endpoints entirely. Use the ZIP you downloaded already from the vendor.
+
+Existing local PDF folder import accepts verified canonical names and
+**user-supplied candidate prefixes** `MC331_...`, `MC68331_...`,
+`MC68332_...`, `MC68336_68376_...`. Unrecognized short names
+(`c5sim.pdf` without the defining NXP ZIP context) go to
+`TO_REVIEW/UNVERIFIED_...`; never assign those to a concrete MCU.
+A source-mapping claim is separate from a verified manual revision.
+
+Terminal alternatives:
+
+    python3 rag_cpu32_downloader.py --offline \
+      --zip "/path/to/MC683336_376UM_ZIP.zip" --output "/path/to/destination"
+
+    python3 rag_cpu32_downloader.py --offline \
+      --pdf-dir "/path/to/downloaded-manuals" --output "/path/to/destination"
+
 ## Security and known limitations
 
 - Only direct HTTPS PDF links to official NXP from the current
