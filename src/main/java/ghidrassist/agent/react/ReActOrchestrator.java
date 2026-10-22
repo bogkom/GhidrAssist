@@ -293,6 +293,10 @@ public class ReActOrchestrator {
         resultFuture.whenComplete((result, error) -> clearActiveAnalysis(resultFuture));
         Instant startTime = Instant.now();
         cancelled.set(false);
+        // A new investigation must not inherit evidence or expanded iteration
+        // budgets from an earlier firmware/program/session.
+        toolRegistry.clearRecentToolEvidence();
+        maxIterations = baseMaxIterations;
 
         try {
             // Initialize components

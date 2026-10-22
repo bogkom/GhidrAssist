@@ -198,7 +198,10 @@ public class ToolRegistry implements ToolExecutor {
                                     Msg.warn(this, "Tool returned error: " + toolName + " - " + safeResult.getErrorMessage());
                                 } else {
                                     Msg.info(this, "Tool completed: " + toolName);
-                                    rememberSuccessfulRead(toolName, args, safeResult.getContent());
+                                    if (isReadOnlyLookup(toolName))
+                                        rememberSuccessfulRead(toolName, args, safeResult.getContent());
+                                    else
+                                        clearRecentToolEvidence(); // A write may invalidate earlier snapshots.
                                 }
                                 if (executionObserver != null && sessionId > 0) {
                                     if (safeResult.isError()) {
@@ -219,12 +222,22 @@ public class ToolRegistry implements ToolExecutor {
         });
     }
 
+    private static boolean isReadOnlyLookup(String name) {
+        if (name == null) return false;
+        String local=name.toLowerCase(java.util.Locale.ROOT);
+        return local.contains("get_") || local.contains("list_") ||
+            local.contains("search_");
+    }
+
+    /** Reset evidence at the start of each ReAct investigation or after a write. */
+    public synchronized void clearRecentToolEvidence() {
+        toolObservations.clear();
+    }
+
     /** Only successful read-only observations; bounded to eight distinct queries. */
     private synchronized void rememberSuccessfulRead(String name, JsonObject args, String content) {
         if (name == null || content == null) return;
-        String local=name.toLowerCase(java.util.Locale.ROOT);
-        if (!(local.contains("get_") || local.contains("list_") ||
-                local.contains("search_"))) return;
+        if (!isReadOnlyLookup(name)) return;
         String key=name+" "+(args==null?"{}":args.toString());
         // Put recent data last even when the same read was attempted again.
         toolObservations.remove(key);
