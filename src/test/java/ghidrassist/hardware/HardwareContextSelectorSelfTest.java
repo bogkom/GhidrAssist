@@ -45,7 +45,7 @@ public final class HardwareContextSelectorSelfTest {
             "## Function-local evidence\n"+
             "### FUN_00002bc0 @ 00002bc0\n"+
             "- `00002bca` SIMCR `0xFFFA00` — WRITE; 0x40CA; move.w #0x40ca,(0x00fffa00).l\n"+
-            ("- other register evidence in this function\\n".replace("\\n","\\n")).repeat(80)+
+            ("- other register evidence in this function\n").repeat(80)+
             "### FUN_00009c96 @ 00009c96\n"+
             "- `00009c98` SIMCR `0xFFFA00` — WRITE; 0x4848; move.w #0x4848,(0x00fffa00).l\n"+
             "### FUN_0006e968 @ 0006e968\n"+
