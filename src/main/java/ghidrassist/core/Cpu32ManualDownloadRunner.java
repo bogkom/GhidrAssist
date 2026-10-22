@@ -56,7 +56,7 @@ public final class Cpu32ManualDownloadRunner {
                 counts.getOrDefault("LOCAL_FOLDER_FAILED",0);
             return "New PDFs: "+saved+" | already present: "+already +
                 " | stored in TO_REVIEW: "+review +
-                "\\nCollisions requiring review: "+conflicts+
+                "\nCollisions requiring review: "+conflicts+
                 " | invalid PDF: "+invalid+
                 " | unrelated skipped: "+skipped+
                 " | other errors: "+other;
