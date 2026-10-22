@@ -1,0 +1,36 @@
+name: Chat mouse paste regression tests
+
+on:
+  pull_request:
+    paths:
+      - 'src/main/java/ghidrassist/ui/common/MousePasteSupport.java'
+      - 'src/main/java/ghidrassist/ui/tabs/QueryTab.java'
+      - 'src/test/java/ghidrassist/ui/common/MousePasteSupportSelfTest.java'
+      - '.github/workflows/chat-mouse-paste-tests.yml'
+  push:
+    branches: [master]
+    paths:
+      - 'src/main/java/ghidrassist/ui/common/MousePasteSupport.java'
+      - 'src/main/java/ghidrassist/ui/tabs/QueryTab.java'
+      - 'src/test/java/ghidrassist/ui/common/MousePasteSupportSelfTest.java'
+      - '.github/workflows/chat-mouse-paste-tests.yml'
+
+jobs:
+  swing-headless:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Compile and exercise chat mouse paste helper
+        run: |
+          mkdir -p "$RUNNER_TEMP/mouse-paste"
+          javac --release 21 -d "$RUNNER_TEMP/mouse-paste" \
+            src/main/java/ghidrassist/ui/common/MousePasteSupport.java \
+            src/test/java/ghidrassist/ui/common/MousePasteSupportSelfTest.java
+          java -Djava.awt.headless=true -cp "$RUNNER_TEMP/mouse-paste" \
+            ghidrassist.ui.common.MousePasteSupportSelfTest
