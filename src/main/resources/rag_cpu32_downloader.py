@@ -215,6 +215,50 @@ def classify_local_pdf(filename: str) -> tuple[str, str, str]:
     return "TO_REVIEW", "UNVERIFIED_" + clean + ".pdf", "DOCUMENT_SCOPE_UNKNOWN"
 
 
+def archive_context(parts: tuple[str, ...]) -> str | None:
+    """Trust only an exact matching directory token as an archive hint.
+    Folder hints are provenance, NOT verified PDF contents or CPU identity.
+    """
+    tokens = {re.sub(r"[^a-z0-9]", "", p.casefold()) for p in parts}
+    if "mc68332" in tokens:
+        return "MC68332"
+    if "mc68331" in tokens or "mc331" in tokens:
+        return "MC68331"
+    if tokens & {"mc683336376umzip", "mc68336376umzip",
+                 "mc6833676", "mc68336376", "mc6833676um",
+                 "mc68336376um", "mc68336376umzip"}:
+        return "MC68336-376"
+    if "mc68336" in tokens and "mc68376" in tokens:
+        return "MC68336-376"
+    return None
+
+
+def classify_scoped_source(path: Path, root: Path) -> tuple[str, str, str] | None:
+    """Recognize device-specific NXP split chapters only with a scoped folder."""
+    relative = path.relative_to(root)
+    scope = archive_context(relative.parts[:-1])
+    stem = path.name.lower()
+    if scope == "MC68332" and stem in MC332_CHAPTERS:
+        chapter, module = MC332_CHAPTERS[stem]
+        return ("MC68332", f"MC68332_{chapter}_{module}.pdf",
+                "NXP_MC68332_FOLDER_HINT; VERIFY_PDF_COVER")
+    if scope == "MC68336-376" and stem in ZIP_NAMES:
+        doc_id = ZIP_NAMES[stem]
+        library, filename = ALIASES[doc_id]
+        return library, filename, "NXP_MC68336_376_FOLDER_HINT; VERIFY_PDF_COVER"
+    return None
+
+
+def preserve_conflict(output: Path, filename: str, data: bytes,
+                      source: str, records: list[dict]) -> None:
+    safe = re.sub(r"[^A-Za-z0-9_-]+", "_", Path(filename).stem)[:54]
+    digest = sha256(data)[:16]
+    target = f"COLLISION_{safe}_{digest}.pdf"
+    save_named(output, "TO_REVIEW", target, "COLLISION",
+               data, source, records,
+               "DIFFERENT_PDF_SAME_OUTPUT_NAME; REVIEW_SOURCE_AND_REVISION")
+
+
 def import_pdf_directory(source: Path, output: Path, records: list[dict]) -> None:
     if not source.is_dir():
         raise ValueError("Selected PDF source folder does not exist")
@@ -235,12 +279,37 @@ def import_pdf_directory(source: Path, output: Path, records: list[dict]) -> Non
                 records.append({"source": str(file_path), "status": "PDF_TOO_LARGE"})
                 continue
             try:
-                library, target, provenance = classify_local_pdf(name)
+                scoped = classify_scoped_source(file_path, source)
+                if scoped is not None:
+                    library, target, provenance = scoped
+                else:
+                    library, target, provenance = classify_local_pdf(name)
+                    if library == "TO_REVIEW":
+                        # Do not copy unrelated CPU08, MPC555, debugger or
+                        # programmer manuals into one CPU32 RAG collection.
+                        # Keep ambiguous chapter names in quarantine.
+                        if not re.fullmatch(r"(?:c\\d{1,2}[a-z0-9_-]*|ap[a-e][a-z0-9_-]*|"
+                                            r"mc68\\d{3,5}[a-z0-9_-]*)\\.pdf",
+                                            name.lower()):
+                            records.append({"source": str(file_path),
+                                            "status": "SKIPPED_OUT_OF_SCOPE"})
+                            continue
+                data = file_path.read_bytes()
+                if not pdf_ok(data):
+                    records.append({"source": str(file_path),
+                                    "status": "INVALID_PDF"})
+                    continue
+                target_file = output / library / target
+                if (target_file.exists() and not target_file.is_symlink()
+                        and sha256(target_file.read_bytes()) != sha256(data)):
+                    preserve_conflict(output, target, data, str(file_path), records)
+                    continue
                 save_named(output, library, target, target[:-4].upper(),
-                           file_path.read_bytes(), str(file_path), records,
+                           data, str(file_path), records,
                            provenance + "; CHECK_COVER_AND_MODEL")
             except Exception as exc:
-                records.append({"source": str(file_path), "status": "FAILED", "error": str(exc)})
+                records.append({"source": str(file_path), "status": "FAILED",
+                                "error": str(exc)})
 
 
 def extract_zip(archive: Path, output: Path, records: list[dict]) -> None:
