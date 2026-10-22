@@ -763,7 +763,7 @@ public class ReActOrchestrator {
 
             // Prevent repeated MCP reads caused by late-stage plan inflation.
             long completedTasks = todoManager.getAllTodos().stream()
-                .filter(t -> t.getStatus() == TodoListManager.TodoStatus.COMPLETED).count();
+                .filter(t -> t.getStatus() == TodoListManager.TodoStatus.COMPLETE).count();
             int taskCount = todoManager.getAllTodos().size();
             if (taskCount > 0 && completedTasks * 2 >= taskCount) {
                 parsed.tasksToAdd.clear();
