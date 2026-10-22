@@ -241,6 +241,12 @@ public class MCPClientAdapter {
                 Msg.debug(this, "Tool execution completed: " + toolName);
                 // Convert result back to JsonElement for compatibility
                 Gson gson = new Gson();
+                // Preserve the MCP protocol error flag; a failed read is not
+                // successful evidence merely because its text is printable.
+                if (Boolean.TRUE.equals(result.isError())) {
+                    throw new IllegalStateException("MCP tool returned an error: " +
+                        gson.toJson(result.content()));
+                }
                 return gson.fromJson(gson.toJson(result.content()), JsonElement.class);
             })
             .doOnError(e -> Msg.error(this, "Tool execution failed for " + toolName + ": " + e.getMessage()))

@@ -127,7 +127,11 @@ public class ReActPrompts {
         sb.append("2. Call the appropriate tool(s) to gather that information:\n");
         sb.append("   - PREFER `ga_get_semantic_analysis`, `ga_get_call_context`, `ga_search_semantic` for understanding function behavior\n");
         sb.append("   - Use `decompile_function` (with appropriate server prefix) only when you need actual source code\n");
-        sb.append("3. After receiving results, briefly summarize what you learned\n\n");
+        sb.append("3. After receiving results, briefly summarize what you learned\n");
+        sb.append("4. Preserve exact tool-returned values and provenance; tool output outranks assumptions.\n");
+        sb.append("5. Do not repeat a successful read-only tool call with the same inputs unless data changed or the response was incomplete.\n");
+        sb.append("6. Cross-check negative claims against retrieved evidence: listed writes/functions are not absent.\n");
+        sb.append("7. Do not add plan steps merely to rediscover or document results already obtained.\n\n");
 
         sb.append("If you believe the current task is complete based on previous findings,\n");
         sb.append("you may proceed without additional tool calls.\n");
@@ -280,6 +284,9 @@ public class ReActPrompts {
             - Say **CONTINUE** if there are pending tasks that would provide valuable information
             - Say **READY** only if ALL planned tasks are complete OR remaining tasks would not
               meaningfully improve the answer
+            - Never ADD tasks to re-fetch or document evidence already returned by successful tools
+            - Prefer READY when the original question has been answered
+            - Literal writes in MCP tool results outrank speculative register semantics
             - Completing investigation tasks thoroughly leads to better answers
             - Do NOT use code blocks, backticks, or extra newlines after labels
             """,

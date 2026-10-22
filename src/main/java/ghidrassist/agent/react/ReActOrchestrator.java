@@ -293,6 +293,10 @@ public class ReActOrchestrator {
         resultFuture.whenComplete((result, error) -> clearActiveAnalysis(resultFuture));
         Instant startTime = Instant.now();
         cancelled.set(false);
+        // A new investigation must not inherit evidence or expanded iteration
+        // budgets from an earlier firmware/program/session.
+        toolRegistry.clearRecentToolEvidence();
+        maxIterations = baseMaxIterations;
 
         try {
             // Initialize components
@@ -475,7 +479,8 @@ public class ReActOrchestrator {
             objective,
             currentIteration == 1 ? initialContext : null,  // Only include context on first iteration
             todoManager.formatForPrompt(),
-            findings.formatForPrompt(50, 500),  // Top 50, max 500 chars per finding
+            findings.formatForPrompt(50, 500) + "\n" + toolRegistry.getRecentToolEvidence(),
+            // Use real returned tool data alongside LLM-generated findings,
             currentIteration
         );
 
@@ -623,7 +628,7 @@ public class ReActOrchestrator {
     ) {
         String synthesisPrompt = ReActPrompts.getSynthesisPrompt(
             objective,
-            findings.formatDetailed(),
+            findings.formatDetailed() + "\n" + toolRegistry.getRecentToolEvidence(),
             todoManager.getCompletedSummary(),
             findings.formatIterationSummaries()
         );
@@ -704,7 +709,7 @@ public class ReActOrchestrator {
     ) {
         String reflectionPrompt = ReActPrompts.getReflectionPrompt(
             objective,
-            findings.formatForPrompt(),
+            findings.formatForPrompt() + "\n" + toolRegistry.getRecentToolEvidence(),
             todoManager.formatForPrompt()
         );
 
@@ -755,6 +760,16 @@ public class ReActOrchestrator {
 
             // Parse structured reflection response for plan updates
             ReflectionParsed parsed = parseReflectionResponse(trimmedResponse);
+
+            // Prevent repeated MCP reads caused by late-stage plan inflation.
+            long completedTasks = todoManager.getAllTodos().stream()
+                .filter(t -> t.getStatus() == TodoListManager.TodoStatus.COMPLETE).count();
+            int taskCount = todoManager.getAllTodos().size();
+            if (taskCount > 0 && completedTasks * 2 >= taskCount) {
+                parsed.tasksToAdd.clear();
+            } else if (parsed.tasksToAdd.size() > 2) {
+                parsed.tasksToAdd.subList(2, parsed.tasksToAdd.size()).clear();
+            }
 
             // Apply plan updates if present (ADD/REMOVE tasks)
             boolean planChanged = false;

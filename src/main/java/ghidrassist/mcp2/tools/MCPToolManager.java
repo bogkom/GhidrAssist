@@ -38,6 +38,8 @@ public class MCPToolManager implements ToolProvider {
     private final Map<String, MCPTool> allTools = new ConcurrentHashMap<>();
     private MCPToolManagerHandler handler;
     private volatile boolean initialized = false;
+    // Current calling GhidrAssist program (not evidence of the physical MCU).
+    private volatile Program currentProgram;
     
     /**
      * Interface for handling tool manager events
@@ -102,7 +104,7 @@ public class MCPToolManager implements ToolProvider {
         // Use the original tool name (without server prefix) when calling the MCP server
         String originalToolName = tool.getName();
         Msg.debug(this, "Executing MCP tool: " + name + " (original: " + originalToolName + ") via server: " + tool.getServerName());
-        return client.executeTool(originalToolName, args)
+        return client.executeTool(originalToolName, withActiveProgram(tool, args))
                 .thenApply(result -> {
                     String content = result != null ? result.toString() : "";
                     return ToolResult.success(content);
@@ -120,8 +122,29 @@ public class MCPToolManager implements ToolProvider {
 
     @Override
     public void setContext(Program program) {
-        // MCP tools don't need Ghidra program context
-        // This is a no-op for MCPToolManager
+        this.currentProgram = program;
+    }
+
+    /**
+     * Fill the optional/required program_name with the active GhidrAssist
+     * program when the model omitted it or provided an empty string.
+     * Never overwrite an explicit nonblank choice made by the user/model.
+     * Only add this field to tools that declare it in their schema.
+     */
+    private JsonObject withActiveProgram(MCPTool tool, JsonObject original) {
+        JsonObject args = original == null ? new JsonObject() : original.deepCopy();
+        Program program = currentProgram;
+        if (program == null || tool == null) return args;
+        JsonObject schema = tool.getInputSchema();
+        boolean supported = schema != null && schema.has("properties") &&
+            schema.get("properties").isJsonObject() &&
+            schema.getAsJsonObject("properties").has("program_name");
+        if (!supported) return args;
+        if (args.has("program_name") && !args.get("program_name").isJsonNull() &&
+            args.get("program_name").isJsonPrimitive() &&
+            !args.get("program_name").getAsString().isBlank()) return args;
+        args.addProperty("program_name", program.getName());
+        return args;
     }
 
     // ==================== Internal MCP Tool Execution ====================
@@ -147,7 +170,7 @@ public class MCPToolManager implements ToolProvider {
         // Use the original tool name (without server prefix) when calling the MCP server
         String originalToolName = tool.getName();
         Msg.debug(this, "MCPToolManager delegating to client: " + tool.getServerName() + " for tool: " + originalToolName);
-        return client.executeTool(originalToolName, arguments)
+        return client.executeTool(originalToolName, withActiveProgram(tool, arguments))
             .thenApply(result -> {
                 Msg.debug(this, "MCPToolManager received result for tool: " + toolName);
                 String content = result != null ? result.toString() : "";

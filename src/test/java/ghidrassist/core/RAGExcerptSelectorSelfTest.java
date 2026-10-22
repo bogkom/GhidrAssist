@@ -23,6 +23,12 @@ public final class RAGExcerptSelectorSelfTest {
         String tail=RAGExcerptSelector.select(longPage.toString(),"YFFB00 YFFC00",1000);
         ok(tail.contains("$YFFB00") && tail.contains("$YFFC00"),"focus on addresses in long page");
         ok(tail.length()<1200,"bounded snippet");
+        String optionPage = "4.8.1.3 Chip-Select Option Registers\\n" +
+            "Table 4-22 Chip-Select Option Register Bit Field\\nDSACK R/W BYTE";
+        String noise = "QSPI transfer uses chip select functions and has commands.";
+        ok(RAGExcerptSelector.evidenceScore(optionPage, "CSOR0 chip-select DSACK") >
+            RAGExcerptSelector.evidenceScore(noise, "CSOR0 chip-select DSACK"),
+            "actual option-register table must beat generic chip-select text");
         System.out.println("RAGExcerptSelectorSelfTest OK");
     }
 }
