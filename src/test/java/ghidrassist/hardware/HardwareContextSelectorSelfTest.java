@@ -41,6 +41,20 @@ public final class HardwareContextSelectorSelfTest {
             "unmatched unspecified question",2400);
         ok(broad.contains("<<<END_LOCAL_GHIDRA_HARDWARE_EVIDENCE>>>"),
             "no-match query still has a closed evidence boundary");
+        String large="# Hardware Evidence — read-only\n"+
+            "## Function-local evidence\n"+
+            "### FUN_00002bc0 @ 00002bc0\n"+
+            "- `00002bca` SIMCR `0xFFFA00` — WRITE; 0x40CA; move.w #0x40ca,(0x00fffa00).l\n"+
+            ("- other register evidence in this function\n").repeat(80)+
+            "### FUN_00009c96 @ 00009c96\n"+
+            "- `00009c98` SIMCR `0xFFFA00` — WRITE; 0x4848; move.w #0x4848,(0x00fffa00).l\n"+
+            "### FUN_0006e968 @ 0006e968\n"+
+            "- `0006e96c` SIMCR `0xFFFA00` — WRITE; 0x40CA; move.w #0x40ca,(0x00fffa00).l\n";
+        String full=HardwareContextSelector.select(large,"#hardware SIMCR MM",1200);
+        ok(full.contains("00002bca")&&full.contains("00009c98")&&full.contains("0006e96c"),
+            "all three SIMCR write sites must survive before long function details");
+        ok(full.contains("3 of 3 matched sites") && full.length()<=1200,
+            "complete coverage and bounded size");
         System.out.println("HardwareContextSelectorSelfTest OK");
     }
 }

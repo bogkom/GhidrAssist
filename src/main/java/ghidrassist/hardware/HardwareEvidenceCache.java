@@ -44,6 +44,11 @@ public final class HardwareEvidenceCache {
         String intent=userIntent==null?"":userIntent;
         boolean requested=intent.toLowerCase(Locale.ROOT).contains("#hardware");
         String cleaned=request.replaceAll("(?i)#hardware\\b","");
+        // #func is a self-contained code excerpt: do not prepend arbitrary
+        // unrelated sections from a prior whole-firmware scan. Still verify
+        // literal hardware arithmetic before the model reads the excerpt.
+        if(!requested && intent.toLowerCase(Locale.ROOT).contains("#func"))
+            return HardwareBitMath.annotate(cleaned);
         if(!requested && !HARDWARE_WORDS.matcher(intent).find())return request;
         if(program==null)return cleaned;
         String markdown;
@@ -53,6 +58,6 @@ public final class HardwareEvidenceCache {
                 "[Hardware Analysis was not run for this program. Do not infer results.]\n"+
                 cleaned : cleaned;
         String selected=HardwareContextSelector.select(markdown,intent,9000);
-        return selected.isBlank()?cleaned:selected+"\n"+cleaned;
+        return selected.isBlank()?cleaned:HardwareBitMath.annotate(selected+"\n"+cleaned);
     }
 }
