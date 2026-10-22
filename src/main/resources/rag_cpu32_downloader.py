@@ -257,6 +257,9 @@ def preserve_conflict(output: Path, filename: str, data: bytes,
     save_named(output, "TO_REVIEW", target, "COLLISION",
                data, source, records,
                "DIFFERENT_PDF_SAME_OUTPUT_NAME; REVIEW_SOURCE_AND_REVISION")
+    if records[-1].get("status") in ("SAVED", "ALREADY_PRESENT"):
+        records[-1]["status"] = "COLLISION_PRESERVED_FOR_REVIEW"
+        print(f"[REVIEW COLLISION] {target}; original document left untouched")
 
 
 def import_pdf_directory(source: Path, output: Path, records: list[dict]) -> None:
@@ -288,8 +291,8 @@ def import_pdf_directory(source: Path, output: Path, records: list[dict]) -> Non
                         # Do not copy unrelated CPU08, MPC555, debugger or
                         # programmer manuals into one CPU32 RAG collection.
                         # Keep ambiguous chapter names in quarantine.
-                        if not re.fullmatch(r"(?:c\\d{1,2}[a-z0-9_-]*|ap[a-e][a-z0-9_-]*|"
-                                            r"mc68\\d{3,5}[a-z0-9_-]*)\\.pdf",
+                        if not re.fullmatch(r"(?:c\d{1,2}[a-z0-9_-]*|ap[a-e][a-z0-9_-]*|"
+                                            r"mc68\d{3,5}[a-z0-9_-]*)\.pdf",
                                             name.lower()):
                             records.append({"source": str(file_path),
                                             "status": "SKIPPED_OUT_OF_SCOPE"})
@@ -496,7 +499,7 @@ def main(argv: list[str] | None = None) -> int:
                 for x in records)
     failed = sum(x.get("status") in ("FAILED", "ZIP_FAILED", "INVALID_PDF",
                                    "CONFLICT_NOT_OVERWRITTEN",
-                                   "LOCAL_FOLDER_FAILED") for x in records)
+                                   "LOCAL_FOLDER_FAILED", "COLLISION_PRESERVED_FOR_REVIEW") for x in records)
     print(f"RESULT saved/present={saved}, issues={failed}; report: {output/'download_report.json'}")
     if saved == 0:
         print("No verified PDFs available. Supply an official local NXP ZIP "+
