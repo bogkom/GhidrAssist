@@ -8,6 +8,7 @@ import ghidrassist.tools.approval.ToolApprovalService;
 import ghidrassist.tools.api.Tool;
 import ghidrassist.tools.api.ToolExecutionObserver;
 import ghidrassist.tools.api.ToolExecutor;
+import ghidrassist.hardware.McpEvidenceGuard;
 import ghidrassist.tools.api.ToolProvider;
 import ghidrassist.tools.api.ToolResult;
 import ghidrassist.tools.native_.NativeToolManager;
@@ -181,6 +182,14 @@ public class ToolRegistry implements ToolExecutor {
                                 }
 
                                 ToolResult safeResult = result != null ? result : ToolResult.error("Tool returned no result");
+                                // Add deterministic, source-bound evidence to MCP disassembly.
+                                // The source output is retained verbatim after the annotations.
+                                if (safeResult.isSuccess()) {
+                                    String original = safeResult.getContent();
+                                    String checked = McpEvidenceGuard.enrich(toolName, original);
+                                    if (checked != null && !checked.equals(original))
+                                        safeResult = ToolResult.success(checked);
+                                }
                                 if (safeResult.isError()) {
                                     Msg.warn(this, "Tool returned error: " + toolName + " - " + safeResult.getErrorMessage());
                                 } else {
