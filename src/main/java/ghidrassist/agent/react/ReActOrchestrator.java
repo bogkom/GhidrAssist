@@ -756,6 +756,16 @@ public class ReActOrchestrator {
             // Parse structured reflection response for plan updates
             ReflectionParsed parsed = parseReflectionResponse(trimmedResponse);
 
+            // Prevent repeated MCP reads caused by late-stage plan inflation.
+            long completedTasks = todoManager.getAllTodos().stream()
+                .filter(t -> t.getStatus() == TodoListManager.TodoStatus.COMPLETED).count();
+            int taskCount = todoManager.getAllTodos().size();
+            if (taskCount > 0 && completedTasks * 2 >= taskCount) {
+                parsed.tasksToAdd.clear();
+            } else if (parsed.tasksToAdd.size() > 2) {
+                parsed.tasksToAdd.subList(2, parsed.tasksToAdd.size()).clear();
+            }
+
             // Apply plan updates if present (ADD/REMOVE tasks)
             boolean planChanged = false;
             if (!parsed.tasksToAdd.isEmpty() || !parsed.tasksToRemove.isEmpty()) {
