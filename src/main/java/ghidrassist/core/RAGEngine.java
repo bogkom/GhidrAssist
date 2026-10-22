@@ -344,7 +344,7 @@ public class RAGEngine {
         List<VectorSearchResult> vectorResults = searchSimilar(queryEmbedding, maxResults, activeLibraries);
         List<SearchResult> keywordResults = search(queryStr, maxResults, activeLibraries);
         results.addAll(vectorResults.stream()
-            .map(RAGEngine::enrichVectorResult)
+            .map(v -> enrichVectorResult(v, queryStr))
             .collect(Collectors.toList()));
         results.addAll(keywordResults);
         return results.stream()
@@ -495,26 +495,27 @@ public class RAGEngine {
             }
             queryBuilder.add(libraryFilter.build(), BooleanClause.Occur.FILTER);
 
-            TopDocs topDocs = searcher.search(queryBuilder.build(), maxResults * 3);
-
-            List<ScoreDoc> scoreDocs = Arrays.asList(topDocs.scoreDocs);
-            scoreDocs.sort((a, b) -> Float.compare(b.score, a.score));
-
-            Set<String> uniqueFiles = new HashSet<>();
-            for (ScoreDoc sd : scoreDocs) {
-                Document doc = searcher.storedFields().document(sd.doc);
-                String filename = doc.get("filename");
-                String content = doc.get("content");
-                int chunkId = doc.getField("chunk_id").numericValue().intValue();
-
-                if (!uniqueFiles.contains(filename) && uniqueFiles.size() < maxResults) {
-                    String snippet = generateSnippet(content, queryStr);
-                    // Normalize BM25 score to 0-1 range using saturation function
-                    // This aligns with cosine similarity scoring (also 0-1)
-                    double normalizedScore = sd.score / (sd.score + 1.0);
-                    results.add(sourceSearchResult(doc, snippet, normalizedScore));
-                    uniqueFiles.add(filename);
-                }
+            // Search several candidate pages, not just the first TOC match.
+            TopDocs topDocs=searcher.search(queryBuilder.build(),Math.max(160,maxResults*30));
+            List<SearchResult> candidates=new ArrayList<>();
+            for(ScoreDoc hit:topDocs.scoreDocs) {
+                Document doc=searcher.storedFields().document(hit.doc);
+                String content=doc.get("content");
+                if(content==null)continue;
+                double lexical=RAGExcerptSelector.evidenceScore(content,queryStr);
+                double bm25=hit.score/(hit.score+1.0);
+                double ranking=Math.min(0.999,bm25+Math.min(0.16,lexical*0.016));
+                candidates.add(sourceSearchResult(doc,
+                    RAGExcerptSelector.select(content,queryStr),ranking));
+            }
+            candidates.sort((a,b)->Double.compare(b.getScore(),a.getScore()));
+            Map<String,Integer> perFile=new HashMap<>();
+            for(SearchResult candidate:candidates) {
+                int count=perFile.getOrDefault(candidate.getFilename(),0);
+                if(count >= (maxResults<=5 ? 3 : 5))continue;
+                results.add(candidate);
+                perFile.put(candidate.getFilename(),count+1);
+                if(results.size()>=maxResults)break;
             }
         } finally {
             indexLock.unlock();
@@ -630,7 +631,7 @@ public class RAGEngine {
             doc.get("source_path"), doc.get("source_type"), page, uncertain);
     }
 
-    private static SearchResult enrichVectorResult(VectorSearchResult vector) {
+    private static SearchResult enrichVectorResult(VectorSearchResult vector, String query) {
         try {
             indexLock.lock();
             try (DirectoryReader reader = DirectoryReader.open(indexWriter)) {
@@ -642,11 +643,25 @@ public class RAGEngine {
                 TopDocs hits = searcher.search(query, 1);
                 if (hits.scoreDocs.length == 0) throw new IOException("Search result vanished: " + vector.getFilename());
                 Document doc = searcher.storedFields().document(hits.scoreDocs[0].doc);
-                return sourceSearchResult(doc, vector.getSnippet(), vector.getScore());
+                return sourceSearchResult(doc, RAGExcerptSelector.select(doc.get("content"), query), vector.getScore());
             } finally { indexLock.unlock(); }
         } catch (IOException ex) {
             throw new java.io.UncheckedIOException("Unable to fetch RAG source metadata", ex);
         }
+    }
+
+    /** Exact full page in Lucene; read-only diagnostic without any PDF reimport. */
+    public static String getIndexedChunkContent(String filename,int chunkId) throws IOException {
+        indexLock.lock();
+        try(DirectoryReader reader=DirectoryReader.open(indexWriter)) {
+            IndexSearcher searcher=new IndexSearcher(reader);
+            Query q=new BooleanQuery.Builder()
+                .add(new TermQuery(new Term("filename",filename)),BooleanClause.Occur.MUST)
+                .add(IntPoint.newExactQuery("chunk_id",chunkId),BooleanClause.Occur.MUST).build();
+            TopDocs found=searcher.search(q,1);
+            if(found.scoreDocs.length==0)throw new IOException("Indexed page missing: "+filename+" / "+chunkId);
+            return searcher.storedFields().document(found.scoreDocs[0].doc).get("content");
+        } finally {indexLock.unlock();}
     }
 
     public static void deleteDocument(String filename) throws IOException {
@@ -750,7 +765,7 @@ public class RAGEngine {
             return search(queryStr, maxResults, activeLibraries);
         List<VectorSearchResult> vectorResults = searchSimilar(queryEmbedding, maxResults, activeLibraries);
         return vectorResults.stream()
-            .map(RAGEngine::enrichVectorResult)
+            .map(v -> enrichVectorResult(v, queryStr))
             .collect(Collectors.toList());
     }
 

@@ -69,8 +69,14 @@ public class QueryProcessor {
      * @throws Exception if RAG search fails
      */
     public static String appendRAGContext(String query, GhidrAssistPlugin plugin) throws Exception {
-        List<SearchResult> results = RAGEngine.hybridSearch(query, MAX_SEARCH_RESULTS,
-            RAGLibraries.active(plugin.getCurrentProgram()));
+        // Hardware addresses require literal evidence rather than nearest-neighbor
+        // semantic ranking. Unrelated prose continues to use hybrid search.
+        boolean precise = java.util.regex.Pattern.compile(
+            "(?iu)(?:\\b(?:0x[0-9a-f]{4,8}|[0-9a-f]{6,8}|SIMCR|TPURAM|CSPAR|CSBAR|QSM|TOUCAN)\\b|\\$[0-9a-fy]{5,8})")
+            .matcher(query).find();
+        List<SearchResult> results = precise ?
+            RAGEngine.search(query, MAX_SEARCH_RESULTS, RAGLibraries.active(plugin.getCurrentProgram())) :
+            RAGEngine.hybridSearch(query, MAX_SEARCH_RESULTS, RAGLibraries.active(plugin.getCurrentProgram()));
         if (results.isEmpty()) {
             return query;
         }
