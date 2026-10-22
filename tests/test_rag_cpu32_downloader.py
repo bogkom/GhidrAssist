@@ -104,10 +104,12 @@ class ManualDownloaderTests(unittest.TestCase):
             for name in ["MC68332UM", "MC68336376UM05", "MC68336376UM08"]
         )
         with tempfile.TemporaryDirectory() as t:
-            with patch.object(mod, "read_catalog", return_value=sample), \\
-                 patch.object(mod, "fetch_pdf", side_effect=lambda url:
-                     (_ for _ in ()).throw(HTTPError(url, 404, "Not Found", None, None))
-                 ) as mock_download:
+            with (
+                patch.object(mod, "read_catalog", return_value=sample),
+                patch.object(mod, "fetch_pdf", side_effect=lambda url:
+                    (_ for _ in ()).throw(HTTPError(url, 404, "Not Found", None, None))
+                ) as mock_download
+            ):
                 self.assertEqual(mod.main(["--output", t]), 2)
                 self.assertEqual(mock_download.call_count, 2)
             report = json.loads((Path(t) / "download_report.json").read_text())
