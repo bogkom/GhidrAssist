@@ -66,12 +66,75 @@ class ManualDownloaderTests(unittest.TestCase):
             self.assertTrue((root / "out/MC68336-376/MC68336_68376_08_QADC.pdf").exists())
             self.assertTrue((root / "out/MC68336-376/MC68336_68376_D_REGISTERS.pdf").exists())
             self.assertFalse((root / "evil.pdf").exists())
-            self.assertTrue((root / "out/TO_REVIEW/MC68336_68376_UNMAPPED_c4cpu.pdf").exists())
+            self.assertTrue((root / "out/MC68336-376/MC68336_68376_04_CPU32.pdf").exists())
             self.assertEqual(sum(r.get("status") == "SKIPPED_UNSAFE_ZIP_PATH"
                                  for r in rows), 1)
             self.assertEqual(
                 sum(r.get("status") == "DUPLICATE_ARCHIVE_ENTRY_SKIPPED" for r in rows), 1
             )
+
+    def test_full_real_336_376_chapter_layout(self):
+        # This is the exact NXP ZIP short filename structure reported by
+        # the user. Chapter 7 MRM and chapter 13 TouCAN are MC68376-only.
+        files = (
+            "c1intro.pdf c2nomen.pdf c3over.pdf c4cpu.pdf c5sim.pdf "
+            "c6sram.pdf c7mrm.pdf c8qadc.pdf c9qsm.pdf c10ctm.pdf "
+            "c11tpu.pdf c12tram.pdf c13tcan.pdf apdreg.pdf"
+        ).split()
+        with tempfile.TemporaryDirectory() as t:
+            root=Path(t)
+            archive=root/"MC683336_376UM_ZIP.zip"
+            with zipfile.ZipFile(archive,"w") as z:
+                for item in files: z.writestr(item, PDF)
+            records=[]
+            mod.extract_zip(archive,root/"out",records)
+            self.assertEqual(sum(d.get("status")=="SAVED" for d in records),len(files))
+            for chapter in ("01","02","03","04","05","06","08","09","10","11","12"):
+                module=mod.CHAPTERS[chapter]
+                self.assertTrue((root/"out"/"MC68336-376"/
+                    f"MC68336_68376_{chapter}_{module}.pdf").exists())
+            self.assertTrue((root/"out"/"MC68376-only"/"MC68336_68376_07_MRM.pdf").exists())
+            self.assertTrue((root/"out"/"MC68376-only"/"MC68336_68376_13_TOUCAN.pdf").exists())
+            self.assertTrue((root/"out"/"MC68336-376"/
+                "MC68336_68376_D_REGISTERS.pdf").exists())
+
+    def test_folder_scope_and_preserve_same_short_name_variants(self):
+        with tempfile.TemporaryDirectory() as t:
+            root=Path(t)
+            inp=root/"all_manuals"
+            a=inp/"mc68332"
+            b=inp/"MC683336_376UM_ZIP"
+            a.mkdir(parents=True)
+            b.mkdir(parents=True)
+            a_bytes=PDF+b"rev332"
+            b_bytes=PDF+b"rev336"
+            # END marker must remain at end of synthetic valid PDFs.
+            a_bytes=b"%PDF-1.4\\nMC68332\\n%%EOF"
+            b_bytes=b"%PDF-1.4\\nMC68336\\n%%EOF"
+            (a/"c5sim.pdf").write_bytes(a_bytes)
+            (b/"c5sim.pdf").write_bytes(b_bytes)
+            (a/"apdreg.pdf").write_bytes(a_bytes)
+            (b/"apdreg.pdf").write_bytes(b_bytes)
+            (inp/"MPC555UserManual.pdf").write_bytes(PDF)
+            (inp/"c5sim.pdf").write_bytes(PDF)
+            output=root/"out"
+            rows=[]
+            mod.import_pdf_directory(inp,output,rows)
+            self.assertTrue((output/"MC68332"/"MC68332_05_SIM.pdf").exists())
+            self.assertTrue((output/"MC68336-376"/"MC68336_68376_05_SIM.pdf").exists())
+            self.assertTrue((output/"MC68332"/"MC68332_D_REGISTERS.pdf").exists())
+            self.assertTrue((output/"MC68336-376"/"MC68336_68376_D_REGISTERS.pdf").exists())
+            self.assertTrue((output/"TO_REVIEW"/"UNVERIFIED_c5sim.pdf").exists())
+            self.assertFalse((output/"TO_REVIEW"/"UNVERIFIED_MPC555UserManual.pdf").exists())
+            self.assertTrue(any(x.get("status")=="SKIPPED_OUT_OF_SCOPE" for x in rows))
+            # Two differently revised files with the same effective target
+            # are preserved by SHA instead of overwriting each other.
+            (a/"c5sim.pdf").write_bytes(b"%PDF-1.4\\nother revision\\n%%EOF")
+            mod.import_pdf_directory(inp,output,rows)
+            preserved=list((output/"TO_REVIEW").glob("COLLISION_MC68332_05_SIM_*.pdf"))
+            self.assertEqual(len(preserved),1)
+            self.assertTrue(any(x.get("status")=="COLLISION_PRESERVED_FOR_REVIEW"
+                                for x in rows))
 
     def test_zip_wrong_device_rejected(self):
         with tempfile.TemporaryDirectory() as t:
