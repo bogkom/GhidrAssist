@@ -48,6 +48,14 @@ public final class RAGExcerptSelector {
         double result=0;
         for(String term:terms(query)) if(body.contains(term)) result+=1;
         String q=query==null?"":query.toLowerCase(Locale.ROOT);
+        if((q.contains("csor") || q.contains("chip-select") || q.contains("chip select")) &&
+            body.contains("chip-select option registers")) result+=7;
+        if((q.contains("csor") || q.contains("chip-select") || q.contains("chip select")) &&
+            body.contains("table 4-22") && body.contains("dsack")) result+=8;
+        if((q.contains("csbar") || q.contains("chip-select") || q.contains("chip select")) &&
+            body.contains("chip-select base address registers")) result+=7;
+        if((q.contains("csor") || q.contains("csbar")) &&
+            body.contains("qs pi")) result-=3;
         if(q.contains("module address map") &&
             body.contains("table d-1 module address map")) result+=5;
         if((q.contains("table d-1") || q.contains("yffa00") || q.contains("yffb00")) &&
@@ -80,6 +88,10 @@ public final class RAGExcerptSelector {
             String window=lower.substring(start,Math.min(body.length(),start+maxChars));
             double score=0;
             for(String term:terms) if(window.contains(term))score++;
+            if((lower.contains("chip-select") || lower.contains("csor")) &&
+                window.contains("table 4-22") && window.contains("dsack")) score+=10;
+            if((lower.contains("chip-select") || lower.contains("csbar")) &&
+                window.contains("chip-select base address registers")) score+=6;
             if(window.contains("table d-1 module address map") &&
                 window.contains("sim 128") && window.contains("qsm 512"))score+=8;
             if(window.contains("geometry-aligned module address table candidates"))score+=2;

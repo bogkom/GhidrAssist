@@ -1,6 +1,10 @@
 package ghidrassist.core;
 
 import java.util.List;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Set;
 import java.util.regex.Pattern;
 import java.util.regex.Matcher;
 
@@ -15,7 +19,7 @@ import ghidrassist.GhidrAssistPlugin.CodeViewType;
 public class QueryProcessor {
 
     private static final Pattern RANGE_PATTERN = Pattern.compile("#range\\(([^,]+),\\s*([^\\)]+)\\)");
-    private static final int MAX_SEARCH_RESULTS = 5;
+    private static final int MAX_SEARCH_RESULTS = 9;
 
     /**
      * Process all macros in the query and replace them with actual content.
@@ -82,15 +86,44 @@ public class QueryProcessor {
         boolean precise = java.util.regex.Pattern.compile(
             "(?iu)(?:\\b(?:0x[0-9a-f]{4,8}|Y[0-9a-f]{5}|[0-9a-f]{6,8}|SIMCR|TPURAM|CSPAR|CSBAR|QSM|TOUCAN)\\b|\\$[0-9a-fy]{5,8})")
             .matcher(searchText).find();
-        List<SearchResult> results = precise ?
-            RAGEngine.search(searchText, MAX_SEARCH_RESULTS, RAGLibraries.active(plugin.getCurrentProgram())) :
-            RAGEngine.hybridSearch(searchText, MAX_SEARCH_RESULTS, RAGLibraries.active(plugin.getCurrentProgram()));
+        Set<String> activeLibraries = RAGLibraries.active(plugin.getCurrentProgram());
+        // A chip-select question needs complementary evidence (address map,
+        // base-address fields and option fields), not nine near-duplicate pages.
+        // The RAG lookup happens before MCP calls, so tool-returned addresses
+        // cannot be relied upon to guide this initial retrieval.
+        Map<String, SearchResult> selected = new LinkedHashMap<>();
+        if (RAGQueryFocus.isChipSelectQuery(originalUserQuery)) {
+            for (String anchor : List.of(
+                    "\"Chip-Select Option Registers\"",
+                    "\"Chip-Select Base Address Registers\"",
+                    "\"Table 4-22\"",
+                    "CSBAR0 CSOR0")) {
+                for (SearchResult result : RAGEngine.search(anchor, 2, activeLibraries)) {
+                    selected.putIfAbsent(result.getFilename() + ":" + result.getChunkId(), result);
+                    if (selected.size() >= MAX_SEARCH_RESULTS) break;
+                }
+                if (selected.size() >= MAX_SEARCH_RESULTS) break;
+            }
+        }
+        List<SearchResult> general = precise ?
+            RAGEngine.search(searchText, MAX_SEARCH_RESULTS, activeLibraries) :
+            RAGEngine.hybridSearch(searchText, MAX_SEARCH_RESULTS, activeLibraries);
+        for (SearchResult result : general) {
+            if (selected.size() >= MAX_SEARCH_RESULTS) break;
+            selected.putIfAbsent(result.getFilename() + ":" + result.getChunkId(), result);
+        }
+        List<SearchResult> results = new ArrayList<>(selected.values());
         if (results.isEmpty()) {
             return query;
         }
 
         StringBuilder contextBuilder = new StringBuilder();
         contextBuilder.append("<context>\n");
+        contextBuilder.append("<retrieval_notice>Search snippets may contain OCR/table-column order errors. " +
+            "Cross-check exact bit positions against the source PDF and distinguish literal " +
+            "assembly writes from conditional MC68332 register-name mappings. " +
+            "Never claim an address has no direct writes when the MCP listing shows one." +
+            "</retrieval_notice>\n");
         
         for (SearchResult result : results) {
             contextBuilder.append("<result>\n");
