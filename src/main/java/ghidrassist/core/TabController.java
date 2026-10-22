@@ -1374,8 +1374,9 @@ public class TabController {
                             "\nOutput folder: " + target +
                             "\nDocument report: " + report.report() +
                             "\nLog: " + report.log() +
-                            "\n\nSuccess: 0; partial result: 1; no PDF obtained: 2." +
-                            "\nSelect RAG > Add Documents to index verified PDF files.";
+                            "\n\n" + report.summary() +
+                            "\n\nOnly add reviewed model-specific PDF files using " +
+                            "RAG > Add Documents. Do NOT index the whole TO_REVIEW folder.";
                         if (report.exitCode() == 0)
                             Msg.showInfo(this, ragManagementTab,
                                 "CPU32 manuals prepared", message);
