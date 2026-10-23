@@ -233,9 +233,40 @@ public final class HardwareProfiles {
         r.add(reg("QSM", "QILR", 0x0c04, 8, source));
         r.add(reg("QSM", "QIVR", 0x0c05, 8, source));
         r.add(reg("QSM", "SPCR0", 0x0c18, 16, source));
+        r.add(reg("QSM", "QTEST", 0x0c02, 16, source));
+        for (int off=0x08; off<=0x0e; off+=2) {
+            String[] sci={"SCCR0","SCCR1","SCSR","SCDR"};
+            r.add(reg("QSM",sci[(off-0x08)/2],0x0c00+off,16,source));
+        }
+        r.add(reg("QSM","PORTQS",0x0c15,8,source));
+        r.add(reg("QSM","PQSPAR",0x0c16,8,source));
+        r.add(reg("QSM","DDRQS",0x0c17,8,source));
+        r.add(reg("QSM","SPCR1",0x0c1a,16,source));
+        r.add(reg("QSM","SPCR2",0x0c1c,16,source));
+        r.add(reg("QSM","SPCR3",0x0c1e,8,source));
+        r.add(reg("QSM","SPSR",0x0c1f,8,source));
+        // Queued receive/transmit RAM is 16 words per queue. Command RAM is 16 bytes.
+        for(int i=0;i<16;i++){
+            r.add(reg("QSM","RR"+i,0x0d00+2*i,16,source));
+            r.add(reg("QSM","TR"+i,0x0d20+2*i,16,source));
+            r.add(reg("QSM","CR"+i,0x0d40+i,8,source));
+        }
         r.add(reg("TPU", "TPUMCR", 0x0e00, 16, MC68332_MANUAL));
         r.add(reg("TPU", "DSSR", 0x0e06, 16, source));
         r.add(reg("TPU", "TICR", 0x0e08, 16, source));
+        String[] tpuNames={"TCR","DSCR","CIER","CFSR0","CFSR1","CFSR2",
+            "CFSR3","HSQR0","HSQR1","HSRR0","HSRR1","CPR0","CPR1","CISR",
+            "LR","SGLR","DCNR"};
+        int[] tpuOffsets={0x02,0x04,0x0a,0x0c,0x0e,0x10,
+            0x12,0x14,0x16,0x18,0x1a,0x1c,0x1e,0x20,
+            0x22,0x24,0x26};
+        for(int i=0;i<tpuNames.length;i++)
+            r.add(reg("TPU",tpuNames[i],0x0e00+tpuOffsets[i],16,source));
+        // TPU parameter RAM: 14 channels x 6 words + 2 channels x 8 words.
+        for(int ch=0;ch<16;ch++)
+            for(int param=0;param<(ch<14?6:8);param++)
+                r.add(reg("TPU","TPU_CH"+ch+"_P"+param,
+                    0x0f00+ch*16+param*2,16,source));
         List<ModuleRegion> modules = List.of(
             module("SIM", "SIM_REGISTERS_MM1", 0x0a00, 128),
             module("TPURAM", "TPURAM_CONTROL_MM1", 0x0b00, 64),
