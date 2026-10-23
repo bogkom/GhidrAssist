@@ -455,6 +455,12 @@ public class QueryTab extends JPanel {
         });
     }
 
+    /** Clear the user input when the Delete action clears the active conversation. */
+    public void clearQueryInput() {
+        queryTextArea.setText("");
+        queryTextArea.setForeground(queryTextColor);
+    }
+
     /** A mouse-menu paste should replace the placeholder, not append to it. */
     private void clearQueryHintBeforePaste() {
         if (QUERY_HINT_TEXT.equals(queryTextArea.getText())) {
