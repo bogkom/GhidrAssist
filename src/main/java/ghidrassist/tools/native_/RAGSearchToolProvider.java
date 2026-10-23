@@ -4,6 +4,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import ghidra.program.model.listing.Program;
 import ghidrassist.core.RAGEngine;
+import ghidrassist.core.RAGLibraries;
 import ghidrassist.core.SearchResult;
 import ghidrassist.tools.api.Tool;
 import ghidrassist.tools.api.ToolProvider;
@@ -14,6 +15,7 @@ import java.util.concurrent.CompletableFuture;
 /** Search the indexed PDF/text manual library, not firmware GraphRAG. */
 public final class RAGSearchToolProvider implements ToolProvider {
     private static final String TOOL_NAME="ga_search_documents";
+    private volatile Program currentProgram;
     @Override public String getProviderName(){return "Documentation RAG";}
     @Override public List<Tool> getTools(){
         JsonObject schema=new JsonObject();
@@ -23,6 +25,13 @@ public final class RAGSearchToolProvider implements ToolProvider {
         query.addProperty("type","string");
         query.addProperty("description","Manual/PDF text query");
         properties.add("query",query);
+        JsonObject scope=new JsonObject();
+        scope.addProperty("type","string");
+        JsonArray scopeValues=new JsonArray();
+        scopeValues.add("selected"); scopeValues.add("all");
+        scope.add("enum",scopeValues);
+        scope.addProperty("description","selected (default) searches only checked RAG libraries for the active program; all searches all indexed libraries");
+        properties.add("scope",scope);
         schema.add("properties",properties);
         JsonArray required=new JsonArray();
         required.add("query");
@@ -34,7 +43,7 @@ public final class RAGSearchToolProvider implements ToolProvider {
             schema,getProviderName()));
     }
     @Override public boolean handlesTool(String name){return TOOL_NAME.equals(name);}
-    @Override public void setContext(Program program){}
+    @Override public void setContext(Program program){currentProgram=program;}
     @Override public CompletableFuture<ToolResult> executeTool(String name,JsonObject args){
         if(!handlesTool(name))return CompletableFuture.completedFuture(
             ToolResult.error("Unknown documentation tool"));
@@ -45,9 +54,15 @@ public final class RAGSearchToolProvider implements ToolProvider {
         return CompletableFuture.supplyAsync(()->{
             try{
                 // Lexical document retrieval works without an embeddings provider.
-                List<SearchResult> hits=RAGEngine.search(query,8);
+                String scope=args.has("scope") ? args.get("scope").getAsString() : "selected";
+                if(!"selected".equals(scope) && !"all".equals(scope))return ToolResult.error("Invalid RAG scope: "+scope);
+                java.util.Set<String> active = "all".equals(scope)
+                    ? RAGLibraries.allIds() : RAGLibraries.active(currentProgram);
+                List<SearchResult> hits=RAGEngine.search(query,8,active);
                 if(hits.isEmpty())return ToolResult.success("No indexed document hits for: "+query);
                 StringBuilder answer=new StringBuilder();
+                answer.append("RAG_SCOPE: ").append(scope).append(" LIBRARIES: ").append(active).append("\\n")
+                    .append("RETURNED_RESULTS: ").append(hits.size()).append("\\n");
                 for(SearchResult hit:hits){
                     answer.append("SOURCE: ").append(hit.getFilename())
                         .append(" PDF_PAGE: ").append(hit.getPageNumber())
