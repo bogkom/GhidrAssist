@@ -51,10 +51,7 @@ public final class HardwareApplyPlan {
         }
         add(items,Kind.MEMORY,"TPURAM_2K_CANDIDATE",0xfff000,0x800,
             "2KiB candidate relocated TPU RAM at TRAMBAR=0xFFF0");
-        add(items,Kind.MEMORY,"CS7_DEVICE_CANDIDATE",0xff8800,0x800,
-            "Only a candidate external chip select, device type UNKNOWN");
-        add(items,Kind.MEMORY,"CS8_DEVICE_CANDIDATE",0xff8000,0x800,
-            "Only a candidate external chip select, device type UNKNOWN");
+        // CS candidates are derived from observed firmware writes, not fixed addresses.
         for(HardwareProfiles.Register register:selected.registers){
             long at=HardwareProfiles.INTERNAL_BASE_MM1+register.offset;
             add(items,Kind.REGISTER,register.name,at,
