@@ -77,23 +77,25 @@ public final class HardwareApplyPlan {
      * kept as alternative candidate ranges: address order is not execution order.
      * No claim is made about CS assertion, external wiring or peripheral type.
      */
+    public record CsbarEvidence(String register, int value, String function) {}
+
     public static List<Item> chipSelectWindowCandidates(
-            List<HardwareInventoryService.Site> sites) {
+            List<CsbarEvidence> sites) {
         if (sites == null || sites.isEmpty()) return List.of();
         Map<String, Item> ranges = new LinkedHashMap<>();
-        for (HardwareInventoryService.Site site : sites) {
-            if (site == null || !site.write || site.literal == null) continue;
-            String name = site.register;
+        for (CsbarEvidence site : sites) {
+            if (site == null || site.register == null) continue;
+            String name = site.register();
             if (name == null || !(name.equals("CSBARBT") ||
                     name.matches("CSBAR(?:10|[0-9])"))) continue;
             HardwareProfiles.CsbarWindow window =
-                HardwareProfiles.decodeCsbar(site.literal);
+                HardwareProfiles.decodeCsbar(site.value());
             if (window.base < 0 || window.endInclusive > 0xffffffL) continue;
             String id = String.format(java.util.Locale.ROOT,
                 "CS_WINDOW_%06X_%06X", window.base, window.endInclusive);
             if (ranges.containsKey(id)) continue;
             addWindow(ranges, id, window.base, (int)window.size,
-                "Possible " + name + " assignment in " + site.function +
+                "Possible " + name + " assignment in " + site.function() +
                 "; direct CSBAR value only; activation and physical device UNKNOWN");
         }
         return List.copyOf(ranges.values());
@@ -107,7 +109,7 @@ public final class HardwareApplyPlan {
 
     /** Full review plan, with CS windows discovered in the current scan. */
     public static List<Item> mc68332Mm1Candidates(long vbrAddress,
-            List<HardwareInventoryService.Site> sites) {
+            List<CsbarEvidence> sites) {
         List<Item> original = mc68332Mm1Candidates(vbrAddress);
         List<Item> generated = chipSelectWindowCandidates(sites);
         if (generated.isEmpty()) return original;
