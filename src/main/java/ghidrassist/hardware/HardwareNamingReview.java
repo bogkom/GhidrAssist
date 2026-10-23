@@ -55,8 +55,7 @@ public final class HardwareNamingReview {
             String previous=existing.getOrDefault(address,"");
             int references=counts.getOrDefault(address,0);
             String candidate=selectedConcreteProfile ?
-                ("HW_"+profile+"_"+name+"_"+(address>=0x800000?"MM1":"MM0"))
-                .replaceAll("[^a-zA-Z0-9_]","_") : "";
+                name.replaceAll("[^a-zA-Z0-9_]","_") : "";
             boolean knownName=!previous.isBlank() &&
                 !previous.startsWith("DAT_") &&
                 !previous.startsWith("LAB_") &&
