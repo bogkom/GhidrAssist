@@ -130,8 +130,11 @@ public final class HardwareApplyService {
         Memory m=p.getMemory();
         if(covers(m,first,last)) {
             Symbol old=p.getSymbolTable().getPrimarySymbol(first);
-            if(old!=null && old.getSource()!=SourceType.DEFAULT)
+            if(old!=null && old.getSource()!=SourceType.DEFAULT) {
+                if(old.getName().equals(item.name))
+                    return decide(State.ALREADY_PRESENT,"Short register label already defined",false);
                 return decide(State.BLOCKED,"Existing non-default label: "+old.getName(),false);
+            }
             if(!p.getListing().isUndefined(first,last)) {
                 ghidra.program.model.listing.Data prior=p.getListing().getDataAt(first);
                 if(prior!=null && prior.isDefined() && prior.getLength()==item.length)
