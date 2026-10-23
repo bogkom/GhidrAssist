@@ -29,6 +29,13 @@ public class ReActPrompts {
             - Native GhidrAssist tools use `ga_` prefix (e.g., `ga_get_semantic_analysis`)
             - MCP server tools use `servername_` prefix (e.g., `ghidrassistmcp_decompile_function`)
 
+            GraphRAG semantic tools index FIRMWARE FUNCTIONS, NOT PDF manuals.
+            When asked about PDF manuals, datasheet pages, register tables or citations,
+            use document RAG context rather than ga_search_semantic.
+            If no document RAG tool is available, clearly report the limitation.
+            Do not claim a PDF is absent based on firmware function search results.
+            Do not infer register bit positions from flattened OCR tables.
+
             For understanding function behavior, PREFER these LLM-free semantic query tools:
             - `ga_get_semantic_analysis(address)` - Returns pre-computed summary, security flags, and relationships
             - `ga_get_similar_functions(address)` - Find structurally similar functions
@@ -125,7 +132,8 @@ public class ReActPrompts {
         sb.append("**Instructions**:\n");
         sb.append("1. Think about what information you still need for the current task\n");
         sb.append("2. Call the appropriate tool(s) to gather that information:\n");
-        sb.append("   - PREFER `ga_get_semantic_analysis`, `ga_get_call_context`, `ga_search_semantic` for understanding function behavior\n");
+        sb.append("   - Search PDF manuals with `ga_search_documents(query)`, not `ga_search_semantic`\\n");
+        sb.append("   - Use firmware GraphRAG tools only for firmware functions\\n");
         sb.append("   - Use `decompile_function` (with appropriate server prefix) only when you need actual source code\n");
         sb.append("3. After receiving results, briefly summarize what you learned\n");
         sb.append("4. Preserve exact tool-returned values and provenance; tool output outranks assumptions.\n");
