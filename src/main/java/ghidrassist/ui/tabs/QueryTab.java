@@ -129,7 +129,7 @@ public class QueryTab extends JPanel {
 
         useAgenticCheckBox = new JCheckBox("Agentic Mode (ReAct)");
         useAgenticCheckBox.setSelected(false);
-        useAgenticCheckBox.setEnabled(false); // Enabled only when MCP is available
+        useAgenticCheckBox.setEnabled(true); // Native agentic tools work without an MCP server
         useAgenticCheckBox.setToolTipText("Enable autonomous ReAct-style analysis with systematic tool use");
 
         acceptAllToolsCheckBox = new JCheckBox("Accept All Tools");
@@ -758,8 +758,8 @@ public class QueryTab extends JPanel {
     
     public void setMCPEnabled(boolean enabled) {
         useMCPCheckBox.setEnabled(enabled);
-        // Agentic mode requires MCP tools, so enable/disable together
-        useAgenticCheckBox.setEnabled(enabled);
+        // Agentic Mode also supports native tools, even without MCP.
+        useAgenticCheckBox.setEnabled(true);
     }
 
     public boolean isMCPEnabled() {
@@ -836,13 +836,13 @@ public class QueryTab extends JPanel {
         boolean wasEnabled = useMCPCheckBox.isEnabled();
         useMCPCheckBox.setEnabled(hasEnabledServers);
 
-        // Agentic mode requires MCP, so enable/disable together
-        useAgenticCheckBox.setEnabled(hasEnabledServers);
+        // Native tools remain available when no MCP server is configured.
+        useAgenticCheckBox.setEnabled(true);
 
         // If no servers enabled, also uncheck both boxes
         if (!hasEnabledServers) {
             useMCPCheckBox.setSelected(false);
-            useAgenticCheckBox.setSelected(false);
+            // Keep an existing Agentic selection; only MCP is disabled.
         }
         
         // Log state change for debugging
