@@ -532,6 +532,18 @@ public final class HardwareAnalysisTab extends JPanel {
      * actionable rows. Conflicts, existing work, external peripherals,
      * relocated RAM and unverified VBR are unchecked.
      */
+    private List<HardwareApplyPlan.CsbarEvidence> csbarEvidence(){
+        List<HardwareApplyPlan.CsbarEvidence> candidates=new ArrayList<>();
+        for(HardwareInventoryService.Site site:latestSites){
+            if(site==null || !site.write || site.literal==null ||
+                    site.register==null || !site.register.matches("CSBAR(?:BT|10|[0-9])"))
+                continue;
+            candidates.add(new HardwareApplyPlan.CsbarEvidence(
+                site.register,site.literal,site.function));
+        }
+        return candidates;
+    }
+
     private void reviewHardwareChanges(){
         Program program=plugin.getCurrentProgram();
         if(program==null || latestProgram!=program || latestMarkdown==null){
@@ -546,7 +558,7 @@ public final class HardwareAnalysisTab extends JPanel {
             return;
         }
         final List<HardwareApplyPlan.Item> candidates=
-            new ArrayList<>(HardwareApplyPlan.mc68332Mm1Candidates(0,latestSites));
+            new ArrayList<>(HardwareApplyPlan.mc68332Mm1Candidates(0,csbarEvidence()));
         final List<HardwareApplyService.Decision> decisions=new ArrayList<>();
         for(HardwareApplyPlan.Item item:candidates)
             decisions.add(HardwareApplyService.preflight(program,item,candidates));
@@ -591,7 +603,7 @@ public final class HardwareAnalysisTab extends JPanel {
             try{
                 long value=Long.parseUnsignedLong(digits,16);
                 List<HardwareApplyPlan.Item> updated=
-                    HardwareApplyPlan.mc68332Mm1Candidates(value,latestSites);
+                    HardwareApplyPlan.mc68332Mm1Candidates(value,csbarEvidence());
                 HardwareApplyPlan.Item item=updated.get(vbrIndex);
                 candidates.set(vbrIndex,item);
                 HardwareApplyService.Decision d=
