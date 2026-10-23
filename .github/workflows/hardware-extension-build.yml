@@ -9,6 +9,8 @@ on:
       - feature/hardware-controlflow-rag-integration
     paths:
       - 'src/main/java/ghidrassist/hardware/**'
+      - 'src/main/java/ghidrassist/agent/**'
+      - 'src/main/java/ghidrassist/tools/**'
       - 'src/main/java/ghidrassist/ui/**'
       - 'src/main/java/ghidrassist/core/RAGPdfExtractor.java'
       - 'src/main/java/ghidrassist/core/RAGEngine.java'
@@ -23,6 +25,8 @@ on:
   pull_request:
     paths:
       - 'src/main/java/ghidrassist/hardware/**'
+      - 'src/main/java/ghidrassist/agent/**'
+      - 'src/main/java/ghidrassist/tools/**'
       - 'src/main/java/ghidrassist/ui/**'
       - 'src/main/java/ghidrassist/core/RAGPdfExtractor.java'
       - 'src/main/java/ghidrassist/core/RAGEngine.java'
