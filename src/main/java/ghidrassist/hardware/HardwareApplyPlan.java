@@ -15,7 +15,7 @@ import java.util.Map;
  */
 public final class HardwareApplyPlan {
     private HardwareApplyPlan() {}
-    public enum Kind { MEMORY, REGISTER, VBR_STRUCTURE }
+    public enum Kind { MEMORY, REGISTER, ANNOTATION, VBR_STRUCTURE }
     public static final class Item {
         public final Kind kind;
         public final String name;
@@ -51,6 +51,9 @@ public final class HardwareApplyPlan {
         }
         add(items,Kind.MEMORY,"TPURAM_2K_CANDIDATE",0xfff000,0x800,
             "2KiB candidate relocated TPU RAM at TRAMBAR=0xFFF0");
+        add(items,Kind.ANNOTATION,"TPURAM_CANDIDATE",0xfff000,1,
+            "Mark possible relocated 2KiB TPU RAM (0xFFF000..0xFFF7FF); "+
+            "no allocation, typed data or code changes; verify TRAMBAR at runtime");
         // CS candidates are derived from observed firmware writes, not fixed addresses.
         for(HardwareProfiles.Register register:selected.registers){
             long at=HardwareProfiles.INTERNAL_BASE_MM1+register.offset;
