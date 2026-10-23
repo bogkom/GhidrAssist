@@ -132,7 +132,8 @@ public class ReActPrompts {
         sb.append("**Instructions**:\n");
         sb.append("1. Think about what information you still need for the current task\n");
         sb.append("2. Call the appropriate tool(s) to gather that information:\n");
-        sb.append("   - Use PDF document RAG for manuals; NEVER use firmware GraphRAG as a PDF search replacement\n   - PREFER `ga_get_semantic_analysis`, `ga_get_call_context`, `ga_search_semantic` only for firmware function behavior\n");
+        sb.append("   - Search PDF manuals with \`ga_search_documents(query)\`, not \`ga_search_semantic\`\\n");
+        sb.append("   - Use firmware GraphRAG tools only for firmware functions\\n");
         sb.append("   - Use `decompile_function` (with appropriate server prefix) only when you need actual source code\n");
         sb.append("3. After receiving results, briefly summarize what you learned\n");
         sb.append("4. Preserve exact tool-returned values and provenance; tool output outranks assumptions.\n");
