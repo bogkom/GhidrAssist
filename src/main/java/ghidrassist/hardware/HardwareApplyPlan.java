@@ -55,7 +55,7 @@ public final class HardwareApplyPlan {
             "Only a candidate external chip select, device type UNKNOWN");
         for(HardwareProfiles.Register register:selected.registers){
             long at=HardwareProfiles.INTERNAL_BASE_MM1+register.offset;
-            add(items,Kind.REGISTER,"HW_MC68332_"+register.name+"_MM1",at,
+            add(items,Kind.REGISTER,register.name,at,
                 register.widthBits/8,
                 "Source-backed candidate: "+register.module+
                 "; "+register.sourcePage+"; access="+register.access+
