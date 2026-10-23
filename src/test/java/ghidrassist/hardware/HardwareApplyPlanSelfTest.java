@@ -42,6 +42,20 @@ public final class HardwareApplyPlanSelfTest {
         check(items.stream().noneMatch(x->x.name.startsWith("CS9") ||
             x.name.startsWith("CS0")||x.name.startsWith("CS1")),
             "overlapping bus windows never auto-proposed as conventional blocks");
+        var csWindows=HardwareApplyPlan.chipSelectWindowCandidates(List.of(
+            new HardwareApplyPlan.CsbarEvidence("CSBAR0",0xF803,"init_A"),
+            new HardwareApplyPlan.CsbarEvidence("CSBAR1",0xF803,"init_A"),
+            new HardwareApplyPlan.CsbarEvidence("CSBAR7",0xFF88,"init_A"),
+            new HardwareApplyPlan.CsbarEvidence("CSOR0",0x3870,"init_A")));
+        check(csWindows.size()==2,"duplicate byte lanes form one CS window");
+        check(csWindows.stream().anyMatch(x->x.address==0xF80000L &&
+            x.length==65536),"CSBAR0/1 complementary range");
+        check(csWindows.stream().anyMatch(x->x.address==0xFF8800L &&
+            x.length==2048),"CSBAR7 discovered range");
+        var extended=HardwareApplyPlan.mc68332Mm1Candidates(0,List.of(
+            new HardwareApplyPlan.CsbarEvidence("CSBAR0",0xF803,"init_A")));
+        check(extended.get(extended.size()-1).kind==
+            HardwareApplyPlan.Kind.VBR_STRUCTURE,"VBR remains final after CS windows");
         var vbr=items.get(items.size()-1);
         check(vbr.kind==HardwareApplyPlan.Kind.VBR_STRUCTURE && vbr.length==1024,
             "256 entries of four bytes");
