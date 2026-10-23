@@ -196,15 +196,6 @@ public class ToolRegistry implements ToolExecutor {
             return CompletableFuture.completedFuture(ToolResult.error(
                 "Tool call blocked: the user prohibited tools for this investigation"));
         }
-        if (!reserveUniqueRead(toolName, args)) {
-            return CompletableFuture.completedFuture(ToolResult.error(
-                "Duplicate read-only tool call blocked in this investigation: reuse earlier tool evidence"));
-        }
-        if (!reserveInvestigationToolCall()) {
-            return CompletableFuture.completedFuture(
-                ToolResult.error("Tool call blocked: explicit per-investigation tool limit reached"));
-        }
-
         int sessionId = activeSessionSupplier != null ? activeSessionSupplier.getAsInt() : -1;
         String programHash = programHashSupplier != null ? programHashSupplier.get() : null;
         String correlationId = java.util.UUID.randomUUID().toString();
@@ -232,6 +223,15 @@ public class ToolRegistry implements ToolExecutor {
 
             for (ToolProvider provider : providers) {
                 if (provider.handlesTool(toolName)) {
+                    // Reserve only AFTER explicit approval; this counts actual provider executions.
+                    if (!reserveUniqueRead(toolName, args)) {
+                        return CompletableFuture.completedFuture(ToolResult.error(
+                            "Duplicate read-only request suppressed; reuse previous evidence"));
+                    }
+                    if (!reserveInvestigationToolCall()) {
+                        return CompletableFuture.completedFuture(ToolResult.error(
+                            "Tool call blocked: user-defined investigation tool limit reached"));
+                    }
                     Msg.debug(this, "Routing tool '" + toolName + "' to provider: " + provider.getProviderName());
                     Msg.info(this, "Executing tool '" + toolName + "' via provider " + provider.getProviderName());
                     if (executionObserver != null && sessionId > 0) {
