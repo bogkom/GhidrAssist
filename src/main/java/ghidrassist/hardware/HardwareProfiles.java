@@ -236,6 +236,7 @@ public final class HardwareProfiles {
         // Distinct internal modules; these register-address entries are
         // MC68332-only hypotheses and are NOT CPU32 family-wide guarantees.
         r.add(reg("TPURAM", "TRAMMCR", 0x0b00, 16, MC68332_MANUAL));
+        r.add(reg("TPURAM", "TRAMTST", 0x0b02, 16, source));
         r.add(reg("TPURAM", "TRAMBAR", 0x0b04, 16, MC68332_MANUAL));
         r.add(reg("QSM", "QSMCR", 0x0c00, 16, MC68332_MANUAL));
         r.add(reg("QSM", "QILR", 0x0c04, 8, source));
