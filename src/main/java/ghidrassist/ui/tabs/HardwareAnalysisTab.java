@@ -777,8 +777,17 @@ public final class HardwareAnalysisTab extends JPanel {
             HardwareApplyService.Outcome outcome=
                 HardwareApplyService.apply(program,accepted);
             StringBuilder details=new StringBuilder();
+            long named=outcome.messages.stream()
+                .filter(line->line.startsWith("DEFINED REGISTER ")).count();
+            long mapped=outcome.messages.stream()
+                .filter(line->line.startsWith("NEW CS REGION ") ||
+                    line.startsWith("NEW MODULE REGION ") ||
+                    line.startsWith("UPGRADED MODULE REGION ")).count();
             details.append("Changed: ").append(outcome.changed)
-                .append("; skipped: ").append(outcome.skipped).append("\n\n");
+                .append("; skipped: ").append(outcome.skipped)
+                .append("; register names: ").append(named)
+                .append("; memory regions/fragments: ").append(mapped)
+                .append("\n\n");
             for(String line:outcome.messages)details.append(line).append("\n");
             JTextArea result=new JTextArea(details.toString(),18,95);
             result.setEditable(false);
