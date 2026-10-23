@@ -649,6 +649,9 @@ public class ReActOrchestrator {
             todoManager.getCompletedSummary(),
             findings.formatIterationSummaries()
         );
+        synthesisPrompt += "\n\\nVerified tool executions recorded by dispatcher: "
+            + toolRegistry.getInvestigationToolCallCount()
+            + ". Report this count exactly; do not estimate based on tasks or iterations.";
 
         // Get final answer without tool calling
         llmApi.sendRequestAsync(synthesisPrompt, new LlmApi.LlmResponseHandler() {
@@ -688,7 +691,7 @@ public class ReActOrchestrator {
                         .toList())
                     .iterationSummaries(findings.getIterationSummaries())
                     .iterationCount(iterationCount)
-                    .toolCallCount(toolCallCount)
+                    .toolCallCount(toolRegistry.getInvestigationToolCallCount())
                     .duration(Duration.between(startTime, Instant.now()))
                     .build();
 
