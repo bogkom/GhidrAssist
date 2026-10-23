@@ -47,6 +47,62 @@ public class ToolRegistry implements ToolExecutor {
     private volatile ToolApprovalService approvalService;
     private volatile IntSupplier activeSessionSupplier = () -> -1;
     private volatile Supplier<String> programHashSupplier = () -> null;
+    // Limits are enforced by the dispatcher, not merely suggested to the LLM.
+    // A null limit means the user did not request a hard per-investigation cap.
+    private Integer investigationToolLimit;
+    private boolean investigationReadOnly;
+    private int investigationToolCalls;
+    private final java.util.Set<String> investigationReadKeys = new java.util.HashSet<>();
+    private synchronized boolean reserveUniqueRead(String toolName, JsonObject args) {
+        if (!isReadOnlyLookup(toolName)) return true;
+        String key = toolName + ":" + (args == null ? "{}" : args.toString());
+        return investigationReadKeys.add(key);
+    }
+
+
+    public synchronized void configureInvestigationToolLimit(String objective) {
+        investigationToolCalls = 0;
+        investigationReadKeys.clear();
+        String normalized = objective == null ? "" : objective.toLowerCase(java.util.Locale.ROOT);
+        investigationReadOnly = normalized.contains("nie modyfikuj projektu")
+            || normalized.contains("nie zmieniaj projektu")
+            || normalized.contains("do not modify the project")
+            || normalized.contains("do not change the program");
+        if (normalized.contains("nie wywołuj żadnych narzędzi")
+                || normalized.contains("nie wykonuj żadnych wywołań")
+                || normalized.contains("do not call any tools")
+                || normalized.contains("do not invoke any tools")) {
+            investigationToolLimit = 0;
+        } else if (normalized.contains("wywołaj dokładnie jeden raz")
+                || normalized.contains("nie wykonuj więcej niż jednego wywołania")
+                || normalized.contains("maksymalnie jedno wywołanie")
+                || normalized.contains("exactly one tool call")
+                || normalized.contains("call exactly one tool")) {
+            investigationToolLimit = 1;
+        } else {
+            investigationToolLimit = null;
+        }
+    }
+
+    public synchronized void clearInvestigationToolLimit() {
+        investigationToolLimit = null;
+        investigationReadOnly = false;
+        investigationToolCalls = 0;
+        investigationReadKeys.clear();
+    }
+
+    private synchronized boolean reserveInvestigationToolCall() {
+        if (investigationToolLimit != null && investigationToolCalls >= investigationToolLimit) {
+            return false;
+        }
+        investigationToolCalls++;
+        return true;
+    }
+
+    public synchronized int getInvestigationToolCallCount() {
+        return investigationToolCalls;
+    }
+
 
     /**
      * Register a tool provider.
@@ -142,6 +198,14 @@ public class ToolRegistry implements ToolExecutor {
                     ToolResult.error("Unknown tool: " + toolName));
         }
 
+        if (investigationToolLimit != null && investigationToolLimit == 0) {
+            return CompletableFuture.completedFuture(ToolResult.error(
+                "Tool call blocked: the user prohibited tools for this investigation"));
+        }
+        if (investigationReadOnly && !isReadOnlyLookup(toolName)) {
+            return CompletableFuture.completedFuture(ToolResult.error(
+                "Tool call blocked: the user explicitly prohibited Ghidra project modification"));
+        }
         int sessionId = activeSessionSupplier != null ? activeSessionSupplier.getAsInt() : -1;
         String programHash = programHashSupplier != null ? programHashSupplier.get() : null;
         String correlationId = java.util.UUID.randomUUID().toString();
@@ -169,6 +233,15 @@ public class ToolRegistry implements ToolExecutor {
 
             for (ToolProvider provider : providers) {
                 if (provider.handlesTool(toolName)) {
+                    // Reserve only AFTER explicit approval; this counts actual provider executions.
+                    if (!reserveUniqueRead(toolName, args)) {
+                        return CompletableFuture.completedFuture(ToolResult.error(
+                            "Duplicate read-only request suppressed; reuse previous evidence"));
+                    }
+                    if (!reserveInvestigationToolCall()) {
+                        return CompletableFuture.completedFuture(ToolResult.error(
+                            "Tool call blocked: user-defined investigation tool limit reached"));
+                    }
                     Msg.debug(this, "Routing tool '" + toolName + "' to provider: " + provider.getProviderName());
                     Msg.info(this, "Executing tool '" + toolName + "' via provider " + provider.getProviderName());
                     if (executionObserver != null && sessionId > 0) {
@@ -232,6 +305,7 @@ public class ToolRegistry implements ToolExecutor {
     /** Reset evidence at the start of each ReAct investigation or after a write. */
     public synchronized void clearRecentToolEvidence() {
         toolObservations.clear();
+        investigationReadKeys.clear();
     }
 
     /** Only successful read-only observations; bounded to eight distinct queries. */

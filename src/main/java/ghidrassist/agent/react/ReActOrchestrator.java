@@ -53,6 +53,7 @@ public class ReActOrchestrator {
     // Dependencies
     private final LlmApi llmApi;
     private final MCPToolManager mcpToolManager;
+    private final boolean mcpToolsEnabled;
     private final ToolRegistry toolRegistry;
     private final GhidrAssistPlugin plugin;
     private NativeToolManager nativeToolManager;
@@ -87,6 +88,18 @@ public class ReActOrchestrator {
         int contextSummaryThreshold,
         int maxToolRounds
     ) {
+        this(providerConfig, plugin, maxIterations, contextSummaryThreshold, maxToolRounds, true);
+    }
+
+    public ReActOrchestrator(
+        APIProviderConfig providerConfig,
+        GhidrAssistPlugin plugin,
+        int maxIterations,
+        int contextSummaryThreshold,
+        int maxToolRounds,
+        boolean enableMcpTools
+    ) {
+        this.mcpToolsEnabled = enableMcpTools;
         this.plugin = plugin;
         this.maxIterations = maxIterations;
         this.baseMaxIterations = maxIterations;  // Store original limit
@@ -129,7 +142,7 @@ public class ReActOrchestrator {
             registry.registerProvider(nativeToolManager);
 
             // Register MCP tools
-            registry.registerProvider(mcpToolManager);
+            if (mcpToolsEnabled) registry.registerProvider(mcpToolManager);
 
             // Set program context for tools that need it
             ghidra.program.model.listing.Program currentProgram = plugin.getCurrentProgram();
@@ -290,12 +303,16 @@ public class ReActOrchestrator {
         String approvedPlan
     ) {
         CompletableFuture<ReActResult> resultFuture = new CompletableFuture<>();
-        resultFuture.whenComplete((result, error) -> clearActiveAnalysis(resultFuture));
+        resultFuture.whenComplete((result, error) -> {
+            clearActiveAnalysis(resultFuture);
+            toolRegistry.clearInvestigationToolLimit();
+        });
         Instant startTime = Instant.now();
         cancelled.set(false);
         // A new investigation must not inherit evidence or expanded iteration
         // budgets from an earlier firmware/program/session.
         toolRegistry.clearRecentToolEvidence();
+        toolRegistry.configureInvestigationToolLimit(query);
         maxIterations = baseMaxIterations;
 
         try {
@@ -632,6 +649,9 @@ public class ReActOrchestrator {
             todoManager.getCompletedSummary(),
             findings.formatIterationSummaries()
         );
+        synthesisPrompt += "\n\\nVerified tool executions recorded by dispatcher: "
+            + toolRegistry.getInvestigationToolCallCount()
+            + ". Report this count exactly; do not estimate based on tasks or iterations.";
 
         // Get final answer without tool calling
         llmApi.sendRequestAsync(synthesisPrompt, new LlmApi.LlmResponseHandler() {
@@ -671,7 +691,7 @@ public class ReActOrchestrator {
                         .toList())
                     .iterationSummaries(findings.getIterationSummaries())
                     .iterationCount(iterationCount)
-                    .toolCallCount(toolCallCount)
+                    .toolCallCount(toolRegistry.getInvestigationToolCallCount())
                     .duration(Duration.between(startTime, Instant.now()))
                     .build();
 
