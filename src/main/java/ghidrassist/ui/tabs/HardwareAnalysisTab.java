@@ -275,7 +275,7 @@ public final class HardwareAnalysisTab extends JPanel {
         report.getHighlighter().removeAllHighlights();
         reportHits.clear();
         updateSearchCount();
-        report.setText("Analyzing hardware...\\nScanning references and memory regions.\\n"+
+        report.setText("Analyzing hardware...\nScanning references and memory regions.\n"+
             "This is a read-only scan; no project data is modified.");
         report.setCaretPosition(0);
         status.setText("Scanning references and disassembled instructions. Read-only.");
