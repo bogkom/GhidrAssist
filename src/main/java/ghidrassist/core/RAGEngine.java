@@ -463,6 +463,12 @@ public class RAGEngine {
 
     public static List<SearchResult> search(String queryStr, int maxResults,
                                             Set<String> activeLibraries) throws Exception {
+        return search(queryStr, maxResults, activeLibraries, null);
+    }
+
+    /** Optionally constrain source file BEFORE Lucene scoring/top-k selection. */
+    public static List<SearchResult> search(String queryStr, int maxResults,
+                                            Set<String> activeLibraries, String filename) throws Exception {
         List<SearchResult> results = new ArrayList<>();
         if (activeLibraries.isEmpty()) return results;
 
@@ -501,6 +507,11 @@ public class RAGEngine {
                 libraryFilter.add(legacy.build(), BooleanClause.Occur.SHOULD);
             }
             queryBuilder.add(libraryFilter.build(), BooleanClause.Occur.FILTER);
+            if (filename != null && !filename.isBlank()) {
+                queryBuilder.add(new TermQuery(new Term("filename", filename.trim())),
+                    BooleanClause.Occur.FILTER);
+            }
+
 
             // Search several candidate pages, not just the first TOC match.
             TopDocs topDocs=searcher.search(queryBuilder.build(),Math.max(160,maxResults*30));
@@ -671,6 +682,34 @@ public class RAGEngine {
             if(found.scoreDocs.length==0)throw new IOException("Indexed page missing: "+filename+" / "+chunkId);
             return searcher.storedFields().document(found.scoreDocs[0].doc).get("content");
         } finally {indexLock.unlock();}
+    }
+
+    /** Retrieve the full indexed text for a physical PDF page (not a search excerpt). */
+    public static String getIndexedPdfPage(String filename, int physicalPage) throws IOException {
+        if (filename == null || filename.isBlank() || physicalPage < 1)
+            throw new IllegalArgumentException("Provide filename and positive physical PDF page");
+        indexLock.lock();
+        try (DirectoryReader reader = DirectoryReader.open(indexWriter)) {
+            IndexSearcher searcher = new IndexSearcher(reader);
+            TopDocs hits = searcher.search(new TermQuery(new Term("filename", filename)), reader.numDocs());
+            java.util.TreeMap<Integer,String> chunks = new java.util.TreeMap<>();
+            for (ScoreDoc hit : hits.scoreDocs) {
+                Document document = searcher.storedFields().document(hit.doc);
+                IndexableField page = document.getField("page_number");
+                if (page == null || page.numericValue() == null
+                        || page.numericValue().intValue() != physicalPage) continue;
+                IndexableField chunk = document.getField("chunk_id");
+                int chunkId = chunk == null || chunk.numericValue() == null
+                    ? hit.doc : chunk.numericValue().intValue();
+                String content = document.get("content");
+                if (content != null) chunks.put(chunkId, content);
+            }
+            if (chunks.isEmpty())
+                throw new IOException("Physical PDF page not indexed: " + filename + " page " + physicalPage);
+            return String.join("\\n\\n", chunks.values());
+        } finally {
+            indexLock.unlock();
+        }
     }
 
     public static void deleteDocument(String filename) throws IOException {
