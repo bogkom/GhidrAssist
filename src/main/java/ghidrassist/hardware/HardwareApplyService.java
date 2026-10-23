@@ -102,6 +102,10 @@ public final class HardwareApplyService {
                 parts.get(0).getEnd().getOffset()==item.last())
             return decide(State.ALREADY_PRESENT,"Entire region already mapped as "+
                 parts.get(0).getName(),false);
+        if(item.name.equals("TPURAM_2K_CANDIDATE") &&
+                csMissing(item,parts).isEmpty())
+            return decide(State.ALREADY_PRESENT,
+                "Entire TPURAM candidate range is mapped; select TPURAM_CANDIDATE annotation instead",false);
         for(MemoryBlock block:parts){
             if(block.getStart().getOffset()<item.address ||
                     block.getEnd().getOffset()>item.last() ||
@@ -158,12 +162,28 @@ public final class HardwareApplyService {
         }
         return decide(State.BLOCKED,"No safe mapped memory for register",false);
     }
+    private static Decision annotationDecision(Program p,HardwareApplyPlan.Item item) {
+        Address at=address(p,item.address);
+        if(!p.getMemory().contains(at))
+            return decide(State.BLOCKED,"Annotation address is not mapped; create CS region first",false);
+        Symbol prior=p.getSymbolTable().getPrimarySymbol(at);
+        if(prior!=null && prior.getSource()!=SourceType.DEFAULT) {
+            return decide(prior.getName().equals(item.name) ?
+                State.ALREADY_PRESENT : State.BLOCKED,
+                prior.getName().equals(item.name) ?
+                    "Candidate label already exists" :
+                    "Keep existing user label: "+prior.getName(),false);
+        }
+        return decide(State.MANUAL_REVIEW,
+            "Mapped inside existing memory; add candidate label and comment only",false);
+    }
     /** Read-only status for one row, reusable in both the UI and apply guard. */
     public static Decision preflight(Program p,HardwareApplyPlan.Item item,
                                      List<HardwareApplyPlan.Item> plan){
         if(p==null||item==null)throw new IllegalArgumentException("Missing program or item");
         if(item.kind==HardwareApplyPlan.Kind.MEMORY)return memoryDecision(p,item);
         if(item.kind==HardwareApplyPlan.Kind.REGISTER)return registerDecision(p,item,plan);
+        if(item.kind==HardwareApplyPlan.Kind.ANNOTATION)return annotationDecision(p,item);
         Address a=address(p,item.address),b=address(p,item.last());
         if(!covers(p.getMemory(),a,b) || !p.getListing().isUndefined(a,b))
             return decide(State.BLOCKED,
@@ -258,6 +278,25 @@ public final class HardwareApplyService {
         notes.add("DEFINED REGISTER "+name+" at "+first);
         return true;
     }
+    private static boolean annotateCandidate(Program p,HardwareApplyPlan.Item item,
+                                              List<String> notes)throws Exception {
+        Decision check=annotationDecision(p,item);
+        if(!check.allowed()){
+            notes.add("SKIP "+item.name+": "+check.description);
+            return false;
+        }
+        Address at=address(p,item.address);
+        p.getSymbolTable().createLabel(at,item.name,SourceType.USER_DEFINED);
+        String existing=p.getListing().getComment(ghidra.program.model.listing.CodeUnit.PLATE_COMMENT,at);
+        String line="GhidrAssist: candidate relocated 2KiB TPURAM 0xFFF000..0xFFF7FF; "+
+            "confirm TRAMBAR and runtime memory configuration.";
+        if(existing==null || !existing.contains(line))
+            p.getListing().setComment(at,
+                ghidra.program.model.listing.CodeUnit.PLATE_COMMENT,
+                existing==null || existing.isBlank()?line:existing+"\n"+line);
+        notes.add("ANNOTATED CANDIDATE "+item.name+" at "+at);
+        return true;
+    }
     private static boolean defineVbr(Program p,HardwareApplyPlan.Item item,
                                      List<String> notes)throws Exception {
         Address start=address(p,item.address),end=address(p,item.last());
@@ -292,6 +331,7 @@ public final class HardwareApplyService {
                     boolean applied=switch(kind) {
                         case MEMORY -> createRegion(program,item,messages);
                         case REGISTER -> defineRegister(program,item,messages);
+                        case ANNOTATION -> annotateCandidate(program,item,messages);
                         case VBR_STRUCTURE -> defineVbr(program,item,messages);
                     };
                     if(applied)changed++;else skipped++;
