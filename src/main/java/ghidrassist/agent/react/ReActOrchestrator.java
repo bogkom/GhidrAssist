@@ -290,12 +290,16 @@ public class ReActOrchestrator {
         String approvedPlan
     ) {
         CompletableFuture<ReActResult> resultFuture = new CompletableFuture<>();
-        resultFuture.whenComplete((result, error) -> clearActiveAnalysis(resultFuture));
+        resultFuture.whenComplete((result, error) -> {
+            clearActiveAnalysis(resultFuture);
+            toolRegistry.clearInvestigationToolLimit();
+        });
         Instant startTime = Instant.now();
         cancelled.set(false);
         // A new investigation must not inherit evidence or expanded iteration
         // budgets from an earlier firmware/program/session.
         toolRegistry.clearRecentToolEvidence();
+        toolRegistry.configureInvestigationToolLimit(query);
         maxIterations = baseMaxIterations;
 
         try {
