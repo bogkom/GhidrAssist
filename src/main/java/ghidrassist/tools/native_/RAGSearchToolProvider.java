@@ -52,6 +52,11 @@ public final class RAGSearchToolProvider implements ToolProvider {
                     answer.append("SOURCE: ").append(hit.getFilename())
                         .append(" PDF_PAGE: ").append(hit.getPageNumber())
                         .append(" PATH: ").append(hit.getSourcePath())
+                        .append(" ORIGINAL_PAGE_URI: ")
+                        .append(hit.getSourcePath()==null ? "UNAVAILABLE" :
+                            new java.io.File(hit.getSourcePath()).toURI().toASCIIString()+
+                            ("pdf".equalsIgnoreCase(hit.getSourceType()) &&
+                                hit.getPageNumber()>0 ? "#page="+hit.getPageNumber() : ""))
                         .append(" LAYOUT_UNCERTAIN: ").append(hit.isUncertainTable())
                         .append("\\nEXCERPT: ").append(hit.getSnippet()).append("\\n\\n");
                 }
