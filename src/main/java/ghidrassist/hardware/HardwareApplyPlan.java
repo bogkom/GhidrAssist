@@ -10,8 +10,8 @@ import java.util.Map;
  * Review-only proposals. Planning does not open a transaction or alter Ghidra.
  * A concrete MC68332 hypothesis and MM=1 must be selected explicitly.
  *
- * Do not map the overlapping CS0/CS1 byte lanes or broad CS9 window as one
- * external block: such choices need a real electrical/boot-space model.
+ * CS ranges are speculative and can be combined for convenient analysis.
+ * Mapping a region does not establish physical device selection.
  */
 public final class HardwareApplyPlan {
     private HardwareApplyPlan() {}
@@ -82,29 +82,47 @@ public final class HardwareApplyPlan {
     public static List<Item> chipSelectWindowCandidates(
             List<CsbarEvidence> sites) {
         if (sites == null || sites.isEmpty()) return List.of();
-        Map<String, Item> ranges = new LinkedHashMap<>();
+        List<Item> windows = new ArrayList<>();
         for (CsbarEvidence site : sites) {
-            if (site == null || site.register == null) continue;
+            if (site == null || site.register() == null) continue;
             String name = site.register();
-            if (name == null || !(name.equals("CSBARBT") ||
-                    name.matches("CSBAR(?:10|[0-9])"))) continue;
-            HardwareProfiles.CsbarWindow window =
-                HardwareProfiles.decodeCsbar(site.value());
+            if (!(name.equals("CSBARBT") || name.matches("CSBAR(?:10|[0-9])"))) continue;
+            HardwareProfiles.CsbarWindow window = HardwareProfiles.decodeCsbar(site.value());
             if (window.base < 0 || window.endInclusive > 0xffffffL) continue;
-            String id = String.format(java.util.Locale.ROOT,
-                "CS_WINDOW_%06X_%06X", window.base, window.endInclusive);
-            if (ranges.containsKey(id)) continue;
-            addWindow(ranges, id, window.base, (int)window.size,
-                "Possible " + name + " assignment in " + site.function() +
-                "; direct CSBAR value only; activation and physical device UNKNOWN");
+            add(windows, Kind.MEMORY, name, window.base, (int) window.size,
+                name + " assignment in " + site.function() +
+                "; device identity and assertion UNKNOWN");
         }
-        return List.copyOf(ranges.values());
+        if (windows.isEmpty()) return List.of();
+        windows.sort(java.util.Comparator.comparingLong(x -> x.address));
+        List<Item> merged = new ArrayList<>();
+        long first = windows.get(0).address;
+        long last = windows.get(0).last();
+        java.util.LinkedHashSet<String> sources = new java.util.LinkedHashSet<>();
+        sources.add(windows.get(0).details);
+        for (int i=1; i<windows.size(); i++) {
+            Item next = windows.get(i);
+            if (next.address <= last + 1) {
+                last = Math.max(last,next.last());
+                sources.add(next.details);
+            } else {
+                addMerged(merged, first, last, sources);
+                first = next.address;
+                last = next.last();
+                sources.clear();
+                sources.add(next.details);
+            }
+        }
+        addMerged(merged, first, last, sources);
+        return List.copyOf(merged);
     }
-    private static void addWindow(Map<String, Item> ranges, String id,
-            long address, int size, String provenance) {
-        List<Item> holder = new ArrayList<>();
-        add(holder, Kind.MEMORY, id, address, size, provenance);
-        ranges.put(id, holder.get(0));
+    private static void addMerged(List<Item> out, long first, long last,
+            java.util.Collection<String> sources) {
+        String id = String.format(java.util.Locale.ROOT,
+            "CS_WINDOW_%06X_%06X", first, last);
+        add(out, Kind.MEMORY, id, first, (int)(last-first+1),
+            "Combined overlapping/adjacent CS windows; " +
+            String.join("; ",sources));
     }
 
     /** Full review plan, with CS windows discovered in the current scan. */
