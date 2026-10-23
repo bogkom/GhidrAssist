@@ -293,7 +293,7 @@ public final class HardwareApplyService {
         if(existing==null || !existing.contains(line))
             p.getListing().setComment(at,
                 ghidra.program.model.listing.CodeUnit.PLATE_COMMENT,
-                existing==null || existing.isBlank()?line:existing+"\\n"+line);
+                existing==null || existing.isBlank()?line:existing+"\n"+line);
         notes.add("ANNOTATED CANDIDATE "+item.name+" at "+at);
         return true;
     }
