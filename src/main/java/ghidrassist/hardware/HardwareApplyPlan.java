@@ -3,6 +3,8 @@ package ghidrassist.hardware;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 /**
  * Review-only proposals. Planning does not open a transaction or alter Ghidra.
@@ -67,6 +69,53 @@ public final class HardwareApplyPlan {
             "256 x 32-bit vector entries at USER-SUPPLIED VBR base; "+
             "apply only to entirely undefined data; no code clearing");
         return Collections.unmodifiableList(items);
+    }
+
+    /**
+     * Build speculative CS memory windows solely from direct, literal CSBAR
+     * assignments observed in the static scan. Alternative initializers are
+     * kept as alternative candidate ranges: address order is not execution order.
+     * No claim is made about CS assertion, external wiring or peripheral type.
+     */
+    public static List<Item> chipSelectWindowCandidates(
+            List<HardwareInventoryService.Site> sites) {
+        if (sites == null || sites.isEmpty()) return List.of();
+        Map<String, Item> ranges = new LinkedHashMap<>();
+        for (HardwareInventoryService.Site site : sites) {
+            if (site == null || !site.write || site.literal == null) continue;
+            String name = site.register;
+            if (name == null || !(name.equals("CSBARBT") ||
+                    name.matches("CSBAR(?:10|[0-9])"))) continue;
+            HardwareProfiles.CsbarWindow window =
+                HardwareProfiles.decodeCsbar(site.literal);
+            if (window.base < 0 || window.endInclusive > 0xffffffL) continue;
+            String id = String.format(java.util.Locale.ROOT,
+                "CS_WINDOW_%06X_%06X", window.base, window.endInclusive);
+            if (ranges.containsKey(id)) continue;
+            addWindow(ranges, id, window.base, (int)window.size,
+                "Possible " + name + " assignment in " + site.function +
+                "; direct CSBAR value only; activation and physical device UNKNOWN");
+        }
+        return List.copyOf(ranges.values());
+    }
+    private static void addWindow(Map<String, Item> ranges, String id,
+            long address, int size, String provenance) {
+        List<Item> holder = new ArrayList<>();
+        add(holder, Kind.MEMORY, id, address, size, provenance);
+        ranges.put(id, holder.get(0));
+    }
+
+    /** Full review plan, with CS windows discovered in the current scan. */
+    public static List<Item> mc68332Mm1Candidates(long vbrAddress,
+            List<HardwareInventoryService.Site> sites) {
+        List<Item> original = mc68332Mm1Candidates(vbrAddress);
+        List<Item> generated = chipSelectWindowCandidates(sites);
+        if (generated.isEmpty()) return original;
+        List<Item> combined = new ArrayList<>(original.size()+generated.size());
+        combined.addAll(original.subList(0, original.size()-1));
+        combined.addAll(generated);
+        combined.add(original.get(original.size()-1)); // VBR always last
+        return List.copyOf(combined);
     }
     public static boolean intersects(Item a,Item b){
         return a.address<=b.last()&&b.address<=a.last();
