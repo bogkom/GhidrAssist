@@ -661,8 +661,18 @@ public final class HardwareAnalysisTab extends JPanel {
         dialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
         dialog.setContentPane(content);
         Dimension screen=Toolkit.getDefaultToolkit().getScreenSize();
-        dialog.setSize(Math.min(1220,Math.max(700,screen.width-100)),
-            Math.min(740,Math.max(460,screen.height-130)));
+        java.util.prefs.Preferences windowPreferences =
+            java.util.prefs.Preferences.userNodeForPackage(HardwareAnalysisTab.class);
+        int preferredWidth = windowPreferences.getInt("hardware.review.width", 1480);
+        int preferredHeight = windowPreferences.getInt("hardware.review.height", 900);
+        dialog.setSize(Math.min(screen.width-60,Math.max(900,preferredWidth)),
+            Math.min(screen.height-90,Math.max(600,preferredHeight)));
+        dialog.addWindowListener(new java.awt.event.WindowAdapter(){
+            @Override public void windowClosed(java.awt.event.WindowEvent e){
+                windowPreferences.putInt("hardware.review.width",dialog.getWidth());
+                windowPreferences.putInt("hardware.review.height",dialog.getHeight());
+            }
+        });
         dialog.setMinimumSize(new Dimension(690,420));
         dialog.setResizable(true);
         dialog.setLocationRelativeTo(this);
