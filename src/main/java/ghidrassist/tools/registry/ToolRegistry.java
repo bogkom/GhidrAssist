@@ -50,6 +50,7 @@ public class ToolRegistry implements ToolExecutor {
     // Limits are enforced by the dispatcher, not merely suggested to the LLM.
     // A null limit means the user did not request a hard per-investigation cap.
     private Integer investigationToolLimit;
+    private boolean investigationReadOnly;
     private int investigationToolCalls;
     private final java.util.Set<String> investigationReadKeys = new java.util.HashSet<>();
     private synchronized boolean reserveUniqueRead(String toolName, JsonObject args) {
@@ -63,6 +64,10 @@ public class ToolRegistry implements ToolExecutor {
         investigationToolCalls = 0;
         investigationReadKeys.clear();
         String normalized = objective == null ? "" : objective.toLowerCase(java.util.Locale.ROOT);
+        investigationReadOnly = normalized.contains("nie modyfikuj projektu")
+            || normalized.contains("nie zmieniaj projektu")
+            || normalized.contains("do not modify the project")
+            || normalized.contains("do not change the program");
         if (normalized.contains("nie wywołuj żadnych narzędzi")
                 || normalized.contains("nie wykonuj żadnych wywołań")
                 || normalized.contains("do not call any tools")
@@ -81,6 +86,7 @@ public class ToolRegistry implements ToolExecutor {
 
     public synchronized void clearInvestigationToolLimit() {
         investigationToolLimit = null;
+        investigationReadOnly = false;
         investigationToolCalls = 0;
         investigationReadKeys.clear();
     }
@@ -195,6 +201,10 @@ public class ToolRegistry implements ToolExecutor {
         if (investigationToolLimit != null && investigationToolLimit == 0) {
             return CompletableFuture.completedFuture(ToolResult.error(
                 "Tool call blocked: the user prohibited tools for this investigation"));
+        }
+        if (investigationReadOnly && !isReadOnlyLookup(toolName)) {
+            return CompletableFuture.completedFuture(ToolResult.error(
+                "Tool call blocked: the user explicitly prohibited Ghidra project modification"));
         }
         int sessionId = activeSessionSupplier != null ? activeSessionSupplier.getAsInt() : -1;
         String programHash = programHashSupplier != null ? programHashSupplier.get() : null;
