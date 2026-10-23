@@ -868,13 +868,6 @@ public class TabController {
             return;
         }
 
-        // Agentic mode requires MCP tools
-        if (useAgentic && !useMCP) {
-            Msg.showInfo(getClass(), queryTab, "MCP Required",
-                "Agentic mode requires MCP tools to be enabled.");
-            return;
-        }
-
         setUIState(true, "Stop", null);
 
         // Route to appropriate handler
