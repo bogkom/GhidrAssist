@@ -1862,6 +1862,7 @@ public class TabController {
 
         final boolean anyDeleted = deletedCount > 0;
         SwingUtilities.invokeLater(() -> {
+            queryTab.clearQueryInput();
             if (anyDeleted) {
                 queryTab.setResponseText("");
                 queryTab.setEditEnabled(false);
