@@ -630,7 +630,36 @@ public final class HardwareAnalysisTab extends JPanel {
             countLabel.setText(selected+" selected, "+existing+
                 " existing, "+blocked+" blocked");
         };
-        model.addTableModelListener(e->updateCount.run());
+        // Keep dependent register checkboxes consistent with the selected module block.
+        // A mapped register remains independent when its parent region already exists.
+        final boolean[] syncing=new boolean[1];
+        model.addTableModelListener(e->{
+            if(!syncing[0] && e.getColumn()==0){
+                syncing[0]=true;
+                try{
+                    for(int k=0;k<candidates.size();k++){
+                        HardwareApplyPlan.Item child=candidates.get(k);
+                        if(child.kind!=HardwareApplyPlan.Kind.REGISTER)continue;
+                        if(!Boolean.TRUE.equals(model.getValueAt(k,0)))continue;
+                        boolean mapped=program.getMemory().contains(
+                            program.getAddressFactory().getDefaultAddressSpace().getAddress(child.address));
+                        if(mapped)continue;
+                        boolean parentSelected=false;
+                        for(int j=0;j<candidates.size();j++){
+                            HardwareApplyPlan.Item parent=candidates.get(j);
+                            if(parent.kind==HardwareApplyPlan.Kind.MEMORY &&
+                                parent.address<=child.address && parent.last()>=child.last() &&
+                                Boolean.TRUE.equals(model.getValueAt(j,0))){
+                                parentSelected=true;
+                                break;
+                            }
+                        }
+                        if(!parentSelected)model.setValueAt(false,k,0);
+                    }
+                }finally{syncing[0]=false;}
+            }
+            updateCount.run();
+        });
         updateCount.run();
         selectSafe.addActionListener(e->{
             for(int i=0;i<candidates.size();i++){
