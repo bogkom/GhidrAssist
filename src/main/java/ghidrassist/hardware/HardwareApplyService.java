@@ -83,16 +83,11 @@ public final class HardwareApplyService {
     }
     private static List<HardwareRegionLayout.Range> csMissing(
             HardwareApplyPlan.Item item, List<MemoryBlock> blocks) {
-        List<HardwareRegionLayout.Range> gaps=new ArrayList<>();
-        long cursor=item.address;
-        for(MemoryBlock block:blocks) {
-            long first=Math.max(item.address,block.getStart().getOffset());
-            long last=Math.min(item.last(),block.getEnd().getOffset());
-            if(first>cursor)gaps.add(new HardwareRegionLayout.Range(cursor,first-1));
-            cursor=Math.max(cursor,last+1);
-        }
-        if(cursor<=item.last())gaps.add(new HardwareRegionLayout.Range(cursor,item.last()));
-        return gaps;
+        List<HardwareRegionLayout.Range> existing=new ArrayList<>();
+        for(MemoryBlock block:blocks)
+            existing.add(new HardwareRegionLayout.Range(
+                block.getStart().getOffset(),block.getEnd().getOffset()));
+        return HardwareRegionLayout.missingClipped(item.address,item.last(),existing);
     }
     private static Decision memoryDecision(Program p,HardwareApplyPlan.Item item){
         List<MemoryBlock> parts=overlaps(p,item);
