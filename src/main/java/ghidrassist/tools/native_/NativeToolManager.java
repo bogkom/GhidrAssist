@@ -50,6 +50,7 @@ public class NativeToolManager implements ToolProvider {
         nativeProviders.add(new SemanticToolProvider(analysisDB));
         nativeProviders.add(actionToolProvider);
         nativeProviders.add(documentToolProvider);
+        nativeProviders.add(new RAGSearchToolProvider());
 
         Msg.info(this, "NativeToolManager initialized with " + nativeProviders.size() + " providers");
     }
