@@ -205,7 +205,7 @@ public final class HardwareApplyService {
             default -> throw new IllegalArgumentException("Unsupported register length: "+item.length);
         };
         p.getListing().createData(first,type);
-        String name=item.name+"_"+Long.toHexString(item.address).toUpperCase(Locale.ROOT);
+        String name=item.name;
         p.getSymbolTable().createLabel(first,name,SourceType.USER_DEFINED);
         notes.add("DEFINED REGISTER "+name+" at "+first);
         return true;
