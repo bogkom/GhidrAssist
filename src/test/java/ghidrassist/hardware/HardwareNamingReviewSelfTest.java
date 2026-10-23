@@ -18,7 +18,7 @@ public final class HardwareNamingReviewSelfTest {
             x.status==HardwareNamingReview.Status.FAMILY_UNCERTAIN),
             "generic CPU32 cannot propose MC68332 labels");
         var manual=HardwareNamingReview.propose(true,"MC68332",names,existing,counts,
-            List.of("HW_MC68332_CSBAR7_MM1","SYNCR"));
+            List.of("CSBAR7","SYNCR"));
         ok(manual.stream().filter(x->x.register.equals("SIMCR")).findFirst()
             .orElseThrow().status==HardwareNamingReview.Status.REVIEW_REQUIRED,
             "provisional manual profile permits preview only");
