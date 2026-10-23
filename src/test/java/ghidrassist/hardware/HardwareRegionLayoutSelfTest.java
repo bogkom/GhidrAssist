@@ -29,6 +29,18 @@ public final class HardwareRegionLayoutSelfTest {
             r(0xfffa00L,0xfffa7fL))).isEmpty(),"already mapped SIM");
         ok(HardwareRegionLayout.missing(0xfffb00L,0xfffb3fL,List.of())
             .get(0).length()==64,"new TPURAM module");
+        var csGaps=HardwareRegionLayout.missingClipped(0xff8000L,0xffffffL,List.of(
+            r(0xff7000L,0xff8fffL),
+            r(0xfffa00L,0xfffa7fL),
+            r(0xfffc00L,0xffffffL)));
+        ok(csGaps.size()==2,"CS range split around existing memory without destruction");
+        ok(csGaps.get(0).first==0xff9000L && csGaps.get(0).last==0xfff9ffL,
+            "first clipped CS gap");
+        ok(csGaps.get(1).first==0xfffa80L && csGaps.get(1).last==0xfffbffL,
+            "second clipped CS gap");
+        ok(HardwareRegionLayout.missingClipped(0xff8000L,0xff87ffL,List.of(
+            r(0xff0000L,0xffffffL))).isEmpty(),
+            "already mapped CS range is not rewritten");
         boolean fail=false;
         try{HardwareRegionLayout.missing(0xfffc00L,0xfffdffL,List.of(
             r(0xfffc00L,0xfffc20L),r(0xfffc20L,0xfffc40L)));}

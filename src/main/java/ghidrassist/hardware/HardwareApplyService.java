@@ -78,8 +78,26 @@ public final class HardwareApplyService {
         blocks.sort(Comparator.comparing(MemoryBlock::getStart));
         return blocks;
     }
+    private static boolean csWindow(HardwareApplyPlan.Item item) {
+        return item.name.startsWith("CS_WINDOW_");
+    }
+    private static List<HardwareRegionLayout.Range> csMissing(
+            HardwareApplyPlan.Item item, List<MemoryBlock> blocks) {
+        List<HardwareRegionLayout.Range> existing=new ArrayList<>();
+        for(MemoryBlock block:blocks)
+            existing.add(new HardwareRegionLayout.Range(
+                block.getStart().getOffset(),block.getEnd().getOffset()));
+        return HardwareRegionLayout.missingClipped(item.address,item.last(),existing);
+    }
     private static Decision memoryDecision(Program p,HardwareApplyPlan.Item item){
         List<MemoryBlock> parts=overlaps(p,item);
+        if(csWindow(item)){
+            List<HardwareRegionLayout.Range> gaps=csMissing(item,parts);
+            return gaps.isEmpty() ?
+                decide(State.ALREADY_PRESENT,"CS address range is already mapped",false) :
+                decide(State.READY,"Map "+gaps.size()+
+                    " missing CS fragment(s), keep existing blocks/data unchanged",true);
+        }
         if(parts.size()==1 && parts.get(0).getStart().getOffset()==item.address &&
                 parts.get(0).getEnd().getOffset()==item.last())
             return decide(State.ALREADY_PRESENT,"Entire region already mapped as "+
@@ -111,11 +129,19 @@ public final class HardwareApplyService {
         Address first=address(p,item.address),last=address(p,item.last());
         Memory m=p.getMemory();
         if(covers(m,first,last)) {
-            if(!p.getListing().isUndefined(first,last))
-                return decide(State.ALREADY_PRESENT,"Data or code already defined",false);
             Symbol old=p.getSymbolTable().getPrimarySymbol(first);
-            if(old!=null && old.getSource()!=SourceType.DEFAULT)
+            if(old!=null && old.getSource()!=SourceType.DEFAULT) {
+                if(old.getName().equals(item.name))
+                    return decide(State.ALREADY_PRESENT,"Short register label already defined",false);
                 return decide(State.BLOCKED,"Existing non-default label: "+old.getName(),false);
+            }
+            if(!p.getListing().isUndefined(first,last)) {
+                ghidra.program.model.listing.Data prior=p.getListing().getDataAt(first);
+                if(prior!=null && prior.isDefined() && prior.getLength()==item.length)
+                    return decide(State.UPGRADE,"Preserve existing typed data; add short register label",true);
+                return decide(State.ALREADY_PRESENT,
+                    "Data/code defined with incompatible size or location",false);
+            }
             return decide(State.READY,"Mapped, undefined and no user symbol",true);
         }
         for(HardwareApplyPlan.Item candidate:all){
@@ -153,6 +179,18 @@ public final class HardwareApplyService {
         }
         Memory m=p.getMemory();
         List<MemoryBlock> parts=overlaps(p,item);
+        if(csWindow(item)){
+            int segment=0;
+            for(HardwareRegionLayout.Range gap:csMissing(item,parts)){
+                String name=item.name+"_PART_"+(++segment);
+                MemoryBlock added=m.createUninitializedBlock(name,address(p,gap.first),
+                    gap.length(),false);
+                added.setRead(true);added.setWrite(true);added.setExecute(false);
+                notes.add("NEW CS REGION "+name+" "+
+                    ChipSelectModel.hex(gap.first,6)+".."+ChipSelectModel.hex(gap.last,6));
+            }
+            return segment>0;
+        }
         if(parts.isEmpty()){
             MemoryBlock b=m.createUninitializedBlock(item.name,address(p,item.address),
                 item.length,false);
@@ -187,9 +225,8 @@ public final class HardwareApplyService {
     private static boolean defineRegister(Program p,HardwareApplyPlan.Item item,
                                           List<String> notes)throws Exception {
         Address first=address(p,item.address),last=address(p,item.last());
-        if(!covers(p.getMemory(),first,last) ||
-                !p.getListing().isUndefined(first,last)){
-            notes.add("SKIP "+item.name+" (unmapped or already defined)");
+        if(!covers(p.getMemory(),first,last)){
+            notes.add("SKIP "+item.name+" (unmapped)");
             return false;
         }
         Symbol prior=p.getSymbolTable().getPrimarySymbol(first);
@@ -204,8 +241,19 @@ public final class HardwareApplyService {
             case 4 -> DWordDataType.dataType;
             default -> throw new IllegalArgumentException("Unsupported register length: "+item.length);
         };
-        p.getListing().createData(first,type);
-        String name=item.name+"_"+Long.toHexString(item.address).toUpperCase(Locale.ROOT);
+        boolean undefined=p.getListing().isUndefined(first,last);
+        if(undefined) {
+            p.getListing().createData(first,type);
+        } else {
+            ghidra.program.model.listing.Data priorData=p.getListing().getDataAt(first);
+            if(priorData==null || !priorData.isDefined() ||
+                    priorData.getLength()!=item.length) {
+                notes.add("SKIP "+item.name+" (existing incompatible data/code)");
+                return false;
+            }
+            // Preserve user-approved data type: only add an informative symbol.
+        }
+        String name=item.name;
         p.getSymbolTable().createLabel(first,name,SourceType.USER_DEFINED);
         notes.add("DEFINED REGISTER "+name+" at "+first);
         return true;

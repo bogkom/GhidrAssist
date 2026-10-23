@@ -56,6 +56,25 @@ public final class HardwareProfilesSelfTest {
         check(m.absoluteAddress(m.register("PICR"),1) == 0xfffa22L &&
             m.absoluteAddress(m.register("PITR"),1)==0xfffa24L,
             "D-4 PICR and PITR");
+        check(m.registers.size() >= 225, "Appendix D QSM/TPU catalog coverage");
+        java.util.Set<Long> occupiedBytes = new java.util.HashSet<>();
+        java.util.Set<String> names = new java.util.HashSet<>();
+        for(var register : m.registers) {
+            check(names.add(register.name), "duplicate register name " + register.name);
+            long start=m.absoluteAddress(register,1);
+            check(register.widthBits==8 || register.widthBits==16 ||
+                register.widthBits==32,"unsupported register width");
+            for(int byteOffset=0;byteOffset<register.widthBits/8;byteOffset++)
+                check(occupiedBytes.add(start+byteOffset),
+                    "overlapping register bytes at " + Long.toHexString(start+byteOffset));
+        }
+        check(m.register("SYPCR").offset==0x0a21, "byte-oriented SYPCR");
+        check(m.register("PEPAR").offset==0x0a17, "byte-oriented PEPAR");
+        check(m.register("PFPAR").offset==0x0a1f, "byte-oriented PFPAR");
+        check(m.register("QILR").offset==0x0c04 &&
+            m.register("QIVR").offset==0x0c05,"QSM IRQ byte registers");
+        check(m.register("TPU_CH15_P7").offset==0x0ffe,
+            "last implemented TPU parameter word");
         for (var r : m.registers) {
             check(r.sourcePage != null && !r.sourcePage.isBlank(),
                 "register missing source-page uncertainty metadata");

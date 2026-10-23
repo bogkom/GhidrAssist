@@ -91,6 +91,7 @@ public final class HardwareAnalysisTab extends JPanel {
     private volatile Program latestProgram;
     private volatile boolean latestConcrete;
     private volatile List<HardwareFunctionNamingReview.Proposal> latestFunctionProposals=List.of();
+    private volatile List<HardwareInventoryService.Site> latestSites=List.of();
 
     public HardwareAnalysisTab(GhidrAssistPlugin plugin){
         super(new BorderLayout(5,5));
@@ -268,6 +269,7 @@ public final class HardwareAnalysisTab extends JPanel {
         approve.setEnabled(false);
         reviewNames.setEnabled(false);
         latestFunctionProposals=List.of();
+        latestSites=List.of();
         latestMarkdown=null;latestNameCsv=null;latestProgram=null;
         ghidrassist.hardware.HardwareEvidenceCache.clear(program);
         report.getHighlighter().removeAllHighlights();
@@ -294,6 +296,7 @@ public final class HardwareAnalysisTab extends JPanel {
                     latestProgram=program;
                     latestConcrete=concrete;
                     latestFunctionProposals=finished.functionProposals;
+                    latestSites=finished.sites;
                     approve.setEnabled(true);
                     reviewNames.setEnabled(concrete && latestFunctionProposals.stream()
                         .anyMatch(p->p.status==ghidrassist.hardware.HardwareNamingReview.Status.REVIEW_REQUIRED));
@@ -529,6 +532,18 @@ public final class HardwareAnalysisTab extends JPanel {
      * actionable rows. Conflicts, existing work, external peripherals,
      * relocated RAM and unverified VBR are unchecked.
      */
+    private List<HardwareApplyPlan.CsbarEvidence> csbarEvidence(){
+        List<HardwareApplyPlan.CsbarEvidence> candidates=new ArrayList<>();
+        for(HardwareInventoryService.Site site:latestSites){
+            if(site==null || !site.write || site.literal==null ||
+                    site.register==null || !site.register.matches("CSBAR(?:BT|10|[0-9])"))
+                continue;
+            candidates.add(new HardwareApplyPlan.CsbarEvidence(
+                site.register,site.literal,site.function));
+        }
+        return candidates;
+    }
+
     private void reviewHardwareChanges(){
         Program program=plugin.getCurrentProgram();
         if(program==null || latestProgram!=program || latestMarkdown==null){
@@ -543,7 +558,7 @@ public final class HardwareAnalysisTab extends JPanel {
             return;
         }
         final List<HardwareApplyPlan.Item> candidates=
-            new ArrayList<>(HardwareApplyPlan.mc68332Mm1Candidates(0));
+            new ArrayList<>(HardwareApplyPlan.mc68332Mm1Candidates(0,csbarEvidence()));
         final List<HardwareApplyService.Decision> decisions=new ArrayList<>();
         for(HardwareApplyPlan.Item item:candidates)
             decisions.add(HardwareApplyService.preflight(program,item,candidates));
@@ -588,7 +603,7 @@ public final class HardwareAnalysisTab extends JPanel {
             try{
                 long value=Long.parseUnsignedLong(digits,16);
                 List<HardwareApplyPlan.Item> updated=
-                    HardwareApplyPlan.mc68332Mm1Candidates(value);
+                    HardwareApplyPlan.mc68332Mm1Candidates(value,csbarEvidence());
                 HardwareApplyPlan.Item item=updated.get(vbrIndex);
                 candidates.set(vbrIndex,item);
                 HardwareApplyService.Decision d=
@@ -630,7 +645,36 @@ public final class HardwareAnalysisTab extends JPanel {
             countLabel.setText(selected+" selected, "+existing+
                 " existing, "+blocked+" blocked");
         };
-        model.addTableModelListener(e->updateCount.run());
+        // Keep dependent register checkboxes consistent with the selected module block.
+        // A mapped register remains independent when its parent region already exists.
+        final boolean[] syncing=new boolean[1];
+        model.addTableModelListener(e->{
+            if(!syncing[0] && e.getColumn()==0){
+                syncing[0]=true;
+                try{
+                    for(int k=0;k<candidates.size();k++){
+                        HardwareApplyPlan.Item child=candidates.get(k);
+                        if(child.kind!=HardwareApplyPlan.Kind.REGISTER)continue;
+                        if(!Boolean.TRUE.equals(model.getValueAt(k,0)))continue;
+                        boolean mapped=program.getMemory().contains(
+                            program.getAddressFactory().getDefaultAddressSpace().getAddress(child.address));
+                        if(mapped)continue;
+                        boolean parentSelected=false;
+                        for(int j=0;j<candidates.size();j++){
+                            HardwareApplyPlan.Item parent=candidates.get(j);
+                            if(parent.kind==HardwareApplyPlan.Kind.MEMORY &&
+                                parent.address<=child.address && parent.last()>=child.last() &&
+                                Boolean.TRUE.equals(model.getValueAt(j,0))){
+                                parentSelected=true;
+                                break;
+                            }
+                        }
+                        if(!parentSelected)model.setValueAt(false,k,0);
+                    }
+                }finally{syncing[0]=false;}
+            }
+            updateCount.run();
+        });
         updateCount.run();
         selectSafe.addActionListener(e->{
             for(int i=0;i<candidates.size();i++){
@@ -661,8 +705,18 @@ public final class HardwareAnalysisTab extends JPanel {
         dialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
         dialog.setContentPane(content);
         Dimension screen=Toolkit.getDefaultToolkit().getScreenSize();
-        dialog.setSize(Math.min(1220,Math.max(700,screen.width-100)),
-            Math.min(740,Math.max(460,screen.height-130)));
+        java.util.prefs.Preferences windowPreferences =
+            java.util.prefs.Preferences.userNodeForPackage(HardwareAnalysisTab.class);
+        int preferredWidth = windowPreferences.getInt("hardware.review.width", 1480);
+        int preferredHeight = windowPreferences.getInt("hardware.review.height", 900);
+        dialog.setSize(Math.min(screen.width-60,Math.max(900,preferredWidth)),
+            Math.min(screen.height-90,Math.max(600,preferredHeight)));
+        dialog.addWindowListener(new java.awt.event.WindowAdapter(){
+            @Override public void windowClosed(java.awt.event.WindowEvent e){
+                windowPreferences.putInt("hardware.review.width",dialog.getWidth());
+                windowPreferences.putInt("hardware.review.height",dialog.getHeight());
+            }
+        });
         dialog.setMinimumSize(new Dimension(690,420));
         dialog.setResizable(true);
         dialog.setLocationRelativeTo(this);
@@ -723,8 +777,17 @@ public final class HardwareAnalysisTab extends JPanel {
             HardwareApplyService.Outcome outcome=
                 HardwareApplyService.apply(program,accepted);
             StringBuilder details=new StringBuilder();
+            long named=outcome.messages.stream()
+                .filter(line->line.startsWith("DEFINED REGISTER ")).count();
+            long mapped=outcome.messages.stream()
+                .filter(line->line.startsWith("NEW CS REGION ") ||
+                    line.startsWith("NEW MODULE REGION ") ||
+                    line.startsWith("UPGRADED MODULE REGION ")).count();
             details.append("Changed: ").append(outcome.changed)
-                .append("; skipped: ").append(outcome.skipped).append("\n\n");
+                .append("; skipped: ").append(outcome.skipped)
+                .append("; register names: ").append(named)
+                .append("; memory regions/fragments: ").append(mapped)
+                .append("\n\n");
             for(String line:outcome.messages)details.append(line).append("\n");
             JTextArea result=new JTextArea(details.toString(),18,95);
             result.setEditable(false);
