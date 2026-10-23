@@ -195,7 +195,7 @@ public final class HardwareProfiles {
             WritePolicy.READ_WRITE, null));
         r.add(reg("SIM", "SYNCR", 0x0a04, 16, source));
         // Additional SIM register locations from MC68332UM Table D-2.
-        r.add(reg("SIM", "SYPCR", 0x0a20, 8, source));
+        r.add(reg("SIM", "SYPCR", 0x0a21, 8, source));
         r.add(reg("SIM", "SWSR", 0x0a27, 8, source));
         r.add(reg("SIM", "PORTE0", 0x0a11, 8, source));
         r.add(reg("SIM", "PORTE1", 0x0a13, 8, source));
