@@ -47,6 +47,47 @@ public class ToolRegistry implements ToolExecutor {
     private volatile ToolApprovalService approvalService;
     private volatile IntSupplier activeSessionSupplier = () -> -1;
     private volatile Supplier<String> programHashSupplier = () -> null;
+    // Limits are enforced by the dispatcher, not merely suggested to the LLM.
+    // A null limit means the user did not request a hard per-investigation cap.
+    private Integer investigationToolLimit;
+    private int investigationToolCalls;
+
+    public synchronized void configureInvestigationToolLimit(String objective) {
+        investigationToolCalls = 0;
+        String normalized = objective == null ? "" : objective.toLowerCase(java.util.Locale.ROOT);
+        if (normalized.contains("nie wywołuj żadnych narzędzi")
+                || normalized.contains("nie wykonuj żadnych wywołań")
+                || normalized.contains("do not call any tools")
+                || normalized.contains("do not invoke any tools")) {
+            investigationToolLimit = 0;
+        } else if (normalized.contains("wywołaj dokładnie jeden raz")
+                || normalized.contains("nie wykonuj więcej niż jednego wywołania")
+                || normalized.contains("maksymalnie jedno wywołanie")
+                || normalized.contains("exactly one tool call")
+                || normalized.contains("call exactly one tool")) {
+            investigationToolLimit = 1;
+        } else {
+            investigationToolLimit = null;
+        }
+    }
+
+    public synchronized void clearInvestigationToolLimit() {
+        investigationToolLimit = null;
+        investigationToolCalls = 0;
+    }
+
+    private synchronized boolean reserveInvestigationToolCall() {
+        if (investigationToolLimit != null && investigationToolCalls >= investigationToolLimit) {
+            return false;
+        }
+        investigationToolCalls++;
+        return true;
+    }
+
+    public synchronized int getInvestigationToolCallCount() {
+        return investigationToolCalls;
+    }
+
 
     /**
      * Register a tool provider.
@@ -140,6 +181,11 @@ public class ToolRegistry implements ToolExecutor {
             Msg.warn(this, "No provider found for tool: " + toolName);
             return CompletableFuture.completedFuture(
                     ToolResult.error("Unknown tool: " + toolName));
+        }
+
+        if (!reserveInvestigationToolCall()) {
+            return CompletableFuture.completedFuture(
+                ToolResult.error("Tool call blocked: explicit per-investigation tool limit reached"));
         }
 
         int sessionId = activeSessionSupplier != null ? activeSessionSupplier.getAsInt() : -1;
