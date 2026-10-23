@@ -51,9 +51,17 @@ public class ToolRegistry implements ToolExecutor {
     // A null limit means the user did not request a hard per-investigation cap.
     private Integer investigationToolLimit;
     private int investigationToolCalls;
+    private final java.util.Set<String> investigationReadKeys = new java.util.HashSet<>();
+    private synchronized boolean reserveUniqueRead(String toolName, JsonObject args) {
+        if (!isReadOnlyLookup(toolName)) return true;
+        String key = toolName + ":" + (args == null ? "{}" : args.toString());
+        return investigationReadKeys.add(key);
+    }
+
 
     public synchronized void configureInvestigationToolLimit(String objective) {
         investigationToolCalls = 0;
+        investigationReadKeys.clear();
         String normalized = objective == null ? "" : objective.toLowerCase(java.util.Locale.ROOT);
         if (normalized.contains("nie wywołuj żadnych narzędzi")
                 || normalized.contains("nie wykonuj żadnych wywołań")
@@ -74,6 +82,7 @@ public class ToolRegistry implements ToolExecutor {
     public synchronized void clearInvestigationToolLimit() {
         investigationToolLimit = null;
         investigationToolCalls = 0;
+        investigationReadKeys.clear();
     }
 
     private synchronized boolean reserveInvestigationToolCall() {
@@ -183,6 +192,14 @@ public class ToolRegistry implements ToolExecutor {
                     ToolResult.error("Unknown tool: " + toolName));
         }
 
+        if (investigationToolLimit != null && investigationToolLimit == 0) {
+            return CompletableFuture.completedFuture(ToolResult.error(
+                "Tool call blocked: the user prohibited tools for this investigation"));
+        }
+        if (!reserveUniqueRead(toolName, args)) {
+            return CompletableFuture.completedFuture(ToolResult.error(
+                "Duplicate read-only tool call blocked in this investigation: reuse earlier tool evidence"));
+        }
         if (!reserveInvestigationToolCall()) {
             return CompletableFuture.completedFuture(
                 ToolResult.error("Tool call blocked: explicit per-investigation tool limit reached"));
@@ -278,6 +295,7 @@ public class ToolRegistry implements ToolExecutor {
     /** Reset evidence at the start of each ReAct investigation or after a write. */
     public synchronized void clearRecentToolEvidence() {
         toolObservations.clear();
+        investigationReadKeys.clear();
     }
 
     /** Only successful read-only observations; bounded to eight distinct queries. */
