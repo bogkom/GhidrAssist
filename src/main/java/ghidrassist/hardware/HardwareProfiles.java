@@ -194,17 +194,25 @@ public final class HardwareProfiles {
             "D-4/D-5/D-6 (PDF pages 218-220)", Access.SUPERVISOR,
             WritePolicy.READ_WRITE, null));
         r.add(reg("SIM", "SYNCR", 0x0a04, 16, source));
+        r.add(reg("SIM", "SIMTR", 0x0a02, 16, source));
+        r.add(reg("SIM", "SIMTRE", 0x0a08, 16, source));
+        r.add(reg("SIM", "TSTMSRA", 0x0a30, 16, source));
+        r.add(reg("SIM", "TSTMSRB", 0x0a32, 16, source));
+        r.add(reg("SIM", "TSTSC", 0x0a34, 16, source));
+        r.add(reg("SIM", "TSTRC", 0x0a36, 16, source));
+        r.add(reg("SIM", "CREG", 0x0a38, 16, source));
+        r.add(reg("SIM", "DREG", 0x0a3a, 16, source));
         // Additional SIM register locations from MC68332UM Table D-2.
         r.add(reg("SIM", "SYPCR", 0x0a21, 8, source));
         r.add(reg("SIM", "SWSR", 0x0a27, 8, source));
         r.add(reg("SIM", "PORTE0", 0x0a11, 8, source));
         r.add(reg("SIM", "PORTE1", 0x0a13, 8, source));
         r.add(reg("SIM", "DDRE", 0x0a15, 8, source));
-        r.add(reg("SIM", "PEPAR", 0x0a16, 16, source));
+        r.add(reg("SIM", "PEPAR", 0x0a17, 8, source));
         r.add(reg("SIM", "PORTF0", 0x0a19, 8, source));
         r.add(reg("SIM", "PORTF1", 0x0a1b, 8, source));
         r.add(reg("SIM", "DDRF", 0x0a1d, 8, source));
-        r.add(reg("SIM", "PFPAR", 0x0a1e, 16, source));
+        r.add(reg("SIM", "PFPAR", 0x0a1f, 8, source));
         r.add(reg("SIM", "PORTC", 0x0a41, 8, source));
         // The upper byte of $YFFA06 is reserved; RSR is a single byte at +7.
         r.add(new Register("SIM", "RSR", 0x0a07, 8, List.of(), source,
