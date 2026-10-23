@@ -91,6 +91,7 @@ public final class HardwareAnalysisTab extends JPanel {
     private volatile Program latestProgram;
     private volatile boolean latestConcrete;
     private volatile List<HardwareFunctionNamingReview.Proposal> latestFunctionProposals=List.of();
+    private volatile List<HardwareInventoryService.Site> latestSites=List.of();
 
     public HardwareAnalysisTab(GhidrAssistPlugin plugin){
         super(new BorderLayout(5,5));
@@ -268,6 +269,7 @@ public final class HardwareAnalysisTab extends JPanel {
         approve.setEnabled(false);
         reviewNames.setEnabled(false);
         latestFunctionProposals=List.of();
+        latestSites=List.of();
         latestMarkdown=null;latestNameCsv=null;latestProgram=null;
         ghidrassist.hardware.HardwareEvidenceCache.clear(program);
         report.getHighlighter().removeAllHighlights();
@@ -294,6 +296,7 @@ public final class HardwareAnalysisTab extends JPanel {
                     latestProgram=program;
                     latestConcrete=concrete;
                     latestFunctionProposals=finished.functionProposals;
+                    latestSites=finished.sites;
                     approve.setEnabled(true);
                     reviewNames.setEnabled(concrete && latestFunctionProposals.stream()
                         .anyMatch(p->p.status==ghidrassist.hardware.HardwareNamingReview.Status.REVIEW_REQUIRED));
@@ -543,7 +546,7 @@ public final class HardwareAnalysisTab extends JPanel {
             return;
         }
         final List<HardwareApplyPlan.Item> candidates=
-            new ArrayList<>(HardwareApplyPlan.mc68332Mm1Candidates(0));
+            new ArrayList<>(HardwareApplyPlan.mc68332Mm1Candidates(0,latestSites));
         final List<HardwareApplyService.Decision> decisions=new ArrayList<>();
         for(HardwareApplyPlan.Item item:candidates)
             decisions.add(HardwareApplyService.preflight(program,item,candidates));
@@ -588,7 +591,7 @@ public final class HardwareAnalysisTab extends JPanel {
             try{
                 long value=Long.parseUnsignedLong(digits,16);
                 List<HardwareApplyPlan.Item> updated=
-                    HardwareApplyPlan.mc68332Mm1Candidates(value);
+                    HardwareApplyPlan.mc68332Mm1Candidates(value,latestSites);
                 HardwareApplyPlan.Item item=updated.get(vbrIndex);
                 candidates.set(vbrIndex,item);
                 HardwareApplyService.Decision d=
