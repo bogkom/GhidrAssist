@@ -129,11 +129,16 @@ public final class HardwareApplyService {
         Address first=address(p,item.address),last=address(p,item.last());
         Memory m=p.getMemory();
         if(covers(m,first,last)) {
-            if(!p.getListing().isUndefined(first,last))
-                return decide(State.ALREADY_PRESENT,"Data or code already defined",false);
             Symbol old=p.getSymbolTable().getPrimarySymbol(first);
             if(old!=null && old.getSource()!=SourceType.DEFAULT)
                 return decide(State.BLOCKED,"Existing non-default label: "+old.getName(),false);
+            if(!p.getListing().isUndefined(first,last)) {
+                ghidra.program.model.listing.Data prior=p.getListing().getDataAt(first);
+                if(prior!=null && prior.isDefined() && prior.getLength()==item.length)
+                    return decide(State.UPGRADE,"Preserve existing typed data; add short register label",true);
+                return decide(State.ALREADY_PRESENT,
+                    "Data/code defined with incompatible size or location",false);
+            }
             return decide(State.READY,"Mapped, undefined and no user symbol",true);
         }
         for(HardwareApplyPlan.Item candidate:all){
@@ -217,9 +222,8 @@ public final class HardwareApplyService {
     private static boolean defineRegister(Program p,HardwareApplyPlan.Item item,
                                           List<String> notes)throws Exception {
         Address first=address(p,item.address),last=address(p,item.last());
-        if(!covers(p.getMemory(),first,last) ||
-                !p.getListing().isUndefined(first,last)){
-            notes.add("SKIP "+item.name+" (unmapped or already defined)");
+        if(!covers(p.getMemory(),first,last)){
+            notes.add("SKIP "+item.name+" (unmapped)");
             return false;
         }
         Symbol prior=p.getSymbolTable().getPrimarySymbol(first);
@@ -234,7 +238,18 @@ public final class HardwareApplyService {
             case 4 -> DWordDataType.dataType;
             default -> throw new IllegalArgumentException("Unsupported register length: "+item.length);
         };
-        p.getListing().createData(first,type);
+        boolean undefined=p.getListing().isUndefined(first,last);
+        if(undefined) {
+            p.getListing().createData(first,type);
+        } else {
+            ghidra.program.model.listing.Data priorData=p.getListing().getDataAt(first);
+            if(priorData==null || !priorData.isDefined() ||
+                    priorData.getLength()!=item.length) {
+                notes.add("SKIP "+item.name+" (existing incompatible data/code)");
+                return false;
+            }
+            // Preserve user-approved data type: only add an informative symbol.
+        }
         String name=item.name;
         p.getSymbolTable().createLabel(first,name,SourceType.USER_DEFINED);
         notes.add("DEFINED REGISTER "+name+" at "+first);
