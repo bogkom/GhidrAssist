@@ -120,6 +120,7 @@ public class TabController {
     private SemanticGraphTab semanticGraphTab;
     private SymGraphTab symGraphTab;
 
+    private volatile boolean pendingAgentUseMCP = true;
     private volatile String pendingAgentPlan;
     private volatile String pendingAgentQuery;
     private volatile String pendingAgentInitialContext;
@@ -872,7 +873,7 @@ public class TabController {
 
         // Route to appropriate handler
         if (useAgentic) {
-            handleAgenticQuery(query);
+            handleAgenticQuery(query, useMCP);
         } else {
             handleRegularQuery(query, useRAG, useMCP);
         }
@@ -905,7 +906,8 @@ public class TabController {
         new TaskLauncher(task, plugin.getTool().getToolFrame());
     }
 
-    private void handleAgenticQuery(String query) {
+    private void handleAgenticQuery(String query, boolean useMCP) {
+        pendingAgentUseMCP = useMCP;
         final String reactRunId = UUID.randomUUID().toString();
 
         // Add user query to conversation history and ensure we have a session
@@ -1009,7 +1011,7 @@ public class TabController {
         // in ReActOrchestrator. MCPToolManager only handles MCP server tools.
 
         java.util.concurrent.CompletableFuture<Void> initFuture;
-        if (!toolManager.isInitialized()) {
+        if (pendingAgentUseMCP && !toolManager.isInitialized()) {
             Msg.info(this, "Initializing MCP servers for agentic analysis...");
             SwingUtilities.invokeLater(() ->
                 queryTab.setResponseText("<html><body>Initializing MCP servers...</body></html>"));
@@ -1027,7 +1029,8 @@ public class TabController {
                     plugin,
                     18,  // maxIterations
                     8000,  // contextSummaryThreshold
-                    maxToolRounds  // maxToolRounds per iteration
+                    maxToolRounds, // maxToolRounds per iteration
+                    pendingAgentUseMCP
                 );
 
             // Wire document chat handler so the agent can create report chats
