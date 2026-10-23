@@ -37,8 +37,8 @@ public final class HardwareApplyPlanSelfTest {
              x.name.equals("QSM_MM1") || x.name.equals("TPU_MM1")))
             .allMatch(x->x.details.contains("PDF page 215")),
             "all module proposals carry sourced D-1 metadata");
-        check(items.stream().anyMatch(x->x.name.equals("CS7_DEVICE_CANDIDATE") &&
-            x.address==0xff8800L && x.length==2048),"CS7 remains candidate");
+        check(items.stream().noneMatch(x->x.name.contains("_DEVICE_CANDIDATE")),
+            "external windows must come from decoded CSBAR evidence");
         check(items.stream().noneMatch(x->x.name.startsWith("CS9") ||
             x.name.startsWith("CS0")||x.name.startsWith("CS1")),
             "overlapping bus windows never auto-proposed as conventional blocks");
