@@ -78,8 +78,31 @@ public final class HardwareApplyService {
         blocks.sort(Comparator.comparing(MemoryBlock::getStart));
         return blocks;
     }
+    private static boolean csWindow(HardwareApplyPlan.Item item) {
+        return item.name.startsWith("CS_WINDOW_");
+    }
+    private static List<HardwareRegionLayout.Range> csMissing(
+            HardwareApplyPlan.Item item, List<MemoryBlock> blocks) {
+        List<HardwareRegionLayout.Range> gaps=new ArrayList<>();
+        long cursor=item.address;
+        for(MemoryBlock block:blocks) {
+            long first=Math.max(item.address,block.getStart().getOffset());
+            long last=Math.min(item.last(),block.getEnd().getOffset());
+            if(first>cursor)gaps.add(new HardwareRegionLayout.Range(cursor,first-1));
+            cursor=Math.max(cursor,last+1);
+        }
+        if(cursor<=item.last())gaps.add(new HardwareRegionLayout.Range(cursor,item.last()));
+        return gaps;
+    }
     private static Decision memoryDecision(Program p,HardwareApplyPlan.Item item){
         List<MemoryBlock> parts=overlaps(p,item);
+        if(csWindow(item)){
+            List<HardwareRegionLayout.Range> gaps=csMissing(item,parts);
+            return gaps.isEmpty() ?
+                decide(State.ALREADY_PRESENT,"CS address range is already mapped",false) :
+                decide(State.READY,"Map "+gaps.size()+
+                    " missing CS fragment(s), keep existing blocks/data unchanged",true);
+        }
         if(parts.size()==1 && parts.get(0).getStart().getOffset()==item.address &&
                 parts.get(0).getEnd().getOffset()==item.last())
             return decide(State.ALREADY_PRESENT,"Entire region already mapped as "+
@@ -153,6 +176,18 @@ public final class HardwareApplyService {
         }
         Memory m=p.getMemory();
         List<MemoryBlock> parts=overlaps(p,item);
+        if(csWindow(item)){
+            int segment=0;
+            for(HardwareRegionLayout.Range gap:csMissing(item,parts)){
+                String name=item.name+"_PART_"+(++segment);
+                MemoryBlock added=m.createUninitializedBlock(name,address(p,gap.first),
+                    gap.length(),false);
+                added.setRead(true);added.setWrite(true);added.setExecute(false);
+                notes.add("NEW CS REGION "+name+" "+
+                    ChipSelectModel.hex(gap.first,6)+".."+ChipSelectModel.hex(gap.last,6));
+            }
+            return segment>0;
+        }
         if(parts.isEmpty()){
             MemoryBlock b=m.createUninitializedBlock(item.name,address(p,item.address),
                 item.length,false);
