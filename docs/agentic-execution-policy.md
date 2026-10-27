@@ -52,16 +52,36 @@ should request fewer results rather than silently lose provenance or pagination.
 
 ## Query GUI
 
-Enable Agentic Mode, use **Restrict tools for this task**, refresh the inventory,
-select allowed tools and enter per-tool limits (blank means unlimited, zero
-means no calls). Optional total-call and read-only settings use the same typed
-policy. Approve Plan freezes a validated snapshot; prompt text never changes it.
-Leaving restrictions off uses the unchanged legacy API. Settings reset after a
-run, cancellation or New chat; they are not saved in user preferences.
+The Query toolbar opens **Tools** in a separate resizable, modeless Swing window.
+Configuration and the optional **Tool history** window occupy no transcript area.
+The toolbar shows the applied mode, selected count and whether its lifetime is
+`next` task or `chat`; its tooltip includes total and per-tool budget information.
 
-The outcome table is driven by the production observer and distinguishes
-REQUESTED, RUNNING, SUCCEEDED, REJECTED and FAILED with actual reasons. The
-existing transcript remains available. Known aliases share a stable operation
-identity, budget and static-read deduplication; an alias is never implicitly
-added to an allowlist. Tool providers exposing aliases must declare the same
-execution identity. MCP adapters use the original remote tool name and source.
+Choose **All available tools**, **Read-only tools**, or **Selected tools**. The
+inventory uses full registered names, provider groups and provider descriptions.
+Search matches literal substrings of names/descriptions, ignoring case. Provider
+filtering and selection operate together; **Select all shown** and **Deselect all
+shown** affect only the filtered rows. The count includes hidden selected rows.
+Tables scroll horizontally; selecting a row displays the full description.
+
+**Max calls** is a per-tool budget and **Total calls** is a per-task global budget.
+Blank means **Unlimited** and zero blocks executions. The read-only preview uses
+exactly the existing ToolRegistry classification (`get_`, `list_`, `search_` in
+the name); it is not a separate audit of provider implementations. Dispatcher
+approvals, aliases, deduplication, journals and other protections are unchanged.
+To allow one tool once, choose Selected tools, clear both filters, deselect all,
+select its full name and set both budgets to one.
+
+**Apply** validates all visible and hidden row limits and commits a snapshot in
+memory. Cancel/window-close discards edits; Restore defaults requires Apply.
+Next task settings reset after execution completes, fails or is cancelled.
+Cancelling a proposed plan does not consume settings. Current conversation
+settings survive tasks but reset when starting, clearing, deleting or switching
+conversations. They are never written to preferences or restored from history.
+Unchanged defaults preserve the legacy API overload. Approve Plan freezes the
+applied policy and editing remains disabled during execution.
+
+Help (?) explains these options in a resizable window. Tool history separately
+shows the latest task's REQUESTED, RUNNING, SUCCEEDED, REJECTED and FAILED events
+and full responses/reasons. These remain production observer events, independent
+of the policy editor and the model's claims.
