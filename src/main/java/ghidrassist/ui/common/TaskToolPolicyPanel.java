@@ -63,10 +63,27 @@ public final class TaskToolPolicyPanel extends JPanel {
         @Override public String getToolTipText(MouseEvent event) {
             int row = rowAtPoint(event.getPoint()), col = columnAtPoint(event.getPoint());
             if (row < 0 || col < 0) return null;
-            Object value = getValueAt(row, col);
-            return value == null ? null : value.toString();
+            String name = String.valueOf(getValueAt(row, 0));
+            String detail = String.valueOf(getValueAt(row, 4));
+            String source = String.valueOf(getValueAt(row, 3));
+            return switch (convertColumnIndexToModel(col)) {
+                case 0 -> tip(name, detail.isBlank() ? "No description supplied by this tool." : detail, source);
+                case 1 -> tip("Allowed", "Choose which tools the model may call. Click the checkbox in Selected tools mode, or use the selection buttons to switch modes.", name);
+                case 2 -> tip("Max calls", "Number of executions allowed per task. Empty means Unlimited; select a row and click Set Unlimited to clear its limit.", name);
+                case 3 -> tip("Provider", "Source of this tool: " + source, name);
+                default -> tip(name, detail.isBlank() ? "No description supplied by this tool." : detail, source);
+            };
         }
     };
+    private static String escapeHtml(String value) {
+        return value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                .replace("\"", "&quot;").replace("'", "&#39;");
+    }
+    private static String tip(String title, String detail, String footer) {
+        return "<html><table width='460'><tr><td><b>" + escapeHtml(title)
+                + "</b><br>" + escapeHtml(detail).replace("\n", "<br>")
+                + "<br><i>" + escapeHtml(footer) + "</i></td></tr></table></html>";
+    }
     private final TableRowSorter<DefaultTableModel> sorter = new TableRowSorter<>(tools);
     private final DefaultTableModel events = new DefaultTableModel(new Object[]{"Tool", "State", "Response / reason"}, 0) {
         @Override public boolean isCellEditable(int row, int col) { return false; }
@@ -101,9 +118,12 @@ public final class TaskToolPolicyPanel extends JPanel {
         filters.add(fieldGroup("Search:", search)); filters.add(fieldGroup("Provider:", provider));
         refreshButton = button("Refresh tools", "Reload native tools and tools from MCP when Use MCP Tools is enabled.", refresh);
         filters.add(refreshButton);
-        JButton select = button("Select all shown", "Allow every tool matching the current search/provider filter in Selected tools mode.", () -> selectShown(true));
-        JButton deselect = button("Deselect all shown", "Disallow every tool matching the current search/provider filter in Selected tools mode.", () -> selectShown(false));
-        filters.add(select); filters.add(deselect);
+        JButton select = button("Select all shown", "Allow tools matching the current filter; automatically switches to Selected tools mode.", () -> selectShown(true));
+        JButton deselect = button("Deselect all shown", "Disallow tools matching the current filter; automatically switches to Selected tools mode.", () -> selectShown(false));
+        JButton selectAll = button("Select all tools", "Allow all registered tools, including those hidden by search or provider filters.", () -> selectAllTools(true));
+        JButton deselectAll = button("Deselect all tools", "Disallow every registered tool, including hidden tools. Switches to Selected tools mode.", () -> selectAllTools(false));
+        JButton unlimited = button("Set Unlimited", "Clear the Max calls limit for the selected table row(s); blank means Unlimited.", this::clearSelectedLimits);
+        filters.add(select); filters.add(deselect); filters.add(selectAll); filters.add(deselectAll); filters.add(unlimited);
         JPanel north = new JPanel(new WrapLayout());
         for (Component c : controls.getComponents()) north.add(c);
         for (Component c : filters.getComponents()) north.add(c);
@@ -125,11 +145,12 @@ public final class TaskToolPolicyPanel extends JPanel {
         apply.addActionListener(e -> applyDraft());
         JPanel actions = new JPanel(new WrapLayout()); actions.add(defaults); actions.add(help); actions.add(cancel); actions.add(apply);
         JPanel south = new JPanel(new BorderLayout()); south.add(notice, BorderLayout.NORTH); south.add(actions, BorderLayout.SOUTH); add(south, BorderLayout.SOUTH);
-        editControls.addAll(List.of(mode, lifetime, total, search, provider, refreshButton, select, deselect, defaults, apply));
+        editControls.addAll(List.of(mode, lifetime, total, search, provider, refreshButton, select, deselect, selectAll, deselectAll, unlimited, defaults, apply));
         provider.addItem("All providers");
         mode.addActionListener(e -> {
-            select.setEnabled(!running && mode.getSelectedItem() == Mode.SELECTED);
-            deselect.setEnabled(!running && mode.getSelectedItem() == Mode.SELECTED);
+            if (!updating) notice.setText(mode.getSelectedItem() == Mode.SELECTED
+                    ? "Click Allowed, double-click a tool name or press Space/Enter. Blank Max calls = Unlimited."
+                    : "Selection buttons switch to Selected tools mode; existing limits remain unchanged.");
             tools.fireTableDataChanged(); updateCount();
         });
         addComponentListener(new ComponentAdapter() {
@@ -142,6 +163,24 @@ public final class TaskToolPolicyPanel extends JPanel {
             public void changedUpdate(DocumentEvent e) { filter(); }
         });
         tools.addTableModelListener(e -> updateCount());
+        table.addMouseListener(new MouseAdapter() {
+            @Override public void mouseClicked(MouseEvent e) {
+                if (SwingUtilities.isLeftMouseButton(e) && e.getClickCount() == 2
+                        && table.columnAtPoint(e.getPoint()) != 1 && table.columnAtPoint(e.getPoint()) != 2) {
+                    int row = table.rowAtPoint(e.getPoint());
+                    if (row >= 0) toggleAllowedRows(new int[]{row});
+                }
+            }
+        });
+        table.getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT).put(
+                KeyStroke.getKeyStroke(KeyEvent.VK_SPACE, 0), "toggleToolAllowed");
+        table.getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT).put(
+                KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0), "toggleToolAllowed");
+        table.getActionMap().put("toggleToolAllowed", new AbstractAction() {
+            @Override public void actionPerformed(ActionEvent e) {
+                if (!table.isEditing()) toggleAllowedRows(table.getSelectedRows());
+            }
+        });
         table.getSelectionModel().addListSelectionListener(e -> {
             int row = table.getSelectedRow();
             String text = row < 0 ? "" : String.valueOf(table.getValueAt(row, 4));
@@ -225,10 +264,47 @@ public final class TaskToolPolicyPanel extends JPanel {
         });
         updateCount();
     }
+    /** Preserve the effective selection when switching from All or Read-only to Selected. */
+    private void ensureSelectedMode() {
+        if (mode.getSelectedItem() == Mode.SELECTED) return;
+        boolean[] effective = new boolean[tools.getRowCount()];
+        for (int r = 0; r < effective.length; r++)
+            effective[r] = Boolean.TRUE.equals(tools.getValueAt(r, 1));
+        mode.setSelectedItem(Mode.SELECTED);
+        for (int r = 0; r < effective.length; r++) tools.setValueAt(effective[r], r, 1);
+    }
     private void selectShown(boolean selected) {
-        if (running || mode.getSelectedItem() != Mode.SELECTED) return;
-        for (int r=0;r<table.getRowCount();r++) tools.setValueAt(selected,table.convertRowIndexToModel(r),1);
+        if (running) return;
+        ensureSelectedMode();
+        for (int r = 0; r < table.getRowCount(); r++)
+            tools.setValueAt(selected, table.convertRowIndexToModel(r), 1);
         updateCount();
+    }
+    private void selectAllTools(boolean selected) {
+        if (running) return;
+        ensureSelectedMode();
+        for (int r = 0; r < tools.getRowCount(); r++) tools.setValueAt(selected, r, 1);
+        updateCount();
+    }
+    private void toggleAllowedRows(int[] viewRows) {
+        if (running || viewRows.length == 0 || table.isEditing()) return;
+        ensureSelectedMode();
+        boolean next = !Boolean.TRUE.equals(tools.getValueAt(table.convertRowIndexToModel(viewRows[0]), 1));
+        for (int viewRow : viewRows)
+            if (viewRow >= 0 && viewRow < table.getRowCount())
+                tools.setValueAt(next, table.convertRowIndexToModel(viewRow), 1);
+        updateCount();
+    }
+    private void clearSelectedLimits() {
+        if (running) return;
+        if (table.isEditing() && !table.getCellEditor().stopCellEditing()) return;
+        int[] rows = table.getSelectedRows();
+        if (rows.length == 0) {
+            notice.setText("Select a tool row first; then click Set Unlimited.");
+            return;
+        }
+        for (int viewRow : rows) tools.setValueAt("", table.convertRowIndexToModel(viewRow), 2);
+        notice.setText("Max calls cleared (Unlimited) for " + rows.length + " tool(s). Click Apply to save.");
     }
     private void updateCount() {
         int allowed = 0; for (int r=0;r<tools.getRowCount();r++) if (Boolean.TRUE.equals(tools.getValueAt(r,1))) allowed++;
@@ -312,9 +388,9 @@ public final class TaskToolPolicyPanel extends JPanel {
             JEditorPane text = new JEditorPane("text/html", "<html><body style='font-family:sans-serif;padding:12px'>" +
                 "<h2>Agentic task tools</h2><p><b>Agentic Mode</b> lets the model plan an investigation, request tools, read their results and produce an answer. The controller decides whether each request can execute.</p>" +
                 "<p><b>Tools</b> are native GhidrAssist functions or functions supplied by MCP servers. Names and descriptions here come from those providers.</p>" +
-                "<p><b>Allowed</b> selects an explicit allowlist in Selected tools mode. All available tools has no allowlist. Read-only tools uses the registry's existing read classification (names containing get_, list_ or search_); it is not an independent audit of remote server behavior. Existing approvals and protections still apply.</p>" +
-                "<p><b>Max calls</b> limits executions of one tool in each task. Aliases share budgets. Changing arguments does not reset a budget. <b>Total calls</b> limits all actual executions in each task. Blank means <b>Unlimited</b>; zero blocks executions. Rejected requests do not consume execution budgets.</p>" +
-                "<p><b>One tool only:</b> choose Selected tools, clear Search, select All providers, Deselect all shown, then allow the exact full tool name. Set its Max calls and Total calls to 1, then Apply.</p>" +
+                "<p><b>Allowed</b> selects an explicit allowlist in Selected tools mode. Use its checkboxes, double-click a tool name, or press Space/Enter on selected rows. Select/Deselect buttons automatically switch to Selected tools mode; <b>shown</b> applies to filtered rows, <b>all tools</b> includes hidden rows. All available tools has no allowlist. Read-only tools uses the registry's existing read classification (names containing get_, list_ or search_); it is not an independent audit of remote server behavior. Existing approvals and protections still apply.</p>" +
+                "<p><b>Max calls</b> limits executions of one tool in each task. Aliases share budgets. Changing arguments does not reset a budget. Select any row and click <b>Set Unlimited</b> to remove its per-tool limit (or clear the editable cell). <b>Total calls</b> limits all actual executions in each task. Blank means <b>Unlimited</b>; zero blocks executions. Rejected requests do not consume execution budgets.</p>" +
+                "<p><b>One tool only:</b> click Deselect all tools (automatically switches to Selected tools), search for the tool, check Allowed, and set Max calls and Total calls to 1. Click Apply.</p>" + +
                 "<p><b>Lifetime:</b> Next task resets after completion, failure or cancellation of an executing task. Cancelling a plan does not consume it. Current conversation applies to each task until you start or switch conversations. Closing the editor or clicking Cancel discards unsaved edits. No settings are saved to preferences or restored from chat history.</p>" +
                 "<p><b>Restore defaults</b> selects all tools, Unlimited budgets and Next task. Click Apply to confirm. <b>Tool history</b> is a separate view of requests, starts, successes, rejections and failures from the latest task.</p></body></html>");
             text.setEditable(false); helpDialog = window(this,"Help - Agentic task tools",new JScrollPane(text),new Dimension(740,600));
