@@ -3,7 +3,11 @@
 Call `ReActOrchestrator.analyze(query, context, sessionId, handler, approvedPlan, policy)`
 with a `ToolExecutionPolicy(allowedTools, perToolLimits)` supplied by trusted caller
 configuration. The existing overload remains unrestricted unless the existing
-narrow global/read-only objective rules apply. No free-form natural-language
+narrow global/read-only objective rules apply. The explicit-policy overload does
+not apply those textual rules: its typed input is authoritative, so prose such as
+"exactly one tool call per tool" cannot overwrite independent per-tool budgets.
+The four-argument policy constructor additionally accepts `totalLimit` and
+`readOnly`; use these fields for explicit global and read-only constraints. No free-form natural-language
 allowlist or per-tool budget parser is introduced.
 
 `allowedTools == null` allows registered tools; an empty set denies all tools.

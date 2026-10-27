@@ -11,7 +11,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 /** Standalone contract tests; no GUI, model, project or user profile is required. */
 public class ToolExecutionPolicySelfTest {
     private static final AtomicInteger executions = new AtomicInteger();
-    private static final List<String> NAMES = List.of("get_alpha", "get_beta", "get_task_status", "server.get_task_status");
+    private static final List<String> NAMES = List.of("get_alpha", "get_beta", "get_task_status", "server.get_task_status", "update_record");
     static ToolRegistry registry() {
         ToolRegistry registry = new ToolRegistry();
         registry.registerProvider(new ToolProvider() {
@@ -60,6 +60,12 @@ public class ToolExecutionPolicySelfTest {
         check(call(registry, "get_beta", 1).isError(), "Static read deduplication remains enabled");
         check(call(registry, "get_task_status", 1).isSuccess() && call(registry, "get_task_status", 1).isSuccess(), "Changing status can be polled");
         check(call(registry, "server.get_task_status", 1).isSuccess() && call(registry, "server.get_task_status", 1).isSuccess(), "Prefixed status can be polled");
+        registry.configureInvestigationToolLimit("Make exactly one tool call per tool", new ToolExecutionPolicy(null, Map.of("get_alpha", 1, "get_beta", 1)));
+        check(call(registry, "get_alpha", 1).isSuccess() && call(registry, "get_beta", 1).isSuccess(), "Explicit per-tool budgets must not be overwritten by prose");
+        registry.configureInvestigationToolLimit("Read tools", new ToolExecutionPolicy(null, Map.of(), 1, false));
+        check(call(registry, "get_alpha", 1).isSuccess() && call(registry, "get_beta", 1).isError(), "Explicit total budget");
+        registry.configureInvestigationToolLimit("", new ToolExecutionPolicy(null, Map.of(), null, true));
+        check(call(registry, "update_record", 1).isError() && call(registry, "get_alpha", 1).isSuccess(), "Explicit read-only policy");
         registry.configureInvestigationToolLimit("Call exactly one tool");
         check(call(registry, "get_alpha", 1).isSuccess() && call(registry, "get_beta", 1).isError(), "Explicit global limit stays global");
         registry.configureInvestigationToolLimit("", new ToolExecutionPolicy(null, Map.of("get_alpha", 0)));

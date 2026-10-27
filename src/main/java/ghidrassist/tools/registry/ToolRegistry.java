@@ -68,16 +68,7 @@ public class ToolRegistry implements ToolExecutor {
 
 
     public synchronized void configureInvestigationToolLimit(String objective) {
-        configureInvestigationToolLimit(objective, ToolExecutionPolicy.unrestricted());
-    }
-
-    public synchronized void configureInvestigationToolLimit(String objective, ToolExecutionPolicy policy) {
-        executionPolicy = java.util.Objects.requireNonNull(policy);
-        executionJournal = new ToolExecutionJournal();
-        investigationClosed = false;
-        perToolCalls.clear();
-        investigationToolCalls = 0;
-        investigationReadKeys.clear();
+        configureInvestigationToolLimit("", ToolExecutionPolicy.unrestricted());
         String normalized = objective == null ? "" : objective.toLowerCase(java.util.Locale.ROOT);
         investigationReadOnly = normalized.contains("nie modyfikuj projektu")
             || normalized.contains("nie zmieniaj projektu")
@@ -97,6 +88,19 @@ public class ToolRegistry implements ToolExecutor {
         } else {
             investigationToolLimit = null;
         }
+    }
+
+
+    /** Explicit policy is authoritative; do not reinterpret its budgets from prose. */
+    public synchronized void configureInvestigationToolLimit(String ignoredObjective, ToolExecutionPolicy policy) {
+        executionPolicy = java.util.Objects.requireNonNull(policy);
+        executionJournal = new ToolExecutionJournal();
+        investigationClosed = false;
+        perToolCalls.clear();
+        investigationToolCalls = 0;
+        investigationReadKeys.clear();
+        investigationToolLimit = policy.totalLimit();
+        investigationReadOnly = policy.readOnly();
     }
 
     public synchronized void clearInvestigationToolLimit() {

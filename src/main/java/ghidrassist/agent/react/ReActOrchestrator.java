@@ -303,11 +303,18 @@ public class ReActOrchestrator {
         ReActProgressHandler handler,
         String approvedPlan
     ) {
-        return analyze(query, initialContext, sessionId, handler, approvedPlan, ToolExecutionPolicy.unrestricted());
+        return analyzeWithPolicy(query, initialContext, sessionId, handler, approvedPlan, null);
     }
 
     /** Callers with explicit restrictions must supply a structured, validated policy. */
-    public synchronized CompletableFuture<ReActResult> analyze(
+    public CompletableFuture<ReActResult> analyze(
+        String query, String initialContext, String sessionId, ReActProgressHandler handler,
+        String approvedPlan, ToolExecutionPolicy policy
+    ) {
+        return analyzeWithPolicy(query, initialContext, sessionId, handler, approvedPlan, java.util.Objects.requireNonNull(policy));
+    }
+
+    private synchronized CompletableFuture<ReActResult> analyzeWithPolicy(
         String query, String initialContext, String sessionId, ReActProgressHandler handler,
         String approvedPlan, ToolExecutionPolicy policy
     ) {
@@ -324,7 +331,8 @@ public class ReActOrchestrator {
         // A new investigation must not inherit evidence or expanded iteration
         // budgets from an earlier firmware/program/session.
         toolRegistry.clearRecentToolEvidence();
-        toolRegistry.configureInvestigationToolLimit(query, policy);
+        if (policy == null) toolRegistry.configureInvestigationToolLimit(query);
+        else toolRegistry.configureInvestigationToolLimit(query, policy);
         maxIterations = baseMaxIterations;
 
         try {
