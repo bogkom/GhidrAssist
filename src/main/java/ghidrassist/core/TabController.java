@@ -919,7 +919,11 @@ public class TabController {
             java.util.List<ghidrassist.tools.api.Tool> available = new java.util.ArrayList<>(nativeTools.getTools());
             if (useMCP) available.addAll(manager.getTools());
             SwingUtilities.invokeLater(() -> queryTab.getTaskToolPolicyPanel().setTools(available));
-        }).exceptionally(error -> { Msg.warn(this,"Unable to refresh task tools: " + error); return null; });
+        }).exceptionally(error -> {
+            Msg.warn(this,"Unable to refresh task tools: " + error);
+            SwingUtilities.invokeLater(() -> queryTab.getTaskToolPolicyPanel().setInventoryError("Unable to refresh tools. Check the MCP connection and try Refresh tools."));
+            return null;
+        });
     }
 
     private void handleAgenticQuery(String query, boolean useMCP) {
@@ -1205,7 +1209,6 @@ public class TabController {
         pendingAgentInitialContext = null;
         if (queryTab != null) {
             queryTab.setPendingPlan(null);
-            queryTab.getTaskToolPolicyPanel().resetForNewTask();
         }
         setUIState(false, "Submit", null);
     }
@@ -1826,6 +1829,7 @@ public class TabController {
     
     public void clearConversationHistory() {
         queryService.clearConversationHistory();
+        SwingUtilities.invokeLater(() -> queryTab.getTaskToolPolicyPanel().resetForNewTask());
     }
     
     // ==== Chat History Management ====
@@ -1900,6 +1904,7 @@ public class TabController {
         final boolean anyDeleted = deletedCount > 0;
         SwingUtilities.invokeLater(() -> {
             queryTab.clearQueryInput();
+            queryTab.getTaskToolPolicyPanel().resetForNewTask();
             if (anyDeleted) {
                 queryTab.setResponseText("");
                 queryTab.setEditEnabled(false);
@@ -1918,10 +1923,12 @@ public class TabController {
         java.util.List<ghidrassist.AnalysisDB.ChatSession> sessions = queryService.getChatSessions();
         if (rowIndex >= 0 && rowIndex < sessions.size()) {
             ghidrassist.AnalysisDB.ChatSession selectedSession = sessions.get(rowIndex);
+            boolean changedConversation = queryService.getCurrentSessionId() != selectedSession.getId();
             boolean success = queryService.switchToChatSession(selectedSession.getId());
             
             if (success) {
                 SwingUtilities.invokeLater(() -> {
+                    if (changedConversation) queryTab.getTaskToolPolicyPanel().resetForNewTask();
                     renderCurrentChatSession();
                 });
             }
@@ -3270,6 +3277,7 @@ public class TabController {
 
 
     public void dispose() {
+        if (queryTab != null) queryTab.getTaskToolPolicyPanel().dispose();
         codeAnalysisService.close();
         analysisDataService.close();
         feedbackService.close();

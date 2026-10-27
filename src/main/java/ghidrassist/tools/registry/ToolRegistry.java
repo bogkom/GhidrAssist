@@ -322,7 +322,8 @@ public class ToolRegistry implements ToolExecutor {
         });
     }
 
-    private static boolean isReadOnlyLookup(String name) {
+    /** Existing dispatcher classification, also displayed by the task-policy editor. */
+    public static boolean isReadOnlyLookup(String name) {
         if (name == null) return false;
         String local=name.toLowerCase(java.util.Locale.ROOT);
         return local.contains("get_") || local.contains("list_") ||

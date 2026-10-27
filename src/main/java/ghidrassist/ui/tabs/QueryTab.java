@@ -54,7 +54,7 @@ public class QueryTab extends JPanel {
     private JButton deleteButton;
     private JTable chatHistoryTable;
     private DefaultTableModel chatHistoryModel;
-    private JLabel contextStatusLabel;
+    private JTextArea contextStatusLabel;
     private JPanel approvalPanel;
     private JPanel planPanel;
     private ghidrassist.ui.common.TaskToolPolicyPanel taskToolPolicyPanel;
@@ -123,10 +123,12 @@ public class QueryTab extends JPanel {
     private void initializeComponents() {
         useRAGCheckBox = new JCheckBox("Use RAG");
         useRAGCheckBox.setSelected(false);
+        useRAGCheckBox.setToolTipText("Include documentation from the active RAG libraries in the query context.");
 
         useMCPCheckBox = new JCheckBox("Use MCP Tools");
         useMCPCheckBox.setSelected(false);
         useMCPCheckBox.setEnabled(false); // Disabled by default, enabled when MCP is detected
+        useMCPCheckBox.setToolTipText("Make tools from configured MCP servers available to this query.");
 
         useAgenticCheckBox = new JCheckBox("Agentic Mode (ReAct)");
         useAgenticCheckBox.setSelected(false);
@@ -152,11 +154,18 @@ public class QueryTab extends JPanel {
         newButton = new JButton("New");
         deleteButton = new JButton("Delete");
         editSaveButton = new JButton("Edit");
-        contextStatusLabel = new JLabel("Model: No provider / No model | No active context window data");
+        contextStatusLabel = new JTextArea("Model: No provider / No model | No active context window data");
+        contextStatusLabel.setEditable(false);
+        contextStatusLabel.setLineWrap(true);
+        contextStatusLabel.setWrapStyleWord(true);
+        contextStatusLabel.setOpaque(false);
+        contextStatusLabel.setToolTipText("Active model and context-window usage. The status wraps when Query is narrow.");
         contextStatusLabel.setFont(new Font("Monospaced", Font.PLAIN, 11));
         approvalPanel = new JPanel(new BorderLayout(6, 6));
         planPanel = new JPanel(new BorderLayout(6, 6));
         taskToolPolicyPanel = new ghidrassist.ui.common.TaskToolPolicyPanel(controller::refreshAgenticTaskTools);
+        taskToolPolicyPanel.getConfigureButton().addActionListener(e -> taskToolPolicyPanel.showConfiguration(this, controller::refreshAgenticTaskTools));
+        taskToolPolicyPanel.getHistoryButton().addActionListener(e -> taskToolPolicyPanel.showHistory(this));
         planTextArea = new JTextArea(5, 40);
         planTextArea.setEditable(false);
         planTextArea.setLineWrap(true);
@@ -234,19 +243,23 @@ public class QueryTab extends JPanel {
         // Create top panel with checkboxes and edit button
         JPanel topPanel = new JPanel(new BorderLayout());
 
-        JPanel checkboxPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        JPanel checkboxPanel = new JPanel(new ghidrassist.ui.common.WrapLayout());
+        checkboxPanel.setName("query-options-toolbar");
         checkboxPanel.add(useRAGCheckBox);
         checkboxPanel.add(useMCPCheckBox);
         checkboxPanel.add(useAgenticCheckBox);
+        checkboxPanel.add(taskToolPolicyPanel.getConfigureButton());
+        checkboxPanel.add(taskToolPolicyPanel.getHistoryButton());
         checkboxPanel.add(acceptAllToolsCheckBox);
+        checkboxPanel.add(editSaveButton);
+        checkboxPanel.addComponentListener(new ComponentAdapter() {
+            @Override public void componentResized(ComponentEvent e) { topPanel.revalidate(); }
+        });
         topPanel.add(checkboxPanel, BorderLayout.CENTER);
 
-        JPanel editPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-        editPanel.add(editSaveButton);
-        topPanel.add(editPanel, BorderLayout.EAST);
-
         JPanel statusPanel = new JPanel(new BorderLayout(0, 6));
-        statusPanel.add(contextStatusLabel, BorderLayout.WEST);
+        statusPanel.add(contextStatusLabel, BorderLayout.CENTER);
+        contextStatusLabel.setMinimumSize(new Dimension(0, contextStatusLabel.getPreferredSize().height));
         topPanel.add(statusPanel, BorderLayout.SOUTH);
 
         JPanel approvalButtonPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 4));
@@ -295,7 +308,6 @@ public class QueryTab extends JPanel {
         responseAreaPanel.add(contentPanel, BorderLayout.CENTER);
         JPanel inlinePanel = new JPanel();
         inlinePanel.setLayout(new BoxLayout(inlinePanel, BoxLayout.Y_AXIS));
-        inlinePanel.add(taskToolPolicyPanel);
         inlinePanel.add(planPanel);
         inlinePanel.add(approvalPanel);
         responseAreaPanel.add(inlinePanel, BorderLayout.SOUTH);
