@@ -52,6 +52,8 @@ public class ToolRegistry implements ToolExecutor {
     private Integer investigationToolLimit;
     private boolean investigationReadOnly;
     private int investigationToolCalls;
+    private ToolExecutionPolicy executionPolicy = ToolExecutionPolicy.unrestricted();
+    private final Map<String, Integer> perToolCalls = new HashMap<>();
     private final java.util.Set<String> investigationReadKeys = new java.util.HashSet<>();
     private synchronized boolean reserveUniqueRead(String toolName, JsonObject args) {
         // Task status is a changing observation, including server-prefixed MCP names.
@@ -63,6 +65,12 @@ public class ToolRegistry implements ToolExecutor {
 
 
     public synchronized void configureInvestigationToolLimit(String objective) {
+        configureInvestigationToolLimit(objective, ToolExecutionPolicy.unrestricted());
+    }
+
+    public synchronized void configureInvestigationToolLimit(String objective, ToolExecutionPolicy policy) {
+        executionPolicy = java.util.Objects.requireNonNull(policy);
+        perToolCalls.clear();
         investigationToolCalls = 0;
         investigationReadKeys.clear();
         String normalized = objective == null ? "" : objective.toLowerCase(java.util.Locale.ROOT);
@@ -87,18 +95,26 @@ public class ToolRegistry implements ToolExecutor {
     }
 
     public synchronized void clearInvestigationToolLimit() {
+        executionPolicy = ToolExecutionPolicy.unrestricted();
+        perToolCalls.clear();
         investigationToolLimit = null;
         investigationReadOnly = false;
         investigationToolCalls = 0;
         investigationReadKeys.clear();
     }
 
-    private synchronized boolean reserveInvestigationToolCall() {
-        if (investigationToolLimit != null && investigationToolCalls >= investigationToolLimit) {
-            return false;
-        }
+    private synchronized String reserveInvestigationToolCall(String toolName, JsonObject args) {
+        if (!executionPolicy.allows(toolName)) return "Tool call blocked: tool is not allowed by the controller policy";
+        Integer toolLimit = executionPolicy.limit(toolName);
+        if (toolLimit != null && perToolCalls.getOrDefault(toolName, 0) >= toolLimit)
+            return "Tool call blocked: per-tool limit reached for " + toolName;
+        if (investigationToolLimit != null && investigationToolCalls >= investigationToolLimit)
+            return "Tool call blocked: user-defined investigation tool limit reached";
+        if (!reserveUniqueRead(toolName, args))
+            return "Duplicate read-only request suppressed; reuse previous evidence";
         investigationToolCalls++;
-        return true;
+        perToolCalls.merge(toolName, 1, Integer::sum);
+        return null;
     }
 
     public synchronized int getInvestigationToolCallCount() {
@@ -200,6 +216,10 @@ public class ToolRegistry implements ToolExecutor {
                     ToolResult.error("Unknown tool: " + toolName));
         }
 
+        if (!executionPolicy.allows(toolName)) {
+            return CompletableFuture.completedFuture(ToolResult.error(
+                "Tool call blocked: tool is not allowed by the controller policy"));
+        }
         if (investigationToolLimit != null && investigationToolLimit == 0) {
             return CompletableFuture.completedFuture(ToolResult.error(
                 "Tool call blocked: the user prohibited tools for this investigation"));
@@ -236,13 +256,9 @@ public class ToolRegistry implements ToolExecutor {
             for (ToolProvider provider : providers) {
                 if (provider.handlesTool(toolName)) {
                     // Reserve only AFTER explicit approval; this counts actual provider executions.
-                    if (!reserveUniqueRead(toolName, args)) {
-                        return CompletableFuture.completedFuture(ToolResult.error(
-                            "Duplicate read-only request suppressed; reuse previous evidence"));
-                    }
-                    if (!reserveInvestigationToolCall()) {
-                        return CompletableFuture.completedFuture(ToolResult.error(
-                            "Tool call blocked: user-defined investigation tool limit reached"));
+                    String rejection = reserveInvestigationToolCall(toolName, args);
+                    if (rejection != null) {
+                        return CompletableFuture.completedFuture(ToolResult.error(rejection));
                     }
                     Msg.debug(this, "Routing tool '" + toolName + "' to provider: " + provider.getProviderName());
                     Msg.info(this, "Executing tool '" + toolName + "' via provider " + provider.getProviderName());

@@ -11,6 +11,7 @@ import ghidrassist.context.ContextWindowListener;
 import ghidrassist.tools.approval.ToolApprovalService;
 import ghidrassist.tools.api.Tool;
 import ghidrassist.tools.api.ToolExecutionObserver;
+import ghidrassist.tools.registry.ToolExecutionPolicy;
 import ghidrassist.tools.native_.DocumentToolProvider;
 import ghidrassist.tools.native_.NativeToolManager;
 import ghidrassist.tools.registry.ToolRegistry;
@@ -302,6 +303,14 @@ public class ReActOrchestrator {
         ReActProgressHandler handler,
         String approvedPlan
     ) {
+        return analyze(query, initialContext, sessionId, handler, approvedPlan, ToolExecutionPolicy.unrestricted());
+    }
+
+    /** Callers with explicit restrictions must supply a structured, validated policy. */
+    public CompletableFuture<ReActResult> analyze(
+        String query, String initialContext, String sessionId, ReActProgressHandler handler,
+        String approvedPlan, ToolExecutionPolicy policy
+    ) {
         CompletableFuture<ReActResult> resultFuture = new CompletableFuture<>();
         resultFuture.whenComplete((result, error) -> {
             clearActiveAnalysis(resultFuture);
@@ -312,7 +321,7 @@ public class ReActOrchestrator {
         // A new investigation must not inherit evidence or expanded iteration
         // budgets from an earlier firmware/program/session.
         toolRegistry.clearRecentToolEvidence();
-        toolRegistry.configureInvestigationToolLimit(query);
+        toolRegistry.configureInvestigationToolLimit(query, policy);
         maxIterations = baseMaxIterations;
 
         try {
