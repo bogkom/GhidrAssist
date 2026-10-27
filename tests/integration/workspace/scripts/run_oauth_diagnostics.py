@@ -56,10 +56,27 @@ def run(label, scenarios):
     return result
 
 if __name__=='__main__':
-    parser=argparse.ArgumentParser();parser.add_argument('mode',choices=['prepare','negative','e2e','matrix']);args=parser.parse_args()
+    parser=argparse.ArgumentParser();parser.add_argument('mode',choices=['prepare','negative','e2e','matrix','strict-rag']);args=parser.parse_args()
     if args.mode=='prepare':prepare()
     elif args.mode=='negative':run('negative-original',[{'id':'NEGATIVE_ORIGINAL','prompt':'Call get_regression_fact with key alpha and report execution_count=N.','reasoning':'none','wire_safe_tools':False}])
     elif args.mode=='e2e':run('e2e',[{'id':'E2E','prompt':'Call ga_get_document_page exactly once with filename MC68332UM.pdf, page 256, scope all, offset 0, max_chars 600. Report returnedCharacters and PDF_PAGE and finish with execution_count=N backed by actual executions.','reasoning':'none','wire_safe_tools':True}])
+    elif args.mode=='strict-rag':
+        spec=importlib.util.spec_from_file_location('scenario_source',ROOT/'tests/test_real_llm.py');module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+        scenario=dict(module.scenario('RAG_PAGE_STRICT',1),wire_safe_tools=True,reasoning='high')
+        state=json.loads(STATE.read_text());base=Path(state['evidence'])
+        label='rag-page-strict';attempt=1
+        while (base/label).exists():
+            attempt+=1;label=f'rag-page-strict-attempt-{attempt:02d}'
+        actual=run(label,[scenario])['cases']['RAG_PAGE_STRICT__r1']
+        layers=module.classify('RAG_PAGE_STRICT',actual,[])
+        status='BLOCKED' if layers['infrastructure'] else 'FAIL' if any(layers.values()) else 'PASS'
+        verified={'RAG_PAGE_STRICT__r1':{'status':status,'layers':layers,
+            'policy_api':actual.get('policy_api'),'policy':actual.get('policy'),'execution_journal':actual.get('execution_journal'),
+            'actual_dispatcher_count':actual.get('actual_dispatcher_count'),'answer':actual.get('answer'),
+            'provider_http_calls':actual.get('provider_http_calls'),'token_usage':actual.get('token_usage')}}
+        out=base/label
+        dump(out/'verified-results.json',verified)
+        if status!='PASS':raise SystemExit('RAG_PAGE_STRICT '+status+'; inspect verified-results.json')
     else:
         state=json.loads(STATE.read_text());gate=json.loads(Path(state['evidence'],'e2e/results.json').read_text())['cases']['E2E']
         assert gate['status']=='SUCCESS' and gate['actual_dispatcher_count']==1 and 'execution_count=1' in gate['answer'], 'End-to-end gate did not pass'

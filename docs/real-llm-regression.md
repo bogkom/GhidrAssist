@@ -31,6 +31,20 @@ separate controller, model, tool and infrastructure fields. Structured final
 semantic accuracy is not presented as automatically verified. Native errors from
 invalid model arguments differ from valid requests failing in the tool.
 
+`RAG_PAGE_STRICT` adds a strict page-256 case with the exact arguments
+`filename=MC68332UM.pdf`, `page=256`, `scope=all`, `offset=0`, and
+`max_chars=600`. It supplies an explicit ToolExecutionPolicy allowing only
+`ga_get_document_page`, with both total and per-tool budgets set to one. The
+assertions verify a single successful journal execution, 600 returned
+characters, PDF page 256, and a final answer consistent with that journal.
+Set `GHIDRASSIST_LLM_CASES=RAG_PAGE_STRICT` to run only this case in the
+pytest-backed local-provider suite.
+
+For the existing authenticated OpenAI OAuth provider, run the targeted
+`scripts/run_oauth_diagnostics.py strict-rag` mode. It uses the same scenario
+and `classify()` assertions against the actual ReActOrchestrator,
+ToolRegistry, and ToolExecutionJournal; it does not change OAuth configuration.
+
 Every repeat has a separate case identity, while task instructions remain the
 same. Results and per-case outcome distributions are written to
 `real-llm/results.json`, `real-llm/model-transport.jsonl` and
