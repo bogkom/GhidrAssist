@@ -79,6 +79,43 @@ public final class TaskToolPolicyPanelSelfTest {
                 check(table.getColumnModel().getColumn(0).getPreferredWidth()>=table.getFontMetrics(table.getFont()).stringWidth(inventory.get(0).getName())+20,"Full tool names remain reachable by horizontal scrolling");
                 search.setText("[");check(table.getRowCount()==0,"Search is literal, not a regular expression");
                 search.setText("");provider.setSelectedItem("mcp:provider-3");check(table.getRowCount()==40,"Provider grouping/filter");
+                // Mouse and keyboard interaction, not only direct table-model mutation.
+                check(button(panel, "Select all shown").isEnabled(), "Selection button available in All mode");
+                button(panel, "Deselect all tools").doClick();
+                check(mode.getSelectedItem() == TaskToolPolicyPanel.Mode.SELECTED,
+                        "Deselect all tools switches to Selected mode");
+                check(((JLabel)field(panel,"count")).getText().contains("Allowed: 0 / 320"),
+                        "Deselect all tools includes hidden rows");
+                button(panel, "Select all tools").doClick();
+                check(((JLabel)field(panel,"count")).getText().contains("Allowed: 320 / 320"),
+                        "Select all tools restores selection");
+                button(panel, "Deselect all tools").doClick();
+                table.setRowSelectionInterval(0,0);
+                java.awt.event.MouseEvent dbl = new java.awt.event.MouseEvent(table,
+                    java.awt.event.MouseEvent.MOUSE_CLICKED, System.currentTimeMillis(), 0,
+                    table.getCellRect(0, 0, true).x+5, table.getCellRect(0, 0, true).y+5,
+                    2, false, java.awt.event.MouseEvent.BUTTON1);
+                table.dispatchEvent(dbl);
+                check(Boolean.TRUE.equals(table.getValueAt(0,1)), "Double-click on name toggles Allowed");
+                javax.swing.Action toggle = table.getActionMap().get("toggleToolAllowed");
+                check(toggle != null && table.getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT)
+                        .get(KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_SPACE,0)).equals("toggleToolAllowed"),
+                        "Space key is bound to selection toggle");
+                check(table.getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT)
+                        .get(KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_ENTER,0)).equals("toggleToolAllowed"),
+                        "Enter key is bound to selection toggle");
+                toggle.actionPerformed(new java.awt.event.ActionEvent(table,java.awt.event.ActionEvent.ACTION_PERFORMED,"toggle"));
+                check(Boolean.FALSE.equals(table.getValueAt(0,1)), "Keyboard action toggles Allowed");
+                java.awt.event.MouseEvent hover = new java.awt.event.MouseEvent(table,
+                    java.awt.event.MouseEvent.MOUSE_MOVED, System.currentTimeMillis(), 0,
+                    table.getCellRect(0, 0, true).x+5, table.getCellRect(0, 0, true).y+5,
+                    0, false);
+                check(table.getToolTipText(hover).contains("Actual provider description"),
+                        "Name tooltip contains provider description, not only name");
+                table.setValueAt("3",0,2);
+                button(panel,"Set Unlimited").doClick();
+                check(table.getValueAt(0,2).toString().isBlank(),
+                        "Set Unlimited clears selected row's per-tool limit");
                 mode.setSelectedItem(TaskToolPolicyPanel.Mode.SELECTED);
                 provider.setSelectedIndex(0);button(panel,"Deselect all shown").doClick();
                 provider.setSelectedItem("mcp:provider-3");button(panel,"Select all shown").doClick();
