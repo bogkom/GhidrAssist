@@ -12,7 +12,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class ToolExecutionPolicySelfTest {
     private static final AtomicInteger executions = new AtomicInteger();
     private static final List<String> NAMES = List.of("get_alpha", "get_beta", "get_task_status", "server.get_task_status");
-    private static ToolRegistry registry() {
+    static ToolRegistry registry() {
         ToolRegistry registry = new ToolRegistry();
         registry.registerProvider(new ToolProvider() {
             public String getProviderName() { return "policy-fixture"; }

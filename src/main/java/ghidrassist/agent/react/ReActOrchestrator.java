@@ -307,14 +307,17 @@ public class ReActOrchestrator {
     }
 
     /** Callers with explicit restrictions must supply a structured, validated policy. */
-    public CompletableFuture<ReActResult> analyze(
+    public synchronized CompletableFuture<ReActResult> analyze(
         String query, String initialContext, String sessionId, ReActProgressHandler handler,
         String approvedPlan, ToolExecutionPolicy policy
     ) {
+        synchronized (analysisStateLock) {
+            if (activeResultFuture != null)
+                return CompletableFuture.failedFuture(new IllegalStateException("An investigation is already active"));
+        }
         CompletableFuture<ReActResult> resultFuture = new CompletableFuture<>();
         resultFuture.whenComplete((result, error) -> {
             clearActiveAnalysis(resultFuture);
-            toolRegistry.clearInvestigationToolLimit();
         });
         Instant startTime = Instant.now();
         cancelled.set(false);
@@ -677,8 +680,8 @@ public class ReActOrchestrator {
                     return;
                 }
                 answer.append(partialResponse);
-                // Stream synthesis to UI
-                handler.onSynthesisChunk(partialResponse);
+                // Publish only after checking the completed synthesis against dispatcher facts.
+                // Otherwise a denied operation can briefly appear as successful in the UI.
             }
 
             @Override
@@ -691,10 +694,12 @@ public class ReActOrchestrator {
                     return;
                 }
 
+                String verifiedAnswer = toolRegistry.getExecutionJournal().verifiedAnswer(fullResponse);
+                handler.onSynthesisChunk(verifiedAnswer);
                 // Build result with the provided completion status
                 ReActResult result = new ReActResult.Builder()
                     .status(completionStatus)
-                    .answer(fullResponse)
+                    .answer(verifiedAnswer)
                     .findings(findings.getAllFindings().stream()
                         .map(f -> f.getFact())
                         .toList())
@@ -1005,6 +1010,7 @@ public class ReActOrchestrator {
     private void clearActiveAnalysis(CompletableFuture<ReActResult> resultFuture) {
         synchronized (analysisStateLock) {
             if (activeResultFuture == resultFuture) {
+                toolRegistry.clearInvestigationToolLimit();
                 activeResultFuture = null;
                 activeStartTime = null;
                 activeFindings = null;

@@ -54,6 +54,7 @@ public class ConversationalToolHandler {
     private static final int MAX_CONVERSATION_CHARS = 600000; // ~150K tokens at 4 chars/token
     private static final double COMPRESSION_THRESHOLD = 0.75; // Trigger compression at 75% of char limit
     private static final int MIN_RECENT_MESSAGES = 8; // Always keep last 8 messages
+    private int executionCountAtBatchStart;
     private final int maxToolRounds; // Maximum tool calling rounds per iteration (configurable)
 
     private static final String SUMMARY_PROMPT = "Summarize the following investigation conversation concisely.\n\n" +
@@ -1119,6 +1120,7 @@ public class ConversationalToolHandler {
      * Execute tools sequentially and collect results
      */
     private void executeToolsSequentially(JsonArray toolCalls, int index, List<JsonObject> toolResults) {
+        if (index == 0) executionCountAtBatchStart = toolRegistry.getInvestigationToolCallCount();
         // Check cancellation before processing next tool
         if (isCancelled) {
             // Flush any collected results to prevent orphaned tool_calls in history.
@@ -1145,8 +1147,9 @@ public class ConversationalToolHandler {
             // All tools executed, add results to conversation and continue
             addToolResultsToConversation(toolResults);
 
-            // Signal tool execution to handler
-            userHandler.onToolsExecuted(toolCalls.size());
+            // Rejected proposals are not completed tool actions.
+            int executed = toolRegistry.getInvestigationToolCallCount() - executionCountAtBatchStart;
+            if (executed > 0) userHandler.onToolsExecuted(executed);
 
             // Add a small delay before making the next API call to avoid rapid sequential requests
             // that could trigger rate limits
@@ -1979,6 +1982,8 @@ public class ConversationalToolHandler {
         }
 
         // Execute tool call on background thread to avoid blocking EDT
+        ghidrassist.tools.registry.ToolExecutionJournal dispatcherJournal = toolRegistry.getExecutionJournal();
+        java.util.concurrent.atomic.AtomicBoolean dispatched = new java.util.concurrent.atomic.AtomicBoolean(false);
         CompletableFuture.runAsync(() -> {
             // Start transaction on EDT
             final int[] transaction = new int[1];
@@ -1991,6 +1996,7 @@ public class ConversationalToolHandler {
             }
 
             // Execute tool via ToolRegistry
+            dispatched.set(true);
             toolRegistry.execute(toolName, arguments)
                 .thenAccept(result -> {
                     // End transaction on EDT
@@ -2012,6 +2018,7 @@ public class ConversationalToolHandler {
 
         }).exceptionally(throwable -> {
             Msg.error(this, "Failed to start transaction: " + throwable.getMessage());
+            if (!dispatched.get()) toolRegistry.recordPreDispatchFailure(dispatcherJournal, toolName, arguments, throwable.toString());
             future.complete(ToolResult.error("Failed to start transaction: " + throwable.getMessage()));
             return null;
         });
