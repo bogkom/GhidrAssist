@@ -11,6 +11,7 @@ import ghidrassist.tools.api.ToolExecutor;
 import ghidrassist.hardware.McpEvidenceGuard;
 import ghidrassist.tools.api.ToolProvider;
 import ghidrassist.tools.api.ToolResult;
+import ghidrassist.tools.context.ToolResultContext;
 import ghidrassist.tools.native_.NativeToolManager;
 
 import java.util.ArrayList;
@@ -333,7 +334,7 @@ public class ToolRegistry implements ToolExecutor {
         String key=name+" "+(args==null?"{}":args.toString());
         // Put recent data last even when the same read was attempted again.
         toolObservations.remove(key);
-        String concise=content.length()>2200?content.substring(0,2200)+" [output truncated]":content;
+        String concise = ToolResultContext.truncate(content, 2200);
         toolObservations.put(key,concise);
         while(toolObservations.size()>8)
             toolObservations.remove(toolObservations.keySet().iterator().next());
