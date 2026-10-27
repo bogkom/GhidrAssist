@@ -54,7 +54,9 @@ public class ToolRegistry implements ToolExecutor {
     private int investigationToolCalls;
     private final java.util.Set<String> investigationReadKeys = new java.util.HashSet<>();
     private synchronized boolean reserveUniqueRead(String toolName, JsonObject args) {
-        if (!isReadOnlyLookup(toolName)) return true;
+        // Task status is a changing observation, including server-prefixed MCP names.
+        String localName = toolName == null ? "" : toolName.substring(toolName.lastIndexOf('.') + 1);
+        if (localName.equals("get_task_status") || !isReadOnlyLookup(toolName)) return true;
         String key = toolName + ":" + (args == null ? "{}" : args.toString());
         return investigationReadKeys.add(key);
     }
