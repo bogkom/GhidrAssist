@@ -1133,6 +1133,7 @@ public class ConversationalToolHandler {
                 JsonObject cancelResult = new JsonObject();
                 cancelResult.addProperty("tool_call_id", cancelledId);
                 cancelResult.addProperty("role", "tool");
+                cancelResult.addProperty("is_error", true);
                 cancelResult.addProperty("content", "Error: Tool execution was cancelled.");
                 toolResults.add(cancelResult);
             }
@@ -1192,6 +1193,7 @@ public class ConversationalToolHandler {
                         JsonObject errorResult = new JsonObject();
                         errorResult.addProperty("tool_call_id", errorToolCallId);
                         errorResult.addProperty("role", "tool");
+                        errorResult.addProperty("is_error", true);
                         errorResult.addProperty("content", "Error: " + throwable.getMessage());
                         toolResults.add(errorResult);
 
@@ -1210,6 +1212,7 @@ public class ConversationalToolHandler {
                     JsonObject fallbackResult = new JsonObject();
                     fallbackResult.addProperty("tool_call_id", "call_error_" + index);
                     fallbackResult.addProperty("role", "tool");
+                    fallbackResult.addProperty("is_error", true);
                     fallbackResult.addProperty("content", "Error: Internal error during tool execution");
                     toolResults.add(fallbackResult);
 
@@ -1249,13 +1252,17 @@ public class ConversationalToolHandler {
                     // Debug logging for development (keep for troubleshooting)
                     Msg.debug(this, String.format("Tool '%s' completed: success=%s, length=%d",
                         toolName, result.isSuccess(),
-                        result.getContent() != null ? result.getContent().length() : 0));
+                        result.getContentOrError() != null ? result.getContentOrError().length() : 0));
 
                     // Create tool result for conversation
                     JsonObject toolResult = new JsonObject();
                     toolResult.addProperty("tool_call_id", toolCallId);
                     toolResult.addProperty("role", "tool");
-                    toolResult.addProperty("content", result.getContent());
+                    toolResult.addProperty("is_error", result.isError());
+                    String returnedContent = result.getContentOrError();
+                    toolResult.addProperty("content", result.isError()
+                        ? "Error: " + (returnedContent == null ? "Tool execution failed without a reason" : returnedContent)
+                        : returnedContent);
 
                     return toolResult;
                 });
@@ -1280,7 +1287,8 @@ public class ConversationalToolHandler {
             }
 
             // Truncate tool results via ContextWindowManager if available
-            if (contextWindowManager != null && content != null && !content.isEmpty()) {
+            boolean isError = result.has("is_error") && result.get("is_error").getAsBoolean();
+            if (!isError && contextWindowManager != null && content != null && !content.isEmpty()) {
                 content = contextWindowManager.truncateToolResult(content);
             }
 
