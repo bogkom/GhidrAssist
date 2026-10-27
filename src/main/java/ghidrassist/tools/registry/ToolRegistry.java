@@ -62,7 +62,8 @@ public class ToolRegistry implements ToolExecutor {
         // Task status is a changing observation, including server-prefixed MCP names.
         String localName = toolName == null ? "" : toolName.substring(toolName.lastIndexOf('.') + 1);
         if (localName.equals("get_task_status") || !isReadOnlyLookup(toolName)) return true;
-        String key = toolName + ":" + (args == null ? "{}" : args.toString());
+        Tool tool = getTool(toolName);
+        String key = (tool == null ? toolName : tool.getExecutionIdentity()) + ":" + (args == null ? "{}" : args.toString());
         return investigationReadKeys.add(key);
     }
 
@@ -116,15 +117,23 @@ public class ToolRegistry implements ToolExecutor {
     private synchronized String reserveInvestigationToolCall(String toolName, JsonObject args, ToolExecutionJournal journal) {
         if (journal != executionJournal || investigationClosed) return "Investigation is no longer active";
         if (!executionPolicy.allows(toolName)) return "Tool call blocked: tool is not allowed by the controller policy";
+        Tool tool = getTool(toolName);
+        String identity = tool.getExecutionIdentity();
         Integer toolLimit = executionPolicy.limit(toolName);
-        if (toolLimit != null && perToolCalls.getOrDefault(toolName, 0) >= toolLimit)
+        // A budget on one registered alias also constrains the same backend operation.
+        for (Tool candidate : getAllTools()) {
+            Integer candidateLimit = executionPolicy.limit(candidate.getName());
+            if (candidateLimit != null && identity.equals(candidate.getExecutionIdentity()))
+                toolLimit = toolLimit == null ? candidateLimit : Math.min(toolLimit, candidateLimit);
+        }
+        if (toolLimit != null && perToolCalls.getOrDefault(identity, 0) >= toolLimit)
             return "Tool call blocked: per-tool limit reached for " + toolName;
         if (investigationToolLimit != null && investigationToolCalls >= investigationToolLimit)
             return "Tool call blocked: user-defined investigation tool limit reached";
         if (!reserveUniqueRead(toolName, args))
             return "Duplicate read-only request suppressed; reuse previous evidence";
         investigationToolCalls++;
-        perToolCalls.merge(toolName, 1, Integer::sum);
+        perToolCalls.merge(identity, 1, Integer::sum);
         return null;
     }
 

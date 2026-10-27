@@ -906,8 +906,25 @@ public class TabController {
         new TaskLauncher(task, plugin.getTool().getToolFrame());
     }
 
+    /** Refresh explicit tool names without reading a security policy from the prompt. */
+    public void refreshAgenticTaskTools() {
+        if (!SwingUtilities.isEventDispatchThread()) { SwingUtilities.invokeLater(this::refreshAgenticTaskTools); return; }
+        final boolean useMCP = queryTab.isMCPSelected();
+        var manager = ghidrassist.mcp2.tools.MCPToolManager.getInstance();
+        java.util.concurrent.CompletableFuture<Void> ready = useMCP && !manager.isInitialized()
+            ? manager.initializeServers() : java.util.concurrent.CompletableFuture.completedFuture(null);
+        ready.thenRunAsync(() -> {
+            var nativeTools = new ghidrassist.tools.native_.NativeToolManager(analysisDB);
+            nativeTools.setContext(plugin.getCurrentProgram());
+            java.util.List<ghidrassist.tools.api.Tool> available = new java.util.ArrayList<>(nativeTools.getTools());
+            if (useMCP) available.addAll(manager.getTools());
+            SwingUtilities.invokeLater(() -> queryTab.getTaskToolPolicyPanel().setTools(available));
+        }).exceptionally(error -> { Msg.warn(this,"Unable to refresh task tools: " + error); return null; });
+    }
+
     private void handleAgenticQuery(String query, boolean useMCP) {
         pendingAgentUseMCP = useMCP;
+        refreshAgenticTaskTools();
         final String reactRunId = UUID.randomUUID().toString();
 
         // Add user query to conversation history and ensure we have a session
@@ -997,7 +1014,8 @@ public class TabController {
     }
 
     private void executeApprovedAgenticQuery(String query, String reactInitialContext,
-                                             String reactRunId, String approvedPlan) {
+                                             String reactRunId, String approvedPlan, ghidrassist.tools.registry.ToolExecutionPolicy taskPolicy) {
+        queryTab.getTaskToolPolicyPanel().beginExecution();
         setUIState(true, "Stop", null);
 
         // Container to hold iteration history so it can be accessed in the final result handler
@@ -1041,7 +1059,25 @@ public class TabController {
                 }
                 return sessionId;
             });
-            currentOrchestrator.setToolExecutionObserver(queryService.getTranscriptService());
+            ghidrassist.tools.api.ToolExecutionObserver transcript = queryService.getTranscriptService();
+            currentOrchestrator.setToolExecutionObserver(new ghidrassist.tools.api.ToolExecutionObserver() {
+                public void onToolCallRequested(int s,String h,String id,ghidrassist.tools.api.Tool t,com.google.gson.JsonObject a) {
+                    queryTab.getTaskToolPolicyPanel().record(id,t.getName(),"REQUESTED",String.valueOf(a));
+                    transcript.onToolCallRequested(s,h,id,t,a);
+                }
+                public void onToolCallStarted(int s,String h,String id,ghidrassist.tools.api.Tool t,com.google.gson.JsonObject a) {
+                    queryTab.getTaskToolPolicyPanel().record(id,t.getName(),"RUNNING",String.valueOf(a));
+                    transcript.onToolCallStarted(s,h,id,t,a);
+                }
+                public void onToolCallCompleted(int s,String h,String id,ghidrassist.tools.api.Tool t,com.google.gson.JsonObject a,ghidrassist.tools.api.ToolResult r) {
+                    queryTab.getTaskToolPolicyPanel().record(id,t.getName(),"SUCCEEDED",r.getContentOrError());
+                    transcript.onToolCallCompleted(s,h,id,t,a,r);
+                }
+                public void onToolCallFailed(int s,String h,String id,ghidrassist.tools.api.Tool t,com.google.gson.JsonObject a,String reason) {
+                    queryTab.getTaskToolPolicyPanel().record(id,t.getName(),"FAILED",reason);
+                    transcript.onToolCallFailed(s,h,id,t,a,reason);
+                }
+            });
             currentOrchestrator.setToolApprovalService(queryService.getToolApprovalService());
             currentOrchestrator.setActiveSessionId(queryService.getCurrentSessionId());
             currentOrchestrator.setProgramHashSupplier(this::getProgramHash);
@@ -1058,13 +1094,9 @@ public class TabController {
                 createReActProgressHandler(historyContainer, reactRunId, query);
 
             // Start analysis asynchronously
-            return currentOrchestrator.analyze(
-                query,
-                reactInitialContext,
-                String.valueOf(queryService.getCurrentSessionId()),
-                progressHandler,
-                approvedPlan
-            );
+            return taskPolicy == null
+                ? currentOrchestrator.analyze(query, reactInitialContext, String.valueOf(queryService.getCurrentSessionId()), progressHandler, approvedPlan)
+                : currentOrchestrator.analyze(query, reactInitialContext, String.valueOf(queryService.getCurrentSessionId()), progressHandler, approvedPlan, taskPolicy);
         }).thenAccept(result -> {
             // Display result on EDT
             SwingUtilities.invokeLater(() -> {
@@ -1089,6 +1121,7 @@ public class TabController {
 
                 // Clear the orchestrator reference
                 currentOrchestrator = null;
+                queryTab.getTaskToolPolicyPanel().finishExecution();
                 setUIState(false, "Submit", null);
 
                 // Refresh chat history to show updated timestamp
@@ -1132,6 +1165,7 @@ public class TabController {
 
                 // Clear the orchestrator reference
                 currentOrchestrator = null;
+                queryTab.getTaskToolPolicyPanel().finishExecution();
                 setUIState(false, "Submit", null);
             });
             return null;
@@ -1141,6 +1175,11 @@ public class TabController {
     public void handleAgentPlanApproved() {
         if (!isAgentPlanPending || pendingAgentPlan == null || pendingAgentPlan.isBlank()) {
             return;
+        }
+        final ghidrassist.tools.registry.ToolExecutionPolicy taskPolicy;
+        try { taskPolicy = queryTab.getTaskToolPolicyPanel().snapshot(); }
+        catch (IllegalArgumentException error) {
+            Msg.showError(getClass(),queryTab,"Task tool policy",error.getMessage()); return;
         }
         String query = pendingAgentQuery;
         String initialContext = pendingAgentInitialContext;
@@ -1152,7 +1191,7 @@ public class TabController {
         if (queryTab != null) {
             queryTab.setPendingPlan(null);
         }
-        executeApprovedAgenticQuery(query, initialContext, runId, approvedPlan);
+        executeApprovedAgenticQuery(query, initialContext, runId, approvedPlan, taskPolicy);
     }
 
     public void handleAgentPlanCancelled() {
@@ -1166,6 +1205,7 @@ public class TabController {
         pendingAgentInitialContext = null;
         if (queryTab != null) {
             queryTab.setPendingPlan(null);
+            queryTab.getTaskToolPolicyPanel().resetForNewTask();
         }
         setUIState(false, "Submit", null);
     }
@@ -1802,6 +1842,7 @@ public class TabController {
 
         SwingUtilities.invokeLater(() -> {
             // Clear current conversation and create new session immediately
+            queryTab.getTaskToolPolicyPanel().resetForNewTask();
             queryService.clearConversationHistory();
             queryTab.setResponseText("");
             queryTab.setEditEnabled(false);

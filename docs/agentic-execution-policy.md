@@ -49,3 +49,19 @@ RAG/source/pagination metadata is retained outside the documentation excerpt
 budget in both the evidence cache and conversation truncation. Mandatory metadata
 may exceed a very small requested excerpt budget; callers needing less context
 should request fewer results rather than silently lose provenance or pagination.
+
+## Query GUI
+
+Enable Agentic Mode, use **Restrict tools for this task**, refresh the inventory,
+select allowed tools and enter per-tool limits (blank means unlimited, zero
+means no calls). Optional total-call and read-only settings use the same typed
+policy. Approve Plan freezes a validated snapshot; prompt text never changes it.
+Leaving restrictions off uses the unchanged legacy API. Settings reset after a
+run, cancellation or New chat; they are not saved in user preferences.
+
+The outcome table is driven by the production observer and distinguishes
+REQUESTED, RUNNING, SUCCEEDED, REJECTED and FAILED with actual reasons. The
+existing transcript remains available. Known aliases share a stable operation
+identity, budget and static-read deduplication; an alias is never implicitly
+added to an allowlist. Tool providers exposing aliases must declare the same
+execution identity. MCP adapters use the original remote tool name and source.

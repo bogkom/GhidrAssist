@@ -57,6 +57,7 @@ public class QueryTab extends JPanel {
     private JLabel contextStatusLabel;
     private JPanel approvalPanel;
     private JPanel planPanel;
+    private ghidrassist.ui.common.TaskToolPolicyPanel taskToolPolicyPanel;
     private JTextArea planTextArea;
     private JButton approvePlanButton;
     private JButton cancelPlanButton;
@@ -155,6 +156,7 @@ public class QueryTab extends JPanel {
         contextStatusLabel.setFont(new Font("Monospaced", Font.PLAIN, 11));
         approvalPanel = new JPanel(new BorderLayout(6, 6));
         planPanel = new JPanel(new BorderLayout(6, 6));
+        taskToolPolicyPanel = new ghidrassist.ui.common.TaskToolPolicyPanel(controller::refreshAgenticTaskTools);
         planTextArea = new JTextArea(5, 40);
         planTextArea.setEditable(false);
         planTextArea.setLineWrap(true);
@@ -293,6 +295,7 @@ public class QueryTab extends JPanel {
         responseAreaPanel.add(contentPanel, BorderLayout.CENTER);
         JPanel inlinePanel = new JPanel();
         inlinePanel.setLayout(new BoxLayout(inlinePanel, BoxLayout.Y_AXIS));
+        inlinePanel.add(taskToolPolicyPanel);
         inlinePanel.add(planPanel);
         inlinePanel.add(approvalPanel);
         responseAreaPanel.add(inlinePanel, BorderLayout.SOUTH);
@@ -1335,5 +1338,7 @@ public class QueryTab extends JPanel {
     public MarkdownHelper getMarkdownHelper() {
         return markdownHelper;
     }
+
+    public ghidrassist.ui.common.TaskToolPolicyPanel getTaskToolPolicyPanel() { return taskToolPolicyPanel; }
 
 }

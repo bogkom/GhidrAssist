@@ -39,6 +39,9 @@ public class MCPToolAdapter implements Tool {
     }
 
     @Override
+    public String getExecutionIdentity() { return getSource() + ":" + getOriginalName(); }
+
+    @Override
     public String getDescription() {
         return mcpTool.getDescription();
     }
