@@ -333,28 +333,28 @@ public final class GhidraHardwareFlowService {
             List<HardwareCallEffects.FunctionNode> graph,
             List<Long> evidencedFunctions) {
         StringBuilder md=new StringBuilder();
-        md.append("## Candidate RESET vector and bounded static-call paths\\n\\n");
+        md.append("## Candidate RESET vector and bounded static-call paths\n\n");
         String language=program.getLanguageID().toString().toUpperCase(Locale.ROOT);
         if(!language.startsWith("68000:BE:")){
             md.append("- Not evaluated: this program is not a 68000 big-endian "+
-                "language. No reset-vector format is assumed.\\n\\n");
+                "language. No reset-vector format is assumed.\n\n");
             return md.toString();
         }
         Address zero=program.getAddressFactory().getDefaultAddressSpace().getAddress(0);
         if(!program.getMemory().contains(zero)){
             md.append("- UNKNOWN: address 0 is not mapped; no candidate "+
-                "vector can be read. No assumption about ROM base/relocation.\\n\\n");
+                "vector can be read. No assumption about ROM base/relocation.\n\n");
             return md.toString();
         }
         byte[] data=new byte[8];
         try {
             if(program.getMemory().getBytes(zero,data)!=data.length){
-                md.append("- UNKNOWN: reset vector at image 0 is incomplete.\\n\\n");
+                md.append("- UNKNOWN: reset vector at image 0 is incomplete.\n\n");
                 return md.toString();
             }
         }catch(MemoryAccessException e){
             md.append("- UNKNOWN: reset vector bytes at image 0 "+
-                "could not be read.\\n\\n");
+                "could not be read.\n\n");
             return md.toString();
         }
         HardwareResetFlow.Vector vector=HardwareResetFlow.readVector(data);
@@ -363,9 +363,9 @@ public final class GhidraHardwareFlowService {
           .append("; PC: ")
           .append(String.format(Locale.ROOT,"0x%08X",vector.resetPc()))
           .append("; plausible: ").append(vector.valid())
-          .append("; ").append(vector.reason()).append("\\n");
+          .append("; ").append(vector.reason()).append("\n");
         if(!vector.valid()){
-            md.append("- No direct-call path inferred from invalid vector.\\n\\n");
+            md.append("- No direct-call path inferred from invalid vector.\n\n");
             return md.toString();
         }
         Address reset;
@@ -374,22 +374,22 @@ public final class GhidraHardwareFlowService {
                 .getAddress(vector.resetPc());
         }catch(RuntimeException invalidAddress){
             md.append("- UNKNOWN: reset PC is outside the current program "+
-                "address space.\\n\\n");
+                "address space.\n\n");
             return md.toString();
         }
         Function root=program.getFunctionManager().getFunctionContaining(reset);
         if(root==null){
             md.append("- UNKNOWN: reset PC is not contained in a recognized "+
-                "Ghidra function. No candidate execution path is asserted.\\n\\n");
+                "Ghidra function. No candidate execution path is asserted.\n\n");
             return md.toString();
         }
         md.append("- Function containing vector PC: ").append(root.getName())
           .append(" at ").append(root.getEntryPoint())
-          .append("; candidate only, not verified entry execution.\\n");
+          .append("; candidate only, not verified entry execution.\n");
         HardwareResetFlow.Summary candidate=HardwareResetFlow.trace(
             root.getEntryPoint().getOffset(),graph,evidencedFunctions,6,128,30);
         md.append(candidate.markdown(vector.resetPc(),
-            root.getEntryPoint().getOffset())).append("\\n");
+            root.getEntryPoint().getOffset())).append("\n");
         return md.toString();
     }
 
