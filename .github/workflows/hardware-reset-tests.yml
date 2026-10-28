@@ -1,0 +1,44 @@
+name: Hardware RESET static flow tests
+
+on:
+  push:
+    paths:
+      - 'src/main/java/ghidrassist/hardware/HardwareResetFlow.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareCallEffects.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareResetFlowSelfTest.java'
+      - '.github/workflows/hardware-reset-tests.yml'
+  pull_request:
+    paths:
+      - 'src/main/java/ghidrassist/hardware/HardwareResetFlow.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareCallEffects.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareResetFlowSelfTest.java'
+      - '.github/workflows/hardware-reset-tests.yml'
+  workflow_dispatch:
+
+jobs:
+  reset-flow:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Compile pure Java reset graph
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/reset-tests"
+          javac --release 21 -d "$RUNNER_TEMP/reset-tests" \
+            src/main/java/ghidrassist/hardware/HardwareCallEffects.java \
+            src/main/java/ghidrassist/hardware/HardwareResetFlow.java \
+            src/test/java/ghidrassist/hardware/HardwareResetFlowSelfTest.java
+      - name: Run deterministic regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          java -cp "$RUNNER_TEMP/reset-tests" \
+            ghidrassist.hardware.HardwareResetFlowSelfTest
