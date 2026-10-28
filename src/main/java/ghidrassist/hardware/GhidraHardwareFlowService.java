@@ -401,7 +401,9 @@ public final class GhidraHardwareFlowService {
                 if(hit.kind==HardwareDataflow.Kind.VBR_FROM_REGISTER){
                     found.add(hit);vbr++;
                 } else if(hit.effectiveAddress!=null &&
-                        targets.containsKey(hit.effectiveAddress)){
+                        targets.containsKey(hit.effectiveAddress) &&
+                        HardwareReportScope.isInitializationRegister(
+                            targets.get(hit.effectiveAddress))){
                     found.add(hit);
                     if(hit.indirect)indirect++;
                 } else if(hit.kind==HardwareDataflow.Kind.STORE_INDIRECT &&
@@ -409,7 +411,7 @@ public final class GhidraHardwareFlowService {
                     unresolved++;
                 }
             }
-            if(found.isEmpty()&&!result.truncated)continue;
+            if(found.isEmpty())continue; // Retain global truncation warning, omit unrelated functions.
             foundFunctions++;
             evidencedFunctions.add(fun.getEntryPoint().getOffset());
             if(shown>=350)continue;
@@ -510,7 +512,7 @@ public final class GhidraHardwareFlowService {
         effects.append("\n");
 
         StringBuilder out=new StringBuilder();
-        out.append("## CFG/P-code hardware evidence (read-only)\n\n")
+        out.append("## CFG/P-code initialization evidence (SIMCR/MM, TRAMBAR, CSBAR, CSOR, VBR)\n\n")
            .append("Only predecessor-agreed intraprocedural constants survive branch joins. ")
            .append("Calls and unknown-destination memory stores invalidate "+
                "previous peripheral constants; ")

@@ -61,7 +61,8 @@ public final class HardwareInventoryService {
             this.program=program;
             this.language=language;
             this.selection=selection;
-            this.uniqueSites=sites.size();
+            this.uniqueSites=(int)sites.stream().filter(site->
+                HardwareReportScope.isInitializationRegister(site.register)).count();
             this.sites=List.copyOf(sites);
             this.markdown=markdown;
             this.namePreviewCsv=namePreviewCsv;
@@ -175,7 +176,11 @@ public final class HardwareInventoryService {
         sites.sort(Comparator.comparing((Site s)->s.function)
             .thenComparing(s->s.pc).thenComparingLong(s->s.registerAddress));
         Map<String,List<Site>> grouped=new LinkedHashMap<>();
-        for(Site site:sites)grouped.computeIfAbsent(site.function,k->new ArrayList<>()).add(site);
+        // Full Site list remains intact for Review / Apply and naming.
+        // The readable Analyze/RAG report lists only initialization evidence.
+        for(Site site:sites)
+            if(HardwareReportScope.isInitializationRegister(site.register))
+                grouped.computeIfAbsent(site.function,k->new ArrayList<>()).add(site);
         String choice=concreteDevice?"MC68332 (MANUALLY ASSUMED)":"CPU32 (MC68332-ADDRESS RECONNAISSANCE)";
         StringBuilder md=new StringBuilder();
         md.append("# Hardware Evidence — read-only\n\n")
@@ -183,11 +188,17 @@ public final class HardwareInventoryService {
           .append("- Ghidra language: `").append(program.getLanguageID()).append("`\n")
           .append("- Selection: **").append(choice).append("**\n")
           .append("- Scanned Listing instructions: ").append(scanned).append("\n")
-          .append("- Unique instruction/register reference sites: ").append(sites.size()).append("\n")
+          .append("- Initialization-register reference sites shown: ")
+            .append(sites.stream().filter(s->HardwareReportScope.isInitializationRegister(s.register)).count())
+            .append("\n")
+          .append("- Other MCU register references: ")
+            .append(sites.stream().filter(s->!HardwareReportScope.isInitializationRegister(s.register)).count())
+            .append(" (retained internally; definitions available in Review / Apply)\n")
           .append("- Firmware origin: currently loaded Ghidra project, NOT a device readback\n")
           .append("- MCU identity, active MM map, reached branches, connected chips and memory wiring: **NOT VERIFIED**\n")
           .append("- Register address provenance: [MC68332 User's Manual](https://www.nxp.com/docs/en/user-guide/MC68332UM.pdf)\n\n");
-        md.append("## Function-local evidence (no runtime ordering guarantee)\n\n");
+        md.append("## Initialization/memory-map evidence (SIMCR/MM, TRAMBAR, CSBAR, CSOR, VBR)\n\n")
+          .append("CSPAR contributes to conditional chip-select decoding but is not listed as a separate register site.\n\n");
         ChipSelectModel.Decoder decoder=new ChipSelectModel.Decoder(
             "MC68332","MC68332 manual; provisional code-site constants");
         for(Map.Entry<String,List<Site>> group:grouped.entrySet()){
