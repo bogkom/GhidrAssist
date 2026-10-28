@@ -1,0 +1,38 @@
+name: Conditional Chip Select table regression
+
+on:
+  push:
+    branches:
+      - feature/hardware-roadmap-cs-table-20261028
+    paths:
+      - 'src/main/java/ghidrassist/hardware/ChipSelectModel.java'
+      - 'src/main/java/ghidrassist/hardware/ChipSelectTable.java'
+      - 'src/test/java/ghidrassist/hardware/ChipSelectTableSelfTest.java'
+      - '.github/workflows/hardware-cs-table-tests.yml'
+  pull_request:
+    paths:
+      - 'src/main/java/ghidrassist/hardware/**'
+      - '.github/workflows/hardware-cs-table-tests.yml'
+  workflow_dispatch:
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Run deterministic per-select report assertions
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/cs-classes"
+          javac --release 21 -d "$RUNNER_TEMP/cs-classes" \
+            src/main/java/ghidrassist/hardware/ChipSelectModel.java \
+            src/main/java/ghidrassist/hardware/ChipSelectTable.java \
+            src/test/java/ghidrassist/hardware/ChipSelectModelSelfTest.java \
+            src/test/java/ghidrassist/hardware/ChipSelectTableSelfTest.java
+          java -cp "$RUNNER_TEMP/cs-classes" ghidrassist.hardware.ChipSelectModelSelfTest
+          java -cp "$RUNNER_TEMP/cs-classes" ghidrassist.hardware.ChipSelectTableSelfTest
