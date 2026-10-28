@@ -176,11 +176,10 @@ public final class HardwareInventoryService {
         sites.sort(Comparator.comparing((Site s)->s.function)
             .thenComparing(s->s.pc).thenComparingLong(s->s.registerAddress));
         Map<String,List<Site>> grouped=new LinkedHashMap<>();
-        // Full Site list remains intact for Review / Apply and naming.
-        // The readable Analyze/RAG report lists only initialization evidence.
+        // Keep the full register set for CS pin-state inference; display below
+        // only the focused initialization sites and their parent functions.
         for(Site site:sites)
-            if(HardwareReportScope.isInitializationRegister(site.register))
-                grouped.computeIfAbsent(site.function,k->new ArrayList<>()).add(site);
+            grouped.computeIfAbsent(site.function,k->new ArrayList<>()).add(site);
         String choice=concreteDevice?"MC68332 (MANUALLY ASSUMED)":"CPU32 (MC68332-ADDRESS RECONNAISSANCE)";
         StringBuilder md=new StringBuilder();
         md.append("# Hardware Evidence — read-only\n\n")
@@ -203,6 +202,9 @@ public final class HardwareInventoryService {
             "MC68332","MC68332 manual; provisional code-site constants");
         for(Map.Entry<String,List<Site>> group:grouped.entrySet()){
             monitor.checkCancelled();
+            if(group.getValue().stream().noneMatch(site->
+                    HardwareReportScope.isInitializationRegister(site.register)))
+                continue;
             md.append("### ").append(group.getKey()).append("\n\n");
             // Different MM windows never form one combined state.
             for(int mm=0;mm<=1;mm++){
@@ -210,6 +212,14 @@ public final class HardwareInventoryService {
                 boolean any=false;
                 for(Site site:group.getValue()){
                     if((site.registerAddress<0x800000L?0:1)!=mm)continue;
+                    if(site.write){
+                        if(site.literal==null)values.remove(site.register);
+                        else values.put(site.register,site.literal);
+                    }
+                    // CSPAR and other register writes update internal context,
+                    // but only key initialization registers appear as rows.
+                    if(!HardwareReportScope.isInitializationRegister(site.register))
+                        continue;
                     any=true;
                     md.append("- `").append(site.pc).append("` ")
                       .append(site.register).append(" `")
@@ -217,10 +227,6 @@ public final class HardwareInventoryService {
                       .append(site.write?"WRITE":"READ/REFERENCE")
                       .append("; ").append(site.literal==null?"value UNKNOWN":hex(site.literal,4))
                       .append("; `").append(site.asm).append("`\n");
-                    if(site.write){
-                        if(site.literal==null)values.remove(site.register);
-                        else values.put(site.register,site.literal);
-                    }
                 }
                 if(!any)continue;
                 md.append("\n**MM=").append(mm).append(" conditional linear-code snapshot**\n\n");
@@ -305,6 +311,9 @@ public final class HardwareInventoryService {
             .analyze(program,monitor);
         md.append("\n\n").append(flow.markdown);
         return new Report(program.getName(),program.getLanguageID().toString(),choice,sites,
-            md.toString(),csv,grouped.size(),functionProposals);
+            md.toString(),csv,(int)grouped.values().stream().filter(group->
+                group.stream().anyMatch(site->
+                    HardwareReportScope.isInitializationRegister(site.register))).count(),
+                functionProposals);
     }
 }
