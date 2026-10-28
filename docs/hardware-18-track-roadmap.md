@@ -18,7 +18,7 @@ The originating document has 18 *sections*, not 18 independent feature checkboxe
 
 | ID | Source | Deliverable | Audited baseline 2026-10-28 | Acceptance / evidence |
 |---|---|---|---|---|
-| GA-01 | A | Reset vector / entry evidence and reachable initialization flow | PARTIAL: function-local CFG/call references; reset-root graph missing | Validate vector bytes / entry, distinguish reachable/candidate/unknown |
+| GA-01 | A | Reset vector / entry evidence and reachable initialization flow | PARTIAL in stacked PR #54: image-zero vector decoding and bounded direct-call candidate paths, no interprocedural state transfer or proven execution | Validate vector bytes / entry on isolated ECU411, distinguish static candidate/unknown and complete indirect paths later |
 | GA-02 | B | Path-conditional SIMCR/MM (write-once), TRAMBAR, CSBAR/CSOR/CSPAR and VBR epochs | PARTIAL: snapshot/unknown-call invalidation; reset-relative epochs missing | Branch/alias/call uncertainty preserved, addresses and source paths |
 | GA-03 | C | Indirect MMIO via A/D registers, indexed modes, P-code LOAD/STORE, aliases | PARTIAL: substantial CFG/P-code work merged through #35 | Synthetic alias joins, call barriers, no invented constants |
 | GA-04 | D | Per-select CSBOOT, CS0..CS10 table in Analyze | PARTIAL: decoder/windows exist; Markdown currently uses per-window bullets | 12 separate rows, start/end/size, missing values UNKNOWN, model scope |
@@ -57,3 +57,14 @@ For upcoming steps prepare independent Supervisor plans, each pinned to the corr
 ## Explicitly deferred, not lost
 
 Full MCU/peripheral emulation, physical CS electrical simulation, generic automatic hardware identification, and broad multi-firmware comparison remain out of the initial delivery, as required by original section 14.
+
+## Second implementation batch (stacked after PR #53)
+
+GA-01 RESET candidate evidence, without pretending to emulate reset:
+
+- Read eight bytes at image zero only for the 68000 big-endian language family; parse unsigned initial SP and reset PC. If bytes, memory, format or function entry are unavailable, report UNKNOWN rather than inventing a boot route. Image-zero is explicitly a *hypothesis* about the firmware origin.
+- Connect the PC's containing function to the already collected direct static-call graph and show bounded paths to **independently observed** MMIO/VBR evidence. Respect cycles, missing targets, computed flow and display budgets.
+- Keep local MMIO dataflow results local. **No** interprocedural propagation, MM first-write-after-reset assertion, verified runtime ordering or reset vector remapping claims.
+- Test vector endianness and invalid data, branch-like diamond paths, unresolved indirect calls, recursion and truncation in pure Java GitHub Actions; require full Ghidra 12.1.4 build and isolated on-host integration before merging.
+
+This is a first GA-01 component, not completion of GA-01 or GA-02. Later steps must model reset-relative path-dependent register epochs and validate against real MC68332 documentation and firmware test copies.
