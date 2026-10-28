@@ -198,8 +198,6 @@ public final class HardwareInventoryService {
           .append("- Register address provenance: [MC68332 User's Manual](https://www.nxp.com/docs/en/user-guide/MC68332UM.pdf)\n\n");
         md.append("## Initialization/memory-map evidence (SIMCR/MM, TRAMBAR, CSBAR, CSOR, VBR)\n\n")
           .append("CSPAR contributes to conditional chip-select decoding but is not listed as a separate register site.\n\n");
-        ChipSelectModel.Decoder decoder=new ChipSelectModel.Decoder(
-            "MC68332","MC68332 manual; provisional code-site constants");
         for(Map.Entry<String,List<Site>> group:grouped.entrySet()){
             monitor.checkCancelled();
             if(group.getValue().stream().noneMatch(site->
@@ -230,19 +228,11 @@ public final class HardwareInventoryService {
                 }
                 if(!any)continue;
                 md.append("\n**MM=").append(mm).append(" conditional linear-code snapshot**\n\n");
-                if(!values.isEmpty()){
-                    List<ChipSelectModel.Window> windows=new ArrayList<>();
-                    for(int cs=-1;cs<=10;cs++){
-                        String label=cs<0?"BT":Integer.toString(cs);
-                        String pin=cs<=5?"CSPAR0":"CSPAR1";
-                        ChipSelectModel.Window window=decoder.window(cs,
-                            values.get("CSBAR"+label),values.get("CSOR"+label),values.get(pin));
-                        if(window==null)continue;
-                        windows.add(window);
-                        md.append("- ").append(window.toSummary()).append("\n");
-                    }
-                    List<String> overlaps=ChipSelectModel.overlaps(windows);
-                    for(String overlap:overlaps)md.append("- shared address hypothesis: ").append(overlap).append("\n");
+                if(concreteDevice && !values.isEmpty()){
+                    md.append("**Per-select Chip Select table (conditional; function-local code sites)**\n\n");
+                    md.append(ChipSelectTable.markdown(values, true));
+                } else if(!concreteDevice) {
+                    md.append(ChipSelectTable.markdown(values, false));
                 }
                 md.append("\n");
             }
