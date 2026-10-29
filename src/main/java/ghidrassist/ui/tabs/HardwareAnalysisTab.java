@@ -203,7 +203,42 @@ public final class HardwareAnalysisTab extends JPanel {
             JOptionPane.showMessageDialog(this,new JScrollPane(preview),
                 "Structural preview ONLY — no MCU profile imported",
                 JOptionPane.INFORMATION_MESSAGE);
-            status.setText("Manifest structure validated. Source/MCU unverified; no Ghidra changes.");
+            // An explicit local checksum check is optional. Source identity
+            // claims are not silently promoted by previewing metadata.
+            String claimed=result.source().claimedSha256();
+            if(claimed.matches("[a-fA-F0-9]{64}") &&
+                    JOptionPane.showConfirmDialog(this,
+                        "Optionally verify a LOCAL PDF against the claimed SHA-256?"+
+                        "\nThis does NOT verify edition, page labels or MCU identity.",
+                        "Verify local document bytes",JOptionPane.YES_NO_OPTION,
+                        JOptionPane.QUESTION_MESSAGE)==JOptionPane.YES_OPTION){
+                JFileChooser pdfChooser=new JFileChooser();
+                pdfChooser.setDialogTitle("Select local PDF for SHA-256 comparison");
+                pdfChooser.setFileFilter(
+                    new FileNameExtensionFilter("PDF document (*.pdf)","pdf"));
+                if(pdfChooser.showOpenDialog(this)==JFileChooser.APPROVE_OPTION){
+                    File pdf=pdfChooser.getSelectedFile();
+                    try{
+                        if(!pdf.isFile() || Files.size(pdf.toPath())>
+                                ghidrassist.hardware.HardwareProfilePdfHashCheck.MAX_PDF_BYTES)
+                            throw new IllegalArgumentException(
+                                "Local PDF missing or exceeds 128 MiB");
+                        ghidrassist.hardware.HardwareProfilePdfHashCheck.Result checked;
+                        try(var in=Files.newInputStream(pdf.toPath())){
+                            checked=ghidrassist.hardware.HardwareProfilePdfHashCheck
+                                .verify(in,claimed,
+                                  ghidrassist.hardware.HardwareProfilePdfHashCheck.MAX_PDF_BYTES);
+                        }
+                        JOptionPane.showMessageDialog(this,checked.report(),
+                            "Claimed PDF checksum comparison",JOptionPane.INFORMATION_MESSAGE);
+                    }catch(Exception error){
+                        JOptionPane.showMessageDialog(this,
+                            "Could not verify local PDF: "+error.getMessage(),
+                            "PDF identity UNKNOWN",JOptionPane.WARNING_MESSAGE);
+                    }
+                }
+            }
+            status.setText("Manifest preview completed: no Ghidra changes; manual facts unverified.");
         }catch(Exception ex){
             JOptionPane.showMessageDialog(this,
                 "Profile rejected (no changes):\n"+ex.getMessage(),

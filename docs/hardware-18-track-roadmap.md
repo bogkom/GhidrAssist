@@ -91,3 +91,16 @@ Full MCU/peripheral emulation, physical CS electrical simulation, generic automa
   explicit user-approved import are distinct future work.
 - Test gate: standalone negative parser regression plus full Ghidra 12.1.4
   build, then separately approved GUI test with isolated project COPY.
+
+
+## 2026-10-29 — GA-06 local PDF hash confirmation (dependent)
+
+- Branch `feature/hardware-profile-pdf-hash-check-20261029`
+  based on immutable PR #62 commit `a4cf5e86aac1aecafa2939861eabba5f35eaf83d`.
+- After structural preview, optional explicit local PDF selection compares
+  SHA-256 over actual *streamed bytes* with the manifest's claimed digest.
+- No PDF bytes are uploaded/indexed, no program data are written, and
+  even a successful checksum match is **not proof** that model, edition,
+  printed pages or register semantics are valid.
+- Supports mismatched, unknown, malformed, oversized and non-PDF inputs.
+  Full Ghidra 12.1.4 CI and an approved real GUI test remain required.
