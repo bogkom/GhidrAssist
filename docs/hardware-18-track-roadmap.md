@@ -70,3 +70,40 @@ Full MCU/peripheral emulation, physical CS electrical simulation, generic automa
 - CI: pure Java table model regressions plus full Ghidra 12.1.4 extension build.
   GUI behavior and navigation require real isolated Ghidra verification.
 - No Supervisor plan approval or project edits are implied.
+
+## 2026-10-29 — GA-09 GUI acceptance and independent configuration fixes
+
+- Immutable [PR #56](https://github.com/bogkom/GhidrAssist/pull/56) SHA
+  `ed53849141141da7810736c61d8e8a7669aa8767`:
+  **manual real-Ghidra 12.1.4 functional PASS**, explicitly distinct
+  from prior private Supervisor **BLOCKED/INCONCLUSIVE (NO ACK)**.
+  Owner verified 1265 MMIO references, three SIMCR hits, successful
+  Go To Listing to `0x00002BCA` with static 16-bit `0x40CA`, and
+  blocked button/double-click navigation after switching active
+  program to another binary.
+- Independent [PR #92](https://github.com/bogkom/GhidrAssist/pull/92)
+  fixes the missing `GhidrAssistPluginPackage` ClassSearcher registry
+  extension point. Real Ghidra ClassSearcher test in a disposable
+  profile passed on [Actions 40923895838](https://github.com/bogkom/GhidrAssist/actions/runs/40923895838).
+  A later icon-only revision is being reverified; it must not inherit
+  a previous commit's CI verdict. PR remains DRAFT.
+- Independent [PR #93](https://github.com/bogkom/GhidrAssist/pull/93)
+  adds full synthetic CodeBrowser/GoToService/Listing regression,
+  separate from Query-only [PR #89](https://github.com/bogkom/GhidrAssist/pull/89).
+  On code head `473e6059f1dd04bcc0f67f79815d1b0237b21d43`,
+  [Actions 40924047669](https://github.com/bogkom/GhidrAssist/actions/runs/40924047669)
+  **PASS** for full Ghidra 12.1.4 extension build and isolated test:
+  valid synthetic SIMCR MMIO row, real Listing navigation, both stale
+  guards, and actual `GhidraTool` `<EXTENSIONS>` XML persistence
+  verified by a second independent Java/Ghidra process without a
+  repeated extension prompt. No original ECU or Wyse user profile used.
+- Ghidra owns CodeBrowser tool config persistence through
+  `ToolExtensionsStatusManager.saveToXml()`; PR #92 package registration
+  is not by itself proof that the original migrated Wyse profile was
+  saved. A real isolated profile save/reopen on Wyse remains a distinct
+  host acceptance step. The full 30/30 Supervisor queue and old formal
+  PR56 test result remain untouched. Do not generate ACK/PASS receipts
+  for any Supervisor plan from standalone GitHub Actions.
+- The production CodeBrowser harness workflow is configured to run on
+  relevant future source changes to MMIO scanning, UI, program navigation,
+  plugin metadata and its own tests, not only manual invocation.
