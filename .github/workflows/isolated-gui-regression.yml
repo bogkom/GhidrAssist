@@ -42,7 +42,7 @@ jobs:
       - name: Install disposable X11 and target-window capture utilities
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends xvfb xauth x11-utils imagemagick
+          sudo apt-get install -y --no-install-recommends xvfb xauth x11-utils imagemagick openbox
       - name: Download hash-pinned Ghidra 12.1.4 PUBLIC
         shell: bash
         run: |
@@ -70,7 +70,7 @@ jobs:
         run: |
           set -euo pipefail
           xvfb-run -a -s '-screen 0 1400x1050x24' \
-            python tests/gui_harness/runner.py \
+            bash -c 'openbox --sm-disable >/dev/null 2>&1 & wm=$!; trap "kill $wm 2>/dev/null || true" EXIT; sleep 1; python tests/gui_harness/runner.py "$@"' gui-harness \
               --ghidra "$GHIDRA_INSTALL_DIR" --java-home "$JAVA_HOME" \
               --extension-zip "$GHIDRASSIST_EXTENSION" \
               --output "$RUNNER_TEMP/ga-gui-smoke" \
@@ -80,7 +80,7 @@ jobs:
         run: |
           set -euo pipefail
           xvfb-run -a -s '-screen 0 1400x1050x24' \
-            python tests/gui_harness/runner.py \
+            bash -c 'openbox --sm-disable >/dev/null 2>&1 & wm=$!; trap "kill $wm 2>/dev/null || true" EXIT; sleep 1; python tests/gui_harness/runner.py "$@"' gui-harness \
               --ghidra "$GHIDRA_INSTALL_DIR" --java-home "$JAVA_HOME" \
               --extension-zip "$GHIDRASSIST_EXTENSION" \
               --output "$RUNNER_TEMP/ga-gui-policy" \
