@@ -53,10 +53,12 @@ public final class HardwareInventoryService {
         public final int uniqueSites,functions;
         public final List<Site> sites;
         public final String markdown;
+        public final String overviewMarkdown;
+        public final String detailsMarkdown;
         public final String namePreviewCsv;
         public final List<HardwareFunctionNamingReview.Proposal> functionProposals;
         private Report(String program,String language,String selection,List<Site> sites,
-                String markdown,String namePreviewCsv,int functions,
+                String overviewMarkdown,String detailsMarkdown,String namePreviewCsv,int functions,
                 List<HardwareFunctionNamingReview.Proposal> functionProposals){
             this.program=program;
             this.language=language;
@@ -64,7 +66,9 @@ public final class HardwareInventoryService {
             this.uniqueSites=(int)sites.stream().filter(site->
                 HardwareReportScope.isInitializationRegister(site.register)).count();
             this.sites=List.copyOf(sites);
-            this.markdown=markdown;
+            this.overviewMarkdown=overviewMarkdown;
+            this.detailsMarkdown=detailsMarkdown;
+            this.markdown=overviewMarkdown+"\n\n---\n\n"+detailsMarkdown;
             this.namePreviewCsv=namePreviewCsv;
             this.functions=functions;
             this.functionProposals=List.copyOf(functionProposals);
@@ -311,10 +315,16 @@ public final class HardwareInventoryService {
         GhidraHardwareFlowService.Report flow=new GhidraHardwareFlowService()
             .analyze(program,monitor);
         md.append("\n\n").append(flow.markdown);
+        int initializationFunctions=(int)grouped.values().stream().filter(group->
+            group.stream().anyMatch(site->
+                HardwareReportScope.isInitializationRegister(site.register))).count();
+        List<HardwareReportOverview.Site> overviewSites=new ArrayList<>();
+        for(Site site:sites)
+            overviewSites.add(new HardwareReportOverview.Site(
+                site.register,site.write,site.literal!=null));
+        String overview=HardwareReportOverview.render(concreteDevice,scanned,
+            initializationFunctions,vbrCount,flow.unresolved,flow.limited,overviewSites);
         return new Report(program.getName(),program.getLanguageID().toString(),choice,sites,
-            md.toString(),csv,(int)grouped.values().stream().filter(group->
-                group.stream().anyMatch(site->
-                    HardwareReportScope.isInitializationRegister(site.register))).count(),
-                functionProposals);
+            overview,md.toString(),csv,initializationFunctions,functionProposals);
     }
 }

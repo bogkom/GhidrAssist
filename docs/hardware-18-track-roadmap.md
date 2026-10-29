@@ -24,7 +24,7 @@ The originating document has 18 *sections*, not 18 independent feature checkboxe
 | GA-04 | D | Per-select CSBOOT, CS0..CS10 table in Analyze | PARTIAL: decoder/windows exist; Markdown currently uses per-window bullets | 12 separate rows, start/end/size, missing values UNKNOWN, model scope |
 | GA-05 | E | Safe CPU32-unknown vs model-specific Review/Apply | PARTIAL: MC68332 full catalog; unknown-mode review constrained | No model-inherited unsafe maps; collision/transaction/Undo tests |
 | GA-06 | F | Extendible sourced MC683xx profiles and conflict matching | PARTIAL: MC68332 and document hints, no complete import pipeline | Explicit model/version/page/bitfields/reset source; SVD/RDL feasibility |
-| GA-07 | G | Compact 3-part Analyze: initiation, register history, CS map | PARTIAL: PR #52 focused site filtering; three-part report missing | UI/Markdown/RAG agreement, concise report, evidence links |
+| GA-07 | G | Compact 3-part Analyze: initiation, register history, CS map | PARTIAL: new draft three-part summary tab + separate full evidence tab on PR #55; Ghidra GUI acceptance pending | UI/Markdown/RAG agreement, concise report, evidence links |
 | GA-08 | H | Function, pointer and variable naming proposals | PARTIAL: function naming/Undo (#22/#28); pointers/locals missing | Collision-safe preview, manual labels preserved, transactional Undo |
 | GA-09 | 13.1 | MMIO accesses explorer with navigation | MISSING as dedicated view | Filterable function/instruction/value/access/confidence with Go To |
 | GA-10 | 13.2 | Verified bitfield decode with provenance | PARTIAL: sourced SIMCR bitfield decoder and direct-MOVE.W Analyze annotations proposed in separate draft; wider register coverage missing | Unknown fields UNKNOWN; model- and edition-specific source |
@@ -69,3 +69,18 @@ Full MCU/peripheral emulation, physical CS electrical simulation, generic automa
 - Local isolated Ghidra acceptance and Supervisor plan remain **PENDING**
   (no auto-approval). Do not merge this or its parent without the genuine
   host results. This batch is independent of PR #54 RESET candidate analysis.
+
+
+## 2026-10-29 — GA-07 independent three-part UI candidate
+
+- New branch `feature/hardware-three-part-overview-20261029` depends on
+  immutable PR #55 commit `f5b464f86cad8bc2703112e09505eb2501b9f1c7`; parent artifact/test plan unchanged.
+- New `HardwareReportOverview` produces a compact deterministic overview
+  (initialization candidates, register history, conditional CS map) from the
+  same inventory and CFG output used for the full report.
+- UI defaults to the overview tab; Full evidence retains detailed Listing,
+  CFG/P-code, source and conditional CS tables. Find/Ctrl+F opens Full evidence.
+  Export Markdown and RAG cache receive overview PLUS all details, not a
+  shortened or independently generated model summary.
+- Required: standalone Java regression + 12.1.4 extension build on exact
+  commit. Do not merge before separate actual-Ghidra test with explicit approval.
