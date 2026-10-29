@@ -10,7 +10,7 @@ Status: **IN PROGRESS**. Scope source: user-approved 2026-10-28 requirements (A�
 - MCU-dependent information is conditional on a **manually selected, documented device**, never silently inherited by generic CPU32.
 - Analyze is compact. Detail/uncertainty belongs in dedicated views; complete register catalog and explicit, undoable changes belong in Review / Apply.
 - Public repository and Actions must never contain ECU411 firmware or its Ghidra project. On-host test copies only. Test artifacts contain non-sensitive summaries/hashes.
-- GitHub Actions first; Supervisor plans pinned to immutable full 40-character commits; local tests run **only after operator approval**, via private `bogkom/codex-supervisor/test-plans/queue/`.
+- GitHub Actions first; Supervisor plans pinned to immutable full 40-character commits. **Standing owner authorization for standard GA-01..18 local tests is already active on Wyse**, with revocable, fail-closed Supervisor policy; no new per-plan approval is necessary. Tests run only inside the approved dedicated test Goal/workspace, never a new Codex programming session.
 
 ## Scope mapping — exactly 18 tracked workstreams
 
@@ -35,7 +35,7 @@ The originating document has 18 *sections*, not 18 independent feature checkboxe
 | GA-15 | 13.7 | Agentic planning, indirect calls, context, pagination, stale cache | PARTIAL: draft PR #49/#50 overlap and existing Agentic work | Don't duplicate existing tools; budget/policy evidence regression |
 | GA-16 | 15 | Physical PDF page/printed label, register tables, sourced RAG | PARTIAL INTEGRATED: physical PDF-page and candidate printed folio sequence status; actual PDF source page remains authoritative | No auto-promotion of ambiguous PDF rows; page/edition evidence |
 | GA-17 | 16 | CI, synthetic tests, isolated ECU411 project acceptance and rollback | PARTIAL: pure-Java Actions and private firmware tests exist | Compile 12.1.4, record artifacts/hashes, reversible actual-Ghidra test |
-| GA-18 | 17 + new decision | GitHub-controlled multi-stage local Supervisor tests | SUPERVISOR IMPLEMENTED; no GhidrAssist queued plans yet | Pinned JSON, explicit approve, quota safeguards, verified private reports |
+| GA-18 | 17 + new decision | GitHub-controlled multi-stage local Supervisor tests | OPERATIONALLY ACTIVE on Wyse as of 2026-10-29; PR #9 GitHub integration still open; real tests PR #53/#54/#55 PASSED | Pinned JSON, active standing authorization, quota safeguards, verified private reports |
 
 ## Dependency order and milestones
 
@@ -46,7 +46,7 @@ The originating document has 18 *sections*, not 18 independent feature checkboxe
 5. **Documentation and agent workflows**: GA-16, GA-15, GA-12; retain report provenance and avoid model token use for deterministic checks.
 6. **Later comparison**: GA-14 after a stable report schema and Ghidra Version Tracking evaluation.
 
-Each milestone: focused Java tests -> exact 12.1.4 extension build on GitHub Actions -> immutable candidate commit -> queue plan in private Supervisor repo -> explicit one-time local approval -> verified isolated-Ghidra regression -> review and merge. A plan proposal is not a PASS. Do not merge on planned rather than observed test results.
+Each milestone: focused Java tests -> exact 12.1.4 extension build on GitHub Actions -> immutable candidate commit -> queue plan in private Supervisor repo -> fail-closed execution under the **already active standing owner authorization** -> verified isolated-Ghidra regression -> review and merge. A queued or artifact-verified plan is not PASS. Do not merge on planned rather than observed test results.
 
 ## First implementation batch
 
@@ -301,3 +301,27 @@ Full MCU/peripheral emulation, physical CS electrical simulation, generic automa
 - Dedicated pure Java branch/loop/alias/unknown tests and complete
   Ghidra 12.1.4 extension CI; actual on-host Ghidra acceptance
   remains a separate Supervisor gate.
+
+## 2026-10-29 — authoritative GA-18 operational update
+
+- Standing owner authorization covering all standard GhidrAssist
+  GA-01..GA-18 tests is **granted, deployed and active on Wyse**.
+  Confirmed `codex-supervisor-auto` systemd timer launched the PR #54
+  dedicated Codex **test-only** turn at 09:24:15 Europe/Warsaw.
+- Private verified real-host Supervisor results exist for
+  **PR #53** ([issue #8](https://github.com/bogkom/codex-supervisor/issues/8)),
+  **PR #54** ([issue #14](https://github.com/bogkom/codex-supervisor/issues/14),
+  PASSED 09:32:49 Warsaw), and **PR #55**
+  ([issue #16](https://github.com/bogkom/codex-supervisor/issues/16),
+  PASSED 09:51:09 Warsaw). Each result is pinned to its own exact
+  historical commit and GitHub Actions artifact.
+- Supervisor standing-policy PR #9 remains unmerged to private `main`,
+  but its approved functionality was already installed and exercised
+  on Wyse using an audited pinned stack based on Supervisor PR #13.
+  **Do not call operational activation unconfirmed solely because
+  these source PRs remain open.** The auto-reload subfeature has
+  not separately been proven by the manual thread reload.
+- Later stacked integration PRs #67–#76 still need their **own**
+  exact-commit real-Ghidra tests and positive Supervisor reports.
+  In particular, a PR #55 success does not verify later source
+  combinations or permission for unreviewed production merges.
