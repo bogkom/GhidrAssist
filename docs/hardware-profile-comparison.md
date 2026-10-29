@@ -56,3 +56,19 @@ artifact and a disposable project; green Java CI is not GUI acceptance.
 This PR is an independent GA-06 branch based on the exact prior GA-06
 profile/PDF-checkpoint PR #63, and does not modify or supersede the
 GA-02/GA-05/GA-12 integrated analyzer stack.
+
+## 2026-10-29 — case-collision and page-label validation
+
+To prevent lossy reconciliation, the preview parser rejects module
+identifiers that differ only by case (e.g., `SIM` and `sim`). A register
+may refer to the canonical module in any case, but the stored definition
+uses the declared module name. Each comparison key is now unique after
+normalization; no source record can be silently overwritten.
+
+A nonempty label containing `PDF page` is no longer sufficient to count
+as a numbered PDF reference. Claims must contain `PDF page N` or
+`PDF pages N-M` with positive numbers and no UNKNOWN, UNVERIFIED,
+AMBIGUOUS, or to-be-verified qualifiers. This affects the *count of
+missing/ambiguous page references*, not source authenticity. Even a
+numeric label is an unverified statement from the external TSV, not
+proof of page identity or source edition. Neither manifest is imported.
