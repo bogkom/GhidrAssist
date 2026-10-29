@@ -5,6 +5,7 @@ on:
       - 'src/main/java/ghidrassist/GhidrAssistPluginPackage.java'
       - 'src/main/java/ghidrassist/GhidrAssistPlugin.java'
       - 'src/test/java/ghidrassist/GhidrAssistPluginPackageSelfTest.java'
+      - 'src/test/java/ghidrassist/GhidrAssistPluginPackageDiscoveryMain.java'
       - '.github/workflows/plugin-package-registration-tests.yml'
   push:
     branches: [master]
@@ -12,6 +13,7 @@ on:
       - 'src/main/java/ghidrassist/GhidrAssistPluginPackage.java'
       - 'src/main/java/ghidrassist/GhidrAssistPlugin.java'
       - 'src/test/java/ghidrassist/GhidrAssistPluginPackageSelfTest.java'
+      - 'src/test/java/ghidrassist/GhidrAssistPluginPackageDiscoveryMain.java'
       - '.github/workflows/plugin-package-registration-tests.yml'
   workflow_dispatch:
 
@@ -78,6 +80,29 @@ jobs:
           java -Djava.awt.headless=true \
             -cp "$RUNNER_TEMP/pkg-test:$cp" \
             ghidrassist.GhidrAssistPluginPackageSelfTest
+      - name: Resolve package through real Ghidra ClassSearcher (isolated profile)
+        shell: bash
+        run: |
+          set -euo pipefail
+          PROFILE="$RUNNER_TEMP/registry-profile"
+          mkdir -p "$PROFILE"
+          EXT="$PROFILE/${USER}-ghidra/ghidra_12.1.4_PUBLIC/Extensions"
+          mkdir -p "$EXT"
+          cp -a "$RUNNER_TEMP/unpacked/GhidrAssist" "$EXT/GhidrAssist"
+          cp=""
+          while IFS= read -r -d '' jarfile; do
+            cp="${cp:+$cp:}$jarfile"
+          done < <(find "$GHIDRA_INSTALL_DIR" "$EXT/GhidrAssist/lib" -type f -name '*.jar' -print0)
+          mkdir -p "$RUNNER_TEMP/registry-classes"
+          javac -cp "$cp" -d "$RUNNER_TEMP/registry-classes" \
+            src/test/java/ghidrassist/GhidrAssistPluginPackageDiscoveryMain.java
+          java -Djava.awt.headless=true \
+            -Djava.system.class.loader=ghidra.GhidraClassLoader \
+            -Dapplication.settingsdir="$PROFILE" \
+            -Dapplication.cachedir="$RUNNER_TEMP/registry-cache" \
+            -Duser.home="$RUNNER_TEMP/registry-home" \
+            -cp "$RUNNER_TEMP/registry-classes:$cp" \
+            ghidrassist.GhidrAssistPluginPackageDiscoveryMain "$GHIDRA_INSTALL_DIR"
       - name: Save nonprivate extension smoke metadata
         shell: bash
         run: |
