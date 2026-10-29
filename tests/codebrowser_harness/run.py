@@ -162,7 +162,10 @@ def main():
                       "listing_navigation","stale_go_to_rejected",
                       "stale_double_click_rejected",
                       "listing_remained_second_program",
-                      "read_only_analyze","tool_template_saved")
+                      "read_only_analyze","tool_template_saved",
+                      "extension_metadata_serialized",
+                      "tool_template_reloaded",
+                      "no_new_extension_prompt_on_restore")
             for name in expected:
                 if data.get(name) is not True:
                     raise RuntimeError("Missing actual GUI evidence: "+name)
