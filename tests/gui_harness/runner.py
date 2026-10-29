@@ -108,15 +108,32 @@ def x11_capture(out: Path) -> dict:
         tree = subprocess.run(
             ["xwininfo", "-root", "-tree"],
             capture_output=True, text=True, timeout=5, check=True)
-        ids = re.findall(
-            r'(?im)^\s*(0x[0-9a-f]+)\s+"[^"\n]*GhidrAssist isolated GUI regression[^"\n]*"',
-            tree.stdout)
-        if len(ids) != 1:
-            raise RuntimeError(
-                "Expected exactly one named isolated GhidrAssist X11 window; "
-                f"found {len(ids)}")
+        # Some Ghidra docking frames expose multiple matching child windows.
+        # Do not guess from find-first. Select exactly one largest mapped
+        # application window, preferring the shallower hierarchy on ties.
+        candidates = []
+        for match in re.finditer(
+                r'(?im)^(\s*)(0x[0-9a-f]+)\s+"[^"\n]*GhidrAssist isolated GUI regression[^"\n]*"',
+                tree.stdout):
+            xid = match.group(2)
+            details = subprocess.run(
+                ["xwininfo", "-id", xid],
+                capture_output=True, text=True, timeout=5, check=True).stdout
+            width = re.search(r"(?m)^\s*Width:\s*(\d+)\s*$", details)
+            height = re.search(r"(?m)^\s*Height:\s*(\d+)\s*$", details)
+            if (width and height and "Map State: IsViewable" in details and
+                    int(width.group(1)) >= 600 and
+                    int(height.group(1)) >= 450):
+                size = int(width.group(1)) * int(height.group(1))
+                candidates.append((size, -len(match.group(1)), xid))
+        if not candidates:
+            raise RuntimeError("No visible suitably sized isolated GhidrAssist X11 frame")
+        candidates.sort(reverse=True)
+        if len(candidates) > 1 and candidates[0][:2] == candidates[1][:2]:
+            raise RuntimeError("Ambiguous equal-size X11 frames: no screenshot")
+        chosen_xid = candidates[0][2]
         image = out / "actual-x11.png"
-        subprocess.run(["import", "-silent", "-window", ids[0], str(image)],
+        subprocess.run(["import", "-silent", "-window", chosen_xid, str(image)],
                        capture_output=True, timeout=15, check=True)
         size = subprocess.run(
             ["identify", "-format", "%w %h", str(image)],
