@@ -104,3 +104,24 @@ Full MCU/peripheral emulation, physical CS electrical simulation, generic automa
   printed pages or register semantics are valid.
 - Supports mismatched, unknown, malformed, oversized and non-PDF inputs.
   Full Ghidra 12.1.4 CI and an approved real GUI test remain required.
+
+
+## 2026-10-29 — GA-06 two-manifest discrepancy preview (independent)
+
+- Candidate branch `feature/ga06-manifest-contradiction-preview-20261029`
+  based on immutable prior GA-06 #63 head
+  `31596da9462b1ceb95b780ec533354417e4f94e2`.
+- The existing `Preview profile...` flow can optionally compare a second
+  strict external profile manifest. The pure-Java comparator counts
+  same-name structural conflicts, absent entries, distinct physical-page
+  **claims**, and cross-name register address overlaps without selecting
+  one input as authoritative. Wrong device labels are rejected.
+- Both profile files and all derived findings remain UNVERIFIED; no automatic
+  hardware discovery, active profile import, RAG promotion, symbol creation,
+  Ghidra Program write or external network operation is introduced.
+- Detailed display is capped at 100 findings with exact omission count;
+  full totals remain available. Separate local PDF SHA verification is
+  unchanged and never inferred from two matching claimed digests.
+- Dedicated deterministic negative tests, full Ghidra 12.1.4 extension CI
+  and actual isolated GUI acceptance on the exact candidate SHA are gates
+  before integrating; no queued plan constitutes local PASS.
