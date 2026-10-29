@@ -1,0 +1,42 @@
+name: Hardware source-only configuration CSV tests
+on:
+  pull_request:
+    paths:
+      - 'src/main/java/ghidrassist/hardware/HardwareConfigurationEvidenceCsv.java'
+      - 'src/main/java/ghidrassist/hardware/GhidraHardwareFlowService.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareInventoryService.java'
+      - 'src/main/java/ghidrassist/ui/tabs/HardwareAnalysisTab.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareConfigurationEvidenceCsvSelfTest.java'
+      - '.github/workflows/hardware-config-evidence-csv.yml'
+  push:
+    paths:
+      - 'src/main/java/ghidrassist/hardware/HardwareConfigurationEvidenceCsv.java'
+      - 'src/main/java/ghidrassist/hardware/GhidraHardwareFlowService.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareInventoryService.java'
+      - 'src/main/java/ghidrassist/ui/tabs/HardwareAnalysisTab.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareConfigurationEvidenceCsvSelfTest.java'
+      - '.github/workflows/hardware-config-evidence-csv.yml'
+  workflow_dispatch:
+jobs:
+  evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Compile source-only evidence model
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/csv"
+          javac --release 21 -d "$RUNNER_TEMP/csv" \
+            src/main/java/ghidrassist/hardware/HardwareCfgWriteAudit.java \
+            src/main/java/ghidrassist/hardware/HardwareCfgStorePaths.java \
+            src/main/java/ghidrassist/hardware/HardwareConfigurationEvidenceCsv.java \
+            src/test/java/ghidrassist/hardware/HardwareConfigurationEvidenceCsvSelfTest.java
+      - name: Test CSV schema, safety and formula injection
+        run: java -cp "$RUNNER_TEMP/csv" ghidrassist.hardware.HardwareConfigurationEvidenceCsvSelfTest
