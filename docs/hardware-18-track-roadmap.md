@@ -30,7 +30,7 @@ The originating document has 18 *sections*, not 18 independent feature checkboxe
 | GA-10 | 13.2 | Verified bitfield decode with provenance | PARTIAL: MC68332 metadata; comprehensive decoder missing | Unknown fields UNKNOWN; model- and edition-specific source |
 | GA-11 | 13.3 | Interrupt / exception analysis including VBR and ISR paths | PARTIAL: VBR sightings, no full ISR graph | Static candidates not treated as active IRQs |
 | GA-12 | 13.4 | Resumable, version-aware incremental analysis | MISSING dedicated analyzer checkpoint protocol | Program identity, input hash, invalidation and resume regressions |
-| GA-13 | 13.5 | Human/analysis/AI origin of changes | MISSING verified per-symbol provenance | Check actual Ghidra 12.1.4 SourceType API; retain rationale and Undo |
+| GA-13 | 13.5 | Human/analysis/AI origin of changes | PARTIAL DRAFT: read-only Ghidra SourceType review and local pre-Apply CSV; actor identity and persistent audit still UNKNOWN | Check actual Ghidra 12.1.4 SourceType API; retain rationale and Undo |
 | GA-14 | 13.6 | Firmware configuration comparison | DEFERRED by source priorities | Assess Ghidra Version Tracking first; later CS/VBR/peripheral diff |
 | GA-15 | 13.7 | Agentic planning, indirect calls, context, pagination, stale cache | PARTIAL: draft PR #49/#50 overlap and existing Agentic work | Don't duplicate existing tools; budget/policy evidence regression |
 | GA-16 | 15 | Physical PDF page/printed label, register tables, sourced RAG | PARTIAL: native PDF/RAG and labels; tables uncertain | No auto-promotion of ambiguous PDF rows; page/edition evidence |
@@ -57,3 +57,21 @@ For upcoming steps prepare independent Supervisor plans, each pinned to the corr
 ## Explicitly deferred, not lost
 
 Full MCU/peripheral emulation, physical CS electrical simulation, generic automatic hardware identification, and broad multi-firmware comparison remain out of the initial delivery, as required by original section 14.
+
+
+## 2026-10-29 — GA-13 partial source provenance (independent draft)
+
+- Branch: `feature/hardware-change-provenance-review-20261029` from immutable PR #53 head
+  `bd0a0a60eaa610e19581bd67fd16d29c637bfb8e`. No changes to pinned PR #53–#58 commits.
+- Review/Apply gains existing primary symbol and Ghidra SourceType columns;
+  optional explicit local CSV export records proposals, review selection,
+  decision and source evidence without performing edits.
+- **Critical provenance distinction:** `SourceType.USER_DEFINED` does not prove
+  human authorship, `ANALYSIS` cannot identify an AI versus tool, and a proposal
+  from GhidrAssist has only a known proposal **process**, not a persisted
+  per-symbol author identity. All unverifiable actors remain UNKNOWN.
+- No modification to preflight eligibility, transaction semantics, default
+  review selection, symbol naming, or OAuth.
+- CI: standalone source interpretation/CSV tests and full Ghidra 12.1.4
+  extension compile; real GUI and Undo regression requires separate approved
+  Supervisor integration. Do not merge before that evidence.
