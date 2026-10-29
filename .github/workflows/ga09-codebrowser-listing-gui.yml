@@ -4,6 +4,15 @@ on:
     paths:
       - 'tests/codebrowser_harness/**'
       - '.github/workflows/ga09-codebrowser-listing-gui.yml'
+      - 'src/main/java/ghidrassist/GhidrAssistPlugin.java'
+      - 'src/main/java/ghidrassist/GhidrAssistProvider.java'
+      - 'src/main/java/ghidrassist/ui/GhidrAssistUI.java'
+      - 'src/main/java/ghidrassist/ui/tabs/HardwareAnalysisTab.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareInventoryService.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareMmioExplorer.java'
+      - 'src/main/java/ghidrassist/GhidrAssistPluginPackage.java'
+      - 'extension.properties'
+      - 'docs/ga09-codebrowser-synthetic-gui-regression.md'
   workflow_dispatch:
 permissions:
   contents: read
