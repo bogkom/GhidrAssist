@@ -27,6 +27,59 @@ public final class HardwareConfigurationEvidenceCsv {
         for(String value:values)parts.add(cell(value));
         return String.join(",",parts)+"\n";
     }
+    /**
+     * Append normalized, deduplicated sources without deleting the raw CFG
+     * provenance rows. MERGED_SITE rows are a second VIEW of the same PCs,
+     * not additional executed stores. Strict cap keeps exports bounded.
+     */
+    public static String withUnifiedSources(String rawCsv,
+            HardwareStartupEvidenceMerge.Report merged,boolean selectedMc68332) {
+        if(rawCsv==null || !rawCsv.startsWith(HEADER) || merged==null)
+            throw new IllegalArgumentException("Untrusted CSV or merged evidence");
+        int rows=0;
+        for(int k=0;k<rawCsv.length();k++)
+            if(rawCsv.charAt(k)=='\n')rows++;
+        rows--; // header, never count as a source observation
+        if(rows<0)throw new IllegalArgumentException("Incomplete source CSV");
+        StringBuilder out=new StringBuilder(rawCsv);
+        int omitted=0;
+        for(HardwareStartupEvidenceMerge.Row s:merged.rows()){
+            if(rows>=MAX_ROWS){omitted++;continue;}
+            String names= (s.sources().contains(
+                HardwareStartupEvidenceMerge.Source.LISTING_REFERENCE)?"LISTING_REF":"")+
+                (s.sources().contains(HardwareStartupEvidenceMerge.Source.CFG_PCODE)?
+                    (s.sources().size()>1?"+CFG_PCODE":"CFG_PCODE"):"");
+            Integer bit=selectedMc68332 && s.candidateRegister().equals("SIMCR") &&
+                s.status()==HardwareStartupEvidenceMerge.Status.FULL_WORD_LITERAL_CANDIDATE ?
+                ((s.literalWord()&0x40)!=0?1:0):null;
+            out.append(row("MERGED_SITE",hex(s.function()),hex(s.pc()),
+                selectedMc68332?s.candidateRegister():"UNVERIFIED_MCU_REGISTER",
+                hex(s.registerAddress()),names,
+                Integer.toString(s.widthBits()),
+                s.status()==HardwareStartupEvidenceMerge.Status.FULL_WORD_LITERAL_CANDIDATE?
+                    String.format(Locale.ROOT,"0x%04X",s.literalWord()):"UNKNOWN",
+                "UNKNOWN",bit==null?"UNKNOWN":bit+" (STATIC_LITERAL_ONLY)",
+                "",s.status().name(),
+                Boolean.toString(s.conditionalOrUncertain() ||
+                    merged.unboundAliasStores()>0),
+                "RECONCILED_READ_ONLY_NEVER_AUTO_APPLY"));
+            rows++;
+        }
+        if(merged.unboundAliasStores()>0) {
+            if(rows<MAX_ROWS)
+                out.append(row("UNBOUND_ALIAS_SUMMARY","","",
+                    selectedMc68332?"UNKNOWN_TARGET":"UNVERIFIED_MCU_REGISTER",
+                    "UNKNOWN","CFG_PCODE","UNKNOWN","UNKNOWN","UNKNOWN",
+                    "UNKNOWN","","UNBOUND_ALIAS_COUNT="+merged.unboundAliasStores(),
+                    "true","POSSIBLE_ANY_MMIO_NEVER_AUTO_APPLY"));
+            else omitted++;
+        }
+        if(omitted>0)out.append(row("OMITTED_MERGED_SITES","","","","",
+            "","","","","","",
+            Integer.toString(omitted),"true","INCOMPLETE_EXPORT_NEVER_AUTO_APPLY"));
+        return out.toString();
+    }
+
     public static String serialize(HardwareCfgWriteAudit.Report stores,
             List<HardwareCfgStorePaths.Pair> paths,boolean mc68332Selected){
         if(stores==null || paths==null)

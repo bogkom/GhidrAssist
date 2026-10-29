@@ -36,6 +36,8 @@ jobs:
           javac --release 21 -d "$RUNNER_TEMP/csv" \
             src/main/java/ghidrassist/hardware/HardwareCfgWriteAudit.java \
             src/main/java/ghidrassist/hardware/HardwareCfgStorePaths.java \
+            src/main/java/ghidrassist/hardware/HardwareStartupConfig.java \
+            src/main/java/ghidrassist/hardware/HardwareStartupEvidenceMerge.java \
             src/main/java/ghidrassist/hardware/HardwareConfigurationEvidenceCsv.java \
             src/test/java/ghidrassist/hardware/HardwareConfigurationEvidenceCsvSelfTest.java
       - name: Test CSV schema, safety and formula injection

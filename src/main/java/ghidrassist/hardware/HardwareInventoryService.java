@@ -386,7 +386,9 @@ public final class HardwareInventoryService {
             flowStage.report().resetGraphIncomplete,startupSites);
         md.append("\n\n").append(startup.markdown());
         return new Report(program.getName(),program.getLanguageID().toString(),choice,sites,
-            overview,md.toString(),csv,flowStage.report().configurationEvidenceCsv,
+            overview,md.toString(),csv,
+            HardwareConfigurationEvidenceCsv.withUnifiedSources(
+                flowStage.report().configurationEvidenceCsv,merged,concreteDevice),
             initializationFunctions,functionProposals);
     }
 }

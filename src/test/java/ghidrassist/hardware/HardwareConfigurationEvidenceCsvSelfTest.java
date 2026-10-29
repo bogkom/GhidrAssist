@@ -39,6 +39,37 @@ public final class HardwareConfigurationEvidenceCsvSelfTest {
         try{HardwareConfigurationEvidenceCsv.serialize(null,List.of(),true);}
         catch(IllegalArgumentException expected){fail=true;}
         check(fail,"missing data must fail");
+        var listing=HardwareStartupEvidenceMerge.Source.LISTING_REFERENCE;
+        var cfg=HardwareStartupEvidenceMerge.Source.CFG_PCODE;
+        var merged=HardwareStartupEvidenceMerge.reconcile(List.of(
+            new HardwareStartupEvidenceMerge.Observation(0x2bc0,0x2bca,
+                0xfffa00,"SIMCR",listing,true,16,0x40ca,false),
+            new HardwareStartupEvidenceMerge.Observation(0x2bc0,0x2bca,
+                0xfffa00,"SIMCR",cfg,true,16,0x40ca,false),
+            new HardwareStartupEvidenceMerge.Observation(0x2bc0,0x2bcc,
+                0xfffa4c,"CSBAR0",cfg,true,8,null,true),
+            new HardwareStartupEvidenceMerge.Observation(0x2bc0,0x2bdf,
+                -1,"UNRESOLVED_ALIAS",cfg,true,0,null,true)));
+        String unified=HardwareConfigurationEvidenceCsv.withUnifiedSources(
+            csv,merged,true);
+        check(unified.contains("\"MERGED_SITE\"") &&
+            unified.contains("\"LISTING_REF+CFG_PCODE\"") &&
+            unified.contains("\"UNBOUND_ALIAS_SUMMARY\"") &&
+            unified.contains("POSSIBLE_ANY_MMIO_NEVER_AUTO_APPLY"),
+            "normalized view, source identity and unknown alias preserved");
+        check(unified.contains("RECONCILED_READ_ONLY_NEVER_AUTO_APPLY") &&
+            unified.contains("UNBOUND_ALIAS_COUNT=1"),
+            "merged sources cannot become Apply requests");
+        String safeGeneric=HardwareConfigurationEvidenceCsv.withUnifiedSources(
+            generic,merged,false);
+        check(!safeGeneric.contains("\"SIMCR\"") &&
+            !safeGeneric.contains("\"CSBAR0\""),
+            "generic CPU32 cannot reveal device labels in merged view");
+        boolean rejectedMerged=false;
+        try{HardwareConfigurationEvidenceCsv.withUnifiedSources(
+            "non-CSV",merged,true);}
+        catch(IllegalArgumentException expected){rejectedMerged=true;}
+        check(rejectedMerged,"invalid raw CSV must fail closed");
         System.out.println("HardwareConfigurationEvidenceCsvSelfTest OK");
     }
 }
