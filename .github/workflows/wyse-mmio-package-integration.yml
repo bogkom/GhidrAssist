@@ -27,7 +27,7 @@ jobs:
         with:
           # Never publish PR synthetic merge refs as the source identity:
           # the package must be pinned to an actual branch source commit.
-          ref: ${ github.event.pull_request.head.sha || github.sha }
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
       - uses: actions/setup-java@v4
         with:
@@ -113,7 +113,7 @@ jobs:
         run: |
           set -euo pipefail
           sha=$(git rev-parse HEAD)
-          test "$sha" = "${ github.event.pull_request.head.sha || github.sha }"
+          test "$sha" = "${{ github.event.pull_request.head.sha || github.sha }}"
           target="$RUNNER_TEMP/Wyse-GhidrAssist-MMIO-12.1.4"
           mkdir -p "$target"
           cp "$EXTENSION" "$target/$(basename "$EXTENSION")"
@@ -134,7 +134,7 @@ jobs:
             "jdk_ci":"25",
             "installable_zip":pathlib.Path(sys.argv[3]).name,
             "installable_zip_sha256":sys.argv[4],
-            "ci_run_id": "${ github.run_id }",
+            "ci_run_id": "${{ github.run_id }}",
             "supervisor_status":"NOT_RUN_NO_ACK",
             "host_acceptance":"PENDING",
             "synthetic_only_ci":True
@@ -144,20 +144,20 @@ jobs:
           (cd "$target" && sha256sum "$(basename "$EXTENSION")" > SHA256SUMS.txt)
           echo "Installer SHA256: $hash"
           echo "Source SHA: $sha"
-          echo "CI run: ${ github.run_id }"
+          echo "CI run: ${{ github.run_id }}"
       - name: Always publish test diagnostics (not an acceptance receipt)
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Wyse-MMIO-Integration-Diagnostics-${ github.run_id }
+          name: Wyse-MMIO-Integration-Diagnostics-${{ github.run_id }}
           path: |
-            ${ runner.temp }/codebrowser-evidence/
+            ${{ runner.temp }}/codebrowser-evidence/
           if-no-files-found: warn
           retention-days: 14
       - name: Upload Ghidra installable ZIP + manifest only after full CI pass
         uses: actions/upload-artifact@v4
         with:
-          name: GhidrAssist-MMIO-PluginPackage-Ghidra-12.1.4-${ github.run_id }
-          path: ${ runner.temp }/Wyse-GhidrAssist-MMIO-12.1.4/
+          name: GhidrAssist-MMIO-PluginPackage-Ghidra-12.1.4-${{ github.run_id }}
+          path: ${{ runner.temp }}/Wyse-GhidrAssist-MMIO-12.1.4/
           if-no-files-found: error
           retention-days: 30
