@@ -592,7 +592,7 @@ public final class GhidraHardwareFlowService {
                                     words.get(step.address):null));
                         }
                         localFirstPaths.add(HardwareSimcrLocalFirst.inspect(
-                            fun.getEntryPoint().getOffset(),steps.get(0).address,
+                            fun.getEntryPoint().getOffset(),fun.getEntryPoint().getOffset(),
                             graph,uncertainFlow || result.truncated,1500));
                     }
                 }
@@ -787,8 +787,8 @@ public final class GhidraHardwareFlowService {
             cfgStoreRelations,cfgPathLimitedFunctions));
         out.append(mc68332Selected?
             HardwareSimcrLocalFirst.markdown(localFirstPaths,localFirstOmittedFunctions):
-            "## Possible local first SIMCR sites\\n\\nGeneric CPU32: explicit "+
-            "MC68332 profile required for these candidate source paths.\\n\\n");
+            "## Possible local first SIMCR sites\n\nGeneric CPU32: explicit "+
+            "MC68332 profile required for these candidate source paths.\n\n");
         String evidenceCsv=HardwareConfigurationEvidenceCsv.serialize(
             HardwareCfgWriteAudit.inspect(mc68332Selected,cfgMmioSites.snapshot()),
             cfgStoreRelations,mc68332Selected);
