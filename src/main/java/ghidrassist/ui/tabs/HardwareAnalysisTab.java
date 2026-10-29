@@ -435,7 +435,6 @@ public final class HardwareAnalysisTab extends JPanel {
             BorderLayout.NORTH);
         content.add(new JScrollPane(table),BorderLayout.CENTER);
         JButton selectSafe=new JButton("Select applicable");
-        JButton exportProvenance=new JButton("Export review CSV...");
         JButton clear=new JButton("Clear selection");
         JButton apply=new JButton("Apply selected...");
         JButton cancel=new JButton("Cancel");
@@ -472,41 +471,6 @@ public final class HardwareAnalysisTab extends JPanel {
         dialog.setLocationRelativeTo(this);
         List<HardwareFunctionNamingReview.Proposal> selected=new ArrayList<>();
         cancel.addActionListener(e->dialog.dispose());
-        exportProvenance.addActionListener(e->{
-            if(program!=plugin.getCurrentProgram()){
-                JOptionPane.showMessageDialog(dialog,
-                    "The active program changed; rerun Analyze before exporting.",
-                    "Stale review",JOptionPane.WARNING_MESSAGE);
-                return;
-            }
-            if(table.isEditing() && !table.getCellEditor().stopCellEditing())return;
-            List<HardwareChangeProvenance.ReviewRow> snapshot=new ArrayList<>();
-            for(int i=0;i<candidates.size();i++)
-                snapshot.add(provenanceRow(program,candidates.get(i),decisions.get(i),
-                    Boolean.TRUE.equals(model.getValueAt(i,0))));
-            String csv=HardwareChangeProvenance.csv(
-                HardwareChangeProvenance.snapshot(snapshot));
-            JFileChooser chooser=new JFileChooser();
-            chooser.setDialogTitle("Export local review provenance CSV");
-            chooser.setSelectedFile(new File("ghidrassist-hardware-review-provenance.csv"));
-            if(chooser.showSaveDialog(dialog)!=JFileChooser.APPROVE_OPTION)return;
-            File destination=chooser.getSelectedFile();
-            if(destination.exists() && JOptionPane.showConfirmDialog(dialog,
-                    "Overwrite existing file: "+destination.getName()+"?",
-                    "Confirm CSV overwrite",JOptionPane.YES_NO_OPTION)!=
-                    JOptionPane.YES_OPTION)return;
-            try{
-                Files.writeString(destination.toPath(),csv,StandardCharsets.UTF_8);
-                JOptionPane.showMessageDialog(dialog,
-                    snapshot.size()+" proposal rows exported locally.\n"+
-                    "SourceType does not identify the human/script/AI author.",
-                    "Review provenance exported",JOptionPane.INFORMATION_MESSAGE);
-            }catch(Exception problem){
-                JOptionPane.showMessageDialog(dialog,
-                    "Could not export review CSV: "+problem.getMessage(),
-                    "Export error",JOptionPane.ERROR_MESSAGE);
-            }
-        });
         apply.addActionListener(e->{
             if(table.isEditing())table.getCellEditor().stopCellEditing();
             selected.clear();
@@ -711,6 +675,7 @@ public final class HardwareAnalysisTab extends JPanel {
         vbrPanel.add(vbrNotice);
 
         JButton selectSafe=new JButton("Select applicable");
+        JButton exportProvenance=new JButton("Export review CSV...");
         JButton deselect=new JButton("Clear selection");
         JButton apply=new JButton("Apply selected...");
         JButton cancel=new JButton("Cancel");
@@ -803,7 +768,41 @@ public final class HardwareAnalysisTab extends JPanel {
 
         final List<HardwareApplyPlan.Item> accepted=new ArrayList<>();
         cancel.addActionListener(e->dialog.dispose());
-        apply.addActionListener(e->{
+        exportProvenance.addActionListener(e->{
+            if(program!=plugin.getCurrentProgram()){
+                JOptionPane.showMessageDialog(dialog,
+                    "The active program changed; rerun Analyze before exporting.",
+                    "Stale review",JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+            if(table.isEditing() && !table.getCellEditor().stopCellEditing())return;
+            List<HardwareChangeProvenance.ReviewRow> snapshot=new ArrayList<>();
+            for(int i=0;i<candidates.size();i++)
+                snapshot.add(provenanceRow(program,candidates.get(i),decisions.get(i),
+                    Boolean.TRUE.equals(model.getValueAt(i,0))));
+            String csv=HardwareChangeProvenance.csv(
+                HardwareChangeProvenance.snapshot(snapshot));
+            JFileChooser chooser=new JFileChooser();
+            chooser.setDialogTitle("Export local review provenance CSV");
+            chooser.setSelectedFile(new File("ghidrassist-hardware-review-provenance.csv"));
+            if(chooser.showSaveDialog(dialog)!=JFileChooser.APPROVE_OPTION)return;
+            File destination=chooser.getSelectedFile();
+            if(destination.exists() && JOptionPane.showConfirmDialog(dialog,
+                    "Overwrite existing file: "+destination.getName()+"?",
+                    "Confirm CSV overwrite",JOptionPane.YES_NO_OPTION)!=
+                    JOptionPane.YES_OPTION)return;
+            try{
+                Files.writeString(destination.toPath(),csv,StandardCharsets.UTF_8);
+                JOptionPane.showMessageDialog(dialog,
+                    snapshot.size()+" proposal rows exported locally.\n"+
+                    "SourceType does not identify the human/script/AI author.",
+                    "Review provenance exported",JOptionPane.INFORMATION_MESSAGE);
+            }catch(Exception problem){
+                JOptionPane.showMessageDialog(dialog,
+                    "Could not export review CSV: "+problem.getMessage(),
+                    "Export error",JOptionPane.ERROR_MESSAGE);
+            }
+        });        apply.addActionListener(e->{
             if(table.isEditing())table.getCellEditor().stopCellEditing();
             accepted.clear();
             for(int i=0;i<candidates.size();i++){
