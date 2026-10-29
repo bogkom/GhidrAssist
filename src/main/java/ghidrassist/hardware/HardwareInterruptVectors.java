@@ -17,7 +17,8 @@ public final class HardwareInterruptVectors {
 
     public enum Classification {
         UNREADABLE, NULL_OR_ERASED, ODD_POINTER,
-        UNMAPPED_TARGET, MAPPED_TARGET, RECOGNIZED_FUNCTION_CANDIDATE
+        UNMAPPED_TARGET, MAPPED_TARGET, INTERIOR_FUNCTION_POINTER_CANDIDATE,
+        RECOGNIZED_FUNCTION_CANDIDATE
     }
 
     /**
@@ -26,7 +27,8 @@ public final class HardwareInterruptVectors {
      * presence in Ghidra's memory map, not proof that the CPU can execute it.
      */
     public record Observation(int vectorNumber, Long pointer,
-                              boolean mappedTarget, String containingFunction) {}
+                              boolean mappedTarget, String containingFunction,
+                              boolean exactFunctionEntry) {}
 
     public record Entry(int vectorNumber, long slotAddress, Long pointer,
                         Classification classification, String function) {
@@ -41,7 +43,7 @@ public final class HardwareInterruptVectors {
 
     public record Summary(long tableAddress, int sampledSlots, int readable,
                           int plausibleMapped, int recognizedFunctions,
-                          int unmapped, int odd, int unreadable, int absent,
+                          int interiorFunctionPointers, int unmapped, int odd, int unreadable, int absent,
                           boolean truncated, List<Entry> displayed) {
         public Summary { displayed=List.copyOf(displayed); }
 
@@ -58,6 +60,8 @@ public final class HardwareInterruptVectors {
              .append("; non-null mapped targets: ").append(plausibleMapped)
              .append("; mapped targets within recognized functions: ")
              .append(recognizedFunctions)
+             .append("; pointers inside recognized function bodies (NOT entries): ")
+             .append(interiorFunctionPointers)
              .append("; unmapped: ").append(unmapped)
              .append("; odd: ").append(odd)
              .append("; null/erased: ").append(absent)
@@ -84,7 +88,8 @@ public final class HardwareInterruptVectors {
             b.append("- **STATIC DATA ONLY**: image-zero vector words are not ")
              .append("proof of the current VBR, a valid vector table, active ")
              .append("peripheral assignments or code execution. A mapped address ")
-             .append("is not proof of an executable ISR. Vector 24 and 25–31 ")
+             .append("is not proof of an executable ISR. A pointer into a function ") 
+             .append("body is NOT a recognized handler entry. Vector 24 and 25–31 ")
              .append("use generic 68000 spurious/autovector numbering; ")
              .append("device-specific vector meanings are UNKNOWN.\n\n");
             return b.toString();
@@ -103,15 +108,22 @@ public final class HardwareInterruptVectors {
             if(o==null || o.vectorNumber()<2 || o.vectorNumber()>255 ||
                     !seen.add(o.vectorNumber()) ||
                     (o.pointer()!=null &&
-                      (o.pointer()<0 || o.pointer()>0xffffffffL)))
+                      (o.pointer()<0 || o.pointer()>0xffffffffL)) ||
+                    (o.exactFunctionEntry() &&
+                        (!o.mappedTarget() || o.containingFunction()==null ||
+                         o.containingFunction().isBlank() || o.pointer()==null ||
+                         o.pointer()==0 || o.pointer()==0xffffffffL ||
+                         (o.pointer()&1)!=0)))
                 throw new IllegalArgumentException("Invalid or duplicate vector entry");
         }
         sorted.sort(Comparator.comparingInt(Observation::vectorNumber));
-        int readable=0,mapped=0,functions=0,unmapped=0,odd=0,unreadable=0,absent=0;
+        int readable=0,mapped=0,functions=0,interior=0,unmapped=0,odd=0,unreadable=0,absent=0;
         List<Entry> displayed=new ArrayList<>();
         int wanted=0;
         for(Observation o:sorted) {
             long slot=tableAddress+4L*o.vectorNumber();
+            if(slot>0xffffffffL)
+                throw new IllegalArgumentException("Vector slot exceeds 32-bit address space");
             Classification state;
             if(o.pointer()==null) {
                 state=Classification.UNREADABLE;
@@ -130,8 +142,11 @@ public final class HardwareInterruptVectors {
                     unmapped++;
                 } else if(o.containingFunction()!=null &&
                         !o.containingFunction().isBlank()) {
-                    state=Classification.RECOGNIZED_FUNCTION_CANDIDATE;
-                    mapped++;functions++;
+                    state=o.exactFunctionEntry()?
+                        Classification.RECOGNIZED_FUNCTION_CANDIDATE:
+                        Classification.INTERIOR_FUNCTION_POINTER_CANDIDATE;
+                    mapped++;
+                    if(o.exactFunctionEntry())functions++;else interior++;
                 } else {
                     state=Classification.MAPPED_TARGET;
                     mapped++;
@@ -147,7 +162,7 @@ public final class HardwareInterruptVectors {
                         o.containingFunction()));
         }
         return new Summary(tableAddress,sorted.size(),readable,mapped,functions,
-            unmapped,odd,unreadable,absent,wanted>displayed.size(),displayed);
+            interior,unmapped,odd,unreadable,absent,wanted>displayed.size(),displayed);
     }
 
     private static String hex(long number) {

@@ -24,3 +24,22 @@ plan must verify on an isolated Ghidra project COPY that the vector
 inventory matches actual memory bytes, has no stale or false execution
 claims, and leaves the user project unchanged. Unverified candidates
 remain UNKNOWN. Do not merge based only on CI.
+
+## 2026-10-29 — exact function entry versus interior vector target
+
+A memory-mapped even vector pointer can land **inside** a recognized
+Ghidra function without addressing its entry point. That is not equal
+evidence of a handler entry. The model now distinguishes:
+
+- `RECOGNIZED_FUNCTION_CANDIDATE` only for a pointer equal to the
+  exact Ghidra `Function.getEntryPoint()`.
+- `INTERIOR_FUNCTION_POINTER_CANDIDATE` for a mapped pointer within
+  the body of a function but not at its entry. Counted separately
+  and explicitly not promoted to an identified ISR.
+- `MAPPED_TARGET` for other mapped, even pointers without a
+  Ghidra-recognized function.
+
+The report still does not prove vector table activation, runtime VBR,
+executed interrupts, CPU privilege/IRQ state, or true MCU peripheral
+assignment. 32-bit vector-slot address arithmetic is guarded against
+overflow even for hypothetical nonzero table addresses.

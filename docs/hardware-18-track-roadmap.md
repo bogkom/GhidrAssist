@@ -82,3 +82,15 @@ This is a first GA-01 component, not completion of GA-01 or GA-02. Later steps m
   A green workflow is not a substitute for isolated actual-Ghidra acceptance.
 - No changes to PR #54 pinned artifact, Review/Apply, source firmware, OAuth or
   original Ghidra projects. New Supervisor test plan only after immutable CI ZIP.
+
+
+## 2026-10-29 — GA-11 interior vector pointer discrimination
+
+- Independent GA-11 follow-up `fix/ga11-vector-function-entry-evidence-20261029`
+  based on immutable PR #57 SHA `99a4deb4868563ca5a12528d92e3b0540c5da5ce`.
+- A vector landing in a recognized Ghidra function *body* is reported
+  separately from a vector pointing exactly to that function's entry
+  point; neither proves dynamic ISR execution or active VBR.
+- Invalid/missing entry metadata and candidate slot arithmetic overflow
+  must not be promoted to a valid handler. Synthetic negative tests,
+  Ghidra 12.1.4 full extension CI and actual host acceptance remain gates.
