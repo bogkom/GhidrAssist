@@ -1,8 +1,7 @@
 package ghidrassist;
 
 import javax.swing.Icon;
-import javax.swing.ImageIcon;
-import java.awt.image.BufferedImage;
+import ghidrassist.resources.GhidrAssistIcons;
 import ghidra.framework.plugintool.util.PluginPackage;
 
 /**
@@ -17,10 +16,9 @@ public final class GhidrAssistPluginPackage extends PluginPackage {
     public static final String NAME = "GhidrAssist";
 
     private static Icon icon() {
-        // Self-contained neutral icon: no dependency on user settings, RAG,
-        // external images, credentials, network or Desktop UI resources.
-        return new ImageIcon(new BufferedImage(
-            16, 16, BufferedImage.TYPE_INT_ARGB));
+        // Reuse the already bundled extension icon. No user files, remote
+        // images, OAuth or provider settings are needed for class discovery.
+        return GhidrAssistIcons.ROBOT_ICON;
     }
 
     public GhidrAssistPluginPackage() {
