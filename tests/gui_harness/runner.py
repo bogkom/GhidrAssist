@@ -102,14 +102,21 @@ def x11_capture(out: Path) -> dict:
         return {"status": "BLOCKED_MISSING_X11_CAPTURE_TOOLS",
                 "human_visual_readback": "NOT_PERFORMED"}
     try:
-        query = subprocess.run(
-            ["xwininfo", "-name", "GhidrAssist isolated GUI regression"],
+        # The Ghidra docking frame can prefix the tool name with a
+        # disposable program/project title. xwininfo -name requires an
+        # EXACT title and incorrectly misses a valid prefixed frame.
+        tree = subprocess.run(
+            ["xwininfo", "-root", "-tree"],
             capture_output=True, text=True, timeout=5, check=True)
-        match = re.search(r"Window id:\s*(0x[0-9a-fA-F]+)", query.stdout)
-        if match is None:
-            raise RuntimeError("No uniquely accessible test window")
+        ids = re.findall(
+            r'(?im)^\\s*(0x[0-9a-f]+)\\s+"[^"\\n]*GhidrAssist isolated GUI regression[^"\\n]*"',
+            tree.stdout)
+        if len(ids) != 1:
+            raise RuntimeError(
+                "Expected exactly one named isolated GhidrAssist X11 window; "
+                f"found {len(ids)}")
         image = out / "actual-x11.png"
-        subprocess.run(["import", "-silent", "-window", match.group(1), str(image)],
+        subprocess.run(["import", "-silent", "-window", ids[0], str(image)],
                        capture_output=True, timeout=15, check=True)
         size = subprocess.run(
             ["identify", "-format", "%w %h", str(image)],
