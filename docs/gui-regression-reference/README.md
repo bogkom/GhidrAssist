@@ -10,7 +10,7 @@ A follow-up run on 2026-10-29, performed by an isolated Codex **testing** sessio
 
 ## Archived source identifiers
 
-Owner-provided historic source files (content intentionally not copied here):
+Owner-provided historic source files **copied into this reference directory for review**. The copy of `harness.py` is intentionally sanitized: the private firmware basename is replaced by `TEST_BINARY.bin`; the original hash below remains a provenance marker, not the hash of that edited GitHub copy. Other listed source files preserve their original contents:
 
 | File | SHA-256 | Bytes |
 | --- | --- | ---: |
@@ -19,6 +19,8 @@ Owner-provided historic source files (content intentionally not copied here):
 | `scripts/controlled_llm.py` | `a2110b724642ed6dde47cb4c8ea6f60d62f6c6ebce074930f08d0102f51f8b56` | 13383 |
 | `scripts/harness.py` | `14ca945369076a481802c43c7311121e9327c9fd46f11c53059da46137e6048c` | 14459 |
 
+The files in this directory are **historical reference sources, not a ready-to-run production harness**. `test_gui_integration.py` imports `scripts.harness` and `scripts.controlled_llm`, so the development team must arrange a proper package layout, configuration and synthetic fixture; a full source archive is *not* available from this branch. 
+
 Full archives may contain private paths, settings, local test evidence, firmware metadata and other user data. **Do not upload the full archives to the public repository.** For further development, use only reviewed, relevant source files and rewrite environment-specific defaults.
 
 ## Implementation task
@@ -26,3 +28,13 @@ Full archives may contain private paths, settings, local test evidence, firmware
 Create a reusable GUI test harness in the GhidrAssist repository, with one-shot smoke mode and an isolated full Query/policy mode; explicit Ghidra/JDK/artifact configuration; no network-dependent LLM; disposable test project/profile; deterministic cleanup; separate Swing/X11 evidence and actual visual readback status; and negative tests. Maintain a distinct full-CodeBrowser Listing-navigation acceptance path for PR #56.
 
 **Ownership:** ChatGPT GhidrAssist development conversation implements code, opens PRs and reviews CI; local Codex executes approved tests only. Do not change existing pinned test plans or SHA references, and do not create ACK/PASS for PR #56.
+
+## Files copied here
+
+- [GuiIntegrationMain.java](GuiIntegrationMain.java) — historical standalone Ghidra GUI / Swing entry point.
+- [test_gui_integration.py](test_gui_integration.py) — pytest GUI integration and policy checks.
+- [controlled_llm.py](controlled_llm.py) — localhost deterministic fake model; no paid LLM.
+- [harness.py](harness.py) — historical runner helper with sanitized binary basename; requires adaptation before production use.
+- [conftest.py](conftest.py) — pytest fixtures from archived test suite.
+
+No report containing test project contents, real application profile, screen capture of user files, access tokens or run archive has been published. **No actual GUI, CI or PR #56 acceptance tests were run by this reference-only upload**. Any future GUI implementation PR should be authored by the ChatGPT GhidrAssist development conversation; Codex runs local acceptance tests only.
