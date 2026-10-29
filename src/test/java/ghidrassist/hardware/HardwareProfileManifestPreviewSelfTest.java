@@ -80,12 +80,12 @@ public final class HardwareProfileManifestPreviewSelfTest {
         check(immutable,"preview immutable");
         // A second module differing only in case must never silently
         // overwrite a normalized key in the comparison view.
-        bad(SAMPLE.replace("MODULE\\tQSM\\t0x0C00\\t0x0200",
-                "MODULE\\tsim\\t0x0C00\\t0x0200"),
+        bad(SAMPLE.replace("MODULE\tQSM\t0x0C00\t0x0200",
+                "MODULE\tsim\t0x0C00\t0x0200"),
             "case-insensitive duplicate module names must be rejected");
         var mixedCase=HardwareProfileManifestPreview.parse(
-            SAMPLE.replace("REGISTER\\tSIM\\tSIMCR",
-                "REGISTER\\tsim\\tSIMCR"));
+            SAMPLE.replace("REGISTER\tSIM\tSIMCR",
+                "REGISTER\tsim\tSIMCR"));
         check(mixedCase.registers().get(0).module().equals("SIM"),
             "register resolves explicitly declared module regardless of case");
         for(String unsupported:new String[]{"PDF page","PDF page UNKNOWN",
