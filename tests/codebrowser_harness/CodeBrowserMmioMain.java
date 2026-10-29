@@ -155,7 +155,7 @@ public final class CodeBrowserMmioMain {
         result.addProperty("application_headless",app.isHeadless());
         result.addProperty("awt_headless",GraphicsEnvironment.isHeadless());
         if(args.length==3 && "restore".equals(args[2])) {
-            Tool restored=null;
+            Tool[] restored={null};
             try {
                 require(!app.isHeadless() && !GraphicsEnvironment.isHeadless(),
                     "Restored CodeBrowser must run with a real display");
@@ -163,13 +163,16 @@ public final class CodeBrowserMmioMain {
                     out.resolve("tool-template.xml").toFile()).getRootElement();
                 var template=new GhidraToolTemplate(persisted,
                     "synthetic-test-only-template");
-                restored=new Tool(project,template);
-                Tool restoredTool=restored;
-                edt(()->restoredTool.setVisible(true));
-                require(restored.getManagedPlugins().stream().anyMatch(
+                // GhidraTool constructs menus/actions: initialization MUST
+                // execute on the Swing EDT, not the Java startup thread.
+                edt(()->{
+                    restored[0]=new Tool(project,template);
+                    restored[0].setVisible(true);
+                });
+                require(restored[0].getManagedPlugins().stream().anyMatch(
                     p->p instanceof GhidrAssistPlugin),
                     "GhidrAssist missing after actual Java-process restart");
-                require(restored.getService(CodeViewerService.class)!=null,
+                require(restored[0].getService(CodeViewerService.class)!=null,
                     "CodeBrowser Listing missing from saved tool template");
                 Thread.sleep(900);
                 for(Window w:Window.getWindows()) {
@@ -189,9 +192,8 @@ public final class CodeBrowserMmioMain {
                 Files.writeString(out.resolve("restart-results.json"),
                     GSON.toJson(restarted));
             } finally {
-                if(restored!=null) {
-                    Tool toolToClose=restored;
-                    edt(()->toolToClose.shutdown());
+                if(restored[0]!=null) {
+                    edt(()->restored[0].shutdown());
                 }
                 first.release(consumer);
                 second.release(consumer);
