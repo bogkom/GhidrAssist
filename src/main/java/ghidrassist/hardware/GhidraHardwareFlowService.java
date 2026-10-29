@@ -437,6 +437,8 @@ public final class GhidraHardwareFlowService {
         HardwareEvidenceBudget<HardwareCfgWriteAudit.Site> cfgMmioSites=
             new HardwareEvidenceBudget<>(MAX_CFG_MMIO_SITES);
         List<HardwareCfgStorePaths.Pair> cfgStoreRelations=new ArrayList<>();
+        List<HardwareSimcrLocalFirst.Result> localFirstPaths=new ArrayList<>();
+        int localFirstOmittedFunctions=0;
         int cfgPathLimitedFunctions=0;
         int foundFunctions=0,indirect=0,vbr=0,unresolved=0,visited=0,shown=0;
         boolean limited=false;
@@ -534,6 +536,66 @@ public final class GhidraHardwareFlowService {
                     hit.priorMmCandidateMin,hit.priorMmCandidateMax,
                     hit.priorUnknownCall,hit.priorUnknownStore,
                     result.truncated || uncertainFlow));
+            }
+            if(mc68332Selected) {
+                // Separate function-local CFG path alternatives from the
+                // global reset/latch question. The entry may itself be
+                // statically unreachable from the real hardware reset.
+                boolean foundSimcr=false;
+                java.util.Map<Long,HardwareSimcrLocalFirst.Effect> effects=
+                    new java.util.HashMap<>();
+                java.util.Map<Long,Integer> words=new java.util.HashMap<>();
+                for(HardwareDataflow.Step step:steps)
+                    if(step.kind==HardwareDataflow.Kind.CALL_BARRIER)
+                        effects.put(step.address,
+                            HardwareSimcrLocalFirst.Effect.ALIAS_OR_CALL_BARRIER);
+                for(HardwareDataflow.Snapshot hit:result.snapshots){
+                    if(hit.kind!=HardwareDataflow.Kind.STORE_DIRECT &&
+                            hit.kind!=HardwareDataflow.Kind.STORE_INDIRECT)
+                        continue;
+                    HardwareSimcrLocalFirst.Effect next=null;
+                    Integer word=null;
+                    if(hit.effectiveAddress!=null &&
+                            "SIMCR".equals(targets.get(hit.effectiveAddress))){
+                        foundSimcr=true;
+                        if(hit.writeBits==16 && hit.writtenWord!=null){
+                            next=HardwareSimcrLocalFirst.Effect.WORD_LITERAL;
+                            word=hit.writtenWord;
+                        }else next=HardwareSimcrLocalFirst.Effect.UNKNOWN_WORD;
+                    }else if(hit.indirect && hit.effectiveAddress==null)
+                        next=HardwareSimcrLocalFirst.Effect.ALIAS_OR_CALL_BARRIER;
+                    if(next==null)continue;
+                    var previous=effects.putIfAbsent(hit.instruction,next);
+                    if(previous!=null &&
+                            (previous!=HardwareSimcrLocalFirst.Effect.WORD_LITERAL ||
+                             next!=HardwareSimcrLocalFirst.Effect.WORD_LITERAL ||
+                             !java.util.Objects.equals(words.get(hit.instruction),word))){
+                        // Multiple P-code stores at one PC may be
+                        // competing values; don't invent intra-PC order.
+                        effects.put(hit.instruction,
+                            HardwareSimcrLocalFirst.Effect.UNKNOWN_WORD);
+                        words.remove(hit.instruction);
+                    }else if(previous==null && word!=null)
+                        words.put(hit.instruction,word);
+                }
+                if(foundSimcr){
+                    if(steps.size()>50000 || localFirstPaths.size()>=75)
+                        localFirstOmittedFunctions++;
+                    else {
+                        List<HardwareSimcrLocalFirst.Node> graph=new ArrayList<>();
+                        for(HardwareDataflow.Step step:steps){
+                            var effect=effects.getOrDefault(step.address,
+                                HardwareSimcrLocalFirst.Effect.NONE);
+                            graph.add(new HardwareSimcrLocalFirst.Node(
+                                step.address,step.successors,effect,
+                                effect==HardwareSimcrLocalFirst.Effect.WORD_LITERAL?
+                                    words.get(step.address):null));
+                        }
+                        localFirstPaths.add(HardwareSimcrLocalFirst.inspect(
+                            fun.getEntryPoint().getOffset(),steps.get(0).address,
+                            graph,uncertainFlow || result.truncated,1500));
+                    }
+                }
             }
             if(mc68332Selected){
                 List<HardwareCfgStorePaths.Store> pathStores=new ArrayList<>();
@@ -723,6 +785,10 @@ public final class GhidraHardwareFlowService {
             cfgMmioSites.snapshot()).markdown());
         out.append(HardwareCfgStorePaths.markdown(
             cfgStoreRelations,cfgPathLimitedFunctions));
+        out.append(mc68332Selected?
+            HardwareSimcrLocalFirst.markdown(localFirstPaths,localFirstOmittedFunctions):
+            "## Possible local first SIMCR sites\\n\\nGeneric CPU32: explicit "+
+            "MC68332 profile required for these candidate source paths.\\n\\n");
         String evidenceCsv=HardwareConfigurationEvidenceCsv.serialize(
             HardwareCfgWriteAudit.inspect(mc68332Selected,cfgMmioSites.snapshot()),
             cfgStoreRelations,mc68332Selected);

@@ -283,3 +283,21 @@ Full MCU/peripheral emulation, physical CS electrical simulation, generic automa
   CFG stage is cached as successful, no Ghidra DB edits are performed.
 - Synthetic budget+fail-closed tests, full Ghidra 12.1.4 compile
   and real isolated host acceptance are required.
+
+
+## 2026-10-29 — GA-02 bounded function-local possible first SIMCR sources
+
+- Stacked draft `feature/hardware-simcr-local-first-paths-20261029`
+  is based on immutable PR #75 head `52fbb1ce1f79ff189ff0a28a07d54e8bd6a037ed`.
+- For explicitly selected MC68332, each recognized function
+  containing a P-code candidate SIMCR write is analyzed using bounded
+  Ghidra CFG successors. The result lists *possible first source-PCs
+  within that function*, including different literal words in
+  alternative branches, unknown values, unknown pointer/call effects,
+  CFG cycles, missing edges and work-budget truncation.
+- The model **cannot prove a first write since MCU RESET**, runtime
+  path feasibility, chip-select configuration or write-once MM latch.
+  Generic CPU32 remains outside this MCU-specific display.
+- Dedicated pure Java branch/loop/alias/unknown tests and complete
+  Ghidra 12.1.4 extension CI; actual on-host Ghidra acceptance
+  remains a separate Supervisor gate.
