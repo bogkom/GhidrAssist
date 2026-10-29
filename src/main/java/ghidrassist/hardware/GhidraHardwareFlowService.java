@@ -7,6 +7,7 @@ import ghidra.program.model.listing.FunctionIterator;
 import ghidra.program.model.listing.Instruction;
 import ghidra.program.model.listing.InstructionIterator;
 import ghidra.program.model.listing.Program;
+import ghidra.program.model.mem.MemoryAccessException;
 import ghidra.program.model.pcode.PcodeOp;
 import ghidra.program.model.pcode.Varnode;
 import ghidra.program.model.scalar.Scalar;
@@ -34,10 +35,13 @@ public final class GhidraHardwareFlowService {
     private static final Pattern OFFSET=Pattern.compile("(?<![A-Z0-9])(-?0[Xx][0-9A-F]+|-?[0-9]+)(?![A-Z0-9])");
     public static final class Report {
         public final String markdown;
+        public final List<HardwarePointerRoleReview.Proposal> pointerRoles;
         public final int functions,indirect,vbr,unresolved,visited;
         public final boolean limited;
-        Report(String md,int fn,int indirect,int vbr,int unresolved,int visited,boolean limited){
-            markdown=md;functions=fn;this.indirect=indirect;this.vbr=vbr;
+        Report(String md,int fn,int indirect,int vbr,int unresolved,int visited,
+                boolean limited,List<HardwarePointerRoleReview.Proposal> pointers){
+            markdown=md;pointerRoles=List.copyOf(pointers);
+            functions=fn;this.indirect=indirect;this.vbr=vbr;
             this.unresolved=unresolved;this.visited=visited;this.limited=limited;
         }
     }
@@ -323,7 +327,80 @@ public final class GhidraHardwareFlowService {
         }
         return lines.toString();
     }
+    /**
+     * Candidate boot vector and direct-call graph. The zero address is only
+     * inspected for a compatible 68000 big-endian language. Reset vectors,
+     * static edges and MMIO sightings are NOT evidence that code ran.
+     */
+    private static String resetStaticCandidates(Program program,
+            List<HardwareCallEffects.FunctionNode> graph,
+            List<Long> evidencedFunctions) {
+        StringBuilder md=new StringBuilder();
+        md.append("## Candidate RESET vector and bounded static-call paths\n\n");
+        String language=program.getLanguageID().toString().toUpperCase(Locale.ROOT);
+        if(!language.startsWith("68000:BE:")){
+            md.append("- Not evaluated: this program is not a 68000 big-endian "+
+                "language. No reset-vector format is assumed.\n\n");
+            return md.toString();
+        }
+        Address zero=program.getAddressFactory().getDefaultAddressSpace().getAddress(0);
+        if(!program.getMemory().contains(zero)){
+            md.append("- UNKNOWN: address 0 is not mapped; no candidate "+
+                "vector can be read. No assumption about ROM base/relocation.\n\n");
+            return md.toString();
+        }
+        byte[] data=new byte[8];
+        try {
+            if(program.getMemory().getBytes(zero,data)!=data.length){
+                md.append("- UNKNOWN: reset vector at image 0 is incomplete.\n\n");
+                return md.toString();
+            }
+        }catch(MemoryAccessException e){
+            md.append("- UNKNOWN: reset vector bytes at image 0 "+
+                "could not be read.\n\n");
+            return md.toString();
+        }
+        HardwareResetFlow.Vector vector=HardwareResetFlow.readVector(data);
+        md.append("- Image-zero vector candidate SP: ")
+          .append(String.format(Locale.ROOT,"0x%08X",vector.initialSp()))
+          .append("; PC: ")
+          .append(String.format(Locale.ROOT,"0x%08X",vector.resetPc()))
+          .append("; plausible: ").append(vector.valid())
+          .append("; ").append(vector.reason()).append("\n");
+        if(!vector.valid()){
+            md.append("- No direct-call path inferred from invalid vector.\n\n");
+            return md.toString();
+        }
+        Address reset;
+        try {
+            reset=program.getAddressFactory().getDefaultAddressSpace()
+                .getAddress(vector.resetPc());
+        }catch(RuntimeException invalidAddress){
+            md.append("- UNKNOWN: reset PC is outside the current program "+
+                "address space.\n\n");
+            return md.toString();
+        }
+        Function root=program.getFunctionManager().getFunctionContaining(reset);
+        if(root==null){
+            md.append("- UNKNOWN: reset PC is not contained in a recognized "+
+                "Ghidra function. No candidate execution path is asserted.\n\n");
+            return md.toString();
+        }
+        md.append("- Function containing vector PC: ").append(root.getName())
+          .append(" at ").append(root.getEntryPoint())
+          .append("; candidate only, not verified entry execution.\n");
+        HardwareResetFlow.Summary candidate=HardwareResetFlow.trace(
+            root.getEntryPoint().getOffset(),graph,evidencedFunctions,6,128,30);
+        md.append(candidate.markdown(vector.resetPc(),
+            root.getEntryPoint().getOffset())).append("\n");
+        return md.toString();
+    }
+
     public Report analyze(Program program,TaskMonitor monitor)throws CancelledException{
+        return analyze(program,monitor,false);
+    }
+    public Report analyze(Program program,TaskMonitor monitor,
+            boolean mc68332Selected)throws CancelledException{
         if(program==null)throw new IllegalArgumentException("Open Ghidra program required");
         if(monitor==null)monitor=TaskMonitor.DUMMY;
         Map<Long,String> targets=new LinkedHashMap<>();
@@ -333,6 +410,7 @@ public final class GhidraHardwareFlowService {
         StringBuilder detail=new StringBuilder();
         List<HardwareCallEffects.FunctionNode> staticCalls=new ArrayList<>();
         List<Long> evidencedFunctions=new ArrayList<>();
+        List<HardwarePointerRoleReview.Site> pointerSites=new ArrayList<>();
         int foundFunctions=0,indirect=0,vbr=0,unresolved=0,visited=0,shown=0;
         boolean limited=false;
         FunctionIterator funs=program.getFunctionManager().getFunctions(true);
@@ -396,6 +474,23 @@ public final class GhidraHardwareFlowService {
                 Math.min(30000,Math.max(300,steps.size()*20)));
             visited+=result.reachedNodes;
             limited|=result.truncated;
+            for(HardwareDataflow.Snapshot hit:result.snapshots){
+                if(!hit.indirect || hit.effectiveAddress==null ||
+                        hit.pointerRegister==null ||
+                        !hit.pointerRegister.matches("A[0-7]"))continue;
+                for(HardwareProfiles.Register reg:p.registers) {
+                    int matchedMm=-1;
+                    if(p.absoluteAddress(reg,0)==hit.effectiveAddress)matchedMm=0;
+                    if(p.absoluteAddress(reg,1)==hit.effectiveAddress)matchedMm=1;
+                    if(matchedMm<0)continue;
+                    pointerSites.add(new HardwarePointerRoleReview.Site(
+                        fun.getEntryPoint().getOffset(),fun.getName(),hit.instruction,
+                        hit.pointerRegister,reg.module,matchedMm,reg.name,
+                        result.truncated || uncertainFlow ||
+                            hit.priorUnknownCall || hit.priorUnknownStore));
+                    break;
+                }
+            }
             List<HardwareDataflow.Snapshot> found=new ArrayList<>();
             for(HardwareDataflow.Snapshot hit:result.snapshots){
                 if(hit.kind==HardwareDataflow.Kind.VBR_FROM_REGISTER){
@@ -526,8 +621,14 @@ public final class GhidraHardwareFlowService {
            .append("- VBR control-register sites: ").append(vbr).append("\n")
            .append("- Unresolved register-based stores: ").append(unresolved).append("\n")
            .append("- Propagation cap reached: ").append(limited).append("\n\n")
+           .append(resetStaticCandidates(program,staticCalls,evidencedFunctions))
+           .append(GhidraInterruptVectorService.analyze(program,monitor))
            .append(detail).append(effects);
         if(shown>=350)out.append("\n[Detailed report bounded at 350 sites.]\n");
-        return new Report(out.toString(),foundFunctions,indirect,vbr,unresolved,visited,limited);
+        List<HardwarePointerRoleReview.Proposal> roles=
+            HardwarePointerRoleReview.propose(mc68332Selected,pointerSites,limited);
+        out.append(HardwarePointerRoleReview.report(roles));
+        return new Report(out.toString(),foundFunctions,indirect,vbr,unresolved,
+            visited,limited,roles);
     }
 }

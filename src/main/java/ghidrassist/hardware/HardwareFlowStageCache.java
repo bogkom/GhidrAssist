@@ -43,7 +43,7 @@ public final class HardwareFlowStageCache {
         }
         // No lock held during the expensive Ghidra CFG walk.
         GhidraHardwareFlowService.Report calculated=
-            new GhidraHardwareFlowService().analyze(program,monitor);
+            new GhidraHardwareFlowService().analyze(program,monitor,started.mc68332Selected());
         monitor.checkCancelled();
         if(!sameRevision(program,started))throw new CancelledException();
         if(calculated.markdown.length()<=MAX_REPORT_CHARS){
