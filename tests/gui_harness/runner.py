@@ -83,17 +83,25 @@ def run_logged(cmd: list[str], *, cwd: Path, env: dict[str, str],
 
 
 def stop_owned(process: subprocess.Popen) -> None:
-    """Only terminate the process group created by our own start_new_session."""
-    if process.poll() is not None:
-        return
+    """Reap only the process group created by start_new_session=True.
+
+    An analyzeHeadless/java launcher may exit while its child is still alive.
+    poll() on that launcher alone is NOT evidence that its process group ended.
+    This function is called immediately in the runner's finally block.
+    """
+    pgid = process.pid  # Popen(start_new_session=True) makes PID == PGID.
     with contextlib.suppress(ProcessLookupError):
-        os.killpg(process.pid, signal.SIGTERM)
+        os.killpg(pgid, signal.SIGTERM)
     try:
         process.wait(timeout=5)
     except subprocess.TimeoutExpired:
         with contextlib.suppress(ProcessLookupError):
-            os.killpg(process.pid, signal.SIGKILL)
+            os.killpg(pgid, signal.SIGKILL)
         process.wait(timeout=5)
+    # Sweep any descendants surviving the direct launcher, even when the
+    # launcher exited and poll() had already returned an exit code.
+    with contextlib.suppress(ProcessLookupError):
+        os.killpg(pgid, signal.SIGKILL)
 
 
 def x11_capture(out: Path) -> dict:
@@ -108,7 +116,7 @@ def x11_capture(out: Path) -> dict:
                 not all(fragment in expected_title for fragment in
                         ("GhidrAssist isolated GUI regression",
                          "GuiFixture", "TEST_BINARY.bin")) or
-                any(char in expected_title for char in ('\\n', '\\r', '\\x00'))):
+                any(ord(char) < 32 for char in expected_title)):
             raise RuntimeError("No synthetic Query host title recorded by Java")
         # The Ghidra docking frame can prefix the tool name with a
         # disposable program/project title. xwininfo -name requires an
