@@ -84,3 +84,15 @@ Full MCU/peripheral emulation, physical CS electrical simulation, generic automa
   shortened or independently generated model summary.
 - Required: standalone Java regression + 12.1.4 extension build on exact
   commit. Do not merge before separate actual-Ghidra test with explicit approval.
+
+
+## 2026-10-29 — GA-07 fail-closed overview quality
+
+- Independent candidate `fix/ga07-overview-failclosed-source-counts-20261029`
+  based on exact PR #58 head `5c8962e59f0038a920bd455e008aa589211610d6`.
+- Reject inconsistent/null/oversized input rows instead of silently
+  reporting complete-looking counters. Mark truncated CFG counts as
+  lower bounds and distinguish focused/omitted register references.
+- Java negative regressions, full Ghidra 12.1.4 extension Actions,
+  and real isolated Supervisor acceptance remain mandatory before
+  integrating. No dynamic execution or physical hardware claims.

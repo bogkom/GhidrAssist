@@ -22,3 +22,23 @@ CI: deterministic overview model test and entire Ghidra 12.1.4
 extension build. Isolated-Ghidra acceptance must confirm both tab
 contents, the export/RAG parity, navigation and no database changes.
 No CI success is a substitute for local GUI acceptance.
+
+## 2026-10-29 — source-count fail-closed semantics
+
+The compact three-part overview no longer silently ignores NULL,
+unnamed or inconsistent observations (e.g. a known write literal on a
+nonwrite source). Such data is rejected rather than rendered as an
+apparently complete scan. Oversize input over 200,000 rows fails
+closed instead of claiming a comprehensive compact view.
+
+When bounded CFG/P-code propagation reached its cap, source coverage
+is prominently marked `INCOMPLETE / TRUNCATED`, and unresolved
+indirect store counts are described as **lower bounds**. A bounded
+pass without truncation is not a runtime trace. The hidden row count
+is explicitly `Other/omitted register references (including CSPAR)`,
+not automatically unrelated peripherals.
+
+These are data quality and presentation guards only. Physical MCU
+selection, active MM/VBR, executed IRQs or chip-select wiring remain
+unknown. All original Ghidra project data, Review/Apply and RAG indices
+stay unchanged.
