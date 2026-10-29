@@ -213,3 +213,22 @@ Full MCU/peripheral emulation, physical CS electrical simulation, generic automa
   Chip Select configuration. Regression tests cover repeated agreeing
   literals, conflicting SIMCR values, unknown CSOR writes and
   reference-only sites. Full Ghidra 12.1.4 build gate remains.
+
+
+## 2026-10-29 — GA-05 guarded CSBAR Review/Apply proposals
+
+- Dependent branch `feature/hardware-csbar-review-gate-20261029`
+  starts from immutable PR #72 head `f18904bd28fa7ff746b0ae7b5083671203f895e8`.
+- Previously the Review/Apply CSBAR window source accepted every
+  individual literal in the inventory, including MM0-addressed sites
+  and contradictory assignments in alternative branches/functions.
+- A conservative read-only gate now recognizes only exact MC68332 MM1
+  source addresses for CSBARBT and CSBAR0..CSBAR10, requires a known
+  full-word literal, and excludes a register entirely if any matched
+  MM1 source disagrees or has an unknown write. Repeated agreeing
+  sources result in one candidate, never a runtime event.
+- The existing explicit user Review, Ghidra preflight, transaction and
+  Undo semantics remain untouched. No automatic Apply is enabled,
+  no reset-state or external CS activation is asserted.
+- CI: pure Java negative safety tests and full Ghidra 12.1.4 build;
+  local isolated GUI acceptance remains required before merge.

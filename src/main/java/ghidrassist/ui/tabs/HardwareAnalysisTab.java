@@ -867,15 +867,23 @@ public final class HardwareAnalysisTab extends JPanel {
      * relocated RAM and unverified VBR are unchecked.
      */
     private List<HardwareApplyPlan.CsbarEvidence> csbarEvidence(){
-        List<HardwareApplyPlan.CsbarEvidence> candidates=new ArrayList<>();
+        List<ghidrassist.hardware.HardwareCsbarReviewGate.Source> sources=
+            new ArrayList<>();
         for(HardwareInventoryService.Site site:latestSites){
-            if(site==null || !site.write || site.literal==null ||
-                    site.register==null || !site.register.matches("CSBAR(?:BT|10|[0-9])"))
-                continue;
-            candidates.add(new HardwareApplyPlan.CsbarEvidence(
-                site.register,site.literal,site.function));
+            if(site==null)continue;
+            sources.add(new ghidrassist.hardware.HardwareCsbarReviewGate.Source(
+                site.function,site.register,site.registerAddress,
+                site.write,site.literal));
         }
-        return candidates;
+        var evidence=ghidrassist.hardware.HardwareCsbarReviewGate
+            .reviewCandidates(sources);
+        // This is a conservative proposal filter, NOT evidence that a
+        // chip select actually decoded the address at runtime.
+        List<HardwareApplyPlan.CsbarEvidence> candidates=new ArrayList<>();
+        for(var candidate:evidence.candidates())
+            candidates.add(new HardwareApplyPlan.CsbarEvidence(
+                candidate.register(),candidate.word(),candidate.origin()));
+        return List.copyOf(candidates);
     }
 
     /**
