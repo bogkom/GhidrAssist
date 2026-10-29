@@ -27,7 +27,7 @@ public final class HardwareProfileManifestPreviewSelfTest {
         check(result.source().device().equals("MC68332") &&
             result.modules().size()==2 && result.registers().size()==3 &&
             result.fields().size()==2,"valid structure read without Ghidra APIs");
-        check(result.ambiguousPages()==3,"physical-page gaps counted");
+        check(result.ambiguousPages()==4,"physical-page gaps counted");
         check(result.report().contains("NOT IMPORTED into Ghidra") &&
             result.report().contains("Claimed edition: UNKNOWN") &&
             result.report().contains("No MCU identification"),
@@ -51,6 +51,15 @@ public final class HardwareProfileManifestPreviewSelfTest {
         bad(SAMPLE.replace("FIELD\tSIMCR\tSUPV\t0x0080",
                            "FIELD\tSIMCR\tSUPV\t0x0040"),
             "reject overlapping bitfields");
+        String wide=SAMPLE.replace("REGISTER\tSIM\tSIMCR\t0x0A00\t16",
+                "REGISTER\tSIM\tSIMCR\t0x0A00\t32")
+            .replace("REGISTER\tSIM\tSYPCR\t0x0A21\t8",
+                     "REGISTER\tSIM\tSYPCR\t0x0A24\t8")
+            .replace("FIELD\tSIMCR\tMM\t0x0040",
+                     "FIELD\tSIMCR\tMM\t0x80000000");
+        var widest=HardwareProfileManifestPreview.parse(wide);
+        check(widest.fields().get(0).mask()==0x80000000L,
+            "full-width 32-bit masks must be unsigned and supported");
         bad(SAMPLE.replace("FIELD\tSIMCR\tMM\t0x0040",
                            "FIELD\tSIMCR\tMM\t0x10000"),
             "reject bitfield outside register width");

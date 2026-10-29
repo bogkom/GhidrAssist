@@ -60,7 +60,7 @@ public final class HardwareProfileManifestPreview {
                  .append("; page label: ").append(r.page()).append("\n");
             }
             if(shown<registers.size())
-                b.append("- ").append(registers.size()-shown())
+                b.append("- ").append(registers.size()-shown)
                  .append(" further registers omitted from preview display.\n");
             return b.toString();
         }
@@ -71,6 +71,11 @@ public final class HardwareProfileManifestPreview {
         long n=Long.parseLong(s.substring(2),16);
         if(n>Integer.MAX_VALUE)throw fail(line,label+" exceeds supported range");
         return (int)n;
+    }
+    private static long parseMask(String s,int line) {
+        if(s==null || !s.matches("0[xX][0-9a-fA-F]{1,8}"))
+            throw fail(line,"bit mask must be 0x-prefixed 32-bit hexadecimal");
+        return Long.parseUnsignedLong(s.substring(2),16);
     }
     private static String id(String s,int line) {
         if(s==null || !s.matches("[A-Za-z][A-Za-z0-9_]{0,63}"))
@@ -176,7 +181,7 @@ public final class HardwareProfileManifestPreview {
                     String register=id(v[1],ln),field=id(v[2],ln);
                     Register reg=registers.get(register.toUpperCase(Locale.ROOT));
                     if(reg==null)throw fail(ln,"field refers to unknown register");
-                    long mask=Integer.toUnsignedLong(parseHex(v[3],"bit mask",ln));
+                    long mask=parseMask(v[3],ln);
                     long full=(1L<<reg.widthBits())-1;
                     if(mask==0 || (mask & ~full)!=0)
                         throw fail(ln,"field mask exceeds register width or is zero");
