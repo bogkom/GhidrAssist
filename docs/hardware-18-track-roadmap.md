@@ -23,7 +23,7 @@ The originating document has 18 *sections*, not 18 independent feature checkboxe
 | GA-03 | C | Indirect MMIO via A/D registers, indexed modes, P-code LOAD/STORE, aliases | PARTIAL: substantial CFG/P-code work merged through #35 | Synthetic alias joins, call barriers, no invented constants |
 | GA-04 | D | Per-select CSBOOT, CS0..CS10 table in Analyze | PARTIAL: decoder/windows exist; Markdown currently uses per-window bullets | 12 separate rows, start/end/size, missing values UNKNOWN, model scope |
 | GA-05 | E | Safe CPU32-unknown vs model-specific Review/Apply | PARTIAL: MC68332 full catalog; unknown-mode review constrained | No model-inherited unsafe maps; collision/transaction/Undo tests |
-| GA-06 | F | Extendible sourced MC683xx profiles and conflict matching | PARTIAL DRAFT: source-page coverage audit, overlap and aperture conflict detector; official edition manifest/import still missing | Explicit model/version/page/bitfields/reset source; SVD/RDL feasibility |
+| GA-06 | F | Extendible sourced MC683xx profiles and conflict matching | PARTIAL DRAFT: citation/overlap audit plus strict external edition/hash manifest PREVIEW; verified import/application still missing | Explicit model/version/page/bitfields/reset source; SVD/RDL feasibility |
 | GA-07 | G | Compact 3-part Analyze: initiation, register history, CS map | PARTIAL: PR #52 focused site filtering; three-part report missing | UI/Markdown/RAG agreement, concise report, evidence links |
 | GA-08 | H | Function, pointer and variable naming proposals | PARTIAL: function naming/Undo (#22/#28); pointers/locals missing | Collision-safe preview, manual labels preserved, transactional Undo |
 | GA-09 | 13.1 | MMIO accesses explorer with navigation | MISSING as dedicated view | Filterable function/instruction/value/access/confidence with Go To |
@@ -74,3 +74,20 @@ Full MCU/peripheral emulation, physical CS electrical simulation, generic automa
   metadata, robust SVD/RDL imports and more verified MCU profiles remain TODO.
 - Required gate: standalone Java checks + Ghidra 12.1.4 full extension build
   + separately approved local acceptance before merge.
+
+
+## 2026-10-29 — GA-06 preview-only external profile manifest
+
+- New dependent branch: `feature/hardware-profile-manifest-preview-20261029`
+  based on immutable PR #61 commit `7872afa09898f1d5f7460dae3baf2d2bc8a3c169`.
+- Strict versioned UTF-8 TSV profile manifest parser with explicit **claimed**
+  document edition, URL and SHA-256; module/register/bitfield offsets;
+  duplicate/collision/alignment checks and bounded memory use.
+- The Hardware Analysis UI shows a *structural preview*, never imports an
+  external profile into active MCU mapping, RAG or Review / Apply. This keeps
+  uncertain/unsourced CPU definitions out of existing trusted catalogs.
+- No external PDF has been independently checked and no source identity
+  has been automatically verified. Official source reconciliation and
+  explicit user-approved import are distinct future work.
+- Test gate: standalone negative parser regression plus full Ghidra 12.1.4
+  build, then separately approved GUI test with isolated project COPY.
