@@ -113,6 +113,54 @@ class IsolatedHarnessTests(unittest.TestCase):
             self.assertIn("configured", str(answer))
         self.assertNotIn("body", (self.root / "controlled-model-events.json").read_text())
 
+    def test_x11_selects_one_largest_mapped_fixture_not_whole_desktop(self):
+        from types import SimpleNamespace
+        tree = '''
+  0x1 "Project - GhidrAssist isolated GUI regression": (200x120+0+0)
+    0x2 "GhidrAssist isolated GUI regression": (1200x950+0+0)
+  0x3 "Unrelated user window": (1900x900+0+0)
+'''
+        seen = []
+        def fake_run(command, **kwargs):
+            seen.append(command)
+            if command[:3] == ["xwininfo", "-root", "-tree"]:
+                return SimpleNamespace(stdout=tree)
+            if command[:2] == ["xwininfo", "-id"]:
+                return SimpleNamespace(stdout=("Map State: IsViewable\n"
+                    + ("Width: 200\nHeight: 120\n" if command[2] == "0x1"
+                       else "Width: 1200\nHeight: 950\n")))
+            if command[0] == "import":
+                Path(command[-1]).write_bytes(b"test-only-image" * 200)
+                return SimpleNamespace(stdout="")
+            if command[0] == "identify":
+                return SimpleNamespace(stdout="1200 950")
+            raise AssertionError("Unexpected external command")
+        with mock.patch("runner.shutil.which", return_value="/fixture/tool"), \
+             mock.patch("runner.subprocess.run", side_effect=fake_run):
+            x11 = x11_capture(self.root)
+        self.assertEqual(x11["status"], "X11_CAPTURED_PIXEL_METADATA_CHECKED")
+        self.assertEqual(x11["human_visual_readback"], "NOT_PERFORMED")
+        self.assertTrue(any(call[:4] == ["import", "-silent", "-window", "0x2"]
+                            for call in seen))
+        self.assertFalse(any("0x3" in call for call in seen))
+
+    def test_x11_rejects_ambiguous_equally_sized_frames(self):
+        from types import SimpleNamespace
+        tree = ('  0x1 "GhidrAssist isolated GUI regression": (...)\\n'
+                '  0x2 "GhidrAssist isolated GUI regression": (...)\\n')
+        def fake_run(command, **kwargs):
+            if command[:3] == ["xwininfo", "-root", "-tree"]:
+                return SimpleNamespace(stdout=tree.replace("\\n", "\n"))
+            if command[:2] == ["xwininfo", "-id"]:
+                return SimpleNamespace(stdout="Map State: IsViewable\n"
+                                       "Width: 1200\nHeight: 950\n")
+            raise AssertionError("Should not capture ambiguous X11 frames")
+        with mock.patch("runner.shutil.which", return_value="/fixture/tool"), \
+             mock.patch("runner.subprocess.run", side_effect=fake_run):
+            result = x11_capture(self.root)
+        self.assertEqual(result["status"], "BLOCKED_X11_READBACK")
+        self.assertEqual(result["human_visual_readback"], "NOT_PERFORMED")
+
     def test_x11_cannot_be_inferred_from_swing_bitmap(self):
         # Invalid DISPLAY or missing tools never turns into a visual PASS.
         with mock.patch("runner.shutil.which", return_value=None):
