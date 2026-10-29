@@ -34,10 +34,13 @@ public final class GhidraHardwareFlowService {
     private static final Pattern OFFSET=Pattern.compile("(?<![A-Z0-9])(-?0[Xx][0-9A-F]+|-?[0-9]+)(?![A-Z0-9])");
     public static final class Report {
         public final String markdown;
+        public final List<HardwarePointerRoleReview.Proposal> pointerRoles;
         public final int functions,indirect,vbr,unresolved,visited;
         public final boolean limited;
-        Report(String md,int fn,int indirect,int vbr,int unresolved,int visited,boolean limited){
-            markdown=md;functions=fn;this.indirect=indirect;this.vbr=vbr;
+        Report(String md,int fn,int indirect,int vbr,int unresolved,int visited,
+                boolean limited,List<HardwarePointerRoleReview.Proposal> pointers){
+            markdown=md;pointerRoles=List.copyOf(pointers);
+            functions=fn;this.indirect=indirect;this.vbr=vbr;
             this.unresolved=unresolved;this.visited=visited;this.limited=limited;
         }
     }
@@ -324,6 +327,10 @@ public final class GhidraHardwareFlowService {
         return lines.toString();
     }
     public Report analyze(Program program,TaskMonitor monitor)throws CancelledException{
+        return analyze(program,monitor,false);
+    }
+    public Report analyze(Program program,TaskMonitor monitor,
+            boolean mc68332Selected)throws CancelledException{
         if(program==null)throw new IllegalArgumentException("Open Ghidra program required");
         if(monitor==null)monitor=TaskMonitor.DUMMY;
         Map<Long,String> targets=new LinkedHashMap<>();
@@ -333,6 +340,7 @@ public final class GhidraHardwareFlowService {
         StringBuilder detail=new StringBuilder();
         List<HardwareCallEffects.FunctionNode> staticCalls=new ArrayList<>();
         List<Long> evidencedFunctions=new ArrayList<>();
+        List<HardwarePointerRoleReview.Site> pointerSites=new ArrayList<>();
         int foundFunctions=0,indirect=0,vbr=0,unresolved=0,visited=0,shown=0;
         boolean limited=false;
         FunctionIterator funs=program.getFunctionManager().getFunctions(true);
@@ -396,6 +404,23 @@ public final class GhidraHardwareFlowService {
                 Math.min(30000,Math.max(300,steps.size()*20)));
             visited+=result.reachedNodes;
             limited|=result.truncated;
+            for(HardwareDataflow.Snapshot hit:result.snapshots){
+                if(!hit.indirect || hit.effectiveAddress==null ||
+                        hit.pointerRegister==null ||
+                        !hit.pointerRegister.matches("A[0-7]"))continue;
+                for(HardwareProfiles.Register reg:p.registers) {
+                    int matchedMm=-1;
+                    if(p.absoluteAddress(reg,0)==hit.effectiveAddress)matchedMm=0;
+                    if(p.absoluteAddress(reg,1)==hit.effectiveAddress)matchedMm=1;
+                    if(matchedMm<0)continue;
+                    pointerSites.add(new HardwarePointerRoleReview.Site(
+                        fun.getEntryPoint().getOffset(),fun.getName(),hit.instruction,
+                        hit.pointerRegister,reg.module,matchedMm,reg.name,
+                        result.truncated || uncertainFlow ||
+                            hit.priorUnknownCall || hit.priorUnknownStore));
+                    break;
+                }
+            }
             List<HardwareDataflow.Snapshot> found=new ArrayList<>();
             for(HardwareDataflow.Snapshot hit:result.snapshots){
                 if(hit.kind==HardwareDataflow.Kind.VBR_FROM_REGISTER){
@@ -528,6 +553,10 @@ public final class GhidraHardwareFlowService {
            .append("- Propagation cap reached: ").append(limited).append("\n\n")
            .append(detail).append(effects);
         if(shown>=350)out.append("\n[Detailed report bounded at 350 sites.]\n");
-        return new Report(out.toString(),foundFunctions,indirect,vbr,unresolved,visited,limited);
+        List<HardwarePointerRoleReview.Proposal> roles=
+            HardwarePointerRoleReview.propose(mc68332Selected,pointerSites,limited);
+        out.append(HardwarePointerRoleReview.report(roles));
+        return new Report(out.toString(),foundFunctions,indirect,vbr,unresolved,
+            visited,limited,roles);
     }
 }

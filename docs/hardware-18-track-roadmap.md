@@ -25,7 +25,7 @@ The originating document has 18 *sections*, not 18 independent feature checkboxe
 | GA-05 | E | Safe CPU32-unknown vs model-specific Review/Apply | PARTIAL: MC68332 full catalog; unknown-mode review constrained | No model-inherited unsafe maps; collision/transaction/Undo tests |
 | GA-06 | F | Extendible sourced MC683xx profiles and conflict matching | PARTIAL: MC68332 and document hints, no complete import pipeline | Explicit model/version/page/bitfields/reset source; SVD/RDL feasibility |
 | GA-07 | G | Compact 3-part Analyze: initiation, register history, CS map | PARTIAL: PR #52 focused site filtering; three-part report missing | UI/Markdown/RAG agreement, concise report, evidence links |
-| GA-08 | H | Function, pointer and variable naming proposals | PARTIAL: function naming/Undo (#22/#28); pointers/locals missing | Collision-safe preview, manual labels preserved, transactional Undo |
+| GA-08 | H | Function, pointer and variable naming proposals | PARTIAL DRAFT: function naming plus read-only CFG-sourced A-register role hints; actual decompiler local identity and rename missing | Collision-safe preview, manual labels preserved, transactional Undo |
 | GA-09 | 13.1 | MMIO accesses explorer with navigation | MISSING as dedicated view | Filterable function/instruction/value/access/confidence with Go To |
 | GA-10 | 13.2 | Verified bitfield decode with provenance | PARTIAL: MC68332 metadata; comprehensive decoder missing | Unknown fields UNKNOWN; model- and edition-specific source |
 | GA-11 | 13.3 | Interrupt / exception analysis including VBR and ISR paths | PARTIAL: VBR sightings, no full ISR graph | Static candidates not treated as active IRQs |
@@ -57,3 +57,18 @@ For upcoming steps prepare independent Supervisor plans, each pinned to the corr
 ## Explicitly deferred, not lost
 
 Full MCU/peripheral emulation, physical CS electrical simulation, generic automatic hardware identification, and broad multi-firmware comparison remain out of the initial delivery, as required by original section 14.
+
+
+## 2026-10-29 — GA-08 pointer role review-only candidates
+
+- Branch `feature/hardware-pointer-role-proposals-20261029` from PR #53
+  immutable head `bd0a0a60eaa610e19581bd67fd16d29c637bfb8e`.
+- Groups bounded CFG/P-code indirect writes by function, A-register, MCU
+  module and MM window; two distinct source PCs and two distinct
+  register targets are required for a role hint. Unknown effects, computed
+  control flow and propagation truncation block positive classification.
+- Appends role hints to the detailed Analyze report and manual naming CSV.
+  All rows are `NEVER_AUTO_APPLY`. This is *not* proof of a Ghidra local
+  variable's lifetime/storage or hardware execution.
+- CI: standalone negative checks and complete Ghidra 12.1.4 build.
+  Isolated Ghidra acceptance by approved Supervisor before merge.

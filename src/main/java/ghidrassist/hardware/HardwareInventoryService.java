@@ -298,8 +298,9 @@ public final class HardwareInventoryService {
         // A second, conservative CFG pass supplies address-register and
         // conditional branch-join evidence. No binary bytes or labels are changed.
         GhidraHardwareFlowService.Report flow=new GhidraHardwareFlowService()
-            .analyze(program,monitor);
+            .analyze(program,monitor,concreteDevice);
         md.append("\n\n").append(flow.markdown);
+        csv+=HardwarePointerRoleReview.csvRows(flow.pointerRoles);
         return new Report(program.getName(),program.getLanguageID().toString(),choice,sites,
             md.toString(),csv,(int)grouped.values().stream().filter(group->
                 group.stream().anyMatch(site->
