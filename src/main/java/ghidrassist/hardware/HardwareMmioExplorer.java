@@ -45,9 +45,14 @@ public final class HardwareMmioExplorer {
             if (o==null || o.pc()<0 || o.address()<0) continue;
             String value="UNKNOWN";
             String evidence;
-            if (o.candidateWrite() && o.directWordLiteral()!=null) {
-                value=String.format(Locale.ROOT,"0x%04X",o.directWordLiteral()&0xffff);
+            if (o.candidateWrite() && o.directWordLiteral()!=null &&
+                    o.directWordLiteral()>=0 && o.directWordLiteral()<=0xffff) {
+                value=String.format(Locale.ROOT,"0x%04X",o.directWordLiteral());
                 evidence="DIRECT WORD LITERAL CANDIDATE; NOT RUNTIME STATE";
+            } else if (o.candidateWrite() && o.directWordLiteral()!=null) {
+                // An inconsistent upstream source must not be quietly
+                // truncated with &0xffff into a plausible-looking word.
+                evidence="OUT-OF-RANGE WORD CANDIDATE; VALUE UNKNOWN";
             } else if (o.candidateWrite()) {
                 evidence="WRITE-TARGET CANDIDATE; VALUE UNKNOWN";
             } else {
