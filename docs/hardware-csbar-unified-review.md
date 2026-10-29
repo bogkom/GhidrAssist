@@ -29,3 +29,19 @@ contradictory literals, mixed byte/word stores, wrong MM address,
 unknown call effects, unresolved pointer aliases, generic CPU32 and
 read-only sources. Exact Ghidra 12.1.4 build and actual GUI acceptance
 on an isolated test project are still mandatory before merging.
+
+## GA-13 — review provenance and final confirmation revision gates
+
+The source-review dialog may stay open while a Program edit, Undo/Redo
+or profile switch changes the original Analyze inputs. Guarding only
+`program == activeProgram` allowed stale Review provenance to be
+written after source data changed. The export now checks the complete
+revision token (same Program object, modification number, language,
+original executable SHA metadata and selected profile), and checks
+again after the potentially long file chooser and overwrite prompt.
+
+Likewise, the second final Apply confirmation can display while Ghidra
+changes in another UI context. A final revision check occurs **after
+the confirmation** and before starting an undoable transaction.
+Neither stale export nor stale approval should be mistaken for
+fresh user-reviewed evidence.

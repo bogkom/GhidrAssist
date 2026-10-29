@@ -258,3 +258,8 @@ Full MCU/peripheral emulation, physical CS electrical simulation, generic automa
   CS_WINDOW default and Ghidra Undo remain unchanged.
 - Full Ghidra 12.1.4 build and synthetic safety checks required;
   real isolated host GUI acceptance remains pending.
+
+- GA-05/13 review hardening: the revision token now guards local
+  provenance CSV export before/after file dialogs, and guards Apply
+  again **after** the final modal user confirmation. Same-Program
+  identity alone is insufficient after Ghidra Edit/Undo/Redo.

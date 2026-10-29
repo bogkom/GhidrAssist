@@ -1106,7 +1106,9 @@ public final class HardwareAnalysisTab extends JPanel {
         final List<HardwareApplyPlan.Item> accepted=new ArrayList<>();
         cancel.addActionListener(e->dialog.dispose());
         exportProvenance.addActionListener(e->{
-            if(program!=plugin.getCurrentProgram()){
+            // The dialog may have been open while Ghidra symbols, memory
+            // or profile changed: identity alone does not guard the receipt.
+            if(!currentScan()){
                 JOptionPane.showMessageDialog(dialog,
                     "The active program changed; rerun Analyze before exporting.",
                     "Stale review",JOptionPane.WARNING_MESSAGE);
@@ -1119,6 +1121,10 @@ public final class HardwareAnalysisTab extends JPanel {
                     Boolean.TRUE.equals(model.getValueAt(i,0))));
             String csv=HardwareChangeProvenance.csv(
                 HardwareChangeProvenance.snapshot(snapshot));
+            if(!currentScan()){
+                status.setText("Review changed during provenance collection; nothing exported.");
+                return;
+            }
             JFileChooser chooser=new JFileChooser();
             chooser.setDialogTitle("Export local review provenance CSV");
             chooser.setSelectedFile(new File("ghidrassist-hardware-review-provenance.csv"));
@@ -1128,6 +1134,12 @@ public final class HardwareAnalysisTab extends JPanel {
                     "Overwrite existing file: "+destination.getName()+"?",
                     "Confirm CSV overwrite",JOptionPane.YES_NO_OPTION)!=
                     JOptionPane.YES_OPTION)return;
+            // JFileChooser and overwrite confirmation run nested Swing event
+            // loops. Re-check the *full* version token after both dialogs.
+            if(!currentScan()){
+                status.setText("Stale Review revision: provenance CSV not written.");
+                return;
+            }
             try{
                 Files.writeString(destination.toPath(),csv,StandardCharsets.UTF_8);
                 JOptionPane.showMessageDialog(dialog,
@@ -1190,6 +1202,13 @@ public final class HardwareAnalysisTab extends JPanel {
             "Final confirmation: modify Ghidra database",
             JOptionPane.YES_NO_OPTION,JOptionPane.WARNING_MESSAGE);
         if(confirm!=JOptionPane.YES_OPTION)return;
+        // A Ghidra edit/Undo/Redo can occur while the modal confirmation
+        // is visible: revalidate identity, profile and modification counter
+        // *after* consent, immediately before beginning the transaction.
+        if(!currentScan()){
+            status.setText("Program/profile revision changed during confirmation; Apply blocked.");
+            return;
+        }
         try{
             HardwareApplyService.Outcome outcome=
                 HardwareApplyService.apply(program,accepted);
