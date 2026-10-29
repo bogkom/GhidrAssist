@@ -26,3 +26,21 @@ CI: deterministic negative folio sequence checks and full Ghidra 12.1.4
 extension build. Actual RAG ingestion/source-page lookup must be tested
 on a non-sensitive local PDF in an isolated Ghidra 12.1.4 session before
 merging; no firmware or user documents are published.
+
+## 2026-10-29 — header-adjacent table/figure false-positive guard
+
+Printed folio extraction now treats a page candidate in the same actual
+`USER'S MANUAL` header/footer as a **text-layer candidate** only if it is
+not directly qualified as a Table, Figure, Section, Chapter or Appendix label.
+For the immediately preceding/following line, only a **standalone**
+`D-1`, `5-20`, `Page: D-1` or `Folio D-1` form may count. A body
+`Table D-1 Module Address Map` directly below the vendor header is not
+a page folio. Multiple conflicting header/standalone candidates anywhere
+in the page's considered header/footer regions yield
+`UNKNOWN / AMBIGUOUS_HEADER` rather than the first lexical match.
+
+No inferred physical page shift, printed-folio repair, automatic register
+definition, hardware assertion or RAG page navigation change is permitted.
+This is candidate extraction quality only. Dedicated Java negative tests
+and a complete Ghidra 12.1.4 PUBLIC build are required; final acceptance
+requires a separate immutable-artifact real Ghidra/RAG test.
