@@ -197,7 +197,7 @@ public final class HardwareInventoryService {
           .append("- MCU identity, active MM map, reached branches, connected chips and memory wiring: **NOT VERIFIED**\n")
           .append("- Register address provenance: [MC68332 User's Manual](https://www.nxp.com/docs/en/user-guide/MC68332UM.pdf)\n\n");
         md.append("## Initialization/memory-map evidence (SIMCR/MM, TRAMBAR, CSBAR, CSOR, VBR)\n\n")
-          .append("CSPAR contributes to conditional chip-select decoding but is not listed as a separate register site.\n\n");
+          .append("CSPAR contributes to conditional chip-select decoding but is not listed as a separate register site.\n\nMC68332 sourced bitfields are shown only for exact full-word literal SIMCR MOVEs; they are static candidate values, not proven execution or latched MM state.\n\n");
         for(Map.Entry<String,List<Site>> group:grouped.entrySet()){
             monitor.checkCancelled();
             if(group.getValue().stream().noneMatch(site->
@@ -224,7 +224,18 @@ public final class HardwareInventoryService {
                       .append(hex(site.registerAddress,6)).append("` — ")
                       .append(site.write?"WRITE":"READ/REFERENCE")
                       .append("; ").append(site.literal==null?"value UNKNOWN":hex(site.literal,4))
-                      .append("; `").append(site.asm).append("`\n");
+                      .append("; `").append(site.asm).append("`");
+                    // Only a literal full-width word MOVE supports exact SIMCR
+                    // bit decoding. Byte/indirect/derived writes remain UNKNOWN.
+                    if (concreteDevice && site.write && site.literal != null &&
+                            "SIMCR".equals(site.register) &&
+                            site.asm.stripLeading().toUpperCase(Locale.ROOT)
+                                .matches("MOVE\\.W\\s+#.*")) {
+                        md.append("; ")
+                          .append(HardwareBitfieldDecoder.decode(
+                              profile,"SIMCR",site.literal,16).summary());
+                    }
+                    md.append("\n");
                 }
                 if(!any)continue;
                 md.append("\n**MM=").append(mm).append(" conditional linear-code snapshot**\n\n");
