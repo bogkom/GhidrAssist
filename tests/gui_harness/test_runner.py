@@ -9,7 +9,7 @@ from unittest import mock
 import zipfile
 
 from runner import (digest, fixture_binary, output_directory,
-                    verify_extension, verify_outcome, x11_capture)
+                    verify_extension, verify_outcome, x11_capture, stop_owned)
 from controlled_llm import ControlledLLM
 
 
@@ -112,6 +112,27 @@ class IsolatedHarnessTests(unittest.TestCase):
             answer = model.respond({"model": "GUI_ALLOW", "messages": []})
             self.assertIn("configured", str(answer))
         self.assertNotIn("body", (self.root / "controlled-model-events.json").read_text())
+
+    def test_cleanup_of_process_group_even_if_launcher_exited(self):
+        from types import SimpleNamespace
+        import signal
+        launcher = SimpleNamespace(
+            pid=34567, poll=lambda: 0, wait=lambda timeout: 0)
+        with mock.patch("runner.os.killpg") as kill:
+            stop_owned(launcher)
+        self.assertEqual(kill.call_args_list, [
+            mock.call(34567, signal.SIGTERM),
+            mock.call(34567, signal.SIGKILL),
+        ], "an exited launcher may still have orphan Java descendants")
+
+    def test_x11_rejects_untrusted_newline_title(self):
+        (self.root / "gui-results.json").write_text(json.dumps({
+            "window_title": "GhidrAssist isolated GUI regression: "
+                            "GuiFixture:/TEST_BINARY.bin\\nInjected"}))
+        with mock.patch("runner.shutil.which", return_value="/fixture/tool"):
+            status = x11_capture(self.root)
+        self.assertEqual(status["status"], "BLOCKED_X11_READBACK")
+        self.assertIn("title", status["reason"])
 
     def test_x11_selects_one_largest_mapped_fixture_not_whole_desktop(self):
         (self.root / "gui-results.json").write_text(json.dumps({"window_title": "GhidrAssist isolated GUI regression: GuiFixture:/TEST_BINARY.bin"}))
