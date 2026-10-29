@@ -28,7 +28,7 @@ The originating document has 18 *sections*, not 18 independent feature checkboxe
 | GA-08 | H | Function, pointer and variable naming proposals | PARTIAL: function naming/Undo (#22/#28); pointers/locals missing | Collision-safe preview, manual labels preserved, transactional Undo |
 | GA-09 | 13.1 | MMIO accesses explorer with navigation | MISSING as dedicated view | Filterable function/instruction/value/access/confidence with Go To |
 | GA-10 | 13.2 | Verified bitfield decode with provenance | PARTIAL: MC68332 metadata; comprehensive decoder missing | Unknown fields UNKNOWN; model- and edition-specific source |
-| GA-11 | 13.3 | Interrupt / exception analysis including VBR and ISR paths | PARTIAL: VBR sightings, no full ISR graph | Static candidates not treated as active IRQs |
+| GA-11 | 13.3 | Interrupt / exception analysis including VBR and ISR paths | PARTIAL: PR #54 VBR evidence; new PR candidate image-zero exception table, static handler labels only; runtime VBR/IRQ graph unresolved | Static candidates not treated as active IRQs |
 | GA-12 | 13.4 | Resumable, version-aware incremental analysis | MISSING dedicated analyzer checkpoint protocol | Program identity, input hash, invalidation and resume regressions |
 | GA-13 | 13.5 | Human/analysis/AI origin of changes | MISSING verified per-symbol provenance | Check actual Ghidra 12.1.4 SourceType API; retain rationale and Undo |
 | GA-14 | 13.6 | Firmware configuration comparison | DEFERRED by source priorities | Assess Ghidra Version Tracking first; later CS/VBR/peripheral diff |
@@ -68,3 +68,17 @@ GA-01 RESET candidate evidence, without pretending to emulate reset:
 - Test vector endianness and invalid data, branch-like diamond paths, unresolved indirect calls, recursion and truncation in pure Java GitHub Actions; require full Ghidra 12.1.4 build and isolated on-host integration before merging.
 
 This is a first GA-01 component, not completion of GA-01 or GA-02. Later steps must model reset-relative path-dependent register epochs and validate against real MC68332 documentation and firmware test copies.
+
+
+## 2026-10-29 — GA-11 candidate interrupt vector inventory
+
+- Branch: `feature/hardware-interrupt-vector-candidates-20261029` built on immutable PR #54 RESET head `9b8b871a10a506925963161dc86a8e14bc3d5a66`.
+- Read-only, bounded big-endian image-zero exception-vector scan of entries 2..255,
+  with per-entry memory/function lookup and explicit unreadable, odd, erased,
+  null, unmapped and recognized-function classes.
+- The report **does not establish VBR at runtime**, actual exceptions, IRQ
+  enablement, device-specific interrupt assignments or executed ISRs.
+- CI: standalone negative Java tests and complete Ghidra 12.1.4 extension build.
+  A green workflow is not a substitute for isolated actual-Ghidra acceptance.
+- No changes to PR #54 pinned artifact, Review/Apply, source firmware, OAuth or
+  original Ghidra projects. New Supervisor test plan only after immutable CI ZIP.
