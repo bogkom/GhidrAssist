@@ -98,36 +98,39 @@ public class GuiIntegrationMain {
      return tool[0].getToolFrame().isShowing() && query.isShowing() &&
          current!=null && current.equals(program);
    }),20);
-   // A component can be showing before the first X11 Expose/paint pass.
-   // Explicitly validate and then yield to the EDT + window manager;
-   // screenshots taken at the first isShowing() tick were empty.
+   // GhidrAssist's ComponentProvider may live in its own DockingFrame.
+   // Render and target the *actual Query host*, not a blank PluginTool frame.
    edt(()->{
-     JFrame window=tool[0].getToolFrame();
-     window.validate();
+     Window host=SwingUtilities.getWindowAncestor(query);
+     if(host==null)throw new AssertionError("No window owns the Query component");
+     host.validate();
      query.revalidate();
-     window.toFront();
+     host.toFront();
      query.repaint();
-     window.repaint();
+     host.repaint();
    });
    Thread.sleep(700);
    edt(()->{});
    edt(()->{try{
-     JFrame window=tool[0].getToolFrame();
+     Window host=SwingUtilities.getWindowAncestor(query);
      Program active=tool[0].getService(ProgramManager.class).getCurrentProgram();
-     if(!window.isShowing()||!query.isShowing()||
-         active==null||!active.equals(program))
-       throw new AssertionError("GUI/program mismatch: window="+
-           window.isShowing()+" query="+query.isShowing()+
+     if(host==null || !host.isShowing() || !query.isShowing() ||
+             active==null || !active.equals(program))
+       throw new AssertionError("GUI/program mismatch: query_host="+
+           (host!=null && host.isShowing())+" query="+query.isShowing()+
            " program="+(active!=null));
+     if(!(host instanceof Frame titled) || titled.getTitle().isBlank())
+       throw new AssertionError("Query host has no X11 window title");
+     result.addProperty("window_title",((Frame)host).getTitle());
      result.addProperty("window_showing",true);
      result.addProperty("query_showing",true);
      result.addProperty("ran_on_edt",SwingUtilities.isEventDispatchThread());
      result.addProperty("program_open",true);
-     BufferedImage frame=new BufferedImage(window.getWidth(),window.getHeight(),
+     BufferedImage frame=new BufferedImage(host.getWidth(),host.getHeight(),
          BufferedImage.TYPE_INT_RGB);
-     Graphics2D paint=frame.createGraphics();window.printAll(paint);paint.dispose();
+     Graphics2D paint=frame.createGraphics();host.printAll(paint);paint.dispose();
      if(!ImageIO.write(frame,"png",out.resolve("swing-render.png").toFile()))
-       throw new AssertionError("Swing render PNG failed");
+       throw new AssertionError("Query host Swing render failed");
      result.addProperty("swing_render",true);
    }catch(Exception e){throw new RuntimeException(e);}});
    Files.writeString(out.resolve("gui-results.json"),JSON.toJson(result));
