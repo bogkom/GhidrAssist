@@ -15,6 +15,7 @@ import ghidra.framework.plugintool.PluginTool;
 import ghidra.framework.project.tool.GhidraTool;
 import ghidra.framework.project.tool.GhidraToolTemplate;
 import org.jdom2.output.XMLOutputter;
+import org.jdom2.input.SAXBuilder;
 import ghidra.app.services.ProgramManager;
 import ghidra.app.services.GoToService;
 import ghidra.app.services.CodeViewerService;
@@ -153,6 +154,51 @@ public final class CodeBrowserMmioMain {
         result.addProperty("supervisor_ack",false);
         result.addProperty("application_headless",app.isHeadless());
         result.addProperty("awt_headless",GraphicsEnvironment.isHeadless());
+        if(args.length==3 && "restore".equals(args[2])) {
+            Tool restored=null;
+            try {
+                require(!app.isHeadless() && !GraphicsEnvironment.isHeadless(),
+                    "Restored CodeBrowser must run with a real display");
+                var persisted=new SAXBuilder().build(
+                    out.resolve("tool-template.xml").toFile()).getRootElement();
+                var template=new GhidraToolTemplate(persisted,
+                    "synthetic-test-only-template");
+                restored=new Tool(project,template);
+                Tool restoredTool=restored;
+                edt(()->restoredTool.setVisible(true));
+                require(restored.getManagedPlugins().stream().anyMatch(
+                    p->p instanceof GhidrAssistPlugin),
+                    "GhidrAssist missing after actual Java-process restart");
+                require(restored.getService(CodeViewerService.class)!=null,
+                    "CodeBrowser Listing missing from saved tool template");
+                Thread.sleep(900);
+                for(Window w:Window.getWindows()) {
+                    if(w.isShowing() && w instanceof JDialog dlg &&
+                            dlg.getTitle().contains("New Plugins Found"))
+                        throw new AssertionError(
+                            "New extension prompt returned after full process restart");
+                }
+                JsonObject restarted=new JsonObject();
+                restarted.addProperty("schema",1);
+                restarted.addProperty("restart_process_verified",true);
+                restarted.addProperty("codebrowser_restored",true);
+                restarted.addProperty("ghidrassist_restored",true);
+                restarted.addProperty("no_repeated_plugin_prompt",true);
+                restarted.addProperty("private_data_used",false);
+                restarted.addProperty("supervisor_ack",false);
+                Files.writeString(out.resolve("restart-results.json"),
+                    GSON.toJson(restarted));
+            } finally {
+                if(restored!=null) {
+                    Tool toolToClose=restored;
+                    edt(()->toolToClose.shutdown());
+                }
+                first.release(consumer);
+                second.release(consumer);
+                project.close();
+            }
+            return;
+        }
         try {
             require(!app.isHeadless() && !GraphicsEnvironment.isHeadless(),
                 "Real Swing display required");
@@ -287,6 +333,11 @@ public final class CodeBrowserMmioMain {
                 "Saved tool XML lacks GhidrAssist extension/plugin records");
             result.addProperty("tool_template_saved",true);
             result.addProperty("extension_metadata_serialized",true);
+            // Persist a real GhidraToolTemplate on disk in disposable output.
+            // The runner launches a NEW Java process to read it back.
+            Files.writeString(out.resolve("tool-template.xml"),
+                new XMLOutputter().outputString(
+                    ((GhidraToolTemplate)saved).saveToXml()));
             // Restore ONLY the synthetic test tool and confirm installed plugin
             // does not return as an unknown extension in the same run.
             edt(()->{try{
