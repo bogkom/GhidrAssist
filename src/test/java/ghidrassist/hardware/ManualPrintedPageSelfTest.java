@@ -37,6 +37,47 @@ public final class ManualPrintedPageSelfTest {
             "MC68336/376 CAN 2.0B CONTROLLER MODULE MOTOROLA\n"+
             "USER’S MANUAL Rev. 15 Oct 2000 13-20");
         ok(toucan.label().equals("13-20"),"TouCAN bottom folio");
+        var tableBelowHeader=ManualPrintedPage.fromText(
+            "MC68332 REFERENCE\nUSER'S MANUAL\n"+
+            "Table D-1 Module Address Map\nSIM 128 $YFFA00");
+        ok(tableBelowHeader.label().equals("UNKNOWN"),
+            "Table D-1 adjacent to header is not a physical folio");
+        var figureAboveHeader=ManualPrintedPage.fromText(
+            "Figure 5-20 Example QSPI\nUSER'S MANUAL\nRegister Summary");
+        ok(figureAboveHeader.label().equals("UNKNOWN"),
+            "Figure 5-20 immediately before header is not a folio");
+        var inlineTable=ManualPrintedPage.fromText(
+            "MC68332 USER'S MANUAL Table D-1\nRegister Summary");
+        ok(inlineTable.label().equals("UNKNOWN"),
+            "table reference inside manual header is not a folio");
+        var pageAndTable=ManualPrintedPage.fromText(
+            "MC68332 USER'S MANUAL D-3\nTable D-1 Module Address Map\n");
+        ok(pageAndTable.label().equals("D-3"),
+            "real header folio is retained while adjacent table is ignored");
+        var standalone=ManualPrintedPage.fromText(
+            "MC68332 USER'S MANUAL\nPAGE: D-7\nSection 7");
+        ok(standalone.label().equals("D-7"),
+            "standalone explicit page label adjacent to header is allowed");
+        var conflictingHeaders=ManualPrintedPage.fromText(
+            "USER'S MANUAL D-1\nMC68332 TEXT\n"+
+            "USER'S MANUAL D-2\n");
+        ok(conflictingHeaders.label().equals("UNKNOWN") &&
+            conflictingHeaders.confidence().equals("AMBIGUOUS_HEADER"),
+            "conflicting vendor headers must fail closed");
+        var matchingHeaders=ManualPrintedPage.fromText(
+            "USER'S MANUAL D-1\nMC68332 TEXT\n"+
+            "USER'S MANUAL D-1\n");
+        ok(matchingHeaders.label().equals("D-1"),
+            "matching duplicate headers preserve only candidate status");
+        var contradictoryAdjacent=ManualPrintedPage.fromText(
+            "D-1\nUSER'S MANUAL D-2\n");
+        ok(contradictoryAdjacent.label().equals("UNKNOWN") &&
+            contradictoryAdjacent.confidence().equals("AMBIGUOUS_HEADER"),
+            "header and adjacent standalone folios disagree");
+        var sameAdjacent=ManualPrintedPage.fromText(
+            "D-1\nUSER'S MANUAL D-1\n");
+        ok(sameAdjacent.label().equals("D-1"),
+            "same header and adjacent folio are not falsely ambiguous");
         System.out.println("ManualPrintedPageSelfTest OK");
     }
 }
