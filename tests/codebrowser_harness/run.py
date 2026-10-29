@@ -157,6 +157,30 @@ def main():
                         os.killpg(process.pid,signal.SIGTERM)
                     with contextlib.suppress(ProcessLookupError):
                         os.killpg(process.pid,signal.SIGKILL)
+            if not (out/"tool-template.xml").is_file():
+                raise RuntimeError("Persisted GhidraTool template XML missing")
+            # A completely new JVM/application initialization must read the
+            # saved template; same-process reloading alone is insufficient.
+            with (out/"restart-java.log").open("x") as restart_log:
+                restarted=subprocess.Popen(cmd+["restore"],cwd=work,env=env,
+                    stdout=restart_log,stderr=subprocess.STDOUT,
+                    start_new_session=True)
+                try:
+                    code=restarted.wait(timeout=args.timeout)
+                    if code:
+                        raise RuntimeError(
+                            f"Restarted CodeBrowser Java test exit {code}")
+                finally:
+                    with contextlib.suppress(ProcessLookupError):
+                        os.killpg(restarted.pid,signal.SIGTERM)
+                    with contextlib.suppress(ProcessLookupError):
+                        os.killpg(restarted.pid,signal.SIGKILL)
+            restart=json.loads((out/"restart-results.json")
+                               .read_text(encoding="utf-8"))
+            for name in ("restart_process_verified","codebrowser_restored",
+                         "ghidrassist_restored","no_repeated_plugin_prompt"):
+                if restart.get(name) is not True:
+                    raise RuntimeError("CodeBrowser restart failed: "+name)
             data=json.loads((out/"gui-results.json").read_text(encoding="utf-8"))
             expected=("synthetic_simcr_site","hardware_analyze_gui",
                       "listing_navigation","stale_go_to_rejected",
@@ -173,7 +197,9 @@ def main():
                 raise RuntimeError("Headless simulation is not real CodeBrowser")
             result.update({"status":"PASSED_SYNTHETIC_CODEBROWSER",
                            "ghidra_version":VERSION,
-                           "synthetic_only":True,"assertions":list(expected)})
+                           "synthetic_only":True,"assertions":list(expected),
+                           "restart_process_verified":True,
+                           "no_repeated_plugin_prompt":True})
     except (OSError, ValueError, RuntimeError, subprocess.TimeoutExpired,
             zipfile.BadZipFile) as error:
         result["reason"]=str(error)[:400]
