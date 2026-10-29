@@ -9,7 +9,7 @@ import java.util.*;
  */
 public final class HardwarePointerRoleReview {
     private HardwarePointerRoleReview() {}
-    public enum Status { FAMILY_UNCERTAIN, PATH_UNCERTAIN, WEAK_EVIDENCE, REVIEW_ONLY }
+    public enum Status { FAMILY_UNCERTAIN, PATH_UNCERTAIN, SCOPE_CONFLICT, WEAK_EVIDENCE, REVIEW_ONLY }
     public record Site(long function, String functionName, long pc, String pointer,
                        String module, int mm, String target, boolean uncertain) {}
     public record Proposal(long function,String functionName,String pointer,String module,
@@ -42,6 +42,10 @@ public final class HardwarePointerRoleReview {
                                          boolean truncated) {
         if(input==null)throw new IllegalArgumentException("Null pointer evidence");
         Map<String,Group> grouped=new TreeMap<>();
+        // A0..A7 are physical registers, NOT stable local variables.
+        // Reusing one address register for different module/MM scopes in
+        // a function invalidates an otherwise attractive single-role hint.
+        Map<String,Set<String>> pointerScopes=new HashMap<>();
         for(Site s:input){
             if(s==null || s.function()<0 || s.pc()<0 ||
                     s.functionName()==null || s.target()==null ||
@@ -51,13 +55,21 @@ public final class HardwarePointerRoleReview {
             String key=String.format(Locale.ROOT,"%016X/%s/%s/%d",
                 s.function(),s.pointer(),s.module(),s.mm());
             grouped.computeIfAbsent(key,k->new Group(s)).add(s);
+            String pointerKey=String.format(Locale.ROOT,"%016X/%s",
+                s.function(),s.pointer());
+            pointerScopes.computeIfAbsent(pointerKey,k->new HashSet<>())
+                .add(s.module()+"/MM"+s.mm());
         }
         List<Proposal> result=new ArrayList<>();
         for(Group g:grouped.values()) {
             if(g.pcs.size()<2)continue;
             Site s=g.first;
+            String pointerKey=String.format(Locale.ROOT,"%016X/%s",
+                s.function(),s.pointer());
+            boolean conflictingScopes=pointerScopes.get(pointerKey).size()>1;
             Status status=!concrete?Status.FAMILY_UNCERTAIN:
                 truncated||g.uncertain?Status.PATH_UNCERTAIN:
+                conflictingScopes?Status.SCOPE_CONFLICT:
                 g.targets.size()<2?Status.WEAK_EVIDENCE:Status.REVIEW_ONLY;
             String hint=status==Status.REVIEW_ONLY ?
                 "p_hw_"+s.module().toLowerCase(Locale.ROOT)+"_mm"+s.mm()+"_candidate":"";
@@ -76,7 +88,9 @@ public final class HardwarePointerRoleReview {
             .append("Read-only, static CFG/P-code site evidence; NOT proof of ")
             .append("runtime execution, pointer lifetime, Ghidra decompiler ")
             .append("HighVariable identity or hardware address map. ")
-            .append("No pointer/variable rename is implemented.\n\n")
+            .append("No pointer/variable rename is implemented. Reuse of ")
+            .append("the same A-register across module/MM scopes in a function ")
+            .append("is SCOPE_CONFLICT, never a stable pointer-role hint.\n\n")
             .append("- Candidate groups: ").append(rows.size()).append(".\n");
         for(int i=0;i<Math.min(50,rows.size());i++) {
             Proposal p=rows.get(i);
