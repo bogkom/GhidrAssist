@@ -26,7 +26,7 @@ The originating document has 18 *sections*, not 18 independent feature checkboxe
 | GA-06 | F | Extendible sourced MC683xx profiles and conflict matching | PARTIAL: MC68332 and document hints, no complete import pipeline | Explicit model/version/page/bitfields/reset source; SVD/RDL feasibility |
 | GA-07 | G | Compact 3-part Analyze: initiation, register history, CS map | PARTIAL: PR #52 focused site filtering; three-part report missing | UI/Markdown/RAG agreement, concise report, evidence links |
 | GA-08 | H | Function, pointer and variable naming proposals | PARTIAL: function naming/Undo (#22/#28); pointers/locals missing | Collision-safe preview, manual labels preserved, transactional Undo |
-| GA-09 | 13.1 | MMIO accesses explorer with navigation | MISSING as dedicated view | Filterable function/instruction/value/access/confidence with Go To |
+| GA-09 | 13.1 | MMIO accesses explorer with navigation | PARTIAL: separate read-only searchable table / Go To Listing candidate in draft PR; host GUI verification pending | Filterable function/instruction/value/access/confidence with Go To |
 | GA-10 | 13.2 | Verified bitfield decode with provenance | PARTIAL: MC68332 metadata; comprehensive decoder missing | Unknown fields UNKNOWN; model- and edition-specific source |
 | GA-11 | 13.3 | Interrupt / exception analysis including VBR and ISR paths | PARTIAL: VBR sightings, no full ISR graph | Static candidates not treated as active IRQs |
 | GA-12 | 13.4 | Resumable, version-aware incremental analysis | MISSING dedicated analyzer checkpoint protocol | Program identity, input hash, invalidation and resume regressions |
@@ -57,3 +57,16 @@ For upcoming steps prepare independent Supervisor plans, each pinned to the corr
 ## Explicitly deferred, not lost
 
 Full MCU/peripheral emulation, physical CS electrical simulation, generic automatic hardware identification, and broad multi-firmware comparison remain out of the initial delivery, as required by original section 14.
+
+## 2026-10-29 — independent GA-09 candidate
+
+- Source: immutable PR #53 head; branch `feature/hardware-mmio-explorer-20261029`.
+- The existing Listing/XREF inventory is exposed in a dedicated read-only,
+  filterable MMIO table with register/function/PC/value/direction candidate
+  and `Go To Listing` navigation. The complete register catalog and
+  the focused Analyze report are unchanged.
+- Candidate writes and literal values are explicitly **not** runtime events.
+  Unclassified references are not labeled as proven peripheral reads.
+- CI: pure Java table model regressions plus full Ghidra 12.1.4 extension build.
+  GUI behavior and navigation require real isolated Ghidra verification.
+- No Supervisor plan approval or project edits are implied.
