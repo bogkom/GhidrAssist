@@ -133,16 +133,39 @@ class IsolatedHarnessTests(unittest.TestCase):
                 Path(command[-1]).write_bytes(b"test-only-image" * 200)
                 return SimpleNamespace(stdout="")
             if command[0] == "identify":
-                return SimpleNamespace(stdout="1200 950")
+                return SimpleNamespace(stdout="1200 950 120")
             raise AssertionError("Unexpected external command")
         with mock.patch("runner.shutil.which", return_value="/fixture/tool"), \
              mock.patch("runner.subprocess.run", side_effect=fake_run):
             x11 = x11_capture(self.root)
-        self.assertEqual(x11["status"], "X11_CAPTURED_PIXEL_METADATA_CHECKED")
+        self.assertEqual(x11["status"], "X11_CAPTURED_NONBLANK_PIXEL_CHECKED")
         self.assertEqual(x11["human_visual_readback"], "NOT_PERFORMED")
         self.assertTrue(any(call[:4] == ["import", "-silent", "-window", "0x2"]
                             for call in seen))
         self.assertFalse(any("0x3" in call for call in seen))
+
+    def test_x11_rejects_large_but_unpainted_window(self):
+        from types import SimpleNamespace
+        def fake_run(command, **kwargs):
+            if command[:3] == ["xwininfo", "-root", "-tree"]:
+                return SimpleNamespace(stdout=(
+                    '  0x9 "GhidrAssist isolated GUI regression": (...)\\n'
+                ).replace("\\n", "\n"))
+            if command[:2] == ["xwininfo", "-id"]:
+                return SimpleNamespace(stdout="Map State: IsViewable\n"
+                                       "Width: 1200\nHeight: 950\n")
+            if command[0] == "import":
+                Path(command[-1]).write_bytes(b"black" * 500)
+                return SimpleNamespace(stdout="")
+            if command[0] == "identify":
+                return SimpleNamespace(stdout="1200 950 2")
+            raise AssertionError("Unexpected external command")
+        with mock.patch("runner.shutil.which", return_value="/fixture/tool"), \
+             mock.patch("runner.subprocess.run", side_effect=fake_run):
+            result = x11_capture(self.root)
+        self.assertEqual(result["status"], "BLOCKED_X11_READBACK")
+        self.assertEqual(result["human_visual_readback"], "NOT_PERFORMED")
+        self.assertIn("unpainted", result["reason"])
 
     def test_x11_rejects_ambiguous_equally_sized_frames(self):
         from types import SimpleNamespace
