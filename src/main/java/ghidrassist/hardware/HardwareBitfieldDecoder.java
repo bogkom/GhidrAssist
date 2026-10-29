@@ -3,6 +3,7 @@ package ghidrassist.hardware;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.regex.Pattern;
 
 /**
  * Pure, model-scoped interpretation of *complete* observed register words.
@@ -12,6 +13,24 @@ import java.util.Locale;
  */
 public final class HardwareBitfieldDecoder {
     private HardwareBitfieldDecoder() {}
+
+    // A declared bitfield with only UNKNOWN/UNVERIFIED/ambiguous page text
+    // is not a sourced definition. This checks a citation *claim* only; it
+    // does not independently verify the actual edition or PDF page bytes.
+    private static final Pattern PHYSICAL_PDF_PAGE_CLAIM=Pattern.compile(
+        "(?i)\\bPDF\\s+PAGES?\\s+[1-9][0-9]*(?:\\s*[-–]\\s*[1-9][0-9]*)?\\b");
+
+    static boolean hasConcretePdfPageClaim(String page) {
+        if(page==null || page.isBlank())return false;
+        String normalized=page.toUpperCase(Locale.ROOT);
+        if(normalized.contains("UNKNOWN") ||
+                normalized.contains("UNVERIFIED") ||
+                normalized.contains("AMBIGUOUS") ||
+                normalized.contains("TO BE VERIFIED") ||
+                normalized.contains("TO BE CHECKED"))
+            return false;
+        return PHYSICAL_PDF_PAGE_CLAIM.matcher(page).find();
+    }
 
     public enum Status {
         DECODED, DEVICE_NOT_SELECTED, REGISTER_UNKNOWN, VALUE_UNKNOWN,
@@ -33,7 +52,7 @@ public final class HardwareBitfieldDecoder {
             if (status != Status.DECODED) {
                 return "bitfield decode " + status + " (no hardware state inferred)";
             }
-            StringBuilder b = new StringBuilder("documented " + profile + " fields [");
+            StringBuilder b = new StringBuilder("source-page-claimed " + profile + " fields [");
             for (int i = 0; i < fields.size(); i++) {
                 FieldEvidence f = fields.get(i);
                 if (i > 0) b.append("; ");
@@ -81,9 +100,9 @@ public final class HardwareBitfieldDecoder {
         List<FieldEvidence> evidence = new ArrayList<>();
         long documented = 0;
         for (HardwareProfiles.BitField f : reg.fields) {
-            if (f.sourcePage == null || f.sourcePage.isBlank() ||
-                    "UNVERIFIED".equalsIgnoreCase(f.sourcePage))
-                continue; // Never promote unsourced fields to verified facts.
+            if (!hasConcretePdfPageClaim(f.sourcePage))
+                continue; // Only explicit numeric page claims may be decoded.
+                // This is NOT independent PDF-edition/page verification.
             int shift = Integer.numberOfTrailingZeros(f.mask);
             int value = (observedWord & f.mask) >>> shift;
             evidence.add(new FieldEvidence(f.name,f.mask,value,
