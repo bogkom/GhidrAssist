@@ -31,3 +31,19 @@ Validation: deterministic standalone Java CSV/provenance tests and full
 Ghidra 12.1.4 extension build in Actions. On a disposable project COPY,
 verify SourceType display, checkboxes, CSV, Undo, stale-program guard and
 absence of OAuth edits before merging. No local PASS is implied by CI.
+
+## 2026-10-29 — local provenance CSV hardening
+
+Quoted CSV cells alone do **not** stop Microsoft Excel/LibreOffice
+from interpreting `=HYPERLINK(...)`, `+1`, `-1` or `@SUM(...)`
+as formulas. GhidrAssist now prefixes formula-looking fields with an
+apostrophe, including when hidden behind whitespace, tabs, BOM or
+zero-width spaces. Quotes, commas and line breaks remain escaped.
+This is a read-only audit export, **never** an Apply instruction.
+
+Export retains at most 5000 Review rows. Larger snapshots append
+`OMITTED_ROWS` with the exact omitted count and a
+`INCOMPLETE_EXPORT_NEVER_AUTO_APPLY` decision. The displayed/exported
+subset must never be mistaken for a full authorship audit. SourceType
+still cannot identify human versus script/AI authors; no Ghidra writes
+or remote transmission are introduced.
