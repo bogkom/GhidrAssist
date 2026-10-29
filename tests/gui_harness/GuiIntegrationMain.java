@@ -98,6 +98,19 @@ public class GuiIntegrationMain {
      return tool[0].getToolFrame().isShowing() && query.isShowing() &&
          current!=null && current.equals(program);
    }),20);
+   // A component can be showing before the first X11 Expose/paint pass.
+   // Explicitly validate and then yield to the EDT + window manager;
+   // screenshots taken at the first isShowing() tick were empty.
+   edt(()->{
+     JFrame window=tool[0].getToolFrame();
+     window.validate();
+     query.revalidate();
+     window.toFront();
+     query.repaint();
+     window.repaint();
+   });
+   Thread.sleep(700);
+   edt(()->{});
    edt(()->{try{
      JFrame window=tool[0].getToolFrame();
      Program active=tool[0].getService(ProgramManager.class).getCurrentProgram();
