@@ -55,13 +55,23 @@ jobs:
               --extension-zip "$EXTENSION" \
               --extension-sha256 "$(cut -d' ' -f1 "$RUNNER_TEMP/extension.sha256")" \
               --output "$RUNNER_TEMP/codebrowser-evidence" --timeout 300
+      - name: Print last synthetic-only Ghidra log on test failure
+        if: failure()
+        shell: bash
+        run: |
+          for filename in "$RUNNER_TEMP/codebrowser-evidence/compile.log" "$RUNNER_TEMP/codebrowser-evidence/java.log"; do
+            if test -f "$filename"; then
+              echo "Synthetic diagnostic: $(basename "$filename")"
+              tail -n 90 "$filename"
+            fi
+          done
       - name: Publish synthetic-only test logs (even on failure)
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: GhidrAssist-CodeBrowser-12.1.4-${ github.run_id }
+          name: GhidrAssist-CodeBrowser-12.1.4-${{ github.run_id }}
           path: |
-            ${ runner.temp }/codebrowser-evidence/
-            ${ runner.temp }/extension.sha256
+            ${{ runner.temp }}/codebrowser-evidence/
+            ${{ runner.temp }}/extension.sha256
           if-no-files-found: warn
           retention-days: 14
