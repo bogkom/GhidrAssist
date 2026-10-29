@@ -37,9 +37,14 @@ by Query-only harness #89). It verifies the saved `GhidraToolTemplate`
 actually contains `<EXTENSIONS>` and `GhidrAssistPlugin` metadata,
 restores this template into a fresh test-only tool instance, and checks
 that the plugin remains enabled **without** another New Plugins prompt.
-This is a same-process save/reload test, **not yet proof of persistence
-across a full Ghidra application restart** or across the owner's CodeBrowser
-profile migration. That remains a separately observable local gate.
+The runner additionally saves `GhidraToolTemplate.saveToXml()` into
+its synthetic-only output and launches a **second Java process** with a new
+Ghidra application initialization. It must reload that exact tool template,
+confirm CodeBrowser and GhidrAssist are enabled, and reject a repeated
+`New Plugins Found!` dialog. The restart result is a separate
+`restart-results.json`. This verifies process-restart persistence **for
+the disposable test profile only**, not for the owner's migrated Wyse
+CodeBrowser configuration, which remains a separate local gate.
 
 ## Reproducibility and isolation
 
