@@ -148,3 +148,17 @@ Full MCU/peripheral emulation, physical CS electrical simulation, generic automa
   in the new CFG provenance table (addresses stay visible as hypotheses).
 - Dedicated synthetic regression, full Ghidra 12.1.4 extension build
   and explicit host integration acceptance remain mandatory.
+
+
+## 2026-10-29 — GA-01/02/03 read-only source-evidence CSV (stacked)
+
+- `feature/hardware-initialization-evidence-csv-20261029` based on
+  immutable PR #69 head `839767b3b688d3875a5f7a5481935269b95f1291`.
+- Ghidra Hardware Analysis adds `Evidence CSV...`: separate,
+  stable-schema, source-only STORE and CFG_PATH receipts, each
+  `NEVER_AUTO_APPLY`. No accidental re-use as naming proposals.
+- Export requires the identical current program revision and selected
+  profile; profiles/edits invalidate old evidence. CSV injection guarded;
+  file capped at 5000 records with omitted-row marker.
+- Standalone schema regression + full Ghidra 12.1.4 build required.
+  Real GUI and Undo/Redo acceptance remain pending Supervisor approval.

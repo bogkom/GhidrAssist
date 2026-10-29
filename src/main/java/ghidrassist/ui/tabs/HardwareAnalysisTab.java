@@ -79,6 +79,7 @@ public final class HardwareAnalysisTab extends JPanel {
     private final JButton cancelScan=new JButton("Cancel Analyze");
     private final JButton export=new JButton("Export MD");
     private final JButton namePreview=new JButton("Export CSV");
+    private final JButton exportConfigCsv=new JButton("Evidence CSV...");
     private final JButton approve=new JButton("Review / Apply...");
     private final JButton exploreMmio=new JButton("MMIO accesses...");
     private final JButton reviewNames=new JButton("Review names...");
@@ -96,6 +97,7 @@ public final class HardwareAnalysisTab extends JPanel {
     private final JLabel status=new JLabel("Open a Ghidra program, then analyze candidate MCU registers.");
     private volatile String latestMarkdown;
     private volatile String latestNameCsv;
+    private volatile String latestConfigCsv;
     private volatile Program latestProgram;
     private volatile ghidrassist.hardware.HardwareAnalysisRevision latestRevision;
     private volatile ghidra.util.task.TaskMonitorAdapter activeMonitor;
@@ -113,6 +115,7 @@ public final class HardwareAnalysisTab extends JPanel {
         profileRow.add(selection);
         profileRow.add(reviewNames);
         profileRow.add(previewProfile);
+        profileRow.add(exportConfigCsv);
         JPanel actionRow=new JPanel(new FlowLayout(FlowLayout.LEFT,5,1));
         actionRow.add(run);
         actionRow.add(cancelScan);
@@ -157,12 +160,14 @@ public final class HardwareAnalysisTab extends JPanel {
         approve.setToolTipText("Review proposed memory regions/registers and apply selected items in an undoable transaction");
         export.setToolTipText("Export Hardware Evidence as Markdown for RAG");
         namePreview.setToolTipText("Export review-only hardware label suggestions as CSV");
+        exportConfigCsv.setToolTipText("Source-only CFG MMIO receipts, never naming/Apply commands");
         approve.setEnabled(false);
         cancelScan.setEnabled(false);
         reviewNames.setEnabled(false);
         reviewNames.setToolTipText("Review function role names and apply explicitly approved, collision-free proposals in one Undo transaction");
-        export.setEnabled(false);
+        export.setEnabled(false);exportConfigCsv.setEnabled(false);
         namePreview.setEnabled(false);
+        exportConfigCsv.setEnabled(false);
         report.setEditable(false);
         overview.setEditable(false);
         overview.setText("Run Analyze to see a three-part, read-only summary.\n"+
@@ -202,6 +207,7 @@ public final class HardwareAnalysisTab extends JPanel {
         });
         export.addActionListener(e->exportMarkdown());
         namePreview.addActionListener(e->exportNamingPreview());
+        exportConfigCsv.addActionListener(e->exportConfigurationEvidence());
         approve.addActionListener(e->reviewHardwareChanges());
         exploreMmio.addActionListener(e->showMmioExplorer());
         reviewNames.addActionListener(e->reviewFunctionNames());
@@ -381,7 +387,7 @@ public final class HardwareAnalysisTab extends JPanel {
     private void discardStale(String reason) {
         Program old=latestProgram;
         if(old!=null)ghidrassist.hardware.HardwareEvidenceCache.clear(old);
-        latestMarkdown=null;
+        latestMarkdown=null;latestConfigCsv=null;
         latestNameCsv=null;
         latestProgram=null;
         latestRevision=null;
@@ -389,7 +395,7 @@ public final class HardwareAnalysisTab extends JPanel {
         latestSites=List.of();
         approve.setEnabled(false);
         reviewNames.setEnabled(false);
-        export.setEnabled(false);
+        export.setEnabled(false);exportConfigCsv.setEnabled(false);
         namePreview.setEnabled(false);
         report.setText(reason+"\nNo results were published to AI/RAG. Rerun Analyze.");
         status.setText(reason);
@@ -525,13 +531,13 @@ public final class HardwareAnalysisTab extends JPanel {
             new ghidra.util.task.TaskMonitorAdapter(true);
         activeMonitor=monitor;
         cancelScan.setEnabled(true);
-        run.setEnabled(false);export.setEnabled(false);namePreview.setEnabled(false);
+        run.setEnabled(false);export.setEnabled(false);exportConfigCsv.setEnabled(false);namePreview.setEnabled(false);
         exploreMmio.setEnabled(false);
         approve.setEnabled(false);
         reviewNames.setEnabled(false);
         latestFunctionProposals=List.of();
         latestSites=List.of();
-        latestMarkdown=null;latestNameCsv=null;latestProgram=null;
+        latestMarkdown=null;latestConfigCsv=null;latestNameCsv=null;latestProgram=null;
         latestRevision=null;
         ghidrassist.hardware.HardwareEvidenceCache.clear(program);
         report.getHighlighter().removeAllHighlights();
@@ -567,6 +573,7 @@ public final class HardwareAnalysisTab extends JPanel {
                     }
                     latestMarkdown=finished.markdown;
                     latestNameCsv=finished.namePreviewCsv;
+                    latestConfigCsv=finished.configurationEvidenceCsv;
                     latestProgram=program;
                     latestRevision=started;
                     latestConcrete=concrete;
@@ -584,6 +591,7 @@ public final class HardwareAnalysisTab extends JPanel {
                     updateReportSearch();
                     export.setEnabled(true);
                     namePreview.setEnabled(true);
+                    exportConfigCsv.setEnabled(true);
                     status.setText("Read-only: "+finished.uniqueSites+
                         " candidate sites in "+finished.functions+" functions. No database edits.");
                 }catch(Exception ex){
@@ -612,7 +620,7 @@ public final class HardwareAnalysisTab extends JPanel {
     }
     private void exportMarkdown(){
         if(latestMarkdown==null || !currentScan()){
-            export.setEnabled(false);
+            export.setEnabled(false);exportConfigCsv.setEnabled(false);
             status.setText("Program changed; run analysis again before export.");
             return;
         }
@@ -637,6 +645,45 @@ public final class HardwareAnalysisTab extends JPanel {
                 "Export error",JOptionPane.ERROR_MESSAGE);
         }
     }
+    /** Local CSV for evidence only; not compatible with Apply proposal schema. */
+    private void exportConfigurationEvidence(){
+        if(latestConfigCsv==null || !currentScan()){
+            exportConfigCsv.setEnabled(false);
+            status.setText("Program changed; rerun Analyze before evidence export.");
+            return;
+        }
+        JFileChooser chooser=new JFileChooser();
+        chooser.setDialogTitle("Source-only CFG evidence — NEVER_AUTO_APPLY");
+        chooser.setFileFilter(new FileNameExtensionFilter("Static evidence CSV (*.csv)","csv"));
+        chooser.setSelectedFile(new File("GhidrAssist_CFG_MMIO_Evidence.csv"));
+        if(chooser.showSaveDialog(this)!=JFileChooser.APPROVE_OPTION)return;
+        File dest=chooser.getSelectedFile();
+        if(!dest.getName().toLowerCase(java.util.Locale.ROOT).endsWith(".csv"))
+            dest=new File(dest.getParentFile(),dest.getName()+".csv");
+        if(!currentScan()){
+            exportConfigCsv.setEnabled(false);
+            status.setText("Program changed while choosing path; stale evidence not saved.");
+            return;
+        }
+        if(dest.isFile() && JOptionPane.showConfirmDialog(this,
+                "Replace existing evidence CSV?\n"+dest.getAbsolutePath(),
+                "Confirm export",JOptionPane.YES_NO_OPTION)!=JOptionPane.YES_OPTION)
+            return;
+        if(!currentScan()){
+            exportConfigCsv.setEnabled(false);
+            status.setText("Program changed before CSV export; no stale file saved.");
+            return;
+        }
+        try{
+            Files.writeString(dest.toPath(),latestConfigCsv,StandardCharsets.UTF_8);
+            status.setText("Static CFG evidence saved locally. No Ghidra changes.");
+        }catch(Exception ex){
+            JOptionPane.showMessageDialog(this,
+                "Cannot save evidence CSV:\n"+ex.getMessage(),
+                "Export error",JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
     private void exportNamingPreview(){
         if(latestNameCsv==null || !currentScan()){
             namePreview.setEnabled(false);
@@ -794,11 +841,11 @@ public final class HardwareAnalysisTab extends JPanel {
                 "Function names updated",JOptionPane.INFORMATION_MESSAGE);
             status.setText(outcome.renamed()+" function names applied (undoable). Reanalyze.");
             ghidrassist.hardware.HardwareEvidenceCache.clear(program);
-            latestProgram=null;latestMarkdown=null;latestNameCsv=null;
+            latestProgram=null;latestMarkdown=null;latestConfigCsv=null;latestNameCsv=null;
             latestRevision=null;
             latestFunctionProposals=List.of();
             reviewNames.setEnabled(false);approve.setEnabled(false);
-            export.setEnabled(false);namePreview.setEnabled(false);
+            export.setEnabled(false);exportConfigCsv.setEnabled(false);namePreview.setEnabled(false);
         }catch(Exception ex){
             ghidra.util.Msg.error(this,"Reviewed function rename failed and rolled back",ex);
             JOptionPane.showMessageDialog(this,
@@ -1162,9 +1209,9 @@ public final class HardwareAnalysisTab extends JPanel {
             status.setText(outcome.changed+" changed, "+outcome.skipped+
                 " skipped. Rerun Analyze to refresh evidence.");
             ghidrassist.hardware.HardwareEvidenceCache.clear(program);
-            latestMarkdown=null;latestNameCsv=null;
+            latestMarkdown=null;latestConfigCsv=null;latestNameCsv=null;
             latestRevision=null;
-            approve.setEnabled(false);export.setEnabled(false);
+            approve.setEnabled(false);export.setEnabled(false);exportConfigCsv.setEnabled(false);
             namePreview.setEnabled(false);
             reviewNames.setEnabled(false);
             exploreMmio.setEnabled(false);
