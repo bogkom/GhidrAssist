@@ -136,13 +136,19 @@ def x11_capture(out: Path) -> dict:
         subprocess.run(["import", "-silent", "-window", chosen_xid, str(image)],
                        capture_output=True, timeout=15, check=True)
         size = subprocess.run(
-            ["identify", "-format", "%w %h", str(image)],
+            ["identify", "-format", "%w %h %k", str(image)],
             capture_output=True, text=True, timeout=5, check=True)
-        width, height = map(int, size.stdout.strip().split())
+        width, height, colors = map(int, size.stdout.strip().split())
         if width < 200 or height < 200 or image.stat().st_size < 1024:
             raise RuntimeError("Empty/small X11 image")
-        return {"status": "X11_CAPTURED_PIXEL_METADATA_CHECKED",
-                "width": width, "height": height,
+        # An Xvfb-backed but unpainted Java window can produce a large,
+        # valid PNG with only two colors (black body and gray border).
+        # Do not call that visual proof just because the dimensions exist.
+        if colors < 16:
+            raise RuntimeError(
+                f"X11 image unpainted/blank: only {colors} unique colors")
+        return {"status": "X11_CAPTURED_NONBLANK_PIXEL_CHECKED",
+                "width": width, "height": height, "unique_colors": colors,
                 "sha256": digest(image),
                 "human_visual_readback": "NOT_PERFORMED"}
     except (OSError, subprocess.SubprocessError, ValueError, RuntimeError) as error:
@@ -285,7 +291,7 @@ def execute(args: argparse.Namespace) -> dict:
             result.update(verify_outcome(out, args.mode))
             result["x11"] = captured
             result["status"] = "PASSED_SWING_AND_POLICY" if args.mode == "policy" else "PASSED_SWING_SMOKE"
-            if args.capture_x11 and captured["status"] != "X11_CAPTURED_PIXEL_METADATA_CHECKED":
+            if args.capture_x11 and captured["status"] != "X11_CAPTURED_NONBLANK_PIXEL_CHECKED":
                 result["status"] = "BLOCKED_X11_CAPTURE"
             return result
     finally:
