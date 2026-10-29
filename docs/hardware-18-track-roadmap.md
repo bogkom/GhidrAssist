@@ -232,3 +232,10 @@ Full MCU/peripheral emulation, physical CS electrical simulation, generic automa
   no reset-state or external CS activation is asserted.
 - CI: pure Java negative safety tests and full Ghidra 12.1.4 build;
   local isolated GUI acceptance remains required before merge.
+
+
+- GA-05 safety follow-up: absent `CS_WINDOW_*` proposals now
+  receive `MANUAL_REVIEW` and `selectedByDefault=false`, not
+  `READY` and automatically selected. Explicit operator selection
+  and final confirmation are still necessary; existing preflight
+  and Undo support are retained.

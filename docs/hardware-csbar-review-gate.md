@@ -25,3 +25,16 @@ preflight/review/confirmation and Undo remain mandatory.
 A pure Java self-test covers wrong-MM aliases, branch conflicts,
 missing values and CSBAR10/CSBOOT, followed by full Ghidra 12.1.4
 build and separately authorized local acceptance.
+
+
+## CS_WINDOW review default (safety hardening)
+
+The preflight previously classified an absent speculative CS window
+as READY and **selected it by default**. This could allow a routine
+"Apply selected" action to create a candidate memory region the
+operator had not specifically checked. The new preflight returns
+MANUAL_REVIEW with selectedByDefault=false for any missing CS window.
+The row remains explicitly selectable by the human and is still
+revalidated under the undoable Ghidra transaction. Existing mapped
+CS windows remain ALREADY_PRESENT, also unselected. No actual
+hardware decode is asserted.

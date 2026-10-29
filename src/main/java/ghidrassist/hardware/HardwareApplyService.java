@@ -95,8 +95,9 @@ public final class HardwareApplyService {
             List<HardwareRegionLayout.Range> gaps=csMissing(item,parts);
             return gaps.isEmpty() ?
                 decide(State.ALREADY_PRESENT,"CS address range is already mapped",false) :
-                decide(State.READY,"Map "+gaps.size()+
-                    " missing CS fragment(s), keep existing blocks/data unchanged",true);
+                decide(State.MANUAL_REVIEW,"Potential external CS window: map "+
+                    gaps.size()+" missing fragment(s) only after explicit "+
+                    "operator selection; active decode and wiring UNKNOWN",false);
         }
         if(parts.size()==1 && parts.get(0).getStart().getOffset()==item.address &&
                 parts.get(0).getEnd().getOffset()==item.last())
