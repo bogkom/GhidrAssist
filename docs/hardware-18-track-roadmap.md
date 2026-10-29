@@ -29,7 +29,7 @@ The originating document has 18 *sections*, not 18 independent feature checkboxe
 | GA-09 | 13.1 | MMIO accesses explorer with navigation | MISSING as dedicated view | Filterable function/instruction/value/access/confidence with Go To |
 | GA-10 | 13.2 | Verified bitfield decode with provenance | PARTIAL: MC68332 metadata; comprehensive decoder missing | Unknown fields UNKNOWN; model- and edition-specific source |
 | GA-11 | 13.3 | Interrupt / exception analysis including VBR and ISR paths | PARTIAL: VBR sightings, no full ISR graph | Static candidates not treated as active IRQs |
-| GA-12 | 13.4 | Resumable, version-aware incremental analysis | MISSING dedicated analyzer checkpoint protocol | Program identity, input hash, invalidation and resume regressions |
+| GA-12 | 13.4 | Resumable, version-aware incremental analysis | PARTIAL DRAFT: exact in-memory Ghidra revision gating, cache invalidation and unchanged-result reuse; durable resumable stages missing | Program identity, input hash, invalidation and resume regressions |
 | GA-13 | 13.5 | Human/analysis/AI origin of changes | MISSING verified per-symbol provenance | Check actual Ghidra 12.1.4 SourceType API; retain rationale and Undo |
 | GA-14 | 13.6 | Firmware configuration comparison | DEFERRED by source priorities | Assess Ghidra Version Tracking first; later CS/VBR/peripheral diff |
 | GA-15 | 13.7 | Agentic planning, indirect calls, context, pagination, stale cache | PARTIAL: draft PR #49/#50 overlap and existing Agentic work | Don't duplicate existing tools; budget/policy evidence regression |
@@ -57,3 +57,22 @@ For upcoming steps prepare independent Supervisor plans, each pinned to the corr
 ## Explicitly deferred, not lost
 
 Full MCU/peripheral emulation, physical CS electrical simulation, generic automatic hardware identification, and broad multi-firmware comparison remain out of the initial delivery, as required by original section 14.
+
+
+## 2026-10-29 — GA-12 revision-aware read-only evidence (partial)
+
+- New independent draft: `feature/hardware-versioned-analysis-cache-20261029`
+  based on immutable PR #53 head `bd0a0a60eaa610e19581bd67fd16d29c637bfb8e`.
+- Ghidra 12.1.4 `DomainObject.getModificationNumber()` changes on program
+  edits, Undo and Redo; exact active Program object, language, original-import
+  SHA-256 metadata, MCU profile selection and analyzer schema are part of
+  the current scan's version check. Original SHA is *not* a live byte hash.
+- Discard results if the source changes during asynchronous Analyze;
+  do not publish stale RAG evidence. Invalidate cached hardware context on
+  program edit/Undo/Redo, and refuse stale export/navigation/Review/Apply.
+- When Analyze is repeated on an identical completed in-memory revision,
+  reuse existing results without re-running the scan. This is a limited
+  incremental optimization, **not** disk-backed resume or partially resumed
+  CFG analysis. Those remain GA-12 TODO.
+- CI: strict revision pure-Java regression plus complete 12.1.4 extension
+  build; separate approved Supervisor real-Ghidra test required before merge.

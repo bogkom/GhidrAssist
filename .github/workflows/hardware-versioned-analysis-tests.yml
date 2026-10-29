@@ -1,0 +1,41 @@
+name: Hardware versioned analysis revision tests
+
+on:
+  push:
+    paths:
+      - 'src/main/java/ghidrassist/hardware/HardwareAnalysisRevision.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareEvidenceCache.java'
+      - 'src/main/java/ghidrassist/ui/tabs/HardwareAnalysisTab.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareAnalysisRevisionSelfTest.java'
+      - '.github/workflows/hardware-versioned-analysis-tests.yml'
+  pull_request:
+    paths:
+      - 'src/main/java/ghidrassist/hardware/HardwareAnalysisRevision.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareEvidenceCache.java'
+      - 'src/main/java/ghidrassist/ui/tabs/HardwareAnalysisTab.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareAnalysisRevisionSelfTest.java'
+      - '.github/workflows/hardware-versioned-analysis-tests.yml'
+  workflow_dispatch:
+
+jobs:
+  revision:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Compile versioned analysis token
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/ga12"
+          javac --release 21 -d "$RUNNER_TEMP/ga12" \
+            src/main/java/ghidrassist/hardware/HardwareAnalysisRevision.java \
+            src/test/java/ghidrassist/hardware/HardwareAnalysisRevisionSelfTest.java
+      - name: Fail closed on changed program, source, profile, and undo
+        run: java -cp "$RUNNER_TEMP/ga12" ghidrassist.hardware.HardwareAnalysisRevisionSelfTest

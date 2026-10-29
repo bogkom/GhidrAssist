@@ -89,6 +89,7 @@ public final class HardwareAnalysisTab extends JPanel {
     private volatile String latestMarkdown;
     private volatile String latestNameCsv;
     private volatile Program latestProgram;
+    private volatile ghidrassist.hardware.HardwareAnalysisRevision latestRevision;
     private volatile boolean latestConcrete;
     private volatile List<HardwareFunctionNamingReview.Proposal> latestFunctionProposals=List.of();
     private volatile List<HardwareInventoryService.Site> latestSites=List.of();
@@ -176,6 +177,10 @@ public final class HardwareAnalysisTab extends JPanel {
         namePreview.addActionListener(e->exportNamingPreview());
         approve.addActionListener(e->reviewHardwareChanges());
         reviewNames.addActionListener(e->reviewFunctionNames());
+        selection.addActionListener(e->{
+            if(latestRevision!=null && !currentScan())
+                discardStale("MCU profile selection changed; previous evidence invalidated.");
+        });
     }
 
     /** Uses the very same saved settings as Settings > Response Appearance. */
@@ -238,8 +243,8 @@ public final class HardwareAnalysisTab extends JPanel {
         while(match.find()){
             if(clicked-from<match.start()||clicked-from>match.end())continue;
             Program program=plugin.getCurrentProgram();
-            if(program==null || program!=latestProgram){
-                status.setText("Program changed; rerun Hardware Analysis before navigating.");
+            if(program==null || !currentScan()){
+                status.setText("Program revision changed; rerun Hardware Analysis before navigating.");
                 return;
             }
             try{
@@ -257,6 +262,40 @@ public final class HardwareAnalysisTab extends JPanel {
             return;
         }
     }
+    /** Source hash is Ghidra's original import metadata, not edited content. */
+    private static ghidrassist.hardware.HardwareAnalysisRevision revision(
+            Program program,boolean concrete) {
+        return ghidrassist.hardware.HardwareAnalysisRevision.capture(
+            program,program.getModificationNumber(),program.getLanguageID().toString(),
+            program.getExecutableSHA256(),concrete);
+    }
+
+    private boolean currentScan() {
+        Program active=plugin.getCurrentProgram();
+        if(active==null || latestRevision==null || latestProgram!=active ||
+                latestConcrete!=(selection.getSelectedIndex()==1))return false;
+        return latestRevision.matches(active,active.getModificationNumber(),
+            active.getLanguageID().toString(),active.getExecutableSHA256(),
+            latestConcrete);
+    }
+
+    private void discardStale(String reason) {
+        Program old=latestProgram;
+        if(old!=null)ghidrassist.hardware.HardwareEvidenceCache.clear(old);
+        latestMarkdown=null;
+        latestNameCsv=null;
+        latestProgram=null;
+        latestRevision=null;
+        latestFunctionProposals=List.of();
+        latestSites=List.of();
+        approve.setEnabled(false);
+        reviewNames.setEnabled(false);
+        export.setEnabled(false);
+        namePreview.setEnabled(false);
+        report.setText(reason+"\nNo results were published to AI/RAG. Rerun Analyze.");
+        status.setText(reason);
+    }
+
     private void startScan(){
         final Program program=plugin.getCurrentProgram();
         if(program==null){
@@ -265,12 +304,21 @@ public final class HardwareAnalysisTab extends JPanel {
             return;
         }
         final boolean concrete=selection.getSelectedIndex()==1;
+        // Incremental reuse is only for a completed scan of this exact
+        // in-memory revision. A changed/undone program is always rescanned.
+        if(currentScan() && latestMarkdown!=null){
+            status.setText("Unchanged Ghidra revision: reusing current read-only results.");
+            return;
+        }
+        final ghidrassist.hardware.HardwareAnalysisRevision started=
+            revision(program,concrete);
         run.setEnabled(false);export.setEnabled(false);namePreview.setEnabled(false);
         approve.setEnabled(false);
         reviewNames.setEnabled(false);
         latestFunctionProposals=List.of();
         latestSites=List.of();
         latestMarkdown=null;latestNameCsv=null;latestProgram=null;
+        latestRevision=null;
         ghidrassist.hardware.HardwareEvidenceCache.clear(program);
         report.getHighlighter().removeAllHighlights();
         reportHits.clear();
@@ -289,21 +337,26 @@ public final class HardwareAnalysisTab extends JPanel {
                 run.setEnabled(true);
                 try {
                     HardwareInventoryService.Report finished=get();
-                    if(plugin.getCurrentProgram()!=program){
-                        report.setText("Program changed while analyzing. Rerun on the active program.");
-                        status.setText("Result discarded; program changed.");
+                    if(plugin.getCurrentProgram()!=program ||
+                            selection.getSelectedIndex()!=(concrete?1:0) ||
+                            !started.matches(program,program.getModificationNumber(),
+                                program.getLanguageID().toString(),
+                                program.getExecutableSHA256(),concrete) ||
+                            !ghidrassist.hardware.HardwareEvidenceCache.publishIfCurrent(
+                                program,finished.markdown,started)){
+                        discardStale("Program revision or MCU selection changed during analysis.");
                         return;
                     }
                     latestMarkdown=finished.markdown;
                     latestNameCsv=finished.namePreviewCsv;
                     latestProgram=program;
+                    latestRevision=started;
                     latestConcrete=concrete;
                     latestFunctionProposals=finished.functionProposals;
                     latestSites=finished.sites;
                     approve.setEnabled(true);
                     reviewNames.setEnabled(concrete && latestFunctionProposals.stream()
                         .anyMatch(p->p.status==ghidrassist.hardware.HardwareNamingReview.Status.REVIEW_REQUIRED));
-                    ghidrassist.hardware.HardwareEvidenceCache.publish(program, finished.markdown);
                     report.setText(finished.markdown);
                     report.setCaretPosition(0);
                     updateReportSearch();
@@ -328,7 +381,7 @@ public final class HardwareAnalysisTab extends JPanel {
         worker.execute();
     }
     private void exportMarkdown(){
-        if(latestMarkdown==null || latestProgram!=plugin.getCurrentProgram()){
+        if(latestMarkdown==null || !currentScan()){
             export.setEnabled(false);
             status.setText("Program changed; run analysis again before export.");
             return;
@@ -355,7 +408,7 @@ public final class HardwareAnalysisTab extends JPanel {
         }
     }
     private void exportNamingPreview(){
-        if(latestNameCsv==null || latestProgram!=plugin.getCurrentProgram()){
+        if(latestNameCsv==null || !currentScan()){
             namePreview.setEnabled(false);
             status.setText("Program changed; rerun analysis before exporting naming review.");
             return;
@@ -386,7 +439,7 @@ public final class HardwareAnalysisTab extends JPanel {
      */
     private void reviewFunctionNames() {
         final Program program=plugin.getCurrentProgram();
-        if(program==null || latestProgram!=program || latestMarkdown==null ||
+        if(program==null || !currentScan() || latestMarkdown==null ||
                 !latestConcrete) {
             status.setText("Choose MC68332 and analyze the active program before reviewing names.");
             return;
@@ -491,8 +544,8 @@ public final class HardwareAnalysisTab extends JPanel {
         });
         dialog.setVisible(true);
         if(selected.isEmpty())return;
-        if(plugin.getCurrentProgram()!=program || latestProgram!=program){
-            status.setText("Program changed; no functions renamed.");
+        if(!currentScan()){
+            status.setText("Program revision changed; no functions renamed.");
             return;
         }
         int confirm=JOptionPane.showConfirmDialog(this,
@@ -512,6 +565,7 @@ public final class HardwareAnalysisTab extends JPanel {
             status.setText(outcome.renamed()+" function names applied (undoable). Reanalyze.");
             ghidrassist.hardware.HardwareEvidenceCache.clear(program);
             latestProgram=null;latestMarkdown=null;latestNameCsv=null;
+            latestRevision=null;
             latestFunctionProposals=List.of();
             reviewNames.setEnabled(false);approve.setEnabled(false);
             export.setEnabled(false);namePreview.setEnabled(false);
@@ -549,8 +603,8 @@ public final class HardwareAnalysisTab extends JPanel {
 
     private void reviewHardwareChanges(){
         Program program=plugin.getCurrentProgram();
-        if(program==null || latestProgram!=program || latestMarkdown==null){
-            status.setText("Run Hardware Analysis on the active program first.");
+        if(program==null || !currentScan() || latestMarkdown==null){
+            status.setText("Run Hardware Analysis on the current program revision first.");
             return;
         }
         if(!latestConcrete){
@@ -763,8 +817,8 @@ public final class HardwareAnalysisTab extends JPanel {
         });
         dialog.setVisible(true);
         if(accepted.isEmpty())return;
-        if(program!=plugin.getCurrentProgram()){
-            status.setText("Active program changed; no definitions applied.");
+        if(!currentScan()){
+            status.setText("Program revision changed; no definitions applied.");
             return;
         }
         int confirm=JOptionPane.showConfirmDialog(this,
@@ -801,6 +855,7 @@ public final class HardwareAnalysisTab extends JPanel {
                 " skipped. Rerun Analyze to refresh evidence.");
             ghidrassist.hardware.HardwareEvidenceCache.clear(program);
             latestMarkdown=null;latestNameCsv=null;
+            latestRevision=null;
             approve.setEnabled(false);export.setEnabled(false);
             namePreview.setEnabled(false);
             reviewNames.setEnabled(false);
