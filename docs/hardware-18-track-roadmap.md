@@ -10,7 +10,7 @@ Status: **IN PROGRESS**. Scope source: user-approved 2026-10-28 requirements (A�
 - MCU-dependent information is conditional on a **manually selected, documented device**, never silently inherited by generic CPU32.
 - Analyze is compact. Detail/uncertainty belongs in dedicated views; complete register catalog and explicit, undoable changes belong in Review / Apply.
 - Public repository and Actions must never contain ECU411 firmware or its Ghidra project. On-host test copies only. Test artifacts contain non-sensitive summaries/hashes.
-- GitHub Actions first; Supervisor plans pinned to immutable full 40-character commits; local tests run **only after operator approval**, via private `bogkom/codex-supervisor/test-plans/queue/`.
+- GitHub Actions first; Supervisor plans pinned to immutable full 40-character commits and verified build artifacts. On 2026-10-29 the owner granted **standing, revocable authorization** for standard isolated tests across all 18 tracks (GA-01..GA-18). Plans satisfying the host-bound, machine-checked authorization policy can be approved and run automatically; out-of-scope plans still require separate explicit authorization. The authoritative private queue remains `bogkom/codex-supervisor/test-plans/queue/`. Codex may freely modify **its dedicated Ghidra test project** but not implementation sources, other user projects, firmware originals, system settings or secrets.
 
 ## Scope mapping — exactly 18 tracked workstreams
 
@@ -35,7 +35,7 @@ The originating document has 18 *sections*, not 18 independent feature checkboxe
 | GA-15 | 13.7 | Agentic planning, indirect calls, context, pagination, stale cache | PARTIAL: draft PR #49/#50 overlap and existing Agentic work | Don't duplicate existing tools; budget/policy evidence regression |
 | GA-16 | 15 | Physical PDF page/printed label, register tables, sourced RAG | PARTIAL: native PDF/RAG and labels; tables uncertain | No auto-promotion of ambiguous PDF rows; page/edition evidence |
 | GA-17 | 16 | CI, synthetic tests, isolated ECU411 project acceptance and rollback | PARTIAL: pure-Java Actions and private firmware tests exist | Compile 12.1.4, record artifacts/hashes, reversible actual-Ghidra test |
-| GA-18 | 17 + new decision | GitHub-controlled multi-stage local Supervisor tests | SUPERVISOR IMPLEMENTED; no GhidrAssist queued plans yet | Pinned JSON, explicit approve, quota safeguards, verified private reports |
+| GA-18 | 17 + new decision | GitHub-controlled multi-stage local Supervisor tests | PR #53 real isolated Ghidra 12.1.4 headless test **FINISHED/PASS**, report published privately; standing auto-test policy proposed in private Supervisor PR #9 | Immutable JSON + signed-off standing policy, host artifact SHA, quota/ownership guards, genuine ACK and private reports; no Codex programming |
 
 ## Dependency order and milestones
 
@@ -46,7 +46,7 @@ The originating document has 18 *sections*, not 18 independent feature checkboxe
 5. **Documentation and agent workflows**: GA-16, GA-15, GA-12; retain report provenance and avoid model token use for deterministic checks.
 6. **Later comparison**: GA-14 after a stable report schema and Ghidra Version Tracking evaluation.
 
-Each milestone: focused Java tests -> exact 12.1.4 extension build on GitHub Actions -> immutable candidate commit -> queue plan in private Supervisor repo -> explicit one-time local approval -> verified isolated-Ghidra regression -> review and merge. A plan proposal is not a PASS. Do not merge on planned rather than observed test results.
+Each milestone: focused Java tests -> exact 12.1.4 extension build on GitHub Actions -> immutable candidate commit -> queue plan in private Supervisor repo -> **automatic approval only if the user's standing GA-01..GA-18 policy is active and the plan is eligible** (otherwise explicit per-plan approval) -> verified isolated-Ghidra regression -> review and merge. A plan proposal is not a PASS. Do not merge on planned rather than observed test results. The user will evaluate overall GUI/usability and feature quality **after all 18 tracks**, not approve each routine PR UI checkpoint; this does not waive automated/real-Ghidra tests or irreversible-change safety.
 
 ## First implementation batch
 
@@ -57,3 +57,11 @@ For upcoming steps prepare independent Supervisor plans, each pinned to the corr
 ## Explicitly deferred, not lost
 
 Full MCU/peripheral emulation, physical CS electrical simulation, generic automatic hardware identification, and broad multi-firmware comparison remain out of the initial delivery, as required by original section 14.
+
+## Standing local-test authorization (owner decision, 2026-10-29)
+
+The user granted a **single standing authorization** for standard GhidrAssist GA-01–GA-18 tests, including GUI/headless execution and arbitrary edits to **Codex's own dedicated test project** (Review/Apply, names/types, Undo, disposable memory/test data). This does **not** authorize source-code implementation by Codex, changes to other Ghidra projects or original firmware, system-admin operations, OAuth/secrets access, network downloads by Codex, or publishing private content.
+
+Supervisor may automatically approve only pinned private GitHub queue plans with an explicit GA-01..GA-18 authorization envelope and verified successful Ghidra 12.1.4 artifact. The host checks the archive and extension SHA-256 before dispatch; native Goal, quota, daemon ownership, nonces, ACKs, output hashes and failure gates stay enforced. An individual plan requiring powers outside this envelope still needs a separate user decision. This authorization is **revocable** and must be activated on the user's Wyse by a one-time, explicit `policy-enable --apply`; merely publishing this document does not start Codex or systemd timers. The optional `auto-timer` also remains disabled until explicitly enabled on the host. Never treat a JSON declaration or model instruction as a substitute for actual filesystem sandboxing.
+
+GhidrAssist PR #53 was verified by GitHub Actions, real Ghidra 12.1.4 headless and Supervisor (1/1 verified test, terminal `finished`, private issue #8). The user manually confirmed its CS table displays. Full modal/Apply behavior remains outside that test's scope and belongs to subsequent acceptance tests; no manual per-PR UI approval will be solicited. Preserve original pinned PR #53 commit unchanged for reproducibility.
