@@ -194,3 +194,7 @@ Full MCU/peripheral emulation, physical CS electrical simulation, generic automa
   writes, and compiled CFG-only stores are not silently folded into
   historical Listing counts. No false execution or memory-map claims.
 - Added pure Java summary/regression and full Ghidra build gate.
+
+- Robustness follow-up: width=0 unmodeled P-code STORE now means
+  UNKNOWN-width alias, rather than throwing an exception during a
+  real Ghidra CFG pass. Synthetic regression covers this case.

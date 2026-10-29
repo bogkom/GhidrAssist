@@ -65,6 +65,14 @@ public final class HardwareConfigurationEvidenceCsvSelfTest {
         check(!safeGeneric.contains("\"SIMCR\"") &&
             !safeGeneric.contains("\"CSBAR0\""),
             "generic CPU32 cannot reveal device labels in merged view");
+        var unknownWidthReport=HardwareCfgWriteAudit.inspect(true,List.of(
+            new HardwareCfgWriteAudit.Site(0x2bc0,0x2bd8,
+                "UNRESOLVED_ALIAS",-1,true,0,null,0,0,false,true,true)));
+        String unknownWidthCsv=HardwareConfigurationEvidenceCsv.serialize(
+            unknownWidthReport,List.of(),true);
+        check(unknownWidthCsv.contains("\"UNKNOWN\",\"UNKNOWN\",\"UNKNOWN\"") &&
+            unknownWidthCsv.contains("NEVER_AUTO_APPLY"),
+            "unmodeled width printed UNKNOWN, never assumed word data");
         boolean rejectedMerged=false;
         try{HardwareConfigurationEvidenceCsv.withUnifiedSources(
             "non-CSV",merged,true);}

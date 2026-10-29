@@ -31,3 +31,9 @@ conflict/alias/dedup regressions. On-host integration acceptance
 requires an exact-head, SHA-pinned Supervisor plan and actual
 isolated Ghidra project test. No prior artifact or test receipt is
 silently reused.
+
+Unknown-width P-code STORE operations (including unmodeled MOVEM and
+unknown alias memory writes) are represented as `UNKNOWN` in reports
+and CSV; they must not abort the entire analysis or become a 16-bit
+literal. Only genuinely unsupported contradictory width codes fail
+closed in the deterministic evidence validator.

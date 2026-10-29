@@ -57,6 +57,14 @@ public final class HardwareCfgWriteAuditSelfTest {
         ok(byteError.sites().get(0).literal()==null &&
             byteError.sites().get(0).mmLiteralBit()==null,
             "partial byte write never treated as known word");
+        var unmapped=HardwareCfgWriteAudit.inspect(true,List.of(
+            site(0x2bdf,"UNRESOLVED_ALIAS",-1,true,0,null,
+                0,0,false,true,true)));
+        ok(unmapped.unresolvedAliases()==1 &&
+            unmapped.partialOrUnresolvedWrites()==1 &&
+            unmapped.sites().get(0).widthBits()==0 &&
+            unmapped.markdown().contains(" | UNKNOWN | UNKNOWN |"),
+            "unknown-width MOVEM/P-code store is represented, not fatal");
         boolean fail=false;
         try{HardwareCfgWriteAudit.prefix(2,0,false,false,false);}
         catch(IllegalArgumentException expected){fail=true;}

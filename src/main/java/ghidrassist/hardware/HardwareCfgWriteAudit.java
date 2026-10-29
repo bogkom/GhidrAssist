@@ -73,7 +73,7 @@ public final class HardwareCfgWriteAudit {
                  .append(" | ").append(f.register())
                  .append(" | ").append(f.address()<0?"UNKNOWN":hex(f.address()))
                  .append(" | ").append(f.indirect()?"INDIRECT":"DIRECT")
-                 .append(" | ").append(f.widthBits())
+                 .append(" | ").append(f.widthBits()==0?"UNKNOWN":f.widthBits())
                  .append(" | ").append(f.fullWordLiteral() ?
                      String.format(Locale.ROOT,"0x%04X",f.literal()):"UNKNOWN")
                  .append(" | ").append(f.simcrPrefix())
@@ -114,7 +114,10 @@ public final class HardwareCfgWriteAudit {
                     (s.address()<0 && !s.register().equals("UNRESOLVED_ALIAS")) ||
                     (s.address()>=0 && s.register().equals("UNRESOLVED_ALIAS")))
                 throw new IllegalArgumentException("Untrusted CFG store site");
-            if(s.widthBits()!=8 && s.widthBits()!=16 && s.widthBits()!=32)
+            // Width 0 represents an unmodeled P-code STORE (e.g. MOVEM),
+            // not a malformed instruction. Preserve it as UNKNOWN.
+            if(s.widthBits()!=0 && s.widthBits()!=8 &&
+                    s.widthBits()!=16 && s.widthBits()!=32)
                 throw new IllegalArgumentException("Unsupported write width");
             if(s.literal()!=null && (s.literal()<0 || s.literal()>65535))
                 throw new IllegalArgumentException("Invalid literal word");

@@ -55,7 +55,7 @@ public final class HardwareConfigurationEvidenceCsv {
             out.append(row("MERGED_SITE",hex(s.function()),hex(s.pc()),
                 selectedMc68332?s.candidateRegister():"UNVERIFIED_MCU_REGISTER",
                 hex(s.registerAddress()),names,
-                Integer.toString(s.widthBits()),
+                s.widthBits()==0?"UNKNOWN":Integer.toString(s.widthBits()),
                 s.status()==HardwareStartupEvidenceMerge.Status.FULL_WORD_LITERAL_CANDIDATE?
                     String.format(Locale.ROOT,"0x%04X",s.literalWord()):"UNKNOWN",
                 "UNKNOWN",bit==null?"UNKNOWN":bit+" (STATIC_LITERAL_ONLY)",
@@ -91,7 +91,8 @@ public final class HardwareConfigurationEvidenceCsv {
             out.append(row("STORE",hex(s.function()),hex(s.pc()),
                 mc68332Selected?s.register():"UNVERIFIED_MCU_REGISTER",
                 s.address()<0?"UNKNOWN":hex(s.address()),
-                s.indirect()?"INDIRECT":"DIRECT",Integer.toString(s.widthBits()),
+                s.indirect()?"INDIRECT":"DIRECT",
+                s.widthBits()==0?"UNKNOWN":Integer.toString(s.widthBits()),
                 s.fullWordLiteral()?String.format(Locale.ROOT,"0x%04X",s.literal()):"UNKNOWN",
                 s.simcrPrefix().name(),mc68332Selected && s.mmLiteralBit()!=null?
                     s.mmLiteralBit()+" (STATIC_LITERAL_ONLY)":"UNKNOWN",
