@@ -1,0 +1,97 @@
+name: GhidrAssist isolated GUI harness — Ghidra 12.1.4
+on:
+  pull_request:
+    paths:
+      - 'tests/gui_harness/**'
+      - '.github/workflows/isolated-gui-regression.yml'
+  push:
+    branches: [master]
+    paths:
+      - 'tests/gui_harness/**'
+      - '.github/workflows/isolated-gui-regression.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  negative-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Reject unsafe archives and false visual proof (no Ghidra)
+        run: python -m unittest discover -s tests/gui_harness -p 'test_*.py' -v
+
+  real-swing-smoke-and-policy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    needs: negative-tests
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install disposable X11 and target-window capture utilities
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends xvfb xauth x11-utils imagemagick
+      - name: Download hash-pinned Ghidra 12.1.4 PUBLIC
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fLsS --retry 3 --connect-timeout 20 \
+            -o "$RUNNER_TEMP/ghidra.zip" \
+            "https://github.com/NationalSecurityAgency/ghidra/releases/download/Ghidra_12.1.4_build/ghidra_12.1.4_PUBLIC_20260921.zip"
+          echo "ddac49f903da9d5bac833e5cc79395098b9c33cfd3279be5f31bd00387d2d4db  $RUNNER_TEMP/ghidra.zip" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/ghidra"
+          unzip -q "$RUNNER_TEMP/ghidra.zip" -d "$RUNNER_TEMP/ghidra"
+          GHIDRA_DIR=$(find "$RUNNER_TEMP/ghidra" -mindepth 1 -maxdepth 1 -type d -name 'ghidra_*' -print -quit)
+          test -n "$GHIDRA_DIR"
+          echo "GHIDRA_INSTALL_DIR=$GHIDRA_DIR" >> "$GITHUB_ENV"
+      - name: Build actual GhidrAssist extension
+        run: |
+          set -euo pipefail
+          "$GHIDRA_INSTALL_DIR/support/gradle/gradlew" --no-daemon --stacktrace buildExtension
+          shopt -s nullglob
+          archive=(dist/ghidra_12.1.4_PUBLIC_*_GhidrAssist.zip)
+          test "${#archive[@]}" -eq 1
+          unzip -tq "${archive[0]}"
+          echo "GHIDRASSIST_EXTENSION=$PWD/${archive[0]}" >> "$GITHUB_ENV"
+      - name: One-shot real PluginTool smoke (Xvfb)
+        shell: bash
+        run: |
+          set -euo pipefail
+          xvfb-run -a -s '-screen 0 1400x1050x24' \
+            python tests/gui_harness/runner.py \
+              --ghidra "$GHIDRA_INSTALL_DIR" --java-home "$JAVA_HOME" \
+              --extension-zip "$GHIDRASSIST_EXTENSION" \
+              --output "$RUNNER_TEMP/ga-gui-smoke" \
+              --mode smoke --capture-x11 --timeout 240
+      - name: Isolated full Query/policy controlled-model test (Xvfb)
+        shell: bash
+        run: |
+          set -euo pipefail
+          xvfb-run -a -s '-screen 0 1400x1050x24' \
+            python tests/gui_harness/runner.py \
+              --ghidra "$GHIDRA_INSTALL_DIR" --java-home "$JAVA_HOME" \
+              --extension-zip "$GHIDRASSIST_EXTENSION" \
+              --output "$RUNNER_TEMP/ga-gui-policy" \
+              --mode policy --capture-x11 --timeout 300
+      - name: Publish disposable synthetic-only evidence (even on failure)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: GhidrAssist-Isolated-GUI-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/ga-gui-smoke/
+            ${{ runner.temp }}/ga-gui-policy/
+          if-no-files-found: warn
+          retention-days: 14
