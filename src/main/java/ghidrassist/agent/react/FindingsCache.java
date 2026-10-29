@@ -65,6 +65,20 @@ public class FindingsCache {
         public void setRelevance(int relevance) { this.relevance = relevance; }
     }
 
+    public static final int MAX_FINDINGS_LIMIT = 1000;
+    public static final int MAX_FACT_CHARS = 2048;
+    public static final int MAX_EVIDENCE_CHARS = 2048;
+    public static final int MAX_TOOL_TEXT_SCAN = 128 * 1024;
+    public static final int MAX_ITERATION_SUMMARIES = 100;
+    public static final int MAX_ITERATION_SUMMARY_CHARS = 2048;
+    private long totalIterationSummaries;
+
+    private static String bounded(String input,int max) {
+        if(input==null)return null;
+        if(input.length()<=max)return input;
+        return input.substring(0,max-15)+" [TRUNCATED]";
+    }
+
     private final List<Finding> findings;
     private final List<String> iterationSummaries;
     private final int maxFindings;
@@ -74,6 +88,8 @@ public class FindingsCache {
     }
 
     public FindingsCache(int maxFindings) {
+        if(maxFindings<1 || maxFindings>MAX_FINDINGS_LIMIT)
+            throw new IllegalArgumentException("maxFindings must be 1.."+MAX_FINDINGS_LIMIT);
         this.findings = new ArrayList<>();
         this.iterationSummaries = new ArrayList<>();
         this.maxFindings = maxFindings;
@@ -83,7 +99,10 @@ public class FindingsCache {
      * Add a finding from tool observation.
      */
     public void addFinding(String fact, String evidence, String toolUsed, int relevance) {
-        findings.add(new Finding(fact, evidence, toolUsed, relevance));
+        if(fact==null || fact.isBlank())return;
+        findings.add(new Finding(bounded(fact,MAX_FACT_CHARS),
+            bounded(evidence,MAX_EVIDENCE_CHARS),bounded(toolUsed,128),
+            Math.max(0,Math.min(10,relevance))));
 
         // Prune old low-relevance findings if we exceed max
         if (findings.size() > maxFindings) {
@@ -108,8 +127,14 @@ public class FindingsCache {
         }
 
         // Simple heuristics for extracting important information
-        String[] lines = output.split("\n");
+        // Never allocate a giant String[] or preserve the entire untrusted
+        // tool transcript in every finding. Extraction is intentionally
+        // bounded and cannot claim to have inspected omitted source bytes.
+        int length=Math.min(MAX_TOOL_TEXT_SCAN,output.length());
+        String[] lines=output.substring(0,length).split("\n");
+        int scanned=0;
         for (String line : lines) {
+            if(scanned++>=2000)break;
             line = line.trim();
 
             // Skip empty or very short lines
@@ -127,9 +152,13 @@ public class FindingsCache {
 
             // Only add findings with reasonable length and some relevance
             if (line.length() >= 20 && line.length() <= 300) {
-                addFinding(line, output, toolName, relevance);
+                addFinding(line, line, toolName, relevance);
             }
         }
+        if(output.length()>length || lines.length>2000)
+            addFinding("SOURCE INCOMPLETE: large tool output truncated for finding extraction",
+                "Tool output exceeded bounded local scan; omitted content NOT analyzed",
+                toolName,RELEVANCE_LOW);
     }
 
     /**
@@ -204,12 +233,14 @@ public class FindingsCache {
 
         return findings.stream()
             .sorted(Comparator.comparingInt(Finding::getRelevance).reversed())
-            .limit(maxShow)
+            .limit(Math.max(0,Math.min(maxShow,maxFindings)))
             .map(f -> {
                 String fact = f.getFact();
                 // Apply character limit if specified
                 if (maxCharsPerFinding > 0 && fact.length() > maxCharsPerFinding) {
-                    fact = fact.substring(0, maxCharsPerFinding - 3) + "...";
+                    fact = maxCharsPerFinding>3 ?
+                        fact.substring(0,maxCharsPerFinding-3)+"..." :
+                        fact.substring(0,maxCharsPerFinding);
                 }
                 return "• " + fact;
             })
@@ -249,7 +280,7 @@ public class FindingsCache {
         sb.append("## Key Findings\n\n");
         findings.stream()
             .sorted(Comparator.comparingInt(Finding::getRelevance).reversed())
-            .limit(maxFindings)
+            .limit(Math.max(0,Math.min(maxFindings,this.maxFindings)))
             .forEach(f -> {
                 sb.append("**").append(f.getFact()).append("**");
                 if (f.getToolUsed() != null) {
@@ -312,6 +343,7 @@ public class FindingsCache {
     public void clear() {
         findings.clear();
         iterationSummaries.clear();
+        totalIterationSummaries=0;
     }
 
     /**
@@ -327,7 +359,11 @@ public class FindingsCache {
      */
     public void addIterationSummary(String summary) {
         if (summary != null && !summary.trim().isEmpty()) {
-            iterationSummaries.add(summary.trim());
+            iterationSummaries.add(bounded(summary.trim(),
+                MAX_ITERATION_SUMMARY_CHARS));
+            totalIterationSummaries++;
+            if(iterationSummaries.size()>MAX_ITERATION_SUMMARIES)
+                iterationSummaries.remove(0);
         }
     }
 
@@ -348,12 +384,15 @@ public class FindingsCache {
         }
 
         // Get last N iterations (most recent)
-        int startIdx = Math.max(0, iterationSummaries.size() - maxIterations);
+        int startIdx = Math.max(0, iterationSummaries.size() -
+            Math.max(0,Math.min(maxIterations,MAX_ITERATION_SUMMARIES)));
         List<String> recent = iterationSummaries.subList(startIdx, iterationSummaries.size());
 
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < recent.size(); i++) {
-            sb.append("### Iteration ").append(startIdx + i + 1).append("\n");
+            sb.append("### Iteration ")
+                .append(totalIterationSummaries-iterationSummaries.size()+startIdx+i+1)
+                .append("\n");
             sb.append(recent.get(i)).append("\n\n");
         }
         return sb.toString();
