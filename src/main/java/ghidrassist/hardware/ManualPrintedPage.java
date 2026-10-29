@@ -13,6 +13,8 @@ import java.util.regex.Pattern;
  */
 public final class ManualPrintedPage {
     private ManualPrintedPage() {}
+    /** Bound untrusted PDFBox-extracted text before uppercasing/splitting. */
+    public static final int MAX_PAGE_TEXT_CHARS=1_048_576;
     private static final Pattern PAGE=Pattern.compile(
         "(?i)(?<![A-Z0-9])([A-D]-[1-9][0-9]{0,2}|[1-9][0-9]?-([1-9][0-9]{0,2}))(?![A-Z0-9])");
     private static final Pattern STANDALONE=Pattern.compile(
@@ -33,6 +35,8 @@ public final class ManualPrintedPage {
     }
     public static Hint fromText(String text) {
         if(text==null || text.isBlank())return new Hint("UNKNOWN","UNVERIFIED");
+        if(text.length()>MAX_PAGE_TEXT_CHARS)
+            return new Hint("UNKNOWN","PDF_TEXT_TOO_LARGE");
         String[] rows=text.replace('’','\'').toUpperCase(Locale.ROOT).split("\\R");
         // Manufacturer folio is often at the bottom of the extracted page.
         // Scan the top and bottom only; never mine arbitrary page body text.
