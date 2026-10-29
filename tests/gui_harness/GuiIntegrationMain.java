@@ -91,11 +91,21 @@ public class GuiIntegrationMain {
    Object provider=field(plugin,"provider"),ui=field(provider,"ui");
    QueryTab query=(QueryTab)field(ui,"queryTab");controller[0]=(TabController)field(ui,"controller");
    edt(()->{try{((JTabbedPane)field(ui,"tabbedPane")).setSelectedComponent(query);}catch(Exception e){throw new RuntimeException(e);}});
+   // The tool can take more than one EDT cycle to show Query after
+   // PluginTool.setVisible(true). Wait for the actual UI, not a fixed sleep.
+   waitFor(()->onEdt(()->{
+     Program current=tool[0].getService(ProgramManager.class).getCurrentProgram();
+     return tool[0].getToolFrame().isShowing() && query.isShowing() &&
+         current!=null && current.equals(program);
+   }),20);
    edt(()->{try{
      JFrame window=tool[0].getToolFrame();
+     Program active=tool[0].getService(ProgramManager.class).getCurrentProgram();
      if(!window.isShowing()||!query.isShowing()||
-         tool[0].getService(ProgramManager.class).getCurrentProgram().equals(program))
-       throw new AssertionError("Invisible GUI or wrong active test program");
+         active==null||!active.equals(program))
+       throw new AssertionError("GUI/program mismatch: window="+
+           window.isShowing()+" query="+query.isShowing()+
+           " program="+(active!=null));
      result.addProperty("window_showing",true);
      result.addProperty("query_showing",true);
      result.addProperty("ran_on_edt",SwingUtilities.isEventDispatchThread());
