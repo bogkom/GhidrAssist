@@ -12,6 +12,9 @@ import ghidra.framework.model.ProjectLocator;
 import ghidra.framework.model.ToolTemplate;
 import ghidra.framework.project.DefaultProjectManager;
 import ghidra.framework.plugintool.PluginTool;
+import ghidra.framework.project.tool.GhidraTool;
+import ghidra.framework.project.tool.GhidraToolTemplate;
+import org.jdom2.output.XMLOutputter;
 import ghidra.app.services.ProgramManager;
 import ghidra.app.services.GoToService;
 import ghidra.app.services.CodeViewerService;
@@ -41,9 +44,11 @@ public final class CodeBrowserMmioMain {
     static final String PROGRAM_A = "synthetic-mmio.bin";
     static final String PROGRAM_B = "guard-other.bin";
     static class Manager extends DefaultProjectManager { Manager(){super();} }
-    static class Tool extends PluginTool {
-        Tool(Project p){super(p,"GhidrAssist isolated CodeBrowser MMIO",false,false,false);}
-        Tool(Project p,ToolTemplate t){super(p,t);}
+    static class Tool extends GhidraTool {
+        // A full GhidraTool, unlike a generic PluginTool, owns the
+        // ToolExtensionsStatusManager and persists <EXTENSIONS> in XML.
+        Tool(Project p){super(p,"GhidrAssist isolated CodeBrowser MMIO");}
+        Tool(Project p,GhidraToolTemplate t){super(p,t);}
         void shutdown(){super.dispose();}
     }
     static void require(boolean ok,String text) {
@@ -272,10 +277,35 @@ public final class CodeBrowserMmioMain {
             // This is serialized tool *configuration*, not user preference persistence
             // across a real application restart.
             ToolTemplate saved=tool[0].saveToolToToolTemplate();
-            require(saved!=null && saved.getToolElement()!=null,
-                "Cannot save CodeBrowser plugin tool configuration");
+            require(saved instanceof GhidraToolTemplate &&
+                    saved.getToolElement()!=null,
+                "Ghidra CodeBrowser configuration is not a persistable tool template");
+            String xml=new XMLOutputter().outputString(saved.getToolElement());
+            require(xml.contains("<EXTENSIONS>") &&
+                    xml.contains("GhidrAssist") &&
+                    xml.contains("ghidrassist.GhidrAssistPlugin"),
+                "Saved tool XML lacks GhidrAssist extension/plugin records");
             result.addProperty("tool_template_saved",true);
-            edt(()->dialog.dispose());
+            result.addProperty("extension_metadata_serialized",true);
+            // Restore ONLY the synthetic test tool and confirm installed plugin
+            // does not return as an unknown extension in the same run.
+            edt(()->{try{
+                dialog.dispose();
+                tool[0].shutdown();
+                tool[0]=new Tool(project,(GhidraToolTemplate)saved);
+                tool[0].setVisible(true);
+            }catch(Exception ex){throw new RuntimeException(ex);}});
+            require(tool[0].getManagedPlugins().stream()
+                .anyMatch(p->p instanceof GhidrAssistPlugin),
+                "Restored tool template lost GhidrAssistPlugin");
+            Thread.sleep(650);
+            for(Window w:Window.getWindows()){
+                if(w.isShowing() && w instanceof JDialog dlg &&
+                        dlg.getTitle().contains("New Plugins Found"))
+                    throw new AssertionError("Known extension prompts again after tool restore");
+            }
+            result.addProperty("tool_template_reloaded",true);
+            result.addProperty("no_new_extension_prompt_on_restore",true);
             Files.writeString(out.resolve("gui-results.json"),GSON.toJson(result));
         } finally {
             if(tool[0]!=null)edt(()->tool[0].shutdown());
