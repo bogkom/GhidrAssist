@@ -27,7 +27,7 @@ The originating document has 18 *sections*, not 18 independent feature checkboxe
 | GA-07 | G | Compact 3-part Analyze: initiation, register history, CS map | PARTIAL: PR #52 focused site filtering; three-part report missing | UI/Markdown/RAG agreement, concise report, evidence links |
 | GA-08 | H | Function, pointer and variable naming proposals | PARTIAL: function naming/Undo (#22/#28); pointers/locals missing | Collision-safe preview, manual labels preserved, transactional Undo |
 | GA-09 | 13.1 | MMIO accesses explorer with navigation | MISSING as dedicated view | Filterable function/instruction/value/access/confidence with Go To |
-| GA-10 | 13.2 | Verified bitfield decode with provenance | PARTIAL: MC68332 metadata; comprehensive decoder missing | Unknown fields UNKNOWN; model- and edition-specific source |
+| GA-10 | 13.2 | Verified bitfield decode with provenance | PARTIAL: sourced SIMCR bitfield decoder and direct-MOVE.W Analyze annotations proposed in separate draft; wider register coverage missing | Unknown fields UNKNOWN; model- and edition-specific source |
 | GA-11 | 13.3 | Interrupt / exception analysis including VBR and ISR paths | PARTIAL: VBR sightings, no full ISR graph | Static candidates not treated as active IRQs |
 | GA-12 | 13.4 | Resumable, version-aware incremental analysis | MISSING dedicated analyzer checkpoint protocol | Program identity, input hash, invalidation and resume regressions |
 | GA-13 | 13.5 | Human/analysis/AI origin of changes | MISSING verified per-symbol provenance | Check actual Ghidra 12.1.4 SourceType API; retain rationale and Undo |
@@ -57,3 +57,15 @@ For upcoming steps prepare independent Supervisor plans, each pinned to the corr
 ## Explicitly deferred, not lost
 
 Full MCU/peripheral emulation, physical CS electrical simulation, generic automatic hardware identification, and broad multi-firmware comparison remain out of the initial delivery, as required by original section 14.
+
+
+## 2026-10-29 — candidate independent GA-10 batch
+
+- Branch: `feature/hardware-bitfield-evidence-20261029` based on immutable PR #53 head.
+- Scope: explicitly selected MC68332 and complete immediate SIMCR word writes only;
+  source-page verified fields `MM`, `SUPV`, `IARB`; all unspecified bits remain uninterpreted.
+- CI required: standalone sourced-bitfield regression and Ghidra 12.1.4
+  extension integration build for the **final commit**.
+- Local isolated Ghidra acceptance and Supervisor plan remain **PENDING**
+  (no auto-approval). Do not merge this or its parent without the genuine
+  host results. This batch is independent of PR #54 RESET candidate analysis.

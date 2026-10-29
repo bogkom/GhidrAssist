@@ -1,0 +1,40 @@
+name: Hardware sourced bitfield decoder tests
+
+on:
+  push:
+    paths:
+      - 'src/main/java/ghidrassist/hardware/HardwareBitfieldDecoder.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareProfiles.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareBitfieldDecoderSelfTest.java'
+      - '.github/workflows/hardware-bitfield-decoder-tests.yml'
+  pull_request:
+    paths:
+      - 'src/main/java/ghidrassist/hardware/HardwareBitfieldDecoder.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareProfiles.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareBitfieldDecoderSelfTest.java'
+      - '.github/workflows/hardware-bitfield-decoder-tests.yml'
+  workflow_dispatch:
+
+jobs:
+  bitfield-decode:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Compile standalone decoder
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/bitfields"
+          javac --release 21 -d "$RUNNER_TEMP/bitfields" \
+            src/main/java/ghidrassist/hardware/HardwareProfiles.java \
+            src/main/java/ghidrassist/hardware/HardwareBitfieldDecoder.java \
+            src/test/java/ghidrassist/hardware/HardwareBitfieldDecoderSelfTest.java
+      - name: Verify known bits, source references and UNKNOWN cases
+        run: java -cp "$RUNNER_TEMP/bitfields" ghidrassist.hardware.HardwareBitfieldDecoderSelfTest
