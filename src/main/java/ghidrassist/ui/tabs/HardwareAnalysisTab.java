@@ -802,7 +802,8 @@ public final class HardwareAnalysisTab extends JPanel {
                     "Could not export review CSV: "+problem.getMessage(),
                     "Export error",JOptionPane.ERROR_MESSAGE);
             }
-        });        apply.addActionListener(e->{
+        });
+        apply.addActionListener(e->{
             if(table.isEditing())table.getCellEditor().stopCellEditing();
             accepted.clear();
             for(int i=0;i<candidates.size();i++){
