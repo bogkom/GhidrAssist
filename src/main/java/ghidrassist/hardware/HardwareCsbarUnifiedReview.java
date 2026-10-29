@@ -14,7 +14,8 @@ public final class HardwareCsbarUnifiedReview {
 
     public record Review(List<HardwareCsbarReviewGate.Candidate> candidates,
                          int matchedSites, int uncertainSites,
-                         int unresolvedAliasWrites, boolean deviceSelected) {
+                         int unresolvedAliasWrites, boolean deviceSelected,
+                         boolean cfgSourceComplete) {
         public Review { candidates=List.copyOf(candidates); }
         public String summary() {
             return "Conditional CSBAR source proposals: "+candidates.size()+
@@ -22,6 +23,7 @@ public final class HardwareCsbarUnifiedReview {
                 "; unsafe/unknown source sites: "+uncertainSites+
                 "; unknown-address CFG stores: "+unresolvedAliasWrites+
                 "; model selected: "+deviceSelected+
+                "; complete bounded CFG evidence: "+cfgSourceComplete+
                 ". All candidates are read-only until manual Review/Apply; "+
                 "MM latch and actual chip-select assertion UNKNOWN.";
         }
@@ -33,11 +35,16 @@ public final class HardwareCsbarUnifiedReview {
 
     public static Review inspect(boolean mc68332Selected,
             HardwareStartupEvidenceMerge.Report merged) {
+        return inspect(mc68332Selected,merged,true);
+    }
+    public static Review inspect(boolean mc68332Selected,
+            HardwareStartupEvidenceMerge.Report merged,
+            boolean cfgSourceComplete) {
         if(merged==null)
             throw new IllegalArgumentException("Missing reconciled evidence");
         int aliases=merged.unboundAliasStores();
         if(!mc68332Selected)
-            return new Review(List.of(),0,0,aliases,false);
+            return new Review(List.of(),0,0,aliases,false,cfgSourceComplete);
 
         List<HardwareCsbarReviewGate.Source> observations=new ArrayList<>();
         int sites=0,uncertain=0;
@@ -61,9 +68,9 @@ public final class HardwareCsbarUnifiedReview {
         // Any unknown pointer target may alias *any* CSBAR, including
         // register writes in other functions. Do not infer non-aliasing
         // from absence of an exact address in the inventory.
-        if(aliases>0)
-            return new Review(List.of(),sites,uncertain,aliases,true);
+        if(aliases>0 || !cfgSourceComplete)
+            return new Review(List.of(),sites,uncertain,aliases,true,cfgSourceComplete);
         var selected=HardwareCsbarReviewGate.reviewCandidates(observations);
-        return new Review(selected.candidates(),sites,uncertain,aliases,true);
+        return new Review(selected.candidates(),sites,uncertain,aliases,true,true);
     }
 }

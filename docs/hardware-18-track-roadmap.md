@@ -263,3 +263,23 @@ Full MCU/peripheral emulation, physical CS electrical simulation, generic automa
   provenance CSV export before/after file dialogs, and guards Apply
   again **after** the final modal user confirmation. Same-Program
   identity alone is insufficient after Ghidra Edit/Undo/Redo.
+
+
+## 2026-10-29 — GA-12 bounded CFG evidence capture, conservative Review
+
+- Stacked on PR #74 exact head `68b665aa142f198745a08c0d7293dbedd7f43574`.
+- Read-only CFG MMIO and A-register pointer-role source collectors
+  now retain at most 12,000 and 8,000 records respectively, with
+  explicit exact counts of discarded source sites.
+- If the CFG walk or its source collector is incomplete, the unified
+  CSBAR Review gate deliberately exposes **no speculative external
+  CS-window proposals**; a truncated collector is not proof that
+  an unobserved pointer store cannot alias a CS register.
+- Extremely large CFG functions (over 50,000 nodes) and duplicate
+  same-PC P-code STORE sites are marked as unresolved for pairwise
+  path comparison rather than crashing Analyze.
+- Source-limited A-register role hints are downgraded to PATH_UNCERTAIN,
+  and reports label all omitted candidate counts. No half-processed
+  CFG stage is cached as successful, no Ghidra DB edits are performed.
+- Synthetic budget+fail-closed tests, full Ghidra 12.1.4 compile
+  and real isolated host acceptance are required.

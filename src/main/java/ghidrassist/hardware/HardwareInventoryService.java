@@ -399,7 +399,8 @@ public final class HardwareInventoryService {
             flowStage.report().resetCandidateFunctions,
             flowStage.report().resetGraphIncomplete,startupSites);
         md.append("\n\n").append(startup.markdown());
-        var guardedCsbar=HardwareCsbarUnifiedReview.inspect(concreteDevice,merged);
+        var guardedCsbar=HardwareCsbarUnifiedReview.inspect(concreteDevice,merged,
+            flowStage.report().cfgReviewComplete);
         md.append("\n\n## Review / Apply source-safety gate\n\n- ")
             .append(guardedCsbar.summary()).append("\n");
         return new Report(program.getName(),program.getLanguageID().toString(),choice,sites,

@@ -31,6 +31,8 @@ import java.util.regex.Pattern;
  * no physical/program execution and no interprocedural call state.
  */
 public final class GhidraHardwareFlowService {
+    private static final int MAX_CFG_MMIO_SITES=12000;
+    private static final int MAX_POINTER_ROLE_SITES=8000;
     private static final Pattern REG=Pattern.compile("(?<![A-Z0-9])([AD][0-7])(?![A-Z0-9])");
     private static final Pattern OFFSET=Pattern.compile("(?<![A-Z0-9])(-?0[Xx][0-9A-F]+|-?[0-9]+)(?![A-Z0-9])");
     public static final class Report {
@@ -42,11 +44,14 @@ public final class GhidraHardwareFlowService {
         public final boolean resetCandidateRecognized,resetGraphIncomplete;
         public final int functions,indirect,vbr,unresolved,visited;
         public final boolean limited;
+        public final boolean cfgReviewComplete;
+        public final long cfgSitesOmitted,pointerSitesOmitted;
         Report(String md,int fn,int indirect,int vbr,int unresolved,int visited,
                 boolean limited,List<HardwarePointerRoleReview.Proposal> pointers,
                 java.util.Set<Long> resetCandidates,boolean resetRecognized,
                 boolean resetUnresolved,String configurationCsv,
-                List<HardwareCfgWriteAudit.Site> cfgSites){
+                List<HardwareCfgWriteAudit.Site> cfgSites,
+                boolean cfgReviewComplete,long cfgOmitted,long pointerOmitted){
             markdown=md;configurationEvidenceCsv=configurationCsv;
             rawCfgMmioSites=List.copyOf(cfgSites);
             pointerRoles=List.copyOf(pointers);
@@ -55,6 +60,8 @@ public final class GhidraHardwareFlowService {
             resetGraphIncomplete=resetUnresolved;
             functions=fn;this.indirect=indirect;this.vbr=vbr;
             this.unresolved=unresolved;this.visited=visited;this.limited=limited;
+            this.cfgReviewComplete=cfgReviewComplete;
+            this.cfgSitesOmitted=cfgOmitted;this.pointerSitesOmitted=pointerOmitted;
         }
     }
     private static String opcode(Instruction i){
@@ -425,8 +432,10 @@ public final class GhidraHardwareFlowService {
         StringBuilder detail=new StringBuilder();
         List<HardwareCallEffects.FunctionNode> staticCalls=new ArrayList<>();
         List<Long> evidencedFunctions=new ArrayList<>();
-        List<HardwarePointerRoleReview.Site> pointerSites=new ArrayList<>();
-        List<HardwareCfgWriteAudit.Site> cfgMmioSites=new ArrayList<>();
+        HardwareEvidenceBudget<HardwarePointerRoleReview.Site> pointerSites=
+            new HardwareEvidenceBudget<>(MAX_POINTER_ROLE_SITES);
+        HardwareEvidenceBudget<HardwareCfgWriteAudit.Site> cfgMmioSites=
+            new HardwareEvidenceBudget<>(MAX_CFG_MMIO_SITES);
         List<HardwareCfgStorePaths.Pair> cfgStoreRelations=new ArrayList<>();
         int cfgPathLimitedFunctions=0;
         int foundFunctions=0,indirect=0,vbr=0,unresolved=0,visited=0,shown=0;
@@ -501,7 +510,7 @@ public final class GhidraHardwareFlowService {
                     if(p.absoluteAddress(reg,0)==hit.effectiveAddress)matchedMm=0;
                     if(p.absoluteAddress(reg,1)==hit.effectiveAddress)matchedMm=1;
                     if(matchedMm<0)continue;
-                    pointerSites.add(new HardwarePointerRoleReview.Site(
+                    pointerSites.offer(new HardwarePointerRoleReview.Site(
                         fun.getEntryPoint().getOffset(),fun.getName(),hit.instruction,
                         hit.pointerRegister,reg.module,matchedMm,reg.name,
                         result.truncated || uncertainFlow ||
@@ -517,7 +526,7 @@ public final class GhidraHardwareFlowService {
                 if(target==null &&
                         !(hit.kind==HardwareDataflow.Kind.STORE_INDIRECT &&
                           hit.effectiveAddress==null))continue;
-                cfgMmioSites.add(new HardwareCfgWriteAudit.Site(
+                cfgMmioSites.offer(new HardwareCfgWriteAudit.Site(
                     fun.getEntryPoint().getOffset(),hit.instruction,
                     target==null?"UNRESOLVED_ALIAS":target,
                     hit.effectiveAddress==null?-1L:hit.effectiveAddress,
@@ -539,7 +548,18 @@ public final class GhidraHardwareFlowService {
                               register.startsWith("CSPAR")))continue;
                     pathStores.add(new HardwareCfgStorePaths.Store(hit.instruction,register));
                 }
-                if(pathStores.size()>1 && cfgStoreRelations.size()<500){
+                // A function may have repeated P-code STORE sites at one
+                // instruction, or huge disassembly. Both are UNCERTAIN,
+                // not a reason to abort the whole hardware analysis.
+                java.util.LinkedHashMap<Long,HardwareCfgStorePaths.Store> uniqueStores=
+                    new java.util.LinkedHashMap<>();
+                for(var store:pathStores)
+                    if(uniqueStores.putIfAbsent(store.pc(),store)!=null)
+                        cfgPathLimitedFunctions++;
+                pathStores=new ArrayList<>(uniqueStores.values());
+                if(pathStores.size()>1 && steps.size()>50000){
+                    cfgPathLimitedFunctions++;
+                }else if(pathStores.size()>1 && cfgStoreRelations.size()<500){
                     List<HardwareCfgStorePaths.Node> pathNodes=new ArrayList<>();
                     for(HardwareDataflow.Step node:steps)
                         pathNodes.add(new HardwareCfgStorePaths.Node(
@@ -688,18 +708,28 @@ public final class GhidraHardwareFlowService {
            .append(GhidraInterruptVectorService.analyze(program,monitor))
            .append(detail).append(effects);
         if(shown>=350)out.append("\n[Detailed report bounded at 350 sites.]\n");
+        boolean cfgSourcesComplete=cfgMmioSites.safeAsComplete(!limited);
+        out.append("\n- Bounded CFG source capture: ")
+            .append(cfgMmioSites.provenance()).append("; pointer hints: ")
+            .append(pointerSites.provenance())
+            .append("; CSBAR source Review eligible for complete evidence: ")
+            .append(cfgSourcesComplete)
+            .append(". Missing sites MUST NOT be inferred as absent.\n");
         List<HardwarePointerRoleReview.Proposal> roles=
-            HardwarePointerRoleReview.propose(mc68332Selected,pointerSites,limited);
+            HardwarePointerRoleReview.propose(mc68332Selected,pointerSites.snapshot(),
+                limited || pointerSites.truncated());
         out.append(HardwarePointerRoleReview.report(roles));
         out.append(HardwareCfgWriteAudit.inspect(mc68332Selected,
-            cfgMmioSites).markdown());
+            cfgMmioSites.snapshot()).markdown());
         out.append(HardwareCfgStorePaths.markdown(
             cfgStoreRelations,cfgPathLimitedFunctions));
         String evidenceCsv=HardwareConfigurationEvidenceCsv.serialize(
-            HardwareCfgWriteAudit.inspect(mc68332Selected,cfgMmioSites),
+            HardwareCfgWriteAudit.inspect(mc68332Selected,cfgMmioSites.snapshot()),
             cfgStoreRelations,mc68332Selected);
         return new Report(out.toString(),foundFunctions,indirect,vbr,unresolved,
-            visited,limited,roles,reset.visited(),
-            reset.recognized(),reset.incomplete(),evidenceCsv,cfgMmioSites);
+            visited,limited || !cfgSourcesComplete || pointerSites.truncated(),
+            roles,reset.visited(),reset.recognized(),reset.incomplete(),
+            evidenceCsv,cfgMmioSites.snapshot(),
+            cfgSourcesComplete,cfgMmioSites.omitted(),pointerSites.omitted());
     }
 }

@@ -47,6 +47,10 @@ public final class HardwareCsbarUnifiedReviewSelfTest {
             "unknown target can alias any CSBAR, block whole proposal set");
         check(HardwareCsbarUnifiedReview.inspect(false,reconciled)
             .candidates().isEmpty(),"generic CPU32 cannot propose MC68332 CSBAR");
+        var limited=HardwareCsbarUnifiedReview.inspect(true,reconciled,false);
+        check(limited.candidates().isEmpty() && !limited.cfgSourceComplete()
+            && limited.summary().contains("complete bounded CFG evidence: false"),
+            "truncated CFG capture must not yield speculative CS windows");
         check(HardwareCsbarUnifiedReview.inspect(true,
             HardwareStartupEvidenceMerge.reconcile(List.of(
                 observation(0x2be8,0xfffa4c,"CSBAR0",cfg,true,0,null,true))))
