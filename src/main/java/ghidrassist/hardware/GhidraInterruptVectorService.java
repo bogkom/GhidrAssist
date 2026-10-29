@@ -32,6 +32,7 @@ public final class GhidraInterruptVectorService {
             Long raw=null;
             boolean mapped=false;
             String function=null;
+            boolean exactFunctionEntry=false;
             long offset=4L*vector;
             try{
                 Address slot=program.getAddressFactory().getDefaultAddressSpace()
@@ -51,8 +52,10 @@ public final class GhidraInterruptVectorService {
                                 if(mapped){
                                     Function f=program.getFunctionManager()
                                         .getFunctionContaining(dest);
-                                    if(f!=null)
+                                    if(f!=null){
                                         function=f.getName()+" @ "+f.getEntryPoint();
+                                        exactFunctionEntry=f.getEntryPoint().equals(dest);
+                                    }
                                 }
                             }catch(RuntimeException invalidTarget){
                                 mapped=false; // Out of address space: UNKNOWN
@@ -64,7 +67,7 @@ public final class GhidraInterruptVectorService {
                 // Unreadable/truncated/bad vector must never be treated as zero.
             }
             observations.add(new HardwareInterruptVectors.Observation(
-                vector,raw,mapped,function));
+                vector,raw,mapped,function,exactFunctionEntry));
         }
         return HardwareInterruptVectors.inspect(0,observations,32).markdown();
     }
