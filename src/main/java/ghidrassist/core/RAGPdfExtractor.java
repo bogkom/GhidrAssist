@@ -11,6 +11,7 @@ import ghidrassist.hardware.ManualRegisterHints;
 import ghidrassist.hardware.ManualModuleTable;
 import ghidrassist.hardware.ManualDocumentScope;
 import ghidrassist.hardware.ManualPrintedPage;
+import ghidrassist.hardware.ManualPaginationAudit;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
@@ -64,6 +65,8 @@ public final class RAGPdfExtractor {
             int indexed = 0;
             int blank = 0;
             int suspicious = 0;
+            int lastFolioPhysical = 0;
+            String lastFolio = null;
             for (int page = 1; page <= count; page++) {
                 LayoutAwareStripper stripper = new LayoutAwareStripper();
                 stripper.beginPage();
@@ -96,7 +99,16 @@ public final class RAGPdfExtractor {
                 // "Printed D-1" can mean PDF page 215 or page 1 depending
                 // on the physical document edition and split chapter.
                 // Record only header-supported labels, never body table IDs.
-                String printed=ManualPrintedPage.fromText(raw).evidence();
+                ManualPrintedPage.Hint folio=ManualPrintedPage.fromText(raw);
+                var sequence=ManualPaginationAudit.compare(
+                    lastFolioPhysical,lastFolio,page,folio.label());
+                // Only actual header candidates become comparison anchors.
+                // Never infer labels for blank or unreadable pages.
+                if(!"UNKNOWN".equals(folio.label())) {
+                    lastFolio=folio.label();
+                    lastFolioPhysical=page;
+                }
+                String printed=folio.evidence()+" "+sequence.evidence();
                 text = identity.evidence(page) + " " + printed +
                     System.lineSeparator() + text;
                 sink.accept(page, text, table);

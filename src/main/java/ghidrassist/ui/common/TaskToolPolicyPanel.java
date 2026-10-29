@@ -63,10 +63,24 @@ public final class TaskToolPolicyPanel extends JPanel {
         @Override public String getToolTipText(MouseEvent event) {
             int row = rowAtPoint(event.getPoint()), col = columnAtPoint(event.getPoint());
             if (row < 0 || col < 0) return null;
+            if (col == 0) {
+                Object details = getValueAt(row, 4);
+                return details == null || details.toString().isBlank()
+                    ? "No description supplied by this tool." : "<html><body style='width:420px'>"
+                        + escapeHtml(details.toString()) + "</body></html>";
+            }
+            if (col == 1) return mode.getSelectedItem() == Mode.SELECTED
+                ? "Click the checkbox to allow or disallow this tool."
+                : "Switch Mode to Selected tools to change the allowlist.";
+            if (col == 2) return "Enter a nonnegative number; clear the cell for Unlimited.";
             Object value = getValueAt(row, col);
             return value == null ? null : value.toString();
         }
     };
+    private static String escapeHtml(String value) {
+        return value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                    .replace("\"", "&quot;").replace("\n", "<br>");
+    }
     private final TableRowSorter<DefaultTableModel> sorter = new TableRowSorter<>(tools);
     private final DefaultTableModel events = new DefaultTableModel(new Object[]{"Tool", "State", "Response / reason"}, 0) {
         @Override public boolean isCellEditable(int row, int col) { return false; }
@@ -104,11 +118,44 @@ public final class TaskToolPolicyPanel extends JPanel {
         JButton select = button("Select all shown", "Allow every tool matching the current search/provider filter in Selected tools mode.", () -> selectShown(true));
         JButton deselect = button("Deselect all shown", "Disallow every tool matching the current search/provider filter in Selected tools mode.", () -> selectShown(false));
         filters.add(select); filters.add(deselect);
+        JButton clearAll = button("Deselect all tools", "Switch to Selected tools and disallow every tool, including hidden rows.", () -> {
+            mode.setSelectedItem(Mode.SELECTED);
+            for (int r = 0; r < tools.getRowCount(); r++) tools.setValueAt(false, r, 1);
+            updateCount();
+        });
+        filters.add(clearAll);
         JPanel north = new JPanel(new WrapLayout());
         for (Component c : controls.getComponents()) north.add(c);
         for (Component c : filters.getComponents()) north.add(c);
         north.add(count); add(north, BorderLayout.NORTH);
         table.setRowSorter(sorter); table.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
+        // Make numeric limits easily resettable: a blank editing value means Unlimited.
+        table.getColumnModel().getColumn(2).setCellEditor(new DefaultCellEditor(new JTextField()) {
+            @Override public Component getTableCellEditorComponent(JTable t, Object value,
+                    boolean selected, int row, int column) {
+                return super.getTableCellEditorComponent(t,
+                    value == null ? "" : value, selected, row, column);
+            }
+        });
+        table.getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT)
+            .put(KeyStroke.getKeyStroke(KeyEvent.VK_SPACE, 0), "toggleAllowed");
+        table.getActionMap().put("toggleAllowed", new AbstractAction() {
+            @Override public void actionPerformed(ActionEvent e) {
+                int row = table.getSelectedRow();
+                if (row < 0 || running || mode.getSelectedItem() != Mode.SELECTED || table.isEditing()) return;
+                int modelRow = table.convertRowIndexToModel(row);
+                tools.setValueAt(!Boolean.TRUE.equals(tools.getValueAt(modelRow, 1)), modelRow, 1);
+            }
+        });
+        table.addMouseListener(new MouseAdapter() {
+            @Override public void mouseClicked(MouseEvent e) {
+                if (e.getClickCount() != 2 || running || mode.getSelectedItem() != Mode.SELECTED) return;
+                int row = table.rowAtPoint(e.getPoint()), col = table.columnAtPoint(e.getPoint());
+                if (row < 0 || col == 1 || col == 2 || table.isEditing()) return;
+                int modelRow = table.convertRowIndexToModel(row);
+                tools.setValueAt(!Boolean.TRUE.equals(tools.getValueAt(modelRow, 1)), modelRow, 1);
+            }
+        });
         int[] widths = {310, 75, 100, 160, 420};
         for (int i = 0; i < widths.length; i++) table.getColumnModel().getColumn(i).setPreferredWidth(widths[i]);
         table.getColumnModel().getColumn(2).setCellRenderer(new DefaultTableCellRenderer() {
@@ -125,12 +172,15 @@ public final class TaskToolPolicyPanel extends JPanel {
         apply.addActionListener(e -> applyDraft());
         JPanel actions = new JPanel(new WrapLayout()); actions.add(defaults); actions.add(help); actions.add(cancel); actions.add(apply);
         JPanel south = new JPanel(new BorderLayout()); south.add(notice, BorderLayout.NORTH); south.add(actions, BorderLayout.SOUTH); add(south, BorderLayout.SOUTH);
-        editControls.addAll(List.of(mode, lifetime, total, search, provider, refreshButton, select, deselect, defaults, apply));
+        editControls.addAll(List.of(mode, lifetime, total, search, provider, refreshButton, select, deselect, clearAll, defaults, apply));
         provider.addItem("All providers");
         mode.addActionListener(e -> {
             select.setEnabled(!running && mode.getSelectedItem() == Mode.SELECTED);
             deselect.setEnabled(!running && mode.getSelectedItem() == Mode.SELECTED);
             tools.fireTableDataChanged(); updateCount();
+            notice.setText(mode.getSelectedItem() == Mode.SELECTED
+                ? "Selected tools: use checkboxes, Space or double-click a tool. Blank Max calls = Unlimited."
+                : "To select individual tools, change Mode to Selected tools. Deselect all tools switches automatically.");
         });
         addComponentListener(new ComponentAdapter() {
             @Override public void componentResized(ComponentEvent e) { revalidate(); }
