@@ -158,7 +158,7 @@ public class FindingsCache {
         if(output.length()>length || lines.length>2000)
             addFinding("SOURCE INCOMPLETE: large tool output truncated for finding extraction",
                 "Tool output exceeded bounded local scan; omitted content NOT analyzed",
-                toolName,RELEVANCE_LOW);
+                toolName,10); // Structural incompleteness must survive relevance pruning.
     }
 
     /**
