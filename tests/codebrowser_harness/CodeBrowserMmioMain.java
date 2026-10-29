@@ -196,9 +196,6 @@ public final class CodeBrowserMmioMain {
                     p->p instanceof GhidrAssistPlugin).findFirst().orElseThrow();
             GhidrAssistUI ui=((GhidrAssistProvider)field(plugin,"provider")).getUI();
             HardwareAnalysisTab tab=(HardwareAnalysisTab)field(ui,"hardwareAnalysisTab");
-            edt(()->{
-                ((JTabbedPane)ui.getComponent().getComponent(0)); // no-op
-            });
             // Actual tab selection through the production GhidrAssist JTabbedPane.
             edt(()->{
                 try {
