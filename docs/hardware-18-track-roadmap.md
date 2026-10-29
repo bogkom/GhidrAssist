@@ -131,3 +131,20 @@ Full MCU/peripheral emulation, physical CS electrical simulation, generic automa
   is never declared a latched hardware configuration.
 - New deterministic adversarial regressions and a full Ghidra 12.1.4 build
   required. No Review/Apply or Ghidra project modifications introduced.
+
+
+## 2026-10-29 — GA-01/02/03 bounded within-function path possibilities
+
+- Stacked draft `feature/hardware-cfg-store-path-relations-20261029`
+  is based on exact PR #68 head `5b343d6da75f59785e1d3107dc42789a77be2565`.
+- Read-only CFG pairwise path-existence between source sites for SIMCR,
+  TRAMBAR, CSBAR/CSOR/CSPAR, bounded to 12 candidate writes per
+  function and 1500 graph nodes per reachability query. The possible
+  relations are A→B, B→A, both directions via cycles, no *modeled*
+  connecting path, or UNKNOWN when budget is exceeded.
+- Explicitly does **not** claim actual execution, feasible branch
+  conditions or a unique chronological order after RESET.
+- Generic CPU32 now suppresses concrete MC68332 register labels
+  in the new CFG provenance table (addresses stay visible as hypotheses).
+- Dedicated synthetic regression, full Ghidra 12.1.4 extension build
+  and explicit host integration acceptance remain mandatory.

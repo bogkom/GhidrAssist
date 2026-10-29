@@ -422,6 +422,8 @@ public final class GhidraHardwareFlowService {
         List<Long> evidencedFunctions=new ArrayList<>();
         List<HardwarePointerRoleReview.Site> pointerSites=new ArrayList<>();
         List<HardwareCfgWriteAudit.Site> cfgMmioSites=new ArrayList<>();
+        List<HardwareCfgStorePaths.Pair> cfgStoreRelations=new ArrayList<>();
+        int cfgPathLimitedFunctions=0;
         int foundFunctions=0,indirect=0,vbr=0,unresolved=0,visited=0,shown=0;
         boolean limited=false;
         FunctionIterator funs=program.getFunctionManager().getFunctions(true);
@@ -518,6 +520,33 @@ public final class GhidraHardwareFlowService {
                     hit.priorMmCandidateMin,hit.priorMmCandidateMax,
                     hit.priorUnknownCall,hit.priorUnknownStore,
                     result.truncated || uncertainFlow));
+            }
+            if(mc68332Selected){
+                List<HardwareCfgStorePaths.Store> pathStores=new ArrayList<>();
+                for(HardwareDataflow.Snapshot hit:result.snapshots){
+                    if(hit.effectiveAddress==null ||
+                            (hit.kind!=HardwareDataflow.Kind.STORE_DIRECT &&
+                             hit.kind!=HardwareDataflow.Kind.STORE_INDIRECT))continue;
+                    String register=targets.get(hit.effectiveAddress);
+                    if(register==null ||
+                            !(register.equals("SIMCR") || register.equals("TRAMBAR") ||
+                              register.startsWith("CSBAR") || register.startsWith("CSOR") ||
+                              register.startsWith("CSPAR")))continue;
+                    pathStores.add(new HardwareCfgStorePaths.Store(hit.instruction,register));
+                }
+                if(pathStores.size()>1 && cfgStoreRelations.size()<500){
+                    List<HardwareCfgStorePaths.Node> pathNodes=new ArrayList<>();
+                    for(HardwareDataflow.Step node:steps)
+                        pathNodes.add(new HardwareCfgStorePaths.Node(
+                            node.address,node.successors));
+                    var pairs=HardwareCfgStorePaths.analyze(
+                        fun.getEntryPoint().getOffset(),pathNodes,pathStores,
+                        uncertainFlow || result.truncated,1500);
+                    if(pairs.truncated())cfgPathLimitedFunctions++;
+                    if(cfgStoreRelations.size()+pairs.relations().size()<=500)
+                        cfgStoreRelations.addAll(pairs.relations());
+                    else cfgPathLimitedFunctions++;
+                }else if(pathStores.size()>1)cfgPathLimitedFunctions++;
             }
             List<HardwareDataflow.Snapshot> found=new ArrayList<>();
             for(HardwareDataflow.Snapshot hit:result.snapshots){
@@ -659,6 +688,8 @@ public final class GhidraHardwareFlowService {
         out.append(HardwarePointerRoleReview.report(roles));
         out.append(HardwareCfgWriteAudit.inspect(mc68332Selected,
             cfgMmioSites).markdown());
+        out.append(HardwareCfgStorePaths.markdown(
+            cfgStoreRelations,cfgPathLimitedFunctions));
         return new Report(out.toString(),foundFunctions,indirect,vbr,unresolved,
             visited,limited,roles,reset.visited(),
             reset.recognized(),reset.incomplete());

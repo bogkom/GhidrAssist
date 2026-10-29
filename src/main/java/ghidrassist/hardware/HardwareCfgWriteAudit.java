@@ -130,7 +130,8 @@ public final class HardwareCfgWriteAudit {
             Integer mm=selectedMc68332 &&
                 s.register().equals("SIMCR") && word!=null ?
                 ((word&0x40)!=0?1:0):null;
-            findings.add(new Finding(s.function(),s.pc(),s.register(),
+            findings.add(new Finding(s.function(),s.pc(),
+                selectedMc68332?s.register():"UNVERIFIED_MCU_REGISTER",
                 s.address(),s.indirect(),s.widthBits(),word,prior,
                 s.unknownStore() || s.address()<0,mm));
         }
