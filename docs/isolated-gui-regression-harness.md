@@ -108,3 +108,23 @@ acceptance remain separate steps. CI uses a downloaded, SHA-verified
 public Ghidra installation and the currently built extension. The
 synthetic CPU32 fixture is *not evidence* of real ECU execution,
 physical CPU model or external hardware.
+
+## 2026-10-29 — X11 blank-image regression
+
+CI exposed a real limitation that could otherwise be misreported as GUI
+visual acceptance: an early Xvfb capture returned a valid **1200×950 PNG
+with only two colors** (mostly black body and gray border), even while
+Swing/dispatcher assertions passed. That is an unpainted or inaccessible
+X11 surface, **not** evidence that a reviewer saw GhidrAssist Query.
+
+The runner now validates at least 16 distinct pixel colors in the
+**specific mapped isolated tool window** selected by its X11 hierarchy
+and geometry; a blank surface returns `BLOCKED_X11_READBACK`. It
+rejects ambiguously equal windows instead of capturing the desktop.
+The Java driver yields for Expose/paint after Query becomes visible,
+and GitHub Actions starts Openbox on the disposable Xvfb server.
+Synthetic safety regressions include a two-color X11 image. The
+`X11_CAPTURED_NONBLANK_PIXEL_CHECKED` status means automated pixel
+diversity only, and the human visual field **remains NOT_PERFORMED**.
+Neither status can be substituted for real CodeBrowser/Listing PR #56
+acceptance, nor for real interactive desktop-controller availability.
