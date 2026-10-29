@@ -4,7 +4,7 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
 import ghidra.GhidraApplicationLayout;
 import ghidra.framework.Application;
-import ghidra.framework.GhidraApplicationConfiguration;
+import ghidra.framework.HeadlessGhidraApplicationConfiguration;
 import ghidra.framework.main.AppInfo;
 import ghidra.framework.model.Project;
 import ghidra.framework.model.ProjectLocator;
@@ -52,8 +52,7 @@ public final class Ga11VectorHeadlessMain {
         Path projectDir=Path.of(args[1]).toRealPath();
         Path out=Path.of(args[2]).toRealPath();
         boolean strictEntry=Boolean.parseBoolean(args[3]);
-        var config=new GhidraApplicationConfiguration();
-        config.setShowSplashScreen(false);
+        var config=new HeadlessGhidraApplicationConfiguration();
         config.setApplicationLogFile(out.resolve("ghidra.log").toFile());
         Application.initializeApplication(new GhidraApplicationLayout(ghidra.toFile()),config);
         check(GraphicsEnvironment.isHeadless(),"Ghidra must really run headless");
