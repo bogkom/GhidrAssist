@@ -53,10 +53,12 @@ public final class HardwareInventoryService {
         public final int uniqueSites,functions;
         public final List<Site> sites;
         public final String markdown;
+        public final String overviewMarkdown;
+        public final String detailsMarkdown;
         public final String namePreviewCsv;
         public final List<HardwareFunctionNamingReview.Proposal> functionProposals;
         private Report(String program,String language,String selection,List<Site> sites,
-                String markdown,String namePreviewCsv,int functions,
+                String overviewMarkdown,String detailsMarkdown,String namePreviewCsv,int functions,
                 List<HardwareFunctionNamingReview.Proposal> functionProposals){
             this.program=program;
             this.language=language;
@@ -64,7 +66,9 @@ public final class HardwareInventoryService {
             this.uniqueSites=(int)sites.stream().filter(site->
                 HardwareReportScope.isInitializationRegister(site.register)).count();
             this.sites=List.copyOf(sites);
-            this.markdown=markdown;
+            this.overviewMarkdown=overviewMarkdown;
+            this.detailsMarkdown=detailsMarkdown;
+            this.markdown=overviewMarkdown+"\n\n---\n\n"+detailsMarkdown;
             this.namePreviewCsv=namePreviewCsv;
             this.functions=functions;
             this.functionProposals=List.copyOf(functionProposals);
@@ -212,8 +216,10 @@ public final class HardwareInventoryService {
           .append("- Firmware origin: currently loaded Ghidra project, NOT a device readback\n")
           .append("- MCU identity, active MM map, reached branches, connected chips and memory wiring: **NOT VERIFIED**\n")
           .append("- Register address provenance: [MC68332 User's Manual](https://www.nxp.com/docs/en/user-guide/MC68332UM.pdf)\n\n");
+        md.append(HardwareProfileAudit.inspect(concreteDevice ?
+            profile : HardwareProfiles.cpu32Family()).markdown());
         md.append("## Initialization/memory-map evidence (SIMCR/MM, TRAMBAR, CSBAR, CSOR, VBR)\n\n")
-          .append("CSPAR contributes to conditional chip-select decoding but is not listed as a separate register site.\n\n");
+          .append("CSPAR contributes to conditional chip-select decoding but is not listed as a separate register site.\n\nMC68332 sourced bitfields are shown only for exact full-word literal SIMCR MOVEs; they are static candidate values, not proven execution or latched MM state.\n\n");
         for(Map.Entry<String,List<Site>> group:grouped.entrySet()){
             monitor.checkCancelled();
             if(group.getValue().stream().noneMatch(site->
@@ -240,7 +246,18 @@ public final class HardwareInventoryService {
                       .append(hex(site.registerAddress,6)).append("` — ")
                       .append(site.write?"WRITE":"READ/REFERENCE")
                       .append("; ").append(site.literal==null?"value UNKNOWN":hex(site.literal,4))
-                      .append("; `").append(site.asm).append("`\n");
+                      .append("; `").append(site.asm).append("`");
+                    // Only a literal full-width word MOVE supports exact SIMCR
+                    // bit decoding. Byte/indirect/derived writes remain UNKNOWN.
+                    if (concreteDevice && site.write && site.literal != null &&
+                            "SIMCR".equals(site.register) &&
+                            site.asm.stripLeading().toUpperCase(Locale.ROOT)
+                                .matches("MOVE\\.W\\s+#.*")) {
+                        md.append("; ")
+                          .append(HardwareBitfieldDecoder.decode(
+                              profile,"SIMCR",site.literal,16).summary());
+                    }
+                    md.append("\n");
                 }
                 if(!any)continue;
                 md.append("\n**MM=").append(mm).append(" conditional linear-code snapshot**\n\n");
@@ -317,10 +334,18 @@ public final class HardwareInventoryService {
             .append(flowStage.reused()?"REUSED same revision":"COMPUTED for this revision")
             .append("; no cross-session resume or runtime execution asserted.\n\n")
             .append(flowStage.report().markdown);
+        int initializationFunctions=(int)grouped.values().stream().filter(group->
+            group.stream().anyMatch(site->
+                HardwareReportScope.isInitializationRegister(site.register))).count();
+        List<HardwareReportOverview.Site> overviewSites=new ArrayList<>();
+        for(Site site:sites)
+            overviewSites.add(new HardwareReportOverview.Site(
+                site.register,site.write,site.literal!=null));
+        String overview=HardwareReportOverview.render(concreteDevice,scanned,
+            initializationFunctions,vbrCount,flowStage.report().unresolved,
+            flowStage.report().limited,overviewSites);
+        csv+=HardwarePointerRoleReview.csvRows(flowStage.report().pointerRoles);
         return new Report(program.getName(),program.getLanguageID().toString(),choice,sites,
-            md.toString(),csv,(int)grouped.values().stream().filter(group->
-                group.stream().anyMatch(site->
-                    HardwareReportScope.isInitializationRegister(site.register))).count(),
-                functionProposals);
+            overview,md.toString(),csv,initializationFunctions,functionProposals);
     }
 }
