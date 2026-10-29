@@ -43,20 +43,43 @@ public final class HardwareChangeProvenance {
         };
     }
 
-    /** RFC-style quoted cells; source names are user data and never uploaded. */
+    /** Bound exported evidence independently of an untrusted Review row list. */
+    public static final int MAX_CSV_ROWS=5000;
+
+    /**
+     * RFC-style quoted cells. Excel/Calc may still evaluate a CSV field as a
+     * formula *inside quotes*; prefix potential formulas with an apostrophe.
+     * Preserve the original spelling otherwise; this is never an Apply CSV.
+     */
     private static String cell(String value) {
-        if(value==null)return "\"\"";
-        return "\"" + value.replace("\"","\"\"").replace("\r"," ")
-            .replace("\n"," ") + "\"";
+        if(value==null)value="";
+        String normalized=value.replace("\r"," ").replace("\n"," ")
+            .replace("\u0000"," ").replace("\u2028"," ")
+            .replace("\u2029"," ");
+        int pos=0;
+        while(pos<normalized.length()) {
+            char c=normalized.charAt(pos);
+            if(!Character.isWhitespace(c) && !Character.isSpaceChar(c) &&
+                    c!='\ufeff' && c!='\u200b')break;
+            pos++;
+        }
+        if(pos<normalized.length() &&
+                "=+-@".indexOf(normalized.charAt(pos))>=0)
+            normalized="'"+normalized;
+        else if(normalized.startsWith("\t"))
+            normalized="'"+normalized;
+        return "\"" + normalized.replace("\"","\"\"") + "\"";
     }
 
     public static String csv(List<ReviewRow> rows) {
-        if(rows==null)throw new IllegalArgumentException("Missing provenance rows");
+        if(rows==null || rows.stream().anyMatch(r->r==null))
+            throw new IllegalArgumentException("Missing/null provenance row");
         StringBuilder out=new StringBuilder(
             "kind,address_range,proposed_name,existing_name,ghidra_source_type,"+
             "source_interpretation,proposed_origin,preflight_decision,selected,evidence\n");
-        for(ReviewRow row:rows){
-            if(row==null)throw new IllegalArgumentException("Null provenance row");
+        int retained=Math.min(rows.size(),MAX_CSV_ROWS);
+        for(int i=0;i<retained;i++){
+            ReviewRow row=rows.get(i);
             out.append(cell(row.kind())).append(',').append(cell(row.range()))
                 .append(',').append(cell(row.proposedName())).append(',')
                 .append(cell(row.displayExistingName())).append(',')
@@ -67,6 +90,20 @@ public final class HardwareChangeProvenance {
                 .append(',').append(cell(row.decision())).append(',')
                 .append(row.selected()).append(',')
                 .append(cell(row.evidence())).append('\n');
+        }
+        if(rows.size()>retained){
+            // A counted extra marker is explicit loss of review provenance.
+            // A truncated export must NEVER be read back as complete Apply
+            // input, and is not an authorship audit of the omitted items.
+            out.append(cell("OMITTED_ROWS")).append(',')
+                .append(cell("")).append(',').append(cell(""))
+                .append(',').append(cell("")).append(',').append(cell("UNKNOWN"))
+                .append(',').append(cell("EXPORT_INCOMPLETE"))
+                .append(',').append(cell("LOCAL_READ_ONLY_CSV"))
+                .append(',').append(cell("INCOMPLETE_EXPORT_NEVER_AUTO_APPLY"))
+                .append(',').append("false").append(',')
+                .append(cell((rows.size()-retained)+" rows omitted by cap"))
+                .append('\n');
         }
         return out.toString();
     }
