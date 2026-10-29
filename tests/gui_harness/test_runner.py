@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest import mock
 import zipfile
 
 from runner import (digest, fixture_binary, output_directory,
@@ -114,7 +115,7 @@ class IsolatedHarnessTests(unittest.TestCase):
 
     def test_x11_cannot_be_inferred_from_swing_bitmap(self):
         # Invalid DISPLAY or missing tools never turns into a visual PASS.
-        with unittest.mock.patch("runner.shutil.which", return_value=None):
+        with mock.patch("runner.shutil.which", return_value=None):
             status = x11_capture(self.root)
         self.assertEqual(status["human_visual_readback"], "NOT_PERFORMED")
         self.assertTrue(status["status"].startswith("BLOCKED"))
