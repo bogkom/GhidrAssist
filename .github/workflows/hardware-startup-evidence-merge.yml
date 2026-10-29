@@ -1,0 +1,40 @@
+name: Unified hardware startup evidence regression
+on:
+  pull_request:
+    paths:
+      - 'src/main/java/ghidrassist/hardware/HardwareStartupEvidenceMerge.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareInventoryService.java'
+      - 'src/main/java/ghidrassist/hardware/GhidraHardwareFlowService.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareStartupEvidenceMergeSelfTest.java'
+      - '.github/workflows/hardware-startup-evidence-merge.yml'
+  push:
+    paths:
+      - 'src/main/java/ghidrassist/hardware/HardwareStartupEvidenceMerge.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareInventoryService.java'
+      - 'src/main/java/ghidrassist/hardware/GhidraHardwareFlowService.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareStartupEvidenceMergeSelfTest.java'
+      - '.github/workflows/hardware-startup-evidence-merge.yml'
+  workflow_dispatch:
+jobs:
+  merge-candidate-evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Compile independent source reconciliation
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/startup-merge"
+          javac --release 21 -d "$RUNNER_TEMP/startup-merge" \
+            src/main/java/ghidrassist/hardware/HardwareStartupConfig.java \
+            src/main/java/ghidrassist/hardware/HardwareStartupEvidenceMerge.java \
+            src/test/java/ghidrassist/hardware/HardwareStartupEvidenceMergeSelfTest.java
+      - name: Verify no duplicate site, false word or hardware-state proof
+        run: java -cp "$RUNNER_TEMP/startup-merge" ghidrassist.hardware.HardwareStartupEvidenceMergeSelfTest
