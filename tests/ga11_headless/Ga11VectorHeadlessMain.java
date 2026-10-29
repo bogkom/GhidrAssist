@@ -23,6 +23,7 @@ import java.nio.file.*;
 import java.util.*;
 
 public final class Ga11VectorHeadlessMain {
+    static class Manager extends DefaultProjectManager { Manager(){super();} }
     static final Gson JSON=new GsonBuilder().setPrettyPrinting().create();
     static void check(boolean pass,String why){
         if(!pass)throw new AssertionError(why);
@@ -56,7 +57,7 @@ public final class Ga11VectorHeadlessMain {
         config.setApplicationLogFile(out.resolve("ghidra.log").toFile());
         Application.initializeApplication(new GhidraApplicationLayout(ghidra.toFile()),config);
         check(GraphicsEnvironment.isHeadless(),"Ghidra must really run headless");
-        DefaultProjectManager manager=new DefaultProjectManager();
+        DefaultProjectManager manager=new Manager();
         Project project=manager.openProject(new ProjectLocator(
             projectDir.toString(),"Ga11Vectors"),false,false);
         AppInfo.setActiveProject(project);
