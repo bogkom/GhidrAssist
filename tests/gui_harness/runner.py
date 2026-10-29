@@ -102,6 +102,14 @@ def x11_capture(out: Path) -> dict:
         return {"status": "BLOCKED_MISSING_X11_CAPTURE_TOOLS",
                 "human_visual_readback": "NOT_PERFORMED"}
     try:
+        record = json.loads((out / "gui-results.json").read_text(encoding="utf-8"))
+        expected_title = record.get("window_title", "")
+        if (not isinstance(expected_title, str) or len(expected_title) > 250 or
+                not all(fragment in expected_title for fragment in
+                        ("GhidrAssist isolated GUI regression",
+                         "GuiFixture", "TEST_BINARY.bin")) or
+                any(char in expected_title for char in ('\\n', '\\r', '\\x00'))):
+            raise RuntimeError("No synthetic Query host title recorded by Java")
         # The Ghidra docking frame can prefix the tool name with a
         # disposable program/project title. xwininfo -name requires an
         # EXACT title and incorrectly misses a valid prefixed frame.
@@ -113,8 +121,10 @@ def x11_capture(out: Path) -> dict:
         # application window, preferring the shallower hierarchy on ties.
         candidates = []
         for match in re.finditer(
-                r'(?im)^(\s*)(0x[0-9a-f]+)\s+"[^"\n]*GhidrAssist isolated GUI regression[^"\n]*"',
+                r'(?m)^(\s*)(0x[0-9a-fA-F]+)\s+"([^"\n]+)"',
                 tree.stdout):
+            if match.group(3) != expected_title:
+                continue
             xid = match.group(2)
             details = subprocess.run(
                 ["xwininfo", "-id", xid],
@@ -127,7 +137,7 @@ def x11_capture(out: Path) -> dict:
                 size = int(width.group(1)) * int(height.group(1))
                 candidates.append((size, -len(match.group(1)), xid))
         if not candidates:
-            raise RuntimeError("No visible suitably sized isolated GhidrAssist X11 frame")
+            raise RuntimeError("No visible mapped X11 frame exactly matching the Java Query host")
         candidates.sort(reverse=True)
         if len(candidates) > 1 and candidates[0][:2] == candidates[1][:2]:
             raise RuntimeError("Ambiguous equal-size X11 frames: no screenshot")
