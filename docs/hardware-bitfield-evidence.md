@@ -35,3 +35,16 @@ must not gain synthetic bitfield values. In generic CPU32 survey mode
 no MC68332 bitfield interpretation may be displayed. Ensure no write to
 the project and compare with the existing CSBOOT table and RESET report.
 No Supervisor plan is approved or submitted by this code change.
+
+## 2026-10-29 — numeric PDF-page claim gate
+
+A nonempty source-page string is insufficient to treat a bitfield as
+sourced. The decoder now requires an explicit numeric `PDF page N` or
+`PDF pages N-M` reference and rejects UNKNOWN/UNVERIFIED, ambiguous,
+missing and "to be verified" page labels. This is a *declared source-page
+claim* in the profile, not independent verification of an actual PDF
+edition or bytes. The rendered static bitfield summary says so.
+
+For unknown, incorrectly sized or otherwise unsourced writes the
+existing status remains UNKNOWN/NO_SOURCED_FIELDS. Other bits remain
+uninterpreted, and no dynamic SIMCR/MM latch or MCU identity is inferred.
