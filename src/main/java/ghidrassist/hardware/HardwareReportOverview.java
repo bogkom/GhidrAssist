@@ -12,6 +12,26 @@ public final class HardwareReportOverview {
 
     public record Site(String register, boolean writeCandidate, boolean literalKnown) {}
 
+    /**
+     * The historical Listing/XREF figures stay separately labeled: adding
+     * CFG-only sites to them would double-count shared source instructions.
+     */
+    public static String withUnifiedSources(String listingOverview,
+            HardwareStartupEvidenceMerge.Report merged) {
+        if(listingOverview==null || merged==null ||
+                !listingOverview.contains("## 2. Register write history"))
+            throw new IllegalArgumentException("Invalid overview/unified evidence");
+        String marker="## 2. Register write history — static evidence\n\n";
+        String note="- Source-reconciled Listing + CFG/P-code candidate sites: "+
+            merged.rows().size()+" (raw source observations: "+merged.rawSites()+
+            ", deduplicated matches: "+merged.duplicateSources()+
+            ", conflicting sites: "+merged.conflicts()+
+            ", unresolved ANY-MMIO pointer aliases: "+
+            merged.unboundAliasStores()+"). These are static source "+
+            "candidates, NOT an execution count or verified hardware state.\n";
+        return listingOverview.replace(marker,marker+note);
+    }
+
     public static String render(boolean userSelectedMc68332, int listingScanned,
             int initializationFunctions, int vbrCandidates, int unknownIndirectStores,
             boolean cfgLimited, List<Site> input) {

@@ -182,3 +182,15 @@ Full MCU/peripheral emulation, physical CS electrical simulation, generic automa
 - Deterministic synthetic conflicts/alias/duplicate tests and complete
   Ghidra 12.1.4 extension CI required before a pinned host plan; no
   changes to original program, RAG documents or user secrets.
+
+
+## 2026-10-29 — GA-07 unified evidence summary without double-counting
+
+- Three-part Overview remains compact, but section 2 now separately
+  records unique function/PC/address source sites from both Listing/XREF
+  and CFG/P-code, raw observations, deduplicated matches, conflicting
+  candidate values and unknown-pointer aliases.
+- Existing Listing count is deliberately not relabeled as runtime
+  writes, and compiled CFG-only stores are not silently folded into
+  historical Listing counts. No false execution or memory-map claims.
+- Added pure Java summary/regression and full Ghidra build gate.

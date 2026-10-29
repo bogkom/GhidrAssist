@@ -377,6 +377,7 @@ public final class HardwareInventoryService {
         }
         var merged=HardwareStartupEvidenceMerge.reconcile(sources);
         md.append("\n\n").append(merged.markdown(concreteDevice));
+        overview=HardwareReportOverview.withUnifiedSources(overview,merged);
         List<HardwareStartupConfig.Site> startupSites=new ArrayList<>();
         for(var item:merged.rows())
             startupSites.add(item.forStartup(

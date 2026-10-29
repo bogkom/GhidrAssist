@@ -43,6 +43,29 @@ public final class HardwareReportOverviewSelfTest {
             cpu.contains("No MC68332 CS ranges are asserted") &&
             cpu.contains("focused initialization register sites: 0"),
             "generic CPU32 does not inherit MCU-specific map");
+        var merged=HardwareStartupEvidenceMerge.reconcile(List.of(
+            new HardwareStartupEvidenceMerge.Observation(
+                0x2bc0,0x2bca,0xfffa00,"SIMCR",
+                HardwareStartupEvidenceMerge.Source.LISTING_REFERENCE,
+                true,16,0x40ca,false),
+            new HardwareStartupEvidenceMerge.Observation(
+                0x2bc0,0x2bca,0xfffa00,"SIMCR",
+                HardwareStartupEvidenceMerge.Source.CFG_PCODE,
+                true,16,0x40ca,false),
+            new HardwareStartupEvidenceMerge.Observation(
+                0x2bc0,0x2bcc,-1,"UNRESOLVED_ALIAS",
+                HardwareStartupEvidenceMerge.Source.CFG_PCODE,
+                true,0,null,true)));
+        String unified=HardwareReportOverview.withUnifiedSources(selected,merged);
+        require(unified.contains("Source-reconciled Listing + CFG/P-code candidate sites: 1") &&
+            unified.contains("raw source observations: 3") &&
+            unified.contains("deduplicated matches: 1") &&
+            unified.contains("unresolved ANY-MMIO pointer aliases: 1") &&
+            unified.contains("NOT an execution count"),
+            "overview displays honest deduplicated candidate count");
+        require(unified.indexOf("## 1.")<unified.indexOf("## 2.") &&
+            unified.indexOf("## 2.")<unified.indexOf("## 3."),
+            "unified provenance must preserve overview hierarchy");
         boolean invalid=false;
         try{HardwareReportOverview.render(true,-1,0,0,0,false,sites);}
         catch(IllegalArgumentException expected){invalid=true;}

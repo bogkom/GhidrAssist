@@ -37,6 +37,8 @@ jobs:
           mkdir -p "$RUNNER_TEMP/overview"
           javac --release 21 -d "$RUNNER_TEMP/overview" \
             src/main/java/ghidrassist/hardware/HardwareReportScope.java \
+            src/main/java/ghidrassist/hardware/HardwareStartupConfig.java \
+            src/main/java/ghidrassist/hardware/HardwareStartupEvidenceMerge.java \
             src/main/java/ghidrassist/hardware/HardwareReportOverview.java \
             src/test/java/ghidrassist/hardware/HardwareReportOverviewSelfTest.java
       - name: Assert static-only counts and generic CPU32 mode
