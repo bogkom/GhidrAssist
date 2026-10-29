@@ -11,6 +11,7 @@ import ghidrassist.context.ContextWindowListener;
 import ghidrassist.tools.approval.ToolApprovalService;
 import ghidrassist.tools.api.Tool;
 import ghidrassist.tools.api.ToolExecutionObserver;
+import ghidrassist.tools.registry.ToolExecutionPolicy;
 import ghidrassist.tools.native_.DocumentToolProvider;
 import ghidrassist.tools.native_.NativeToolManager;
 import ghidrassist.tools.registry.ToolRegistry;
@@ -53,6 +54,7 @@ public class ReActOrchestrator {
     // Dependencies
     private final LlmApi llmApi;
     private final MCPToolManager mcpToolManager;
+    private final boolean mcpToolsEnabled;
     private final ToolRegistry toolRegistry;
     private final GhidrAssistPlugin plugin;
     private NativeToolManager nativeToolManager;
@@ -87,6 +89,18 @@ public class ReActOrchestrator {
         int contextSummaryThreshold,
         int maxToolRounds
     ) {
+        this(providerConfig, plugin, maxIterations, contextSummaryThreshold, maxToolRounds, true);
+    }
+
+    public ReActOrchestrator(
+        APIProviderConfig providerConfig,
+        GhidrAssistPlugin plugin,
+        int maxIterations,
+        int contextSummaryThreshold,
+        int maxToolRounds,
+        boolean enableMcpTools
+    ) {
+        this.mcpToolsEnabled = enableMcpTools;
         this.plugin = plugin;
         this.maxIterations = maxIterations;
         this.baseMaxIterations = maxIterations;  // Store original limit
@@ -129,7 +143,7 @@ public class ReActOrchestrator {
             registry.registerProvider(nativeToolManager);
 
             // Register MCP tools
-            registry.registerProvider(mcpToolManager);
+            if (mcpToolsEnabled) registry.registerProvider(mcpToolManager);
 
             // Set program context for tools that need it
             ghidra.program.model.listing.Program currentProgram = plugin.getCurrentProgram();
@@ -289,13 +303,36 @@ public class ReActOrchestrator {
         ReActProgressHandler handler,
         String approvedPlan
     ) {
+        return analyzeWithPolicy(query, initialContext, sessionId, handler, approvedPlan, null);
+    }
+
+    /** Callers with explicit restrictions must supply a structured, validated policy. */
+    public CompletableFuture<ReActResult> analyze(
+        String query, String initialContext, String sessionId, ReActProgressHandler handler,
+        String approvedPlan, ToolExecutionPolicy policy
+    ) {
+        return analyzeWithPolicy(query, initialContext, sessionId, handler, approvedPlan, java.util.Objects.requireNonNull(policy));
+    }
+
+    private synchronized CompletableFuture<ReActResult> analyzeWithPolicy(
+        String query, String initialContext, String sessionId, ReActProgressHandler handler,
+        String approvedPlan, ToolExecutionPolicy policy
+    ) {
+        synchronized (analysisStateLock) {
+            if (activeResultFuture != null)
+                return CompletableFuture.failedFuture(new IllegalStateException("An investigation is already active"));
+        }
         CompletableFuture<ReActResult> resultFuture = new CompletableFuture<>();
-        resultFuture.whenComplete((result, error) -> clearActiveAnalysis(resultFuture));
+        resultFuture.whenComplete((result, error) -> {
+            clearActiveAnalysis(resultFuture);
+        });
         Instant startTime = Instant.now();
         cancelled.set(false);
         // A new investigation must not inherit evidence or expanded iteration
         // budgets from an earlier firmware/program/session.
         toolRegistry.clearRecentToolEvidence();
+        if (policy == null) toolRegistry.configureInvestigationToolLimit(query);
+        else toolRegistry.configureInvestigationToolLimit(query, policy);
         maxIterations = baseMaxIterations;
 
         try {
@@ -632,6 +669,9 @@ public class ReActOrchestrator {
             todoManager.getCompletedSummary(),
             findings.formatIterationSummaries()
         );
+        synthesisPrompt += "\n\\nVerified tool executions recorded by dispatcher: "
+            + toolRegistry.getInvestigationToolCallCount()
+            + ". Report this count exactly; do not estimate based on tasks or iterations.";
 
         // Get final answer without tool calling
         llmApi.sendRequestAsync(synthesisPrompt, new LlmApi.LlmResponseHandler() {
@@ -648,8 +688,8 @@ public class ReActOrchestrator {
                     return;
                 }
                 answer.append(partialResponse);
-                // Stream synthesis to UI
-                handler.onSynthesisChunk(partialResponse);
+                // Publish only after checking the completed synthesis against dispatcher facts.
+                // Otherwise a denied operation can briefly appear as successful in the UI.
             }
 
             @Override
@@ -662,16 +702,18 @@ public class ReActOrchestrator {
                     return;
                 }
 
+                String verifiedAnswer = toolRegistry.getExecutionJournal().verifiedAnswer(fullResponse);
+                handler.onSynthesisChunk(verifiedAnswer);
                 // Build result with the provided completion status
                 ReActResult result = new ReActResult.Builder()
                     .status(completionStatus)
-                    .answer(fullResponse)
+                    .answer(verifiedAnswer)
                     .findings(findings.getAllFindings().stream()
                         .map(f -> f.getFact())
                         .toList())
                     .iterationSummaries(findings.getIterationSummaries())
                     .iterationCount(iterationCount)
-                    .toolCallCount(toolCallCount)
+                    .toolCallCount(toolRegistry.getInvestigationToolCallCount())
                     .duration(Duration.between(startTime, Instant.now()))
                     .build();
 
@@ -976,6 +1018,7 @@ public class ReActOrchestrator {
     private void clearActiveAnalysis(CompletableFuture<ReActResult> resultFuture) {
         synchronized (analysisStateLock) {
             if (activeResultFuture == resultFuture) {
+                toolRegistry.clearInvestigationToolLimit();
                 activeResultFuture = null;
                 activeStartTime = null;
                 activeFindings = null;

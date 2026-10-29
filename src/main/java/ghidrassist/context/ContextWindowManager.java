@@ -201,15 +201,8 @@ public class ContextWindowManager {
         double keepRatio = (double) actualMaxTokens / resultTokens;
         int charsToKeep = (int) (result.length() * keepRatio);
 
-        // Keep first 70% of allowed space, last 30%
-        int startChars = (int) (charsToKeep * 0.7);
-        int endChars = (int) (charsToKeep * 0.3);
-
-        String truncated = result.substring(0, Math.min(startChars, result.length())) +
-            "\n\n[... truncated for context management ...]\n\n" +
-            result.substring(Math.max(0, result.length() - endChars));
-
-        return truncated;
+        // Source and pagination metadata is independent of the excerpt budget.
+        return ghidrassist.tools.context.ToolResultContext.truncate(result, Math.max(0, charsToKeep));
     }
 
     /**

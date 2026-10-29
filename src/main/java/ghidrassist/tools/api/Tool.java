@@ -15,6 +15,9 @@ public interface Tool {
      */
     String getName();
 
+    /** Stable operation identity shared by aliases from the same provider. */
+    default String getExecutionIdentity() { return getSource() + ":" + getName(); }
+
     /**
      * Get a human-readable description of what this tool does.
      * @return Tool description

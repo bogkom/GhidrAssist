@@ -7,6 +7,7 @@ on:
       - master
       - feature/hardware-analysis-seven-stages
       - feature/hardware-controlflow-rag-integration
+      - codex/agentic-policy-and-evidence-fixes
     paths:
       - 'src/main/java/ghidrassist/hardware/**'
       - 'src/main/java/ghidrassist/agent/**'
@@ -80,7 +81,18 @@ jobs:
             exit 1
           fi
           unzip -tq "${packages[0]}"
+          mapfile -t roots < <(unzip -Z1 "${packages[0]}" | awk -F/ 'NF {print $1}' | sort -u)
+          test "${#roots[@]}" -eq 1 && test "${roots[0]}" = GhidrAssist
+          unzip -p "${packages[0]}" GhidrAssist/extension.properties > "$RUNNER_TEMP/extension.properties"
+          grep -Fxq 'version=12.1.4' "$RUNNER_TEMP/extension.properties"
+          test "$(unzip -Z1 "${packages[0]}" | grep -Fx 'GhidrAssist/lib/GhidrAssist.jar')" = GhidrAssist/lib/GhidrAssist.jar
+          mkdir -p "$RUNNER_TEMP/install-check"
+          unzip -q "${packages[0]}" -d "$RUNNER_TEMP/install-check"
+          test -f "$RUNNER_TEMP/install-check/GhidrAssist/extension.properties"
+          test -f "$RUNNER_TEMP/install-check/GhidrAssist/lib/GhidrAssist.jar"
+          jar tf "$RUNNER_TEMP/install-check/GhidrAssist/lib/GhidrAssist.jar" | grep -Fxq 'ghidrassist/apiprovider/APIProvider.class'
           ( cd dist && sha256sum "$(basename "${packages[0]}")" > SHA256SUMS.txt )
+          ( cd dist && sha256sum -c SHA256SUMS.txt )
           printf 'Extension package: %s\n' "${packages[0]}"
           ls -lh "${packages[0]}" dist/SHA256SUMS.txt
       - name: Assert CPU32 downloader resource is in the installable extension

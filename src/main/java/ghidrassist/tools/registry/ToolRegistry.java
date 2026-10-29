@@ -11,6 +11,7 @@ import ghidrassist.tools.api.ToolExecutor;
 import ghidrassist.hardware.McpEvidenceGuard;
 import ghidrassist.tools.api.ToolProvider;
 import ghidrassist.tools.api.ToolResult;
+import ghidrassist.tools.context.ToolResultContext;
 import ghidrassist.tools.native_.NativeToolManager;
 
 import java.util.ArrayList;
@@ -47,6 +48,99 @@ public class ToolRegistry implements ToolExecutor {
     private volatile ToolApprovalService approvalService;
     private volatile IntSupplier activeSessionSupplier = () -> -1;
     private volatile Supplier<String> programHashSupplier = () -> null;
+    // Limits are enforced by the dispatcher, not merely suggested to the LLM.
+    // A null limit means the user did not request a hard per-investigation cap.
+    private Integer investigationToolLimit;
+    private boolean investigationReadOnly;
+    private int investigationToolCalls;
+    private volatile ToolExecutionJournal executionJournal = new ToolExecutionJournal();
+    private boolean investigationClosed;
+    private volatile ToolExecutionPolicy executionPolicy = ToolExecutionPolicy.unrestricted();
+    private final Map<String, Integer> perToolCalls = new HashMap<>();
+    private final java.util.Set<String> investigationReadKeys = new java.util.HashSet<>();
+    private synchronized boolean reserveUniqueRead(String toolName, JsonObject args) {
+        // Task status is a changing observation, including server-prefixed MCP names.
+        String localName = toolName == null ? "" : toolName.substring(toolName.lastIndexOf('.') + 1);
+        if (localName.equals("get_task_status") || !isReadOnlyLookup(toolName)) return true;
+        Tool tool = getTool(toolName);
+        String key = (tool == null ? toolName : tool.getExecutionIdentity()) + ":" + (args == null ? "{}" : args.toString());
+        return investigationReadKeys.add(key);
+    }
+
+
+    public synchronized void configureInvestigationToolLimit(String objective) {
+        configureInvestigationToolLimit("", ToolExecutionPolicy.unrestricted());
+        String normalized = objective == null ? "" : objective.toLowerCase(java.util.Locale.ROOT);
+        investigationReadOnly = normalized.contains("nie modyfikuj projektu")
+            || normalized.contains("nie zmieniaj projektu")
+            || normalized.contains("do not modify the project")
+            || normalized.contains("do not change the program");
+        if (normalized.contains("nie wywołuj żadnych narzędzi")
+                || normalized.contains("nie wykonuj żadnych wywołań")
+                || normalized.contains("do not call any tools")
+                || normalized.contains("do not invoke any tools")) {
+            investigationToolLimit = 0;
+        } else if (normalized.contains("wywołaj dokładnie jeden raz")
+                || normalized.contains("nie wykonuj więcej niż jednego wywołania")
+                || normalized.contains("maksymalnie jedno wywołanie")
+                || normalized.contains("exactly one tool call")
+                || normalized.contains("call exactly one tool")) {
+            investigationToolLimit = 1;
+        } else {
+            investigationToolLimit = null;
+        }
+    }
+
+
+    /** Explicit policy is authoritative; do not reinterpret its budgets from prose. */
+    public synchronized void configureInvestigationToolLimit(String ignoredObjective, ToolExecutionPolicy policy) {
+        executionPolicy = java.util.Objects.requireNonNull(policy);
+        executionJournal = new ToolExecutionJournal();
+        investigationClosed = false;
+        perToolCalls.clear();
+        investigationToolCalls = 0;
+        investigationReadKeys.clear();
+        investigationToolLimit = policy.totalLimit();
+        investigationReadOnly = policy.readOnly();
+    }
+
+    public synchronized void clearInvestigationToolLimit() {
+        investigationClosed = true;
+        executionPolicy = ToolExecutionPolicy.unrestricted();
+        perToolCalls.clear();
+        investigationToolLimit = null;
+        investigationReadOnly = false;
+        investigationToolCalls = 0;
+        investigationReadKeys.clear();
+    }
+
+    private synchronized String reserveInvestigationToolCall(String toolName, JsonObject args, ToolExecutionJournal journal) {
+        if (journal != executionJournal || investigationClosed) return "Investigation is no longer active";
+        if (!executionPolicy.allows(toolName)) return "Tool call blocked: tool is not allowed by the controller policy";
+        Tool tool = getTool(toolName);
+        String identity = tool.getExecutionIdentity();
+        Integer toolLimit = executionPolicy.limit(toolName);
+        // A budget on one registered alias also constrains the same backend operation.
+        for (Tool candidate : getAllTools()) {
+            Integer candidateLimit = executionPolicy.limit(candidate.getName());
+            if (candidateLimit != null && identity.equals(candidate.getExecutionIdentity()))
+                toolLimit = toolLimit == null ? candidateLimit : Math.min(toolLimit, candidateLimit);
+        }
+        if (toolLimit != null && perToolCalls.getOrDefault(identity, 0) >= toolLimit)
+            return "Tool call blocked: per-tool limit reached for " + toolName;
+        if (investigationToolLimit != null && investigationToolCalls >= investigationToolLimit)
+            return "Tool call blocked: user-defined investigation tool limit reached";
+        if (!reserveUniqueRead(toolName, args))
+            return "Duplicate read-only request suppressed; reuse previous evidence";
+        investigationToolCalls++;
+        perToolCalls.merge(identity, 1, Integer::sum);
+        return null;
+    }
+
+    public synchronized int getInvestigationToolCallCount() {
+        return investigationToolCalls;
+    }
+
 
     /**
      * Register a tool provider.
@@ -133,96 +227,103 @@ public class ToolRegistry implements ToolExecutor {
         return providers.stream().anyMatch(p -> p.handlesTool(toolName));
     }
 
+    public ToolExecutionJournal getExecutionJournal() { return executionJournal; }
+
+    private void notifyObserver(java.util.function.Consumer<ToolExecutionObserver> callback) {
+        ToolExecutionObserver observer = executionObserver;
+        if (observer == null) return;
+        try { callback.accept(observer); }
+        catch (RuntimeException error) { Msg.warn(this, "Tool observer failed: " + error.getMessage()); }
+    }
+
+    private ToolResult reject(ToolExecutionJournal journal, String id, Tool tool, JsonObject args,
+            int sessionId, String hash, String reason) {
+        journal.finished(id, ToolExecutionJournal.State.REJECTED, reason);
+        if (tool != null && sessionId > 0)
+            notifyObserver(observer -> observer.onToolCallFailed(sessionId, hash, id, tool, args, reason));
+        return ToolResult.error(reason);
+    }
+
+    /** A transaction failed before the dispatcher was entered; it did not execute a tool. */
+    public void recordPreDispatchFailure(ToolExecutionJournal journal, String name, JsonObject args, String reason) {
+        String id = java.util.UUID.randomUUID().toString();
+        journal.requested(id, name, args == null ? "{}" : args.toString());
+        journal.finished(id, ToolExecutionJournal.State.FAILED, reason);
+    }
+
     @Override
     public CompletableFuture<ToolResult> execute(String toolName, JsonObject args) {
-        Tool tool = getTool(toolName);
-        if (tool == null) {
-            Msg.warn(this, "No provider found for tool: " + toolName);
-            return CompletableFuture.completedFuture(
-                    ToolResult.error("Unknown tool: " + toolName));
+        final ToolExecutionJournal journal = executionJournal;
+        final String id = java.util.UUID.randomUUID().toString();
+        journal.requested(id, toolName, args == null ? "{}" : args.toString());
+        final Tool tool = getTool(toolName);
+        final int sessionId = activeSessionSupplier != null ? activeSessionSupplier.getAsInt() : -1;
+        final String hash = programHashSupplier != null ? programHashSupplier.get() : null;
+        if (tool != null && sessionId > 0)
+            notifyObserver(observer -> observer.onToolCallRequested(sessionId, hash, id, tool, args));
+        String earlyRejection = tool == null ? "Unknown tool: " + toolName
+            : !executionPolicy.allows(toolName) ? "Tool call blocked: tool is not allowed by the controller policy"
+            : investigationToolLimit != null && investigationToolLimit == 0 ? "Tool call blocked: the user prohibited tools for this investigation"
+            : investigationReadOnly && !isReadOnlyLookup(toolName) ? "Tool call blocked: the user explicitly prohibited Ghidra project modification" : null;
+        if (earlyRejection != null)
+            return CompletableFuture.completedFuture(reject(journal, id, tool, args, sessionId, hash, earlyRejection));
+
+        CompletableFuture<ToolApprovalService.ApprovalOutcome> approval;
+        try {
+            approval = approvalService == null
+                ? CompletableFuture.completedFuture(ToolApprovalService.ApprovalOutcome.approved(ToolApprovalService.DECISION_ALLOW_ONCE))
+                : java.util.Objects.requireNonNull(approvalService.requestApproval(sessionId, hash, id, tool, args));
+        } catch (Exception error) {
+            approval = CompletableFuture.failedFuture(error);
         }
-
-        int sessionId = activeSessionSupplier != null ? activeSessionSupplier.getAsInt() : -1;
-        String programHash = programHashSupplier != null ? programHashSupplier.get() : null;
-        String correlationId = java.util.UUID.randomUUID().toString();
-
-        if (executionObserver != null && sessionId > 0) {
-            executionObserver.onToolCallRequested(sessionId, programHash, correlationId, tool, args);
-        }
-        Msg.info(this, "Tool requested: " + toolName + " (" + tool.getSource() + ")");
-
-        CompletableFuture<ToolApprovalService.ApprovalOutcome> approvalFuture =
-            approvalService != null
-                ? approvalService.requestApproval(sessionId, programHash, correlationId, tool, args)
-                : CompletableFuture.completedFuture(ToolApprovalService.ApprovalOutcome.approved(
-                    ToolApprovalService.DECISION_ALLOW_ONCE));
-
-        return approvalFuture.thenComposeAsync(outcome -> {
-            if (outcome == null || !outcome.isApproved()) {
-                Msg.warn(this, "Tool denied: " + toolName);
-                if (executionObserver != null && sessionId > 0) {
-                    executionObserver.onToolCallFailed(sessionId, programHash, correlationId, tool, args,
-                            "Execution denied by user");
-                }
-                return CompletableFuture.completedFuture(ToolResult.error("Tool execution denied by user"));
-            }
-
+        return approval.thenComposeAsync(outcome -> {
+            if (outcome == null || !outcome.isApproved())
+                return CompletableFuture.completedFuture(reject(journal, id, tool, args, sessionId, hash, "Tool execution denied by user"));
             for (ToolProvider provider : providers) {
-                if (provider.handlesTool(toolName)) {
-                    Msg.debug(this, "Routing tool '" + toolName + "' to provider: " + provider.getProviderName());
-                    Msg.info(this, "Executing tool '" + toolName + "' via provider " + provider.getProviderName());
-                    if (executionObserver != null && sessionId > 0) {
-                        executionObserver.onToolCallStarted(sessionId, programHash, correlationId, tool, args);
+                if (!provider.handlesTool(toolName)) continue;
+                // An approval for an investigation that has already ended cannot start new work.
+                if (journal != executionJournal)
+                    return CompletableFuture.completedFuture(reject(journal, id, tool, args, sessionId, hash, "Investigation is no longer active"));
+                String rejection = reserveInvestigationToolCall(toolName, args, journal);
+                if (rejection != null)
+                    return CompletableFuture.completedFuture(reject(journal, id, tool, args, sessionId, hash, rejection));
+                journal.started(id);
+                if (sessionId > 0)
+                    notifyObserver(observer -> observer.onToolCallStarted(sessionId, hash, id, tool, args));
+                Msg.info(this, "Executing tool '" + toolName + "' via provider " + provider.getProviderName());
+                return provider.executeTool(toolName, args).handle((result, failure) -> {
+                    ToolResult safe = failure != null ? ToolResult.error(failure.toString())
+                        : result == null ? ToolResult.error("Tool returned no result") : result;
+                    if (safe.isSuccess()) {
+                        String original = safe.getContent();
+                        String checked = McpEvidenceGuard.enrich(toolName, original);
+                        if (checked != null && !checked.equals(original)) safe = ToolResult.success(checked);
+                        if (journal == executionJournal) {
+                            if (isReadOnlyLookup(toolName)) rememberSuccessfulRead(toolName, args, safe.getContent());
+                            else clearRecentToolEvidence();
+                        }
                     }
-                    return provider.executeTool(toolName, args)
-                            .handle((result, throwable) -> {
-                                if (throwable != null) {
-                                    Msg.warn(this, "Tool failed: " + toolName + " - " + throwable.getMessage());
-                                    if (executionObserver != null && sessionId > 0) {
-                                        executionObserver.onToolCallFailed(sessionId, programHash, correlationId,
-                                                tool, args, throwable.getMessage());
-                                    }
-                                    return ToolResult.error(throwable.getMessage());
-                                }
-
-                                ToolResult safeResult = result != null ? result : ToolResult.error("Tool returned no result");
-                                // Add deterministic, source-bound evidence to MCP disassembly.
-                                // The source output is retained verbatim after the annotations.
-                                if (safeResult.isSuccess()) {
-                                    String original = safeResult.getContent();
-                                    String checked = McpEvidenceGuard.enrich(toolName, original);
-                                    if (checked != null && !checked.equals(original))
-                                        safeResult = ToolResult.success(checked);
-                                }
-                                if (safeResult.isError()) {
-                                    Msg.warn(this, "Tool returned error: " + toolName + " - " + safeResult.getErrorMessage());
-                                } else {
-                                    Msg.info(this, "Tool completed: " + toolName);
-                                    if (isReadOnlyLookup(toolName))
-                                        rememberSuccessfulRead(toolName, args, safeResult.getContent());
-                                    else
-                                        clearRecentToolEvidence(); // A write may invalidate earlier snapshots.
-                                }
-                                if (executionObserver != null && sessionId > 0) {
-                                    if (safeResult.isError()) {
-                                        executionObserver.onToolCallFailed(sessionId, programHash, correlationId,
-                                                tool, args, safeResult.getErrorMessage());
-                                    } else {
-                                        executionObserver.onToolCallCompleted(sessionId, programHash, correlationId,
-                                                tool, args, safeResult);
-                                    }
-                                }
-                                return safeResult;
-                            });
-                }
+                    journal.finished(id, safe.isSuccess() ? ToolExecutionJournal.State.SUCCEEDED : ToolExecutionJournal.State.FAILED,
+                        safe.getContentOrError());
+                    final ToolResult delivered = safe;
+                    if (sessionId > 0) notifyObserver(observer -> {
+                        if (delivered.isError()) observer.onToolCallFailed(sessionId, hash, id, tool, args, delivered.getErrorMessage());
+                        else observer.onToolCallCompleted(sessionId, hash, id, tool, args, delivered);
+                    });
+                    return safe;
+                });
             }
-
-            Msg.warn(this, "No provider found for tool: " + toolName);
-            return CompletableFuture.completedFuture(ToolResult.error("Unknown tool: " + toolName));
+            return CompletableFuture.completedFuture(reject(journal, id, tool, args, sessionId, hash, "No provider found for tool: " + toolName));
+        }).exceptionally(error -> {
+            String reason = "Tool execution failed: " + error;
+            journal.finished(id, ToolExecutionJournal.State.FAILED, reason);
+            if (sessionId > 0) notifyObserver(observer -> observer.onToolCallFailed(sessionId, hash, id, tool, args, reason));
+            return ToolResult.error(reason);
         });
     }
 
-    private static boolean isReadOnlyLookup(String name) {
+    /** Existing dispatcher classification, also displayed by the task-policy editor. */
+    public static boolean isReadOnlyLookup(String name) {
         if (name == null) return false;
         String local=name.toLowerCase(java.util.Locale.ROOT);
         return local.contains("get_") || local.contains("list_") ||
@@ -232,6 +333,7 @@ public class ToolRegistry implements ToolExecutor {
     /** Reset evidence at the start of each ReAct investigation or after a write. */
     public synchronized void clearRecentToolEvidence() {
         toolObservations.clear();
+        investigationReadKeys.clear();
     }
 
     /** Only successful read-only observations; bounded to eight distinct queries. */
@@ -241,7 +343,7 @@ public class ToolRegistry implements ToolExecutor {
         String key=name+" "+(args==null?"{}":args.toString());
         // Put recent data last even when the same read was attempted again.
         toolObservations.remove(key);
-        String concise=content.length()>2200?content.substring(0,2200)+" [output truncated]":content;
+        String concise = ToolResultContext.truncate(content, 2200);
         toolObservations.put(key,concise);
         while(toolObservations.size()>8)
             toolObservations.remove(toolObservations.keySet().iterator().next());
