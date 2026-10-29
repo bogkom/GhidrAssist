@@ -231,14 +231,19 @@ public final class HardwareInventoryService {
             md.append("### ").append(group.getKey()).append("\n\n");
             // Different MM windows never form one combined state.
             for(int mm=0;mm<=1;mm++){
-                Map<String,Integer> values=new LinkedHashMap<>();
+                List<HardwareStaticWordConsensus.Observation> localWrites=
+                    new ArrayList<>();
+                for(Site site:group.getValue())
+                    if((site.registerAddress<0x800000L?0:1)==mm)
+                        localWrites.add(new HardwareStaticWordConsensus.Observation(
+                            site.register,site.write,site.literal));
+                var consensus=HardwareStaticWordConsensus.inspect(localWrites);
+                // No source-PC last-write-wins: any conflicting or unknown
+                // write excludes the register from a single-value sketch.
+                Map<String,Integer> values=consensus.singleLiteralCandidates();
                 boolean any=false;
                 for(Site site:group.getValue()){
                     if((site.registerAddress<0x800000L?0:1)!=mm)continue;
-                    if(site.write){
-                        if(site.literal==null)values.remove(site.register);
-                        else values.put(site.register,site.literal);
-                    }
                     // CSPAR and other register writes update internal context,
                     // but only key initialization registers appear as rows.
                     if(!HardwareReportScope.isInitializationRegister(site.register))
@@ -263,7 +268,11 @@ public final class HardwareInventoryService {
                     md.append("\n");
                 }
                 if(!any)continue;
-                md.append("\n**MM=").append(mm).append(" conditional linear-code snapshot**\n\n");
+                md.append("\n**MM=").append(mm)
+                    .append(" conditional candidate snapshot (NOT active state)**\n\n");
+                md.append("- ").append(consensus.description()).append(". ")
+                    .append("Alternative/unknown sites are excluded from any ")
+                    .append("single-value CS table.\n\n");
                 if(concreteDevice && !values.isEmpty()){
                     md.append("**Per-select Chip Select table (conditional; function-local code sites)**\n\n");
                     md.append(ChipSelectTable.markdown(values, true));

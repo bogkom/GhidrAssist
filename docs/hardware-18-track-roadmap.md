@@ -198,3 +198,18 @@ Full MCU/peripheral emulation, physical CS electrical simulation, generic automa
 - Robustness follow-up: width=0 unmodeled P-code STORE now means
   UNKNOWN-width alias, rather than throwing an exception during a
   real Ghidra CFG pass. Synthetic regression covers this case.
+
+
+## 2026-10-29 — GA-02/03 no lexical last-write-wins CS map
+
+- The earlier per-function MM0/MM1 conditional CS table used a lexical
+  address-ordered `Map.put` that could accidentally select the last
+  source site even across branch alternatives.
+- A standalone pure-Java source-consensus gate now includes a register
+  only when **all observed candidate writes** have the same known
+  full-word literal. Any different literal, partial-width or unknown
+  write excludes the register and counts the conflict/unknown.
+- The table remains a *conditional source sketch*, never a physical
+  Chip Select configuration. Regression tests cover repeated agreeing
+  literals, conflicting SIMCR values, unknown CSOR writes and
+  reference-only sites. Full Ghidra 12.1.4 build gate remains.
