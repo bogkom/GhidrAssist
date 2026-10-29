@@ -33,7 +33,7 @@ The originating document has 18 *sections*, not 18 independent feature checkboxe
 | GA-13 | 13.5 | Human/analysis/AI origin of changes | MISSING verified per-symbol provenance | Check actual Ghidra 12.1.4 SourceType API; retain rationale and Undo |
 | GA-14 | 13.6 | Firmware configuration comparison | DEFERRED by source priorities | Assess Ghidra Version Tracking first; later CS/VBR/peripheral diff |
 | GA-15 | 13.7 | Agentic planning, indirect calls, context, pagination, stale cache | PARTIAL: draft PR #49/#50 overlap and existing Agentic work | Don't duplicate existing tools; budget/policy evidence regression |
-| GA-16 | 15 | Physical PDF page/printed label, register tables, sourced RAG | PARTIAL: native PDF/RAG and labels; tables uncertain | No auto-promotion of ambiguous PDF rows; page/edition evidence |
+| GA-16 | 15 | Physical PDF page/printed label, register tables, sourced RAG | PARTIAL DRAFT: physical PDF/printed label provenance plus adjacent folio consistency audit; table interpretation still uncertain | No auto-promotion of ambiguous PDF rows; page/edition evidence |
 | GA-17 | 16 | CI, synthetic tests, isolated ECU411 project acceptance and rollback | PARTIAL: pure-Java Actions and private firmware tests exist | Compile 12.1.4, record artifacts/hashes, reversible actual-Ghidra test |
 | GA-18 | 17 + new decision | GitHub-controlled multi-stage local Supervisor tests | SUPERVISOR IMPLEMENTED; no GhidrAssist queued plans yet | Pinned JSON, explicit approve, quota safeguards, verified private reports |
 
@@ -57,3 +57,18 @@ For upcoming steps prepare independent Supervisor plans, each pinned to the corr
 ## Explicitly deferred, not lost
 
 Full MCU/peripheral emulation, physical CS electrical simulation, generic automatic hardware identification, and broad multi-firmware comparison remain out of the initial delivery, as required by original section 14.
+
+
+## 2026-10-29 — GA-16 printed folio sequence evidence
+
+- Independent branch `feature/rag-printed-page-sequence-audit-20261029`
+  based on PR #53 head `bd0a0a60eaa610e19581bd67fd16d29c637bfb8e`.
+- At PDF ingestion, annotate each page's *independently observed* printed
+  folio with sequence status relative to the previous observed printed folio
+  and physical PDF page gap. Unknown/duplicate/nonmonotonic labels remain
+  uncertain, and chapter transitions are not treated as contiguous.
+- Physical PDF page index remains authoritative for opening the source.
+  No manufactured page corrections, MCU register imports or vendor document
+  edition claims. The status is always candidate-only source metadata.
+- CI: standalone negatives and complete Ghidra 12.1.4 build; actual RAG
+  source-page integration requires authorized isolated Ghidra testing.

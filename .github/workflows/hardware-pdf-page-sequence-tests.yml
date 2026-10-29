@@ -1,0 +1,31 @@
+name: Hardware PDF physical/printed folio sequence regression
+
+on:
+  pull_request:
+    paths:
+      - 'src/main/java/ghidrassist/hardware/ManualPaginationAudit.java'
+      - 'src/main/java/ghidrassist/core/RAGPdfExtractor.java'
+      - 'src/test/java/ghidrassist/hardware/ManualPaginationAuditSelfTest.java'
+      - '.github/workflows/hardware-pdf-page-sequence-tests.yml'
+  workflow_dispatch:
+
+jobs:
+  folio-evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Compile standalone folio audit
+        run: |
+          mkdir -p "$RUNNER_TEMP/folio"
+          javac --release 21 -d "$RUNNER_TEMP/folio" \
+            src/main/java/ghidrassist/hardware/ManualPaginationAudit.java \
+            src/test/java/ghidrassist/hardware/ManualPaginationAuditSelfTest.java
+      - name: Confirm exact PDF ordering and unknowns
+        run: java -cp "$RUNNER_TEMP/folio" ghidrassist.hardware.ManualPaginationAuditSelfTest
