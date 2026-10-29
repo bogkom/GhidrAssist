@@ -31,3 +31,35 @@ Validation: deterministic standalone Java CSV/provenance tests and full
 Ghidra 12.1.4 extension build in Actions. On a disposable project COPY,
 verify SourceType display, checkboxes, CSV, Undo, stale-program guard and
 absence of OAuth edits before merging. No local PASS is implied by CI.
+
+## 2026-10-29 — local provenance CSV hardening
+
+Quoted CSV cells alone do **not** stop Microsoft Excel/LibreOffice
+from interpreting `=HYPERLINK(...)`, `+1`, `-1` or `@SUM(...)`
+as formulas. GhidrAssist now prefixes formula-looking fields with an
+apostrophe, including when hidden behind whitespace, tabs, BOM or
+zero-width spaces. Quotes, commas and line breaks remain escaped.
+This is a read-only audit export, **never** an Apply instruction.
+
+Export retains at most 5000 Review rows. Larger snapshots append
+`OMITTED_ROWS` with the exact omitted count and a
+`INCOMPLETE_EXPORT_NEVER_AUTO_APPLY` decision. The displayed/exported
+subset must never be mistaken for a full authorship audit. SourceType
+still cannot identify human versus script/AI authors; no Ghidra writes
+or remote transmission are introduced.
+
+## 2026-10-29 — per-cell provenance limit
+
+The existing row cap (5,000) was insufficient: an untrusted Ghidra symbol,
+proposed name or evidence string could still contain millions of characters,
+causing a large export and multiple temporary copies during normalization.
+Each raw CSV cell is now truncated to **512 characters before allocating
+normalized strings** and includes an explicit `[SOURCE_TRUNCATED]` marker.
+Spreadsheet formula prevention still applies to the retained prefix, including
+initial signs hidden after whitespace. The exported CSV is **not** a complete
+audit of truncated evidence and remains never auto-applicable.
+
+Negative offline tests include million-character input fields and combined
+row/cell limits. A full extension build for Ghidra 12.1.4 and actual isolated
+Review/export acceptance remain required. Original evidence must be opened
+in Ghidra before naming or applying any change.

@@ -75,3 +75,14 @@ Full MCU/peripheral emulation, physical CS electrical simulation, generic automa
 - CI: standalone source interpretation/CSV tests and full Ghidra 12.1.4
   extension compile; real GUI and Undo regression requires separate approved
   Supervisor integration. Do not merge before that evidence.
+
+
+## 2026-10-29 — GA-13 provenance CSV formula and size guard
+
+- Independent GA-13 follow-up `fix/ga13-provenance-csv-formula-budget-20261029`
+  based on immutable PR #59 head `1b6e3f3d4c6fb27b8158e2e0d4dee3a66fc3414e`.
+- Source names/evidence are neutralized against spreadsheet formula
+  interpretation even inside quoted CSV; control/newline hiding is rejected.
+- Output cap 5000 review rows and counted `OMITTED_ROWS` record.
+  No automatic import or Ghidra mutation; positive exact-head CI,
+  12.1.4 extension build and isolated real Ghidra acceptance required.

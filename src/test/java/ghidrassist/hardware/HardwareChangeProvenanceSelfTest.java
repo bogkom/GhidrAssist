@@ -50,6 +50,54 @@ public final class HardwareChangeProvenanceSelfTest {
         try{HardwareChangeProvenance.csv(null);}
         catch(IllegalArgumentException expected){invalid=true;}
         check(invalid,"null input rejects rather than generating false snapshot");
+        var malicious = new HardwareChangeProvenance.ReviewRow("REGISTER",
+            "0x00000000","=HYPERLINK(\"https://evil.invalid\")",
+            "  +1+2","USER_DEFINED","MANUAL_REVIEW",false,
+            "\t@SUM(1,2)\nnewline");
+        String safe=HardwareChangeProvenance.csv(List.of(malicious));
+        check(safe.contains("\"'=HYPERLINK(\"\"https://evil.invalid\"\")\"") &&
+            safe.contains("\"'  +1+2\"") &&
+            safe.contains("\"'\t@SUM(1,2) newline\""),
+            "CSV quotes alone cannot prevent formula execution");
+        var unicode = new HardwareChangeProvenance.ReviewRow("REGISTER",
+            "0x0","\uFEFF=1+2","\u200B-9",null,"MANUAL_REVIEW",false,
+            "\u2028=PAYLOAD\u2029");
+        String safeUnicode=HardwareChangeProvenance.csv(List.of(unicode));
+        check(safeUnicode.contains("\"'\uFEFF=1+2\"") &&
+            safeUnicode.contains("\"'\u200B-9\"") &&
+            !safeUnicode.contains("\u2028") && !safeUnicode.contains("\u2029"),
+            "Unicode spacing must not hide spreadsheet formulas/newline markers");
+        var many=new java.util.ArrayList<HardwareChangeProvenance.ReviewRow>();
+        for(int n=0;n<HardwareChangeProvenance.MAX_CSV_ROWS+7;n++)
+            many.add(a);
+        String capped=HardwareChangeProvenance.csv(many);
+        check(capped.contains("\"OMITTED_ROWS\"") &&
+            capped.contains("7 rows omitted by cap") &&
+            capped.contains("INCOMPLETE_EXPORT_NEVER_AUTO_APPLY") &&
+            capped.lines().count()==HardwareChangeProvenance.MAX_CSV_ROWS+2,
+            "bounded output with counted omission record");
+        boolean nullRow=false;
+        var withNull=new java.util.ArrayList<HardwareChangeProvenance.ReviewRow>();
+        withNull.add(a);withNull.add(null);
+        try{HardwareChangeProvenance.csv(withNull);}
+        catch(IllegalArgumentException expected){nullRow=true;}
+        check(nullRow,"null entry must not silently disappear from provenance");
+        var huge=new HardwareChangeProvenance.ReviewRow("REGISTER","0x0",
+            "=HYPERLINK("+"X".repeat(1_000_000),null,"ANALYSIS",
+            "MANUAL_REVIEW",false,"E".repeat(1_000_000));
+        String bounded=HardwareChangeProvenance.csv(List.of(huge));
+        check(bounded.length()<4000 &&
+            bounded.contains("SOURCE_TRUNCATED") &&
+            bounded.contains("\"'=HYPERLINK("),
+            "giant provenance fields cannot produce unbounded CSV or executable formulas");
+        var largeRows=new java.util.ArrayList<HardwareChangeProvenance.ReviewRow>();
+        for(int n=0;n<HardwareChangeProvenance.MAX_CSV_ROWS+3;n++)
+            largeRows.add(huge);
+        String cappedFields=HardwareChangeProvenance.csv(largeRows);
+        check(cappedFields.length()<25_000_000 &&
+            cappedFields.contains("3 rows omitted by cap") &&
+            cappedFields.contains("SOURCE_TRUNCATED"),
+            "both row count and each cell are bounded; omissions signaled");
         System.out.println("HardwareChangeProvenanceSelfTest OK");
     }
 }
