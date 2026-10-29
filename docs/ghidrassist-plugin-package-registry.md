@@ -65,3 +65,37 @@ acceptance criteria:
 
 No PASS/ACK is claimed for any of these host test cases. The original
 PR #56 remains DRAFT pending a genuine and pinned acceptance result.
+
+## 2026-10-29 — diagnosed extension-detection lifecycle (upstream Ghidra)
+
+Further direct inspection of Ghidra's
+`ToolExtensionsStatusManager` and `ToolExtensionsEnabledState` reveals
+a **separate** built-in persistence mechanism:
+`ToolExtensionsStatusManager.saveToXml()` writes an `<EXTENSIONS>`
+element with the installed extension name and `<PLUGIN CLASS=...>`
+records into **the tool's saved XML configuration**. On tool restore,
+`restoreFromXml()` compares those records against current installed
+extension plug-ins, removes already enabled classes and offers the
+`New extension plugins detected` prompt only for remaining entries.
+If a previously saved CodeBrowser configuration lacks the extension
+record or contains stale plugin classes, the prompt may recur even
+when the plug-in itself is working.
+
+This is a **tool configuration persistence issue**, not a preference
+that GhidrAssist should forcibly reset or an invitation to auto-edit
+an original Wyse profile. Ghidra's documented safe operation for a
+disposable CodeBrowser configuration is `File → Save Tool` after
+accepting the plugin; on restart it should restore the saved
+`<EXTENSIONS>` and enabled plug-in state. If it still prompts, inspect
+only an exported disposable tool XML; do not change user settings,
+configuration files or extensions on a live profile. The PR #93
+synthetic full-CodeBrowser CI harness separately exercises
+`saveToolToToolTemplate()` and the Listing path. In-memory tool
+serialization alone is **not** proof of successful profile persistence
+across a real application restart; this remains a local acceptance gate.
+
+The upstream extension discovery and package registry are distinct.
+Registering `GhidrAssistPluginPackage` prevents the "Creating stub..."
+fallback, but does not by itself guarantee saving the current
+CodeBrowser tool configuration. Do **not** call this prompt bug fixed
+without an isolated save/close/reopen test on the corrected extension.
