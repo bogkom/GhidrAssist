@@ -46,9 +46,10 @@ public final class HardwareResetFlow {
 
     public record Summary(boolean rootRecognized, int visitedFunctions,
                           boolean unresolved, boolean recursive,
-                          boolean truncated, List<Evidence> evidence) {
+                          boolean truncated, List<Evidence> evidence, Set<Long> visitedEntries) {
         public Summary {
             evidence=List.copyOf(evidence);
+            visitedEntries=Set.copyOf(visitedEntries);
         }
         public String markdown(long vectorPc,long rootEntry) {
             StringBuilder out=new StringBuilder();
@@ -108,7 +109,7 @@ public final class HardwareResetFlow {
             if(n==null || graph.putIfAbsent(n.entry(),n)!=null)
                 throw new IllegalArgumentException("Duplicate/bad function entry");
         if(!graph.containsKey(root))
-            return new Summary(false,0,true,false,false,List.of());
+            return new Summary(false,0,true,false,false,List.of(),Set.of());
         Set<Long> evidenceIds=new HashSet<>(evidenceFunctions);
         Set<Long> visited=new HashSet<>();
         ArrayDeque<QueueEntry> queue=new ArrayDeque<>();
@@ -143,6 +144,6 @@ public final class HardwareResetFlow {
                 }
             }
         }
-        return new Summary(true,visited.size(),unresolved,recursive,truncated,matched);
+        return new Summary(true,visited.size(),unresolved,recursive,truncated,matched,visited);
     }
 }

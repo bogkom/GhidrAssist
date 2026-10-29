@@ -345,6 +345,18 @@ public final class HardwareInventoryService {
             initializationFunctions,vbrCount,flowStage.report().unresolved,
             flowStage.report().limited,overviewSites);
         csv+=HardwarePointerRoleReview.csvRows(flowStage.report().pointerRoles);
+        List<HardwareStartupConfig.Site> startupSites=new ArrayList<>();
+        for(Site site:sites){
+            Function f=program.getFunctionManager().getFunctionContaining(site.pc);
+            startupSites.add(new HardwareStartupConfig.Site(
+                f==null?-1L:f.getEntryPoint().getOffset(),site.pc.getOffset(),
+                site.register,site.write,site.literal));
+        }
+        var startup=HardwareStartupConfig.analyze(concreteDevice,
+            flowStage.report().resetCandidateRecognized,
+            flowStage.report().resetCandidateFunctions,
+            flowStage.report().resetGraphIncomplete,startupSites);
+        md.append("\n\n").append(startup.markdown());
         return new Report(program.getName(),program.getLanguageID().toString(),choice,sites,
             overview,md.toString(),csv,initializationFunctions,functionProposals);
     }

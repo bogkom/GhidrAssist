@@ -36,11 +36,18 @@ public final class GhidraHardwareFlowService {
     public static final class Report {
         public final String markdown;
         public final List<HardwarePointerRoleReview.Proposal> pointerRoles;
+        public final java.util.Set<Long> resetCandidateFunctions;
+        public final boolean resetCandidateRecognized,resetGraphIncomplete;
         public final int functions,indirect,vbr,unresolved,visited;
         public final boolean limited;
         Report(String md,int fn,int indirect,int vbr,int unresolved,int visited,
-                boolean limited,List<HardwarePointerRoleReview.Proposal> pointers){
+                boolean limited,List<HardwarePointerRoleReview.Proposal> pointers,
+                java.util.Set<Long> resetCandidates,boolean resetRecognized,
+                boolean resetUnresolved){
             markdown=md;pointerRoles=List.copyOf(pointers);
+            resetCandidateFunctions=java.util.Set.copyOf(resetCandidates);
+            resetCandidateRecognized=resetRecognized;
+            resetGraphIncomplete=resetUnresolved;
             functions=fn;this.indirect=indirect;this.vbr=vbr;
             this.unresolved=unresolved;this.visited=visited;this.limited=limited;
         }
@@ -332,7 +339,9 @@ public final class GhidraHardwareFlowService {
      * inspected for a compatible 68000 big-endian language. Reset vectors,
      * static edges and MMIO sightings are NOT evidence that code ran.
      */
-    private static String resetStaticCandidates(Program program,
+    private record ResetCandidates(String markdown,java.util.Set<Long> visited,
+            boolean recognized,boolean incomplete) {}
+    private static ResetCandidates resetStaticCandidates(Program program,
             List<HardwareCallEffects.FunctionNode> graph,
             List<Long> evidencedFunctions) {
         StringBuilder md=new StringBuilder();
@@ -341,24 +350,24 @@ public final class GhidraHardwareFlowService {
         if(!language.startsWith("68000:BE:")){
             md.append("- Not evaluated: this program is not a 68000 big-endian "+
                 "language. No reset-vector format is assumed.\n\n");
-            return md.toString();
+            return new ResetCandidates(md.toString(),java.util.Set.of(),false,true);
         }
         Address zero=program.getAddressFactory().getDefaultAddressSpace().getAddress(0);
         if(!program.getMemory().contains(zero)){
             md.append("- UNKNOWN: address 0 is not mapped; no candidate "+
                 "vector can be read. No assumption about ROM base/relocation.\n\n");
-            return md.toString();
+            return new ResetCandidates(md.toString(),java.util.Set.of(),false,true);
         }
         byte[] data=new byte[8];
         try {
             if(program.getMemory().getBytes(zero,data)!=data.length){
                 md.append("- UNKNOWN: reset vector at image 0 is incomplete.\n\n");
-                return md.toString();
+                return new ResetCandidates(md.toString(),java.util.Set.of(),false,true);
             }
         }catch(MemoryAccessException e){
             md.append("- UNKNOWN: reset vector bytes at image 0 "+
                 "could not be read.\n\n");
-            return md.toString();
+            return new ResetCandidates(md.toString(),java.util.Set.of(),false,true);
         }
         HardwareResetFlow.Vector vector=HardwareResetFlow.readVector(data);
         md.append("- Image-zero vector candidate SP: ")
@@ -369,7 +378,7 @@ public final class GhidraHardwareFlowService {
           .append("; ").append(vector.reason()).append("\n");
         if(!vector.valid()){
             md.append("- No direct-call path inferred from invalid vector.\n\n");
-            return md.toString();
+            return new ResetCandidates(md.toString(),java.util.Set.of(),false,true);
         }
         Address reset;
         try {
@@ -378,13 +387,13 @@ public final class GhidraHardwareFlowService {
         }catch(RuntimeException invalidAddress){
             md.append("- UNKNOWN: reset PC is outside the current program "+
                 "address space.\n\n");
-            return md.toString();
+            return new ResetCandidates(md.toString(),java.util.Set.of(),false,true);
         }
         Function root=program.getFunctionManager().getFunctionContaining(reset);
         if(root==null){
             md.append("- UNKNOWN: reset PC is not contained in a recognized "+
                 "Ghidra function. No candidate execution path is asserted.\n\n");
-            return md.toString();
+            return new ResetCandidates(md.toString(),java.util.Set.of(),false,true);
         }
         md.append("- Function containing vector PC: ").append(root.getName())
           .append(" at ").append(root.getEntryPoint())
@@ -393,7 +402,8 @@ public final class GhidraHardwareFlowService {
             root.getEntryPoint().getOffset(),graph,evidencedFunctions,6,128,30);
         md.append(candidate.markdown(vector.resetPc(),
             root.getEntryPoint().getOffset())).append("\n");
-        return md.toString();
+        return new ResetCandidates(md.toString(),candidate.visitedEntries(),
+            candidate.rootRecognized(),candidate.unresolved()||candidate.truncated());
     }
 
     public Report analyze(Program program,TaskMonitor monitor)throws CancelledException{
@@ -606,6 +616,7 @@ public final class GhidraHardwareFlowService {
             effects.append("- Additional functions omitted by 60-row limit.\n");
         effects.append("\n");
 
+        ResetCandidates reset=resetStaticCandidates(program,staticCalls,evidencedFunctions);
         StringBuilder out=new StringBuilder();
         out.append("## CFG/P-code initialization evidence (SIMCR/MM, TRAMBAR, CSBAR, CSOR, VBR)\n\n")
            .append("Only predecessor-agreed intraprocedural constants survive branch joins. ")
@@ -621,7 +632,7 @@ public final class GhidraHardwareFlowService {
            .append("- VBR control-register sites: ").append(vbr).append("\n")
            .append("- Unresolved register-based stores: ").append(unresolved).append("\n")
            .append("- Propagation cap reached: ").append(limited).append("\n\n")
-           .append(resetStaticCandidates(program,staticCalls,evidencedFunctions))
+           .append(reset.markdown())
            .append(GhidraInterruptVectorService.analyze(program,monitor))
            .append(detail).append(effects);
         if(shown>=350)out.append("\n[Detailed report bounded at 350 sites.]\n");
@@ -629,6 +640,7 @@ public final class GhidraHardwareFlowService {
             HardwarePointerRoleReview.propose(mc68332Selected,pointerSites,limited);
         out.append(HardwarePointerRoleReview.report(roles));
         return new Report(out.toString(),foundFunctions,indirect,vbr,unresolved,
-            visited,limited,roles);
+            visited,limited,roles,reset.visited(),
+            reset.recognized(),reset.incomplete());
     }
 }
