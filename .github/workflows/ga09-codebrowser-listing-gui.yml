@@ -59,7 +59,7 @@ jobs:
         if: failure()
         shell: bash
         run: |
-          for filename in "$RUNNER_TEMP/codebrowser-evidence/compile.log" "$RUNNER_TEMP/codebrowser-evidence/java.log"; do
+          for filename in "$RUNNER_TEMP/codebrowser-evidence/compile.log" "$RUNNER_TEMP/codebrowser-evidence/java.log" "$RUNNER_TEMP/codebrowser-evidence/restart-java.log"; do
             if test -f "$filename"; then
               echo "Synthetic diagnostic: $(basename "$filename")"
               tail -n 90 "$filename"
