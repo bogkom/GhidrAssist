@@ -40,6 +40,7 @@ import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
+import javax.swing.JTabbedPane;
 import javax.swing.SwingWorker;
 import javax.swing.JTable;
 import javax.swing.JTextField;
@@ -78,6 +79,8 @@ public final class HardwareAnalysisTab extends JPanel {
     private final JButton approve=new JButton("Review / Apply...");
     private final JButton reviewNames=new JButton("Review names...");
     private final JTextArea report=new JTextArea();
+    private final JTextArea overview=new JTextArea();
+    private final JTabbedPane reportTabs=new JTabbedPane();
     private final JTextField reportSearch=new JTextField(21);
     private final JButton previousHit=new JButton("Previous");
     private final JButton nextHit=new JButton("Next");
@@ -150,6 +153,9 @@ public final class HardwareAnalysisTab extends JPanel {
         export.setEnabled(false);
         namePreview.setEnabled(false);
         report.setEditable(false);
+        overview.setEditable(false);
+        overview.setText("Run Analyze to see a three-part, read-only summary.\n"+
+            "Full source references and conditional tables appear on the Full evidence tab.");
         refreshAppearance();
         report.setToolTipText("Double-click an address or FUN_... to navigate in Ghidra Listing");
         report.addMouseListener(new MouseAdapter(){
@@ -168,7 +174,10 @@ public final class HardwareAnalysisTab extends JPanel {
             "Use #hardware in a query to request evidence explicitly.\n"+
             "No API credits or network are needed for this analysis.");
         add(controls,BorderLayout.NORTH);
-        add(new JScrollPane(report),BorderLayout.CENTER);
+        reportTabs.addTab("Overview",new JScrollPane(overview));
+        reportTabs.addTab("Full evidence",new JScrollPane(report));
+        reportTabs.setSelectedIndex(0);
+        add(reportTabs,BorderLayout.CENTER);
         status.setBorder(BorderFactory.createEmptyBorder(4,8,5,8));
         add(status,BorderLayout.SOUTH);
         run.addActionListener(e->startScan());
@@ -182,9 +191,13 @@ public final class HardwareAnalysisTab extends JPanel {
     public void refreshAppearance(){
         String family=MarkdownHelper.getResponseFontFamily();
         int size=MarkdownHelper.getResponseFontSize();
-        report.setFont(new Font(family==null?Font.MONOSPACED:family,Font.PLAIN,size));
+        Font configured=new Font(family==null?Font.MONOSPACED:family,Font.PLAIN,size);
+        report.setFont(configured);
+        overview.setFont(configured);
     }
     private void updateReportSearch(){
+        if(!reportSearch.getText().isEmpty())
+            reportTabs.setSelectedIndex(1);
         reportHits.clear();
         hitIndex=-1;
         report.getHighlighter().removeAllHighlights();
@@ -275,6 +288,8 @@ public final class HardwareAnalysisTab extends JPanel {
         report.getHighlighter().removeAllHighlights();
         reportHits.clear();
         updateSearchCount();
+        overview.setText("Analyzing hardware...\nRead-only evidence scan in progress.");
+        reportTabs.setSelectedIndex(0);
         report.setText("Analyzing hardware...\nScanning references and memory regions.\n"+
             "This is a read-only scan; no project data is modified.");
         report.setCaretPosition(0);
@@ -290,6 +305,7 @@ public final class HardwareAnalysisTab extends JPanel {
                 try {
                     HardwareInventoryService.Report finished=get();
                     if(plugin.getCurrentProgram()!=program){
+                        overview.setText("Program changed while analyzing. Rerun on the active program.");
                         report.setText("Program changed while analyzing. Rerun on the active program.");
                         status.setText("Result discarded; program changed.");
                         return;
@@ -304,8 +320,11 @@ public final class HardwareAnalysisTab extends JPanel {
                     reviewNames.setEnabled(concrete && latestFunctionProposals.stream()
                         .anyMatch(p->p.status==ghidrassist.hardware.HardwareNamingReview.Status.REVIEW_REQUIRED));
                     ghidrassist.hardware.HardwareEvidenceCache.publish(program, finished.markdown);
-                    report.setText(finished.markdown);
+                    overview.setText(finished.overviewMarkdown);
+                    overview.setCaretPosition(0);
+                    report.setText(finished.detailsMarkdown);
                     report.setCaretPosition(0);
+                    reportTabs.setSelectedIndex(0);
                     updateReportSearch();
                     export.setEnabled(true);
                     namePreview.setEnabled(true);
@@ -317,6 +336,8 @@ public final class HardwareAnalysisTab extends JPanel {
                         root=root.getCause();
                     ghidra.util.Msg.error(HardwareAnalysisTab.this,
                         "Hardware Analysis failed; detailed stack trace follows",ex);
+                    overview.setText("Hardware analysis failed. See Full evidence and Ghidra Application Log.");
+                    reportTabs.setSelectedIndex(1);
                     report.setText("Hardware analysis failed:\n"+
                         root.getClass().getSimpleName()+": "+root.getMessage()+
                         "\n\nFull stack trace is in Ghidra Application Log."+
