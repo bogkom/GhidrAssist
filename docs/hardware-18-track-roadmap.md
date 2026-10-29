@@ -95,3 +95,17 @@ Full MCU/peripheral emulation, physical CS electrical simulation, generic automa
   checkpoints, interrupted-function continuation or cross-session resume.
 - Gate: exact Ghidra 12.1.4 extension build and standalone negative stage
   tests, then local isolated Ghidra cancellation+Undo tests before merge.
+
+
+## 2026-10-29 — GA-12 in-flight cache invalidation hardening
+
+- Independent candidate `fix/ga12-cfg-cache-invalidation-epoch-20261029`
+  based on exact PR #64 head `a634ec276e371f1efcf4850dae5bb7b04214ed3f`.
+- A weak-key, per-open-program invalidation generation prevents old CFG
+  scans from publishing stage checkpoints after explicit cache clear.
+- Cache hits and noncached results recheck cancellation and revision;
+  explicit UI stale discard invalidates pending stage writes. Normal
+  cancellation after completed CFG still permits unchanged-revision reuse.
+- Dedicated deterministic concurrency tests, Ghidra 12.1.4 full CI and
+  real isolated Ghidra acceptance are required; no runtime hardware
+  claims or mutation of firmware/OAuth.

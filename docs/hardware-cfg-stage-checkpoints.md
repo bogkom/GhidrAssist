@@ -34,3 +34,26 @@ extension build. Local acceptance: isolated project COPY, cancel during
 inventory after complete CFG, repeat on unchanged revision, edit/Undo
 to confirm recompute, verify no stale RAG or Review/Apply access.
 Do not mark GUI validation PASS until actual host test.
+
+## 2026-10-29 — explicit invalidation of in-flight stage writers
+
+Previously an in-flight CFG scan could finish after an explicit UI cache
+clear and repopulate a revision-matching stage (even though it had already
+been discarded). New weak-key, process-local **epoch tokens** bind each
+calculation to its initial cache generation. `clear(program)` always
+increments the epoch — including before the first successful checkpoint —
+and removes the completed entry.
+
+Cache hits are rechecked against a fresh Ghidra revision and cooperative
+cancellation before returning. A late producer must verify its original
+epoch **before inserting** and **before returning**; otherwise it cancels
+without publishing the stale result, including oversized results not stored
+in the cache. The UI's explicit stale-evidence discard also clears the
+completed CFG checkpoint, but normal Cancel Analyze continues to preserve
+a genuinely completed stage for safe same-revision reuse as before.
+
+This does not guarantee scheduling or prove that the firmware executed.
+The result still needs full on-host revision checks, and none of the
+checkpoints persist across process restarts. Deterministic concurrency
+regressions run without Ghidra; actual UI cancellation and Ghidra
+Undo/Redo acceptance remain required.

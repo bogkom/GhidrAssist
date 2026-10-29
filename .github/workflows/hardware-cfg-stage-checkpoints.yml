@@ -4,18 +4,22 @@ on:
   pull_request:
     paths:
       - 'src/main/java/ghidrassist/hardware/HardwareStageCheckpoint.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareStageEpochs.java'
       - 'src/main/java/ghidrassist/hardware/HardwareFlowStageCache.java'
       - 'src/main/java/ghidrassist/hardware/HardwareInventoryService.java'
       - 'src/main/java/ghidrassist/ui/tabs/HardwareAnalysisTab.java'
       - 'src/test/java/ghidrassist/hardware/HardwareStageCheckpointSelfTest.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareStageEpochsSelfTest.java'
       - '.github/workflows/hardware-cfg-stage-checkpoints.yml'
   push:
     paths:
       - 'src/main/java/ghidrassist/hardware/HardwareStageCheckpoint.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareStageEpochs.java'
       - 'src/main/java/ghidrassist/hardware/HardwareFlowStageCache.java'
       - 'src/main/java/ghidrassist/hardware/HardwareInventoryService.java'
       - 'src/main/java/ghidrassist/ui/tabs/HardwareAnalysisTab.java'
       - 'src/test/java/ghidrassist/hardware/HardwareStageCheckpointSelfTest.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareStageEpochsSelfTest.java'
       - '.github/workflows/hardware-cfg-stage-checkpoints.yml'
   workflow_dispatch:
 
@@ -38,6 +42,10 @@ jobs:
           mkdir -p "$RUNNER_TEMP/checkpoint"
           javac --release 21 -d "$RUNNER_TEMP/checkpoint" \
             src/main/java/ghidrassist/hardware/HardwareStageCheckpoint.java \
-            src/test/java/ghidrassist/hardware/HardwareStageCheckpointSelfTest.java
+            src/main/java/ghidrassist/hardware/HardwareStageEpochs.java \
+            src/test/java/ghidrassist/hardware/HardwareStageCheckpointSelfTest.java \
+            src/test/java/ghidrassist/hardware/HardwareStageEpochsSelfTest.java
       - name: Reject stale or incomplete stage reuse
-        run: java -cp "$RUNNER_TEMP/checkpoint" ghidrassist.hardware.HardwareStageCheckpointSelfTest
+        run: |
+          java -cp "$RUNNER_TEMP/checkpoint" ghidrassist.hardware.HardwareStageCheckpointSelfTest
+          java -cp "$RUNNER_TEMP/checkpoint" ghidrassist.hardware.HardwareStageEpochsSelfTest
