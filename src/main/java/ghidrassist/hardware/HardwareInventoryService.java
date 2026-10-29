@@ -348,13 +348,38 @@ public final class HardwareInventoryService {
             initializationFunctions,vbrCount,flowStage.report().unresolved,
             flowStage.report().limited,overviewSites);
         csv+=HardwarePointerRoleReview.csvRows(flowStage.report().pointerRoles);
-        List<HardwareStartupConfig.Site> startupSites=new ArrayList<>();
+        // One source PC can be observed in both Listing/XREF and CFG/P-code.
+        // The reconciler counts it only once and refuses to combine
+        // contradictory widths/words into a confident literal.
+        List<HardwareStartupEvidenceMerge.Observation> sources=new ArrayList<>();
         for(Site site:sites){
+            monitor.checkCancelled();
             Function f=program.getFunctionManager().getFunctionContaining(site.pc);
-            startupSites.add(new HardwareStartupConfig.Site(
-                f==null?-1L:f.getEntryPoint().getOffset(),site.pc.getOffset(),
-                site.register,site.write,site.literal));
+            if(f==null)continue; // UNKNOWN owning function: do not invent call ancestry
+            Instruction instruction=program.getListing().getInstructionAt(site.pc);
+            String mnemonic=instruction==null?"":instruction.getMnemonicString()
+                .toUpperCase(Locale.ROOT);
+            int width=mnemonic.endsWith(".W")?16:
+                mnemonic.endsWith(".B")?8:mnemonic.endsWith(".L")?32:0;
+            sources.add(new HardwareStartupEvidenceMerge.Observation(
+                f.getEntryPoint().getOffset(),site.pc.getOffset(),
+                site.registerAddress,site.register,
+                HardwareStartupEvidenceMerge.Source.LISTING_REFERENCE,
+                site.write,width,site.literal,false));
         }
+        for(HardwareCfgWriteAudit.Site s:flowStage.report().rawCfgMmioSites){
+            monitor.checkCancelled();
+            sources.add(new HardwareStartupEvidenceMerge.Observation(
+                s.function(),s.pc(),s.address(),s.register(),
+                HardwareStartupEvidenceMerge.Source.CFG_PCODE,
+                true,s.widthBits(),s.literal(),
+                s.unknownCall() || s.unknownStore() || s.functionIncomplete()));
+        }
+        var merged=HardwareStartupEvidenceMerge.reconcile(sources);
+        md.append("\n\n").append(merged.markdown(concreteDevice));
+        List<HardwareStartupConfig.Site> startupSites=new ArrayList<>();
+        for(var item:merged.rows())
+            startupSites.add(item.forStartup());
         var startup=HardwareStartupConfig.analyze(concreteDevice,
             flowStage.report().resetCandidateRecognized,
             flowStage.report().resetCandidateFunctions,

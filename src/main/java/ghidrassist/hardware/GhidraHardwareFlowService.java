@@ -36,6 +36,7 @@ public final class GhidraHardwareFlowService {
     public static final class Report {
         public final String markdown;
         public final String configurationEvidenceCsv;
+        public final List<HardwareCfgWriteAudit.Site> rawCfgMmioSites;
         public final List<HardwarePointerRoleReview.Proposal> pointerRoles;
         public final java.util.Set<Long> resetCandidateFunctions;
         public final boolean resetCandidateRecognized,resetGraphIncomplete;
@@ -44,8 +45,10 @@ public final class GhidraHardwareFlowService {
         Report(String md,int fn,int indirect,int vbr,int unresolved,int visited,
                 boolean limited,List<HardwarePointerRoleReview.Proposal> pointers,
                 java.util.Set<Long> resetCandidates,boolean resetRecognized,
-                boolean resetUnresolved,String configurationCsv){
+                boolean resetUnresolved,String configurationCsv,
+                List<HardwareCfgWriteAudit.Site> cfgSites){
             markdown=md;configurationEvidenceCsv=configurationCsv;
+            rawCfgMmioSites=List.copyOf(cfgSites);
             pointerRoles=List.copyOf(pointers);
             resetCandidateFunctions=java.util.Set.copyOf(resetCandidates);
             resetCandidateRecognized=resetRecognized;
@@ -697,6 +700,6 @@ public final class GhidraHardwareFlowService {
             cfgStoreRelations,mc68332Selected);
         return new Report(out.toString(),foundFunctions,indirect,vbr,unresolved,
             visited,limited,roles,reset.visited(),
-            reset.recognized(),reset.incomplete(),evidenceCsv);
+            reset.recognized(),reset.incomplete(),evidenceCsv,cfgMmioSites);
     }
 }

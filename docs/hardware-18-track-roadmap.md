@@ -162,3 +162,23 @@ Full MCU/peripheral emulation, physical CS electrical simulation, generic automa
   file capped at 5000 records with omitted-row marker.
 - Standalone schema regression + full Ghidra 12.1.4 build required.
   Real GUI and Undo/Redo acceptance remain pending Supervisor approval.
+
+
+## 2026-10-29 — GA-01/02/03 unified source-site reconciliation (PR #72 candidate)
+
+- Stacked branch `feature/hardware-unified-startup-evidence-20261029`
+  based on immutable PR #71 head `bd206954ad9ca73f81804f836dd764e7729d3a6c`.
+- Full-report startup alternatives now use a union of existing
+  Listing/XREF candidates and CFG/P-code resolved direct/indirect stores,
+  deduplicated by function+instruction PC+register-address.
+- Each site carries independent LISTING/CFG origins; contradictory
+  register identity, width, or literal degrades to UNKNOWN. Unknown
+  destination aliases are counted as potential ANY-MMIO effects
+  without inventing a specific register target. Byte/long/unknown
+  writes never become confirmed 16-bit words.
+- Generic CPU32 register labels in the new merged report stay
+  UNVERIFIED_MCU_REGISTER. Source groups are still **static candidates
+  only**, not execution events, proven reset epochs or physical CS maps.
+- Deterministic synthetic conflicts/alias/duplicate tests and complete
+  Ghidra 12.1.4 extension CI required before a pinned host plan; no
+  changes to original program, RAG documents or user secrets.
