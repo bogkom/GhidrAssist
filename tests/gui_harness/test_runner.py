@@ -114,10 +114,11 @@ class IsolatedHarnessTests(unittest.TestCase):
         self.assertNotIn("body", (self.root / "controlled-model-events.json").read_text())
 
     def test_x11_selects_one_largest_mapped_fixture_not_whole_desktop(self):
+        (self.root / "gui-results.json").write_text(json.dumps({"window_title": "GhidrAssist isolated GUI regression: GuiFixture:/TEST_BINARY.bin"}))
         from types import SimpleNamespace
         tree = '''
   0x1 "Project - GhidrAssist isolated GUI regression": (200x120+0+0)
-    0x2 "GhidrAssist isolated GUI regression": (1200x950+0+0)
+    0x2 "GhidrAssist isolated GUI regression: GuiFixture:/TEST_BINARY.bin": (1200x950+0+0)
   0x3 "Unrelated user window": (1900x900+0+0)
 '''
         seen = []
@@ -145,11 +146,12 @@ class IsolatedHarnessTests(unittest.TestCase):
         self.assertFalse(any("0x3" in call for call in seen))
 
     def test_x11_rejects_large_but_unpainted_window(self):
+        (self.root / "gui-results.json").write_text(json.dumps({"window_title": "GhidrAssist isolated GUI regression: GuiFixture:/TEST_BINARY.bin"}))
         from types import SimpleNamespace
         def fake_run(command, **kwargs):
             if command[:3] == ["xwininfo", "-root", "-tree"]:
                 return SimpleNamespace(stdout=(
-                    '  0x9 "GhidrAssist isolated GUI regression": (...)\\n'
+                    '  0x9 "GhidrAssist isolated GUI regression: GuiFixture:/TEST_BINARY.bin": (...)\\n'
                 ).replace("\\n", "\n"))
             if command[:2] == ["xwininfo", "-id"]:
                 return SimpleNamespace(stdout="Map State: IsViewable\n"
@@ -168,9 +170,10 @@ class IsolatedHarnessTests(unittest.TestCase):
         self.assertIn("unpainted", result["reason"])
 
     def test_x11_rejects_ambiguous_equally_sized_frames(self):
+        (self.root / "gui-results.json").write_text(json.dumps({"window_title": "GhidrAssist isolated GUI regression: GuiFixture:/TEST_BINARY.bin"}))
         from types import SimpleNamespace
-        tree = ('  0x1 "GhidrAssist isolated GUI regression": (...)\\n'
-                '  0x2 "GhidrAssist isolated GUI regression": (...)\\n')
+        tree = ('  0x1 "GhidrAssist isolated GUI regression: GuiFixture:/TEST_BINARY.bin": (...)\\n'
+                '  0x2 "GhidrAssist isolated GUI regression: GuiFixture:/TEST_BINARY.bin": (...)\\n')
         def fake_run(command, **kwargs):
             if command[:3] == ["xwininfo", "-root", "-tree"]:
                 return SimpleNamespace(stdout=tree.replace("\\n", "\n"))
