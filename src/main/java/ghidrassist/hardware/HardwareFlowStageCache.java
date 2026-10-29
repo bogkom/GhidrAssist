@@ -18,6 +18,7 @@ public final class HardwareFlowStageCache {
     private static final Map<Program,HardwareStageCheckpoint<GhidraHardwareFlowService.Report>>
         COMPLETED=new WeakHashMap<>();
     private static final int MAX_REPORT_CHARS=1_000_000;
+    private static final HardwareStageEpochs<Program> EPOCHS=new HardwareStageEpochs<>();
 
     private static boolean sameRevision(Program program,
             HardwareAnalysisRevision revision) {
@@ -32,13 +33,20 @@ public final class HardwareFlowStageCache {
             throw new IllegalArgumentException("Missing Ghidra analysis context");
         monitor.checkCancelled();
         if(!sameRevision(program,started))throw new CancelledException();
-        HardwareStageCheckpoint<GhidraHardwareFlowService.Report> previous;
+        final long computationEpoch;
         synchronized(COMPLETED){
-            previous=COMPLETED.get(program);
+            computationEpoch=EPOCHS.begin(program);
+            HardwareStageCheckpoint<GhidraHardwareFlowService.Report> previous=
+                COMPLETED.get(program);
             if(previous!=null && previous.validFor(started.modificationNumber(),
                     started.language(),started.sourceSha256(),
-                    started.mc68332Selected()))
+                    started.mc68332Selected())){
+                monitor.checkCancelled();
+                if(!sameRevision(program,started) ||
+                        !EPOCHS.current(program,computationEpoch))
+                    throw new CancelledException();
                 return new Result(previous.evidence(),true);
+            }
             COMPLETED.remove(program);
         }
         // No lock held during the expensive Ghidra CFG walk.
@@ -46,21 +54,40 @@ public final class HardwareFlowStageCache {
             new GhidraHardwareFlowService().analyze(program,monitor);
         monitor.checkCancelled();
         if(!sameRevision(program,started))throw new CancelledException();
+        synchronized(COMPLETED){
+            if(!EPOCHS.current(program,computationEpoch))
+                throw new CancelledException(); // Explicit invalidation during scan.
+        }
         if(calculated.markdown.length()<=MAX_REPORT_CHARS){
             HardwareStageCheckpoint<GhidraHardwareFlowService.Report> checkpoint=
                 HardwareStageCheckpoint.complete(started.modificationNumber(),
                     started.language(),started.sourceSha256(),
                     started.mc68332Selected(),calculated);
             synchronized(COMPLETED) {
-                if(!sameRevision(program,started))throw new CancelledException();
+                monitor.checkCancelled();
+                if(!sameRevision(program,started) ||
+                        !EPOCHS.current(program,computationEpoch))
+                    throw new CancelledException();
                 COMPLETED.put(program,checkpoint);
             }
+        }
+        // Even oversized (non-cached) results cannot be handed back after
+        // an explicit invalidation in the middle of the analysis.
+        monitor.checkCancelled();
+        synchronized(COMPLETED){
+            if(!sameRevision(program,started) ||
+                    !EPOCHS.current(program,computationEpoch))
+                throw new CancelledException();
         }
         return new Result(calculated,false);
     }
 
     public static void clear(Program program){
         if(program==null)return;
-        synchronized(COMPLETED){COMPLETED.remove(program);}
+        synchronized(COMPLETED){
+            // Invalidate ongoing scans even when no completed entry exists.
+            EPOCHS.invalidate(program);
+            COMPLETED.remove(program);
+        }
     }
 }
