@@ -21,7 +21,7 @@ import ghidrassist.apiprovider.APIProviderConfig;
 
 @PluginInfo(
     status = PluginStatus.STABLE,
-    packageName = "GhidrAssist",
+    packageName = GhidrAssistPluginPackage.NAME,
     category = PluginCategoryNames.COMMON,
     shortDescription = "GhidrAssist LLM Plugin",
     description = "A plugin that provides code assistance using a language model."
