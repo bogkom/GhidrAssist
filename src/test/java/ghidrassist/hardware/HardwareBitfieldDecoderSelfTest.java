@@ -51,6 +51,22 @@ public final class HardwareBitfieldDecoderSelfTest {
         boolean immutable = false;
         try {known.fields().clear();} catch(UnsupportedOperationException expected){immutable=true;}
         check(immutable,"no mutable evidence results");
+        check(HardwareBitfieldDecoder.hasConcretePdfPageClaim(
+                "D-5/D-6 (PDF pages 219-220)") &&
+            HardwareBitfieldDecoder.hasConcretePdfPageClaim(
+                "D-6 (PDF page 220)"),
+            "current sourced SIMCR definitions have numeric physical page claims");
+        for(String unsourced: new String[]{null,"","UNVERIFIED","UNKNOWN",
+                "D-6", "Appendix D (page to be verified)",
+                "PDF page UNKNOWN", "PDF pages 12-13 AMBIGUOUS",
+                "PDF page 0", "PDF page ?",
+                "PDF page 10 unverified edition"}) {
+            check(!HardwareBitfieldDecoder.hasConcretePdfPageClaim(unsourced),
+                "reject unsupported/ambiguous field page citation: "+unsourced);
+        }
+        check(known.summary().contains("source-page-claimed MC68332") &&
+            known.summary().contains("PDF edition/page claim UNVERIFIED"),
+            "literal field decode cannot claim physical PDF identity proof");
         System.out.println("HardwareBitfieldDecoderSelfTest OK");
     }
 }
