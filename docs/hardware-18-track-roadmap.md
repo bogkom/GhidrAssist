@@ -125,3 +125,16 @@ Full MCU/peripheral emulation, physical CS electrical simulation, generic automa
 - Dedicated deterministic negative tests, full Ghidra 12.1.4 extension CI
   and actual isolated GUI acceptance on the exact candidate SHA are gates
   before integrating; no queued plan constitutes local PASS.
+
+
+## 2026-10-29 — GA-06 case-normalized manifest safety
+
+- Follow-up branch `fix/ga06-manifest-case-page-guard-20261029`
+  based on exact GA-06 PR #78 head
+  `9fcce7c9cce9bf431f8d0417d7f15bd2b40bc1de`.
+- Reject case-insensitive duplicate MCU module definitions before
+  comparison normalizes keys; register references resolve to the declared
+  module. Explicit numeric PDF page claims replace mere substring checks.
+- Strict parser/comparison regressions, full Ghidra 12.1.4 CI and separate
+  host-attested real Ghidra acceptance remain required; no source TSV
+  becomes authoritative or is imported automatically.
