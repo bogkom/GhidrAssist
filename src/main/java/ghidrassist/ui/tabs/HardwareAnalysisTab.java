@@ -200,9 +200,39 @@ public final class HardwareAnalysisTab extends JPanel {
             JTextArea preview=new JTextArea(result.report(),22,91);
             preview.setEditable(false);
             preview.setCaretPosition(0);
-            JOptionPane.showMessageDialog(this,new JScrollPane(preview),
+            int selected=JOptionPane.showOptionDialog(this,
+                new JScrollPane(preview),
                 "Structural preview ONLY — no MCU profile imported",
-                JOptionPane.INFORMATION_MESSAGE);
+                JOptionPane.DEFAULT_OPTION,JOptionPane.INFORMATION_MESSAGE,
+                null,new Object[]{"Close preview","Compare with another..."},
+                "Close preview");
+            if(selected==1) {
+                JFileChooser otherChooser=new JFileChooser();
+                otherChooser.setDialogTitle(
+                    "Compare second untrusted MCU profile manifest — no import");
+                otherChooser.setFileFilter(new FileNameExtensionFilter(
+                    "Profile manifest (*.tsv)","tsv"));
+                if(otherChooser.showOpenDialog(this)==JFileChooser.APPROVE_OPTION) {
+                    File other=otherChooser.getSelectedFile();
+                    if(!other.isFile() || Files.size(other.toPath())>
+                            ghidrassist.hardware.HardwareProfileManifestPreview.MAX_BYTES)
+                        throw new IllegalArgumentException(
+                            "Second profile must be a local TSV file no larger than 1 MiB");
+                    String otherText=Files.readString(other.toPath(),
+                        StandardCharsets.UTF_8);
+                    var parsedOther=ghidrassist.hardware.HardwareProfileManifestPreview
+                        .parse(otherText);
+                    var comparison=ghidrassist.hardware.HardwareProfileManifestComparison
+                        .compare(result,parsedOther);
+                    JTextArea differences=new JTextArea(comparison.render(),24,94);
+                    differences.setEditable(false);
+                    differences.setCaretPosition(0);
+                    JOptionPane.showMessageDialog(this,
+                        new JScrollPane(differences),
+                        "Unverified manifest differences — read-only",
+                        JOptionPane.INFORMATION_MESSAGE);
+                }
+            }
             // An explicit local checksum check is optional. Source identity
             // claims are not silently promoted by previewing metadata.
             String claimed=result.source().claimedSha256();
