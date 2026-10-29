@@ -72,3 +72,17 @@ Full MCU/peripheral emulation, physical CS electrical simulation, generic automa
   edition claims. The status is always candidate-only source metadata.
 - CI: standalone negatives and complete Ghidra 12.1.4 build; actual RAG
   source-page integration requires authorized isolated Ghidra testing.
+
+
+## 2026-10-29 — GA-16 manual folio header false-positive fix
+
+- Follow-up branch `fix/ga16-pdf-folio-header-evidence-20261029` builds on
+  immutable PR #66 commit `96ce7b133844cf5a69f109153217f5cf44691f0d`.
+- Detect `Table D-1` or `Figure 5-20` adjacent to `USER'S MANUAL`
+  without treating these as printed page numbers; only standalone adjacent
+  folios or genuine same-line header candidates are considered.
+- Conflicting header candidates from different lines are `AMBIGUOUS_HEADER`.
+  Physical PDF page indexes and navigation remain authoritative and unchanged.
+- Deterministic negative extraction/pagination CI, full Ghidra 12.1.4
+  extension build and real isolated RAG/Ghidra acceptance on exact artifact
+  remain required before integration or merge.
