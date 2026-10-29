@@ -9,7 +9,13 @@ import java.util.*;
  */
 public final class HardwareStartupConfig {
     private HardwareStartupConfig() {}
-    public record Site(long function,long pc,String register,boolean write,Integer word) {}
+    public record Site(long function,long pc,String register,boolean write,
+                       Integer word,boolean uncertain) {
+        // Preserve all existing five-field synthetic callers.
+        public Site(long function,long pc,String register,boolean write,Integer word) {
+            this(function,pc,register,write,word,false);
+        }
+    }
     public enum Path { STATIC_RESET_CALL_CANDIDATE, OUTSIDE_OR_UNRESOLVED }
     public enum Alternatives { REFERENCE_ONLY, UNKNOWN_WRITE_VALUE,
         ONE_LITERAL_CANDIDATE, MULTIPLE_LITERAL_ALTERNATIVES }
@@ -30,7 +36,7 @@ public final class HardwareStartupConfig {
                 .append("; direct-call graph incomplete: ").append(callGraphIncomplete)
                 .append("; register sites: ").append(sites)
                 .append("; write candidates: ").append(writes)
-                .append("; unknown write values: ").append(unknownWrites).append(".\n")
+                .append("; unknown or path-uncertain write candidates: ").append(unknownWrites).append(".\n")
                 .append("- **STATIC POSSIBILITY, NOT EXECUTION:** possible direct-call ")
                 .append("reachability does not establish feasible paths; other functions ")
                 .append("are OUTSIDE_OR_UNRESOLVED, not proven unreachable.\n")
@@ -46,7 +52,8 @@ public final class HardwareStartupConfig {
             for(int i=0;i<shown;i++){
                 Group g=groups.get(i);
                 out.append("| ").append(String.format(Locale.ROOT,"0x%08X",g.function()))
-                    .append(" | ").append(g.register())
+                    .append(" | ").append(mc68332Selected?
+                        g.register():"UNVERIFIED_MCU_REGISTER")
                     .append(" | ").append(g.path())
                     .append(" | ").append(g.alternatives()).append(" | ");
                 if(g.possibleWords().isEmpty())out.append("UNKNOWN");
@@ -90,9 +97,14 @@ public final class HardwareStartupConfig {
                 k->new Grouping(s.function(),s.register(),path));
             if(!s.write())continue;
             writes++;group.writes++;
-            if(s.word()==null || s.word()<0 || s.word()>0xffff){
+            if(s.word()==null || s.word()<0 || s.word()>0xffff ||
+                    s.uncertain()){
                 unknown++;group.unknown++;
-            }else group.words.add(s.word());
+            }
+            // The literal is still a source candidate even when a call,
+            // alias or unknown-width write prevents safe interpretation.
+            if(s.word()!=null && s.word()>=0 && s.word()<=0xffff)
+                group.words.add(s.word());
         }
         List<Group> results=new ArrayList<>();
         for(Grouping g:grouped.values()){

@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -38,15 +39,22 @@ public final class HardwareStartupEvidenceMerge {
             Set<Source> sources,boolean possibleWrite,int widthBits,
             Integer literalWord,Status status,boolean conditionalOrUncertain) {
         public Row {sources=Set.copyOf(sources);}
-        public HardwareStartupConfig.Site forStartup(){
+        public HardwareStartupConfig.Site forStartup() {
+            return forStartup(false);
+        }
+        public HardwareStartupConfig.Site forStartup(boolean unknownAliasSameFunction) {
             return new HardwareStartupConfig.Site(function,pc,candidateRegister,
                 possibleWrite,status==Status.FULL_WORD_LITERAL_CANDIDATE?
-                    literalWord:null);
+                    literalWord:null,conditionalOrUncertain||unknownAliasSameFunction);
         }
     }
     public record Report(List<Row> rows,int rawSites,int duplicateSources,
-            int unboundAliasStores,int conflicts,int uncertainWrites) {
-        public Report {rows=List.copyOf(rows);}
+            int unboundAliasStores,int conflicts,int uncertainWrites,
+            Set<Long> functionsWithUnknownAlias) {
+        public Report {
+            rows=List.copyOf(rows);
+            functionsWithUnknownAlias=Set.copyOf(functionsWithUnknownAlias);
+        }
         public String markdown(boolean selectedMc68332){
             StringBuilder out=new StringBuilder(
                 "## Unified startup write evidence (Listing + CFG/P-code)\n\n")
@@ -127,11 +135,15 @@ public final class HardwareStartupEvidenceMerge {
         if(observations==null)throw new IllegalArgumentException("Null source set");
         Map<Identity,Mutable> grouped=new LinkedHashMap<>();
         int raw=0,duplicates=0,unbound=0;
+        Set<Long> aliasFunctions=new LinkedHashSet<>();
         for(Observation o:observations){
             if(o==null)throw new IllegalArgumentException("Null source observation");
             raw++;
             if(o.registerAddress()<0){
-                if(o.possibleWrite())unbound++;
+                if(o.possibleWrite()){
+                    unbound++;
+                    aliasFunctions.add(o.function());
+                }
                 continue; // never invent a target address for unknown alias
             }
             Identity key=new Identity(o.function(),o.pc(),o.registerAddress());
@@ -158,6 +170,7 @@ public final class HardwareStartupEvidenceMerge {
         }
         rows.sort(Comparator.comparingLong(Row::function)
             .thenComparingLong(Row::pc).thenComparingLong(Row::registerAddress));
-        return new Report(rows,raw,duplicates,unbound,conflicts,unknownWrites);
+        return new Report(rows,raw,duplicates,unbound,conflicts,
+            unknownWrites,aliasFunctions);
     }
 }

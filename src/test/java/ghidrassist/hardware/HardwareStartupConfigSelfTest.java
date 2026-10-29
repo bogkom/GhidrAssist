@@ -41,6 +41,18 @@ public final class HardwareStartupConfigSelfTest {
             List.of(at(0x2bc0,0x2bca,"SIMCR",true,0x40ca)))
             .groups().get(0).path()==HardwareStartupConfig.Path.OUTSIDE_OR_UNRESOLVED,
             "unrecognized reset root");
+        var withBarrier=HardwareStartupConfig.analyze(true,true,Set.of(0x2bc0L),
+            false,List.of(new HardwareStartupConfig.Site(
+                0x2bc0,0x2bca,"SIMCR",true,0x40ca,true)));
+        ok(withBarrier.groups().get(0).alternatives()==
+            HardwareStartupConfig.Alternatives.UNKNOWN_WRITE_VALUE &&
+            withBarrier.groups().get(0).simcrMmCandidate()==null &&
+            withBarrier.unknownWrites()==1,
+            "known literal after unknown call/alias stays source only");
+        ok(!HardwareStartupConfig.analyze(false,true,Set.of(0x2bc0L),false,
+            List.of(new HardwareStartupConfig.Site(
+                0x2bc0,0x2bca,"SIMCR",true,0x40ca))).markdown().contains("| SIMCR |"),
+            "generic CPU32 report hides selected-MCU register names");
         boolean readonly=false;try{result.groups().clear();}
         catch(UnsupportedOperationException e){readonly=true;}
         ok(readonly,"immutable output");

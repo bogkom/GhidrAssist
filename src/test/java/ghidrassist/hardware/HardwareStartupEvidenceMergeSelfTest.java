@@ -38,6 +38,9 @@ public final class HardwareStartupEvidenceMergeSelfTest {
         ok(csor.status()==HardwareStartupEvidenceMerge.Status.CONFLICTING_EVIDENCE &&
             csor.forStartup().word()==null,
             "mixed byte and word at same PC cannot establish register word");
+        ok(r.functionsWithUnknownAlias().contains(0x2bc0L) &&
+            sim.forStartup(true).uncertain(),
+            "same-function unbound alias blocks confident startup word inference");
         ok(r.markdown(true).contains("not be counted as two events") &&
             r.markdown(true).contains("remain UNKNOWN"),
             "no false runtime epoch, MM latch or CS physical map");

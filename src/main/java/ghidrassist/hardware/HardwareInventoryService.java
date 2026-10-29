@@ -379,7 +379,8 @@ public final class HardwareInventoryService {
         md.append("\n\n").append(merged.markdown(concreteDevice));
         List<HardwareStartupConfig.Site> startupSites=new ArrayList<>();
         for(var item:merged.rows())
-            startupSites.add(item.forStartup());
+            startupSites.add(item.forStartup(
+                merged.functionsWithUnknownAlias().contains(item.function())));
         var startup=HardwareStartupConfig.analyze(concreteDevice,
             flowStage.report().resetCandidateRecognized,
             flowStage.report().resetCandidateFunctions,
