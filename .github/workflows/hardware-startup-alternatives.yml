@@ -7,6 +7,7 @@ on:
       - 'src/main/java/ghidrassist/hardware/GhidraHardwareFlowService.java'
       - 'src/main/java/ghidrassist/hardware/HardwareInventoryService.java'
       - 'src/test/java/ghidrassist/hardware/HardwareStartupConfigSelfTest.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareStartupResetIntegrationSelfTest.java'
       - '.github/workflows/hardware-startup-alternatives.yml'
   workflow_dispatch:
 jobs:
@@ -25,7 +26,12 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/startup"
           javac --release 21 -d "$RUNNER_TEMP/startup" \
+            src/main/java/ghidrassist/hardware/HardwareCallEffects.java \
+            src/main/java/ghidrassist/hardware/HardwareResetFlow.java \
             src/main/java/ghidrassist/hardware/HardwareStartupConfig.java \
-            src/test/java/ghidrassist/hardware/HardwareStartupConfigSelfTest.java
+            src/test/java/ghidrassist/hardware/HardwareStartupConfigSelfTest.java \
+            src/test/java/ghidrassist/hardware/HardwareStartupResetIntegrationSelfTest.java
       - name: Assert no false MM/CS execution conclusions
-        run: java -cp "$RUNNER_TEMP/startup" ghidrassist.hardware.HardwareStartupConfigSelfTest
+        run: |
+          java -cp "$RUNNER_TEMP/startup" ghidrassist.hardware.HardwareStartupConfigSelfTest
+          java -cp "$RUNNER_TEMP/startup" ghidrassist.hardware.HardwareStartupResetIntegrationSelfTest

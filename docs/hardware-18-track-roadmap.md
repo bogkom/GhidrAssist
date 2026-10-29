@@ -18,22 +18,22 @@ The originating document has 18 *sections*, not 18 independent feature checkboxe
 
 | ID | Source | Deliverable | Audited baseline 2026-10-28 | Acceptance / evidence |
 |---|---|---|---|---|
-| GA-01 | A | Reset vector / entry evidence and reachable initialization flow | PARTIAL: function-local CFG/call references; reset-root graph missing | Validate vector bytes / entry, distinguish reachable/candidate/unknown |
-| GA-02 | B | Path-conditional SIMCR/MM (write-once), TRAMBAR, CSBAR/CSOR/CSPAR and VBR epochs | PARTIAL: snapshot/unknown-call invalidation; reset-relative epochs missing | Branch/alias/call uncertainty preserved, addresses and source paths |
-| GA-03 | C | Indirect MMIO via A/D registers, indexed modes, P-code LOAD/STORE, aliases | PARTIAL: substantial CFG/P-code work merged through #35 | Synthetic alias joins, call barriers, no invented constants |
+| GA-01 | A | Reset vector / entry evidence and reachable initialization flow | PARTIAL INTEGRATED: image-zero RESET candidate, bounded direct-call graph and statically recognized function set; no dynamic path proof | Validate vector bytes / entry, distinguish reachable/candidate/unknown |
+| GA-02 | B | Path-conditional SIMCR/MM (write-once), TRAMBAR, CSBAR/CSOR/CSPAR and VBR epochs | PARTIAL INTEGRATED: per-function SIMCR/MM, TRAMBAR, CSBAR/CSOR alternative words and unknown writes; no first-executed write or latched MM proof | Branch/alias/call uncertainty preserved, addresses and source paths |
+| GA-03 | C | Indirect MMIO via A/D registers, indexed modes, P-code LOAD/STORE, aliases | PARTIAL INTEGRATED: conditional CSBOOT–CS10 table and source-local CS register alternatives; no physical bus map | Synthetic alias joins, call barriers, no invented constants |
 | GA-04 | D | Per-select CSBOOT, CS0..CS10 table in Analyze | PARTIAL: decoder/windows exist; Markdown currently uses per-window bullets | 12 separate rows, start/end/size, missing values UNKNOWN, model scope |
 | GA-05 | E | Safe CPU32-unknown vs model-specific Review/Apply | PARTIAL: MC68332 full catalog; unknown-mode review constrained | No model-inherited unsafe maps; collision/transaction/Undo tests |
-| GA-06 | F | Extendible sourced MC683xx profiles and conflict matching | PARTIAL: MC68332 and document hints, no complete import pipeline | Explicit model/version/page/bitfields/reset source; SVD/RDL feasibility |
-| GA-07 | G | Compact 3-part Analyze: initiation, register history, CS map | PARTIAL: PR #52 focused site filtering; three-part report missing | UI/Markdown/RAG agreement, concise report, evidence links |
-| GA-08 | H | Function, pointer and variable naming proposals | PARTIAL: function naming/Undo (#22/#28); pointers/locals missing | Collision-safe preview, manual labels preserved, transactional Undo |
-| GA-09 | 13.1 | MMIO accesses explorer with navigation | MISSING as dedicated view | Filterable function/instruction/value/access/confidence with Go To |
-| GA-10 | 13.2 | Verified bitfield decode with provenance | PARTIAL: MC68332 metadata; comprehensive decoder missing | Unknown fields UNKNOWN; model- and edition-specific source |
-| GA-11 | 13.3 | Interrupt / exception analysis including VBR and ISR paths | PARTIAL: VBR sightings, no full ISR graph | Static candidates not treated as active IRQs |
-| GA-12 | 13.4 | Resumable, version-aware incremental analysis | PARTIAL DRAFT: version-aware cache plus cancelable scan and reusable COMPLETE CFG stage in memory; persistent partial-stage resume still missing | Program identity, input hash, invalidation and resume regressions |
-| GA-13 | 13.5 | Human/analysis/AI origin of changes | MISSING verified per-symbol provenance | Check actual Ghidra 12.1.4 SourceType API; retain rationale and Undo |
+| GA-06 | F | Extendible sourced MC683xx profiles and conflict matching | PARTIAL INTEGRATED: profile citation audit, strict preview-only external manifest and optional local PDF checksum; no verified MCU import | Explicit model/version/page/bitfields/reset source; SVD/RDL feasibility |
+| GA-07 | G | Compact 3-part Analyze: initiation, register history, CS map | PARTIAL INTEGRATED: three-part Overview, full evidence tab and complete export/RAG evidence | UI/Markdown/RAG agreement, concise report, evidence links |
+| GA-08 | H | Function, pointer and variable naming proposals | PARTIAL INTEGRATED: function naming review and source-only A-register role hints; no local-variable rename | Collision-safe preview, manual labels preserved, transactional Undo |
+| GA-09 | 13.1 | MMIO accesses explorer with navigation | PARTIAL INTEGRATED: searchable read-only MMIO explorer with Go To Listing; host GUI verification pending | Filterable function/instruction/value/access/confidence with Go To |
+| GA-10 | 13.2 | Verified bitfield decode with provenance | PARTIAL INTEGRATED: sourced SIMCR bitfield values from literal full-word writes only; other bits UNKNOWN | Unknown fields UNKNOWN; model- and edition-specific source |
+| GA-11 | 13.3 | Interrupt / exception analysis including VBR and ISR paths | PARTIAL INTEGRATED: reset-based vector candidate inventory; actual VBR/ISR execution UNKNOWN | Static candidates not treated as active IRQs |
+| GA-12 | 13.4 | Resumable, version-aware incremental analysis | PARTIAL INTEGRATED: revision-aware invalidation, cancelable Analyze and in-memory complete CFG-stage checkpoint | Program identity, input hash, invalidation and resume regressions |
+| GA-13 | 13.5 | Human/analysis/AI origin of changes | PARTIAL INTEGRATED: read-only SourceType audit and local CSV; human/AI authorship UNKNOWN | Check actual Ghidra 12.1.4 SourceType API; retain rationale and Undo |
 | GA-14 | 13.6 | Firmware configuration comparison | DEFERRED by source priorities | Assess Ghidra Version Tracking first; later CS/VBR/peripheral diff |
 | GA-15 | 13.7 | Agentic planning, indirect calls, context, pagination, stale cache | PARTIAL: draft PR #49/#50 overlap and existing Agentic work | Don't duplicate existing tools; budget/policy evidence regression |
-| GA-16 | 15 | Physical PDF page/printed label, register tables, sourced RAG | PARTIAL: native PDF/RAG and labels; tables uncertain | No auto-promotion of ambiguous PDF rows; page/edition evidence |
+| GA-16 | 15 | Physical PDF page/printed label, register tables, sourced RAG | PARTIAL INTEGRATED: physical PDF-page and candidate printed folio sequence status; actual PDF source page remains authoritative | No auto-promotion of ambiguous PDF rows; page/edition evidence |
 | GA-17 | 16 | CI, synthetic tests, isolated ECU411 project acceptance and rollback | PARTIAL: pure-Java Actions and private firmware tests exist | Compile 12.1.4, record artifacts/hashes, reversible actual-Ghidra test |
 | GA-18 | 17 + new decision | GitHub-controlled multi-stage local Supervisor tests | SUPERVISOR IMPLEMENTED; no GhidrAssist queued plans yet | Pinned JSON, explicit approve, quota safeguards, verified private reports |
 
@@ -95,3 +95,22 @@ Full MCU/peripheral emulation, physical CS electrical simulation, generic automa
   checkpoints, interrupted-function continuation or cross-session resume.
 - Gate: exact Ghidra 12.1.4 extension build and standalone negative stage
   tests, then local isolated Ghidra cancellation+Undo tests before merge.
+
+
+## 2026-10-29 — integrated release candidate PR #67
+
+- Branch `integration/hardware-tracks-20261029` is built on immutable
+  PR #64 (and PR #60) and reconciles sibling PR #54–#66 functionality.
+  It is a **draft integration candidate**, not a merge to `master`.
+- Dedicated read-only RESET graph produces a set of recognized candidate
+  direct-call functions, with recursion, unknown target and traversal caps
+  preserved. The same immutable evidence is used for GA-01/02/03
+  per-function write alternatives.
+- Separate candidate word values for SIMCR/MM, TRAMBAR, CSBAR/CSOR/CSPAR
+  are not interpreted as temporal register epochs. Chip Select state
+  across functions or branch alternatives remains UNKNOWN.
+- Compiles the full extension for Ghidra 12.1.4 and runs standalone
+  adversarial tests. A green CI run is **not** local firmware acceptance.
+  Prepare an *integration-specific*, artifact/SHA-pinned Supervisor plan
+  after successful final-head CI; retain all old plans without automatic
+  approval. Do not merge before real host integration verification.
