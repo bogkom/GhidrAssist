@@ -1,0 +1,35 @@
+name: Hardware intra-function SIMCR first-source candidates
+on:
+  push:
+    paths:
+      - 'src/main/java/ghidrassist/hardware/HardwareSimcrLocalFirst.java'
+      - 'src/main/java/ghidrassist/hardware/GhidraHardwareFlowService.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareSimcrLocalFirstSelfTest.java'
+      - '.github/workflows/hardware-simcr-local-first.yml'
+  pull_request:
+    paths:
+      - 'src/main/java/ghidrassist/hardware/HardwareSimcrLocalFirst.java'
+      - 'src/main/java/ghidrassist/hardware/GhidraHardwareFlowService.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareSimcrLocalFirstSelfTest.java'
+      - '.github/workflows/hardware-simcr-local-first.yml'
+  workflow_dispatch:
+jobs:
+  candidate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Compile source-only possible first SIMCR candidates
+        run: |
+          mkdir -p "$RUNNER_TEMP/simcr-first"
+          javac --release 21 -d "$RUNNER_TEMP/simcr-first" \
+            src/main/java/ghidrassist/hardware/HardwareSimcrLocalFirst.java \
+            src/test/java/ghidrassist/hardware/HardwareSimcrLocalFirstSelfTest.java
+      - name: Test branches, cycles, aliases and missing edges
+        run: java -cp "$RUNNER_TEMP/simcr-first" ghidrassist.hardware.HardwareSimcrLocalFirstSelfTest
