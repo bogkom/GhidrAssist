@@ -77,6 +77,7 @@ public final class HardwareAnalysisTab extends JPanel {
     private final JButton namePreview=new JButton("Export CSV");
     private final JButton approve=new JButton("Review / Apply...");
     private final JButton reviewNames=new JButton("Review names...");
+    private final JButton previewProfile=new JButton("Preview profile...");
     private final JTextArea report=new JTextArea();
     private final JTextField reportSearch=new JTextField(21);
     private final JButton previousHit=new JButton("Previous");
@@ -102,6 +103,7 @@ public final class HardwareAnalysisTab extends JPanel {
         profileRow.add(new JLabel("Profile:"));
         profileRow.add(selection);
         profileRow.add(reviewNames);
+        profileRow.add(previewProfile);
         JPanel actionRow=new JPanel(new FlowLayout(FlowLayout.LEFT,5,1));
         actionRow.add(run);
         actionRow.add(approve);
@@ -176,6 +178,38 @@ public final class HardwareAnalysisTab extends JPanel {
         namePreview.addActionListener(e->exportNamingPreview());
         approve.addActionListener(e->reviewHardwareChanges());
         reviewNames.addActionListener(e->reviewFunctionNames());
+        previewProfile.addActionListener(e->previewExternalProfile());
+    }
+
+    /**
+     * Preview only. This input is never converted to a Ghidra Register,
+     * HardwareProfiles.Profile or Review/Apply item.
+     */
+    private void previewExternalProfile(){
+        JFileChooser chooser=new JFileChooser();
+        chooser.setDialogTitle("Preview external MCU profile manifest — no import");
+        chooser.setFileFilter(new FileNameExtensionFilter("Profile manifest (*.tsv)","tsv"));
+        if(chooser.showOpenDialog(this)!=JFileChooser.APPROVE_OPTION)return;
+        File file=chooser.getSelectedFile();
+        try{
+            if(!file.isFile() || Files.size(file.toPath())>
+                    ghidrassist.hardware.HardwareProfileManifestPreview.MAX_BYTES)
+                throw new IllegalArgumentException("Profile must be a local TSV file no larger than 1 MiB");
+            String data=Files.readString(file.toPath(),StandardCharsets.UTF_8);
+            var result=ghidrassist.hardware.HardwareProfileManifestPreview.parse(data);
+            JTextArea preview=new JTextArea(result.report(),22,91);
+            preview.setEditable(false);
+            preview.setCaretPosition(0);
+            JOptionPane.showMessageDialog(this,new JScrollPane(preview),
+                "Structural preview ONLY — no MCU profile imported",
+                JOptionPane.INFORMATION_MESSAGE);
+            status.setText("Manifest structure validated. Source/MCU unverified; no Ghidra changes.");
+        }catch(Exception ex){
+            JOptionPane.showMessageDialog(this,
+                "Profile rejected (no changes):\n"+ex.getMessage(),
+                "Unsafe or invalid manifest",JOptionPane.WARNING_MESSAGE);
+            status.setText("Manifest rejected; current MCU profile unchanged.");
+        }
     }
 
     /** Uses the very same saved settings as Settings > Response Appearance. */
