@@ -78,6 +78,21 @@ public final class ManualPrintedPageSelfTest {
             "D-1\nUSER'S MANUAL D-1\n");
         ok(sameAdjacent.label().equals("D-1"),
             "same header and adjacent folio are not falsely ambiguous");
+        var oversized=ManualPrintedPage.fromText(
+            "MC68332 USER'S MANUAL D-1\n"+
+            "X".repeat(ManualPrintedPage.MAX_PAGE_TEXT_CHARS));
+        ok(oversized.label().equals("UNKNOWN") &&
+            oversized.confidence().equals("PDF_TEXT_TOO_LARGE"),
+            "oversized PDF text cannot yield falsely certain printed folio");
+        var extremeLines=ManualPrintedPage.fromText(
+            "MC68332 USER'S MANUAL D-1\n" + "\n".repeat(
+                ManualPrintedPage.MAX_PAGE_TEXT_CHARS));
+        ok(extremeLines.label().equals("UNKNOWN") &&
+            extremeLines.confidence().equals("PDF_TEXT_TOO_LARGE"),
+            "excessive lines cannot force unconstrained split allocations");
+        var normal=ManualPrintedPage.fromText("USER'S MANUAL D-4\n");
+        ok(normal.label().equals("D-4"),
+            "ordinary folio candidate preserved under text budget");
         System.out.println("ManualPrintedPageSelfTest OK");
     }
 }
