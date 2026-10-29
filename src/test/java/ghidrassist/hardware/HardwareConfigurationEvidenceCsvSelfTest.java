@@ -70,7 +70,7 @@ public final class HardwareConfigurationEvidenceCsvSelfTest {
                 "UNRESOLVED_ALIAS",-1,true,0,null,0,0,false,true,true)));
         String unknownWidthCsv=HardwareConfigurationEvidenceCsv.serialize(
             unknownWidthReport,List.of(),true);
-        check(unknownWidthCsv.contains("\"UNKNOWN\",\"UNKNOWN\",\"UNKNOWN\"") &&
+        check(unknownWidthCsv.contains("\"INDIRECT\",\"UNKNOWN\",\"UNKNOWN\",\"UNKNOWN_DUE_TO_BARRIER_OR_LIMIT\"") &&
             unknownWidthCsv.contains("NEVER_AUTO_APPLY"),
             "unmodeled width printed UNKNOWN, never assumed word data");
         boolean rejectedMerged=false;
