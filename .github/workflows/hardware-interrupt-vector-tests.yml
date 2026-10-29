@@ -1,0 +1,40 @@
+name: Hardware exception vector candidates tests
+
+on:
+  push:
+    paths:
+      - 'src/main/java/ghidrassist/hardware/HardwareInterruptVectors.java'
+      - 'src/main/java/ghidrassist/hardware/GhidraInterruptVectorService.java'
+      - 'src/main/java/ghidrassist/hardware/GhidraHardwareFlowService.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareInterruptVectorsSelfTest.java'
+      - '.github/workflows/hardware-interrupt-vector-tests.yml'
+  pull_request:
+    paths:
+      - 'src/main/java/ghidrassist/hardware/HardwareInterruptVectors.java'
+      - 'src/main/java/ghidrassist/hardware/GhidraInterruptVectorService.java'
+      - 'src/main/java/ghidrassist/hardware/GhidraHardwareFlowService.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareInterruptVectorsSelfTest.java'
+      - '.github/workflows/hardware-interrupt-vector-tests.yml'
+  workflow_dispatch:
+
+jobs:
+  vector-model:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Compile independent vector evidence model
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/vectors"
+          javac --release 21 -d "$RUNNER_TEMP/vectors" \
+            src/main/java/ghidrassist/hardware/HardwareInterruptVectors.java \
+            src/test/java/ghidrassist/hardware/HardwareInterruptVectorsSelfTest.java
+      - name: Reject false dynamic ISR and VBR claims
+        run: java -cp "$RUNNER_TEMP/vectors" ghidrassist.hardware.HardwareInterruptVectorsSelfTest

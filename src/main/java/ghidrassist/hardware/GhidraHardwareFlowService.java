@@ -597,6 +597,7 @@ public final class GhidraHardwareFlowService {
            .append("- Unresolved register-based stores: ").append(unresolved).append("\n")
            .append("- Propagation cap reached: ").append(limited).append("\n\n")
            .append(resetStaticCandidates(program,staticCalls,evidencedFunctions))
+           .append(GhidraInterruptVectorService.analyze(program,monitor))
            .append(detail).append(effects);
         if(shown>=350)out.append("\n[Detailed report bounded at 350 sites.]\n");
         return new Report(out.toString(),foundFunctions,indirect,vbr,unresolved,visited,limited);
