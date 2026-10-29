@@ -72,3 +72,15 @@ Full MCU/peripheral emulation, physical CS electrical simulation, generic automa
   variable's lifetime/storage or hardware execution.
 - CI: standalone negative checks and complete Ghidra 12.1.4 build.
   Isolated Ghidra acceptance by approved Supervisor before merge.
+
+
+## 2026-10-29 — GA-08 mixed A-register scope uncertainty
+
+- Candidate branch `fix/ga08-address-register-scope-conflicts-20261029`
+  built on exact PR #65 head `81ff1c4d553f5cecd646b4487d6ec5f5ea5759f7`.
+- A physical A-register reused for multiple MM/module scopes within
+  one function is marked `SCOPE_CONFLICT` across all related groups.
+  No apparently stable pointer name may be suggested in that case.
+- Deterministic CFG-source grouping regressions, full Ghidra 12.1.4
+  build and private real Ghidra acceptance required before merge;
+  no program writes or variable lifetime claims.
