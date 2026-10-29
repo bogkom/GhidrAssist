@@ -109,7 +109,7 @@ def x11_capture(out: Path) -> dict:
             ["xwininfo", "-root", "-tree"],
             capture_output=True, text=True, timeout=5, check=True)
         ids = re.findall(
-            r'(?im)^\\s*(0x[0-9a-f]+)\\s+"[^"\\n]*GhidrAssist isolated GUI regression[^"\\n]*"',
+            r'(?im)^\s*(0x[0-9a-f]+)\s+"[^"\n]*GhidrAssist isolated GUI regression[^"\n]*"',
             tree.stdout)
         if len(ids) != 1:
             raise RuntimeError(
