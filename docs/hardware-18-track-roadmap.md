@@ -70,3 +70,12 @@ Full MCU/peripheral emulation, physical CS electrical simulation, generic automa
 - CI: pure Java table model regressions plus full Ghidra 12.1.4 extension build.
   GUI behavior and navigation require real isolated Ghidra verification.
 - No Supervisor plan approval or project edits are implied.
+
+
+## 2026-10-29 — GA-09 unnormalized direct MMIO word guard
+
+- Independent follow-up `fix/ga09-mmio-literal-range-20261029`
+  based on immutable PR #56 head `ed53849141141da7810736c61d8e8a7669aa8767`.
+- The read-only MMIO explorer does not mask out-of-range literal
+  candidates into apparently valid 16-bit writes. Values remain UNKNOWN;
+  full 12.1.4 CI and real isolated Ghidra acceptance remain mandatory.

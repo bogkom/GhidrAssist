@@ -47,6 +47,24 @@ public final class HardwareMmioExplorerSelfTest {
         check(readonly,"snapshot immutable");
         check(HardwareMmioExplorer.rows(java.util.Arrays.asList(null,input.get(0)),false).size()==1,
             "ignore unrecognized null site");
+        var badLiteral=HardwareMmioExplorer.rows(List.of(
+            new HardwareMmioExplorer.Observation(0x400L,0xfffa00L,"SIMCR",
+                "FUN_D","move.l #0x10000,(0xfffa00).l",true,0x10000),
+            new HardwareMmioExplorer.Observation(0x500L,0xfffa00L,"SIMCR",
+                "FUN_E","move.w #-1,(0xfffa00).l",true,-1),
+            new HardwareMmioExplorer.Observation(0x600L,0xfffa00L,"SIMCR",
+                "FUN_F","move.w #0xffff,(0xfffa00).l",true,0xffff)),true);
+        check(badLiteral.get(0).value().equals("UNKNOWN") &&
+            badLiteral.get(0).evidence().contains("OUT-OF-RANGE"),
+            "65536 must not silently wrap to a known 0x0000 word");
+        check(badLiteral.get(1).value().equals("UNKNOWN") &&
+            badLiteral.get(1).evidence().contains("OUT-OF-RANGE"),
+            "negative unnormalized candidate cannot become 0xFFFF");
+        check(badLiteral.get(2).value().equals("0xFFFF") &&
+            badLiteral.get(2).evidence().contains("NOT RUNTIME STATE"),
+            "maximum valid unsigned word remains a source-only candidate");
+        check(badLiteral.stream().allMatch(r->r.deviceScope().contains("USER-SELECTED")),
+            "range validation cannot assert dynamic MM mode");
         System.out.println("HardwareMmioExplorerSelfTest OK");
     }
 }
