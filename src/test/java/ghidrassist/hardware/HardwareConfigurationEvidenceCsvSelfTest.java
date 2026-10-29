@@ -20,7 +20,7 @@ public final class HardwareConfigurationEvidenceCsvSelfTest {
             csv.contains("\"0x40CA\"") && csv.contains("\"1 (STATIC_LITERAL_ONLY)\""),
             "source site with conditional MM literal only");
         check(csv.contains("\"CSBAR0\"") &&
-            csv.contains("\"UNKNOWN\",\"POSSIBLE_MATCH_ON_SOME_CFG_PATHS\""),
+            csv.contains("\"UNKNOWN\",\"UNKNOWN_DUE_TO_BARRIER_OR_LIMIT\""),
             "byte width cannot be a word literal");
         check(csv.contains("\"'=INJECT\""),"spreadsheet formula escaped");
         check(csv.contains("\"CFG_PATH\"") && csv.contains("\"A_MAY_PRECEDE_B\"") &&
