@@ -40,6 +40,33 @@ public final class HardwareSimcrLocalFirstSelfTest {
                 node(2,word,0x40ca)),false,20);
         ok(loop.cyclesOrIncompleteEdges() && loop.unknownFirstPossible(),
             "possible nonterminating loop must not prove first hardware write");
+        // A normal diamond and a shared suffix are not loops. Both
+        // predecessor paths may reach the same literal/exit safely.
+        var diamond=HardwareSimcrLocalFirst.inspect(0,0,
+            List.of(node(0,none,null,1,2),
+                node(1,none,null,3),node(2,none,null,3),
+                node(3,none,null,4),node(4,word,0x40ca)),false,20);
+        ok(diamond.literalCandidates().size()==1 &&
+            !diamond.unknownFirstPossible() &&
+            !diamond.cyclesOrIncompleteEdges() &&
+            diamond.visitedNodes()==5,
+            "joined branches must not be mislabeled as cycles");
+        var sharedExit=HardwareSimcrLocalFirst.inspect(0,0,
+            List.of(node(0,none,null,1,2),
+                node(1,none,null,3),node(2,none,null,3),
+                node(3,none,null)),false,20);
+        ok(sharedExit.exitWithoutSimcr() &&
+            !sharedExit.unknownFirstPossible() &&
+            !sharedExit.cyclesOrIncompleteEdges(),
+            "shared no-write exit is not a back-edge");
+        var delayedCycle=HardwareSimcrLocalFirst.inspect(0,0,
+            List.of(node(0,none,null,1,2),
+                node(1,none,null,3),node(2,none,null,3),
+                node(3,none,null,1,4),node(4,word,0x4848)),false,20);
+        ok(delayedCycle.unknownFirstPossible() &&
+            delayedCycle.cyclesOrIncompleteEdges() &&
+            delayedCycle.literalCandidates().size()==1,
+            "real back-edge must remain uncertain after a join");
         var truncated=HardwareSimcrLocalFirst.inspect(0,0,
             List.of(node(0,none,null,1),node(1,word,0x40ca)),false,1);
         ok(truncated.workLimitReached() && truncated.unknownFirstPossible(),
