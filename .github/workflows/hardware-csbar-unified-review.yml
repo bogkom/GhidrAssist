@@ -1,0 +1,41 @@
+name: Hardware unified CSBAR Review safety
+on:
+  push:
+    paths:
+      - 'src/main/java/ghidrassist/hardware/HardwareCsbarUnifiedReview.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareInventoryService.java'
+      - 'src/main/java/ghidrassist/ui/tabs/HardwareAnalysisTab.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareCsbarUnifiedReviewSelfTest.java'
+      - '.github/workflows/hardware-csbar-unified-review.yml'
+  pull_request:
+    paths:
+      - 'src/main/java/ghidrassist/hardware/HardwareCsbarUnifiedReview.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareInventoryService.java'
+      - 'src/main/java/ghidrassist/ui/tabs/HardwareAnalysisTab.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareCsbarUnifiedReviewSelfTest.java'
+      - '.github/workflows/hardware-csbar-unified-review.yml'
+  workflow_dispatch:
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Compile pure-Java source gate and adversarial cases
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/review"
+          javac --release 21 -d "$RUNNER_TEMP/review" \
+            src/main/java/ghidrassist/hardware/HardwareStartupConfig.java \
+            src/main/java/ghidrassist/hardware/HardwareStartupEvidenceMerge.java \
+            src/main/java/ghidrassist/hardware/HardwareCsbarReviewGate.java \
+            src/main/java/ghidrassist/hardware/HardwareCsbarUnifiedReview.java \
+            src/test/java/ghidrassist/hardware/HardwareCsbarUnifiedReviewSelfTest.java
+      - name: No alias, width or call uncertainty in CS window proposals
+        run: java -cp "$RUNNER_TEMP/review" ghidrassist.hardware.HardwareCsbarUnifiedReviewSelfTest
