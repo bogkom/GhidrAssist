@@ -1,0 +1,41 @@
+name: Hardware CFG MMIO write provenance
+
+on:
+  push:
+    paths:
+      - 'src/main/java/ghidrassist/hardware/HardwareCfgWriteAudit.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareDataflow.java'
+      - 'src/main/java/ghidrassist/hardware/GhidraHardwareFlowService.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareCfgWriteAuditSelfTest.java'
+      - '.github/workflows/hardware-cfg-mmio-evidence.yml'
+  pull_request:
+    paths:
+      - 'src/main/java/ghidrassist/hardware/HardwareCfgWriteAudit.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareDataflow.java'
+      - 'src/main/java/ghidrassist/hardware/GhidraHardwareFlowService.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareCfgWriteAuditSelfTest.java'
+      - '.github/workflows/hardware-cfg-mmio-evidence.yml'
+  workflow_dispatch:
+
+jobs:
+  static-evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Compile standalone CFG evidence model
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/cfg-mmio"
+          javac --release 21 -d "$RUNNER_TEMP/cfg-mmio" \
+            src/main/java/ghidrassist/hardware/HardwareCfgWriteAudit.java \
+            src/test/java/ghidrassist/hardware/HardwareCfgWriteAuditSelfTest.java
+      - name: Check aliases, write widths, SIMCR alternative paths
+        run: java -cp "$RUNNER_TEMP/cfg-mmio" ghidrassist.hardware.HardwareCfgWriteAuditSelfTest

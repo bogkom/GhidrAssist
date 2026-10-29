@@ -421,6 +421,7 @@ public final class GhidraHardwareFlowService {
         List<HardwareCallEffects.FunctionNode> staticCalls=new ArrayList<>();
         List<Long> evidencedFunctions=new ArrayList<>();
         List<HardwarePointerRoleReview.Site> pointerSites=new ArrayList<>();
+        List<HardwareCfgWriteAudit.Site> cfgMmioSites=new ArrayList<>();
         int foundFunctions=0,indirect=0,vbr=0,unresolved=0,visited=0,shown=0;
         boolean limited=false;
         FunctionIterator funs=program.getFunctionManager().getFunctions(true);
@@ -500,6 +501,23 @@ public final class GhidraHardwareFlowService {
                             hit.priorUnknownCall || hit.priorUnknownStore));
                     break;
                 }
+            }
+            for(HardwareDataflow.Snapshot hit:result.snapshots) {
+                if(hit.kind!=HardwareDataflow.Kind.STORE_DIRECT &&
+                        hit.kind!=HardwareDataflow.Kind.STORE_INDIRECT)continue;
+                String target=hit.effectiveAddress==null?null:
+                    targets.get(hit.effectiveAddress);
+                if(target==null &&
+                        !(hit.kind==HardwareDataflow.Kind.STORE_INDIRECT &&
+                          hit.effectiveAddress==null))continue;
+                cfgMmioSites.add(new HardwareCfgWriteAudit.Site(
+                    fun.getEntryPoint().getOffset(),hit.instruction,
+                    target==null?"UNRESOLVED_ALIAS":target,
+                    hit.effectiveAddress==null?-1L:hit.effectiveAddress,
+                    hit.indirect,hit.writeBits,hit.writtenWord,
+                    hit.priorMmCandidateMin,hit.priorMmCandidateMax,
+                    hit.priorUnknownCall,hit.priorUnknownStore,
+                    result.truncated || uncertainFlow));
             }
             List<HardwareDataflow.Snapshot> found=new ArrayList<>();
             for(HardwareDataflow.Snapshot hit:result.snapshots){
@@ -639,6 +657,8 @@ public final class GhidraHardwareFlowService {
         List<HardwarePointerRoleReview.Proposal> roles=
             HardwarePointerRoleReview.propose(mc68332Selected,pointerSites,limited);
         out.append(HardwarePointerRoleReview.report(roles));
+        out.append(HardwareCfgWriteAudit.inspect(mc68332Selected,
+            cfgMmioSites).markdown());
         return new Report(out.toString(),foundFunctions,indirect,vbr,unresolved,
             visited,limited,roles,reset.visited(),
             reset.recognized(),reset.incomplete());

@@ -114,3 +114,20 @@ Full MCU/peripheral emulation, physical CS electrical simulation, generic automa
   Prepare an *integration-specific*, artifact/SHA-pinned Supervisor plan
   after successful final-head CI; retain all old plans without automatic
   approval. Do not merge before real host integration verification.
+
+
+## 2026-10-29 — GA-02/03 CFG-derived MMIO store evidence (#68)
+
+- Independent dependent draft `feature/hardware-cfg-mmio-evidence-20261029`
+  based on exact integration PR #67 SHA `85352509cd2de2e2dcc452eaf93c9ad49bedd0be`.
+- A new source-only CFG/P-code report classifies resolved direct vs indirect
+  register stores, full 16-bit literals, byte/long/unknown writes, and
+  unknown-destination pointer aliases. It is separate from the direct
+  Listing/XREF history to avoid double-counting as real execution.
+- SIMCR write sites retain a saturated predecessor candidate range
+  (0/1/2+) from within the modeled **same-function** CFG.
+  Unknown calls, alias stores or control-flow limits force UNKNOWN,
+  regardless of source-PC ordering or MM literal value. MC68332 MM bit
+  is never declared a latched hardware configuration.
+- New deterministic adversarial regressions and a full Ghidra 12.1.4 build
+  required. No Review/Apply or Ghidra project modifications introduced.
