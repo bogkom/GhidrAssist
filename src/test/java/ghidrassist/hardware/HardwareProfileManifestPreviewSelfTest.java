@@ -78,6 +78,28 @@ public final class HardwareProfileManifestPreviewSelfTest {
         try{result.modules().clear();}
         catch(UnsupportedOperationException e){immutable=true;}
         check(immutable,"preview immutable");
+        // A second module differing only in case must never silently
+        // overwrite a normalized key in the comparison view.
+        bad(SAMPLE.replace("MODULE\\tQSM\\t0x0C00\\t0x0200",
+                "MODULE\\tsim\\t0x0C00\\t0x0200"),
+            "case-insensitive duplicate module names must be rejected");
+        var mixedCase=HardwareProfileManifestPreview.parse(
+            SAMPLE.replace("REGISTER\\tSIM\\tSIMCR",
+                "REGISTER\\tsim\\tSIMCR"));
+        check(mixedCase.registers().get(0).module().equals("SIM"),
+            "register resolves explicitly declared module regardless of case");
+        for(String unsupported:new String[]{"PDF page","PDF page UNKNOWN",
+                "PDF pages 2-3 AMBIGUOUS","PDF page 0",
+                "Appendix D page to be verified","PDF page abc"}){
+            var changed=HardwareProfileManifestPreview.parse(
+                SAMPLE.replace("D-6 PDF page 220",unsupported));
+            check(changed.ambiguousPages()==6,
+                "unknown source page must remain counted as ambiguous: "+unsupported);
+        }
+        var explicit=HardwareProfileManifestPreview.parse(
+            SAMPLE.replace("D-6 PDF page 220","D-6 PDF pages 220-221"));
+        check(explicit.ambiguousPages()==4,
+            "numeric source page range is a claim, not unverified gap");
         System.out.println("HardwareProfileManifestPreviewSelfTest OK");
     }
 }
