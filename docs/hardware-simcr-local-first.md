@@ -28,3 +28,21 @@ Pure Java tests cover branch alternatives, unknown aliases, prior
 unknown literal, cycles, dangling CFG edges, missing entry and
 work-budget limits. Full Ghidra 12.1.4 build and an actual isolated
 test project acceptance are required before merge.
+
+## CFG join correctness hardening (2026-10-29)
+
+A converging diamond in the function CFG is **not** an execution loop.
+The bounded intraprocedural walker now uses iterative depth-first
+WHITE/GRAY/BLACK discovery: only edges to active GRAY ancestors are
+classified as modeled cycles; repeated predecessors of completed BLACK
+nodes are ordinary joins. Actual back-edges, unknown aliases, missing
+successors, undecoded functions and search exhaustion stay UNKNOWN.
+Traversal stops at the first known/unknown SIMCR write on each modeled
+path. The change does not establish run-time reachability, timing,
+write-once MM state, or interrupt/callee ordering.
+
+Standalone regressions cover converging branches, a common exit, a
+true post-join back-edge and the original branch/alias/limit cases.
+This corrective candidate is independently stacked on PR #76 and
+requires green exact-SHA Ghidra 12.1.4 Actions build and genuine
+isolated Ghidra acceptance prior to integration.
