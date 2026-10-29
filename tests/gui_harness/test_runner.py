@@ -128,7 +128,7 @@ class IsolatedHarnessTests(unittest.TestCase):
     def test_x11_rejects_untrusted_newline_title(self):
         (self.root / "gui-results.json").write_text(json.dumps({
             "window_title": "GhidrAssist isolated GUI regression: "
-                            "GuiFixture:/TEST_BINARY.bin\\nInjected"}))
+                            "GuiFixture:/TEST_BINARY.bin" + chr(10) + "Injected"}))
         with mock.patch("runner.shutil.which", return_value="/fixture/tool"):
             status = x11_capture(self.root)
         self.assertEqual(status["status"], "BLOCKED_X11_READBACK")
