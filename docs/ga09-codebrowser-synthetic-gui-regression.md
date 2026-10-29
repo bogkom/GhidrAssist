@@ -32,10 +32,14 @@ double-click both refuse stale navigation. ProgramManager's active
 Program must remain the second fixture, and the user-visible warning
 must say `Active program changed; rerun Analyze.`
 
-The driver also verifies `PluginTool.saveToolToToolTemplate()`
-produces a config template. **This does not yet prove persistence
-after a complete Ghidra process restart**; extension-detection prompts
-and real CodeBrowser save/reopen remain separately observable gates.
+The driver uses a real `GhidraTool` (not the generic `PluginTool` used
+by Query-only harness #89). It verifies the saved `GhidraToolTemplate`
+actually contains `<EXTENSIONS>` and `GhidrAssistPlugin` metadata,
+restores this template into a fresh test-only tool instance, and checks
+that the plugin remains enabled **without** another New Plugins prompt.
+This is a same-process save/reload test, **not yet proof of persistence
+across a full Ghidra application restart** or across the owner's CodeBrowser
+profile migration. That remains a separately observable local gate.
 
 ## Reproducibility and isolation
 
