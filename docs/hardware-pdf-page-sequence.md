@@ -44,3 +44,20 @@ definition, hardware assertion or RAG page navigation change is permitted.
 This is candidate extraction quality only. Dedicated Java negative tests
 and a complete Ghidra 12.1.4 PUBLIC build are required; final acceptance
 requires a separate immutable-artifact real Ghidra/RAG test.
+
+## 2026-10-29 — oversized PDF text fail-closed
+
+A physical PDF page may contain unexpectedly large or corrupt extracted
+text. The printed-folio candidate parser now rejects source text over
+**1,048,576 UTF-16 characters** *before* uppercasing and line splitting.
+It returns `UNKNOWN / PDF_TEXT_TOO_LARGE`, never a partial, unverified
+printed page label. This avoids excessive transient allocation and prevents
+a plausible header at the beginning of a truncated page from being reported
+as a complete, sourced folio.
+
+Standalone negative regressions cover an oversized page containing an early
+apparent `D-1` header and a page with more than one million line separators.
+A normal page remains a `PDF_TEXT_HEADER_CANDIDATE` (not proof of edition,
+physical PDF page number or chip-specific layout). All RAG and Ghidra
+operations remain read-only; independent 12.1.4 build/real-Ghidra tests
+remain mandatory before integration.
