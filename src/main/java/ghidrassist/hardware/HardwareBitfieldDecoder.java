@@ -69,7 +69,8 @@ public final class HardwareBitfieldDecoder {
             }
             b.append("]; other bits UNINTERPRETED (mask ")
                 .append(hex(unspecifiedMask, widthBits))
-                .append("); static constant only, not proven hardware state or write order");
+                .append("); static constant only, PDF edition/page claim UNVERIFIED, "+
+                    "not proven hardware state or write order");
             return b.toString();
         }
     }
@@ -100,9 +101,9 @@ public final class HardwareBitfieldDecoder {
         List<FieldEvidence> evidence = new ArrayList<>();
         long documented = 0;
         for (HardwareProfiles.BitField f : reg.fields) {
+            // Require a numeric page-claim label, not independent PDF proof.
             if (!hasConcretePdfPageClaim(f.sourcePage))
-                continue; // Only explicit numeric page claims may be decoded.
-                // This is NOT independent PDF-edition/page verification.
+                continue;
             int shift = Integer.numberOfTrailingZeros(f.mask);
             int value = (observedWord & f.mask) >>> shift;
             evidence.add(new FieldEvidence(f.name,f.mask,value,
