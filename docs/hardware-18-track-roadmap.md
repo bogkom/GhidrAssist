@@ -69,3 +69,14 @@ Full MCU/peripheral emulation, physical CS electrical simulation, generic automa
 - Local isolated Ghidra acceptance and Supervisor plan remain **PENDING**
   (no auto-approval). Do not merge this or its parent without the genuine
   host results. This batch is independent of PR #54 RESET candidate analysis.
+
+
+## 2026-10-29 — GA-10 source-page claim confidence guard
+
+- Independent follow-up `fix/ga10-bitfield-page-claim-guard-20261029`
+  built on immutable PR #55 head `f5b464f86cad8bc2703112e09505eb2501b9f1c7`.
+- Unsupported/ambiguous/UNKNOWN or nonnumeric PDF page descriptions
+  cannot justify source-backed bitfield decoding. Numeric page labels
+  remain *profile source claims*, not verified PDF bytes or runtime writes.
+- Java negative regressions, exact Ghidra 12.1.4 extension build and
+  real isolated Supervisor acceptance remain mandatory before merging.
