@@ -29,7 +29,7 @@ The originating document has 18 *sections*, not 18 independent feature checkboxe
 | GA-09 | 13.1 | MMIO accesses explorer with navigation | MISSING as dedicated view | Filterable function/instruction/value/access/confidence with Go To |
 | GA-10 | 13.2 | Verified bitfield decode with provenance | PARTIAL: MC68332 metadata; comprehensive decoder missing | Unknown fields UNKNOWN; model- and edition-specific source |
 | GA-11 | 13.3 | Interrupt / exception analysis including VBR and ISR paths | PARTIAL: VBR sightings, no full ISR graph | Static candidates not treated as active IRQs |
-| GA-12 | 13.4 | Resumable, version-aware incremental analysis | PARTIAL DRAFT: exact in-memory Ghidra revision gating, cache invalidation and unchanged-result reuse; durable resumable stages missing | Program identity, input hash, invalidation and resume regressions |
+| GA-12 | 13.4 | Resumable, version-aware incremental analysis | PARTIAL DRAFT: version-aware cache plus cancelable scan and reusable COMPLETE CFG stage in memory; persistent partial-stage resume still missing | Program identity, input hash, invalidation and resume regressions |
 | GA-13 | 13.5 | Human/analysis/AI origin of changes | MISSING verified per-symbol provenance | Check actual Ghidra 12.1.4 SourceType API; retain rationale and Undo |
 | GA-14 | 13.6 | Firmware configuration comparison | DEFERRED by source priorities | Assess Ghidra Version Tracking first; later CS/VBR/peripheral diff |
 | GA-15 | 13.7 | Agentic planning, indirect calls, context, pagination, stale cache | PARTIAL: draft PR #49/#50 overlap and existing Agentic work | Don't duplicate existing tools; budget/policy evidence regression |
@@ -76,3 +76,22 @@ Full MCU/peripheral emulation, physical CS electrical simulation, generic automa
   CFG analysis. Those remain GA-12 TODO.
 - CI: strict revision pure-Java regression plus complete 12.1.4 extension
   build; separate approved Supervisor real-Ghidra test required before merge.
+
+
+## 2026-10-29 — GA-12 completed CFG stage resume and cancellation
+
+- Draft branch `feature/hardware-resumable-cfg-stage-20261029`
+  builds on immutable PR #60 head `a0dd587b8f60d47afdbf1a9725b6e0039dc87456`.
+- A completed conservative CFG/P-code stage is cached first, keyed by exact
+  Ghidra Program weak identity, analyzer schema, revision/Undo counter,
+  language, original-import SHA-256 metadata and selected MCU profile.
+- A later cancelled read-only inventory scan leaves the **completed** CFG
+  stage available for same-revision retry. No half-processed function is
+  interpreted as completed. A changed program/profile never reuses it.
+- Analyze now supplies a real cancellable Ghidra TaskMonitorAdapter and
+  Cancel Analyze button. Cancel never publishes partial RAG/Markdown/Apply
+  evidence. Computed/reused checkpoint is labeled in completed report.
+- This is **process-local completed-stage reuse**, not persistent disk
+  checkpoints, interrupted-function continuation or cross-session resume.
+- Gate: exact Ghidra 12.1.4 extension build and standalone negative stage
+  tests, then local isolated Ghidra cancellation+Undo tests before merge.

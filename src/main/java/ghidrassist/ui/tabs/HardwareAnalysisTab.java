@@ -73,6 +73,7 @@ public final class HardwareAnalysisTab extends JPanel {
         "MC68332 — user-selected device hypothesis"
     });
     private final JButton run=new JButton("Analyze");
+    private final JButton cancelScan=new JButton("Cancel Analyze");
     private final JButton export=new JButton("Export MD");
     private final JButton namePreview=new JButton("Export CSV");
     private final JButton approve=new JButton("Review / Apply...");
@@ -90,6 +91,7 @@ public final class HardwareAnalysisTab extends JPanel {
     private volatile String latestNameCsv;
     private volatile Program latestProgram;
     private volatile ghidrassist.hardware.HardwareAnalysisRevision latestRevision;
+    private volatile ghidra.util.task.TaskMonitorAdapter activeMonitor;
     private volatile boolean latestConcrete;
     private volatile List<HardwareFunctionNamingReview.Proposal> latestFunctionProposals=List.of();
     private volatile List<HardwareInventoryService.Site> latestSites=List.of();
@@ -105,6 +107,7 @@ public final class HardwareAnalysisTab extends JPanel {
         profileRow.add(reviewNames);
         JPanel actionRow=new JPanel(new FlowLayout(FlowLayout.LEFT,5,1));
         actionRow.add(run);
+        actionRow.add(cancelScan);
         actionRow.add(approve);
         actionRow.add(export);
         actionRow.add(namePreview);
@@ -146,6 +149,7 @@ public final class HardwareAnalysisTab extends JPanel {
         export.setToolTipText("Export Hardware Evidence as Markdown for RAG");
         namePreview.setToolTipText("Export review-only hardware label suggestions as CSV");
         approve.setEnabled(false);
+        cancelScan.setEnabled(false);
         reviewNames.setEnabled(false);
         reviewNames.setToolTipText("Review function role names and apply explicitly approved, collision-free proposals in one Undo transaction");
         export.setEnabled(false);
@@ -173,6 +177,14 @@ public final class HardwareAnalysisTab extends JPanel {
         status.setBorder(BorderFactory.createEmptyBorder(4,8,5,8));
         add(status,BorderLayout.SOUTH);
         run.addActionListener(e->startScan());
+        cancelScan.addActionListener(e->{
+            ghidra.util.task.TaskMonitorAdapter m=activeMonitor;
+            if(m!=null){
+                m.cancel();
+                cancelScan.setEnabled(false);
+                status.setText("Cancellation requested; completed CFG checkpoint may be reused.");
+            }
+        });
         export.addActionListener(e->exportMarkdown());
         namePreview.addActionListener(e->exportNamingPreview());
         approve.addActionListener(e->reviewHardwareChanges());
@@ -312,6 +324,10 @@ public final class HardwareAnalysisTab extends JPanel {
         }
         final ghidrassist.hardware.HardwareAnalysisRevision started=
             revision(program,concrete);
+        final ghidra.util.task.TaskMonitorAdapter monitor=
+            new ghidra.util.task.TaskMonitorAdapter(true);
+        activeMonitor=monitor;
+        cancelScan.setEnabled(true);
         run.setEnabled(false);export.setEnabled(false);namePreview.setEnabled(false);
         approve.setEnabled(false);
         reviewNames.setEnabled(false);
@@ -331,9 +347,11 @@ public final class HardwareAnalysisTab extends JPanel {
                 new SwingWorker<>() {
             @Override protected HardwareInventoryService.Report doInBackground()throws Exception{
                 return new HardwareInventoryService().scan(program,concrete,
-                    ghidra.util.task.TaskMonitor.DUMMY);
+                    monitor,started);
             }
             @Override protected void done(){
+                activeMonitor=null;
+                cancelScan.setEnabled(false);
                 run.setEnabled(true);
                 try {
                     HardwareInventoryService.Report finished=get();
@@ -368,6 +386,12 @@ public final class HardwareAnalysisTab extends JPanel {
                     Throwable root=ex;
                     while(root.getCause()!=null && root.getCause()!=root)
                         root=root.getCause();
+                    if(root instanceof ghidra.util.exception.CancelledException ||
+                            monitor.isCancelled() ||
+                            ex instanceof java.util.concurrent.CancellationException){
+                        discardStale("Hardware Analyze canceled. Completed same-revision CFG stage retained.");
+                        return;
+                    }
                     ghidra.util.Msg.error(HardwareAnalysisTab.this,
                         "Hardware Analysis failed; detailed stack trace follows",ex);
                     report.setText("Hardware analysis failed:\n"+

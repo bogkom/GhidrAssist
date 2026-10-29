@@ -115,7 +115,23 @@ public final class HardwareInventoryService {
     public Report scan(Program program,boolean concreteDevice,TaskMonitor monitor)
             throws CancelledException {
         if(program==null)throw new IllegalArgumentException("A loaded Ghidra program is required");
+        return scan(program,concreteDevice,monitor,HardwareAnalysisRevision.capture(
+            program,program.getModificationNumber(),
+            program.getLanguageID().toString(),program.getExecutableSHA256(),
+            concreteDevice));
+    }
+
+    public Report scan(Program program,boolean concreteDevice,TaskMonitor monitor,
+            HardwareAnalysisRevision revision) throws CancelledException {
+        if(program==null)throw new IllegalArgumentException("A loaded Ghidra program is required");
         if(monitor==null)monitor=TaskMonitor.DUMMY;
+        monitor.checkCancelled();
+        // A complete CFG stage is saved BEFORE the reference-inventory stage.
+        // If the user cancels the later stage, a same-revision retry can
+        // reuse this exact conservative CFG evidence without recalculating it.
+        HardwareFlowStageCache.Result flowStage=
+            HardwareFlowStageCache.loadOrAnalyze(program,revision,monitor);
+        monitor.checkCancelled();
         HardwareProfiles.Profile profile=HardwareProfiles.mc68332();
         Map<Long,HardwareProfiles.Register> byAddress=new LinkedHashMap<>();
         for(HardwareProfiles.Register r:profile.registers)
@@ -295,11 +311,12 @@ public final class HardwareInventoryService {
           .append(" (direct multi-register write evidence only; no renaming performed).\n")
           .append("Function rows in the same CSV have register column FUNCTION_ROLE; ")
           .append("unknown/indirect-only roles and runtime reachability remain unresolved.\n");
-        // A second, conservative CFG pass supplies address-register and
-        // conditional branch-join evidence. No binary bytes or labels are changed.
-        GhidraHardwareFlowService.Report flow=new GhidraHardwareFlowService()
-            .analyze(program,monitor);
-        md.append("\n\n").append(flow.markdown);
+        // The completed CFG stage came from the matching program revision;
+        // never treat this as a successful partial CFG resume.
+        md.append("\n\n- CFG/P-code completed-stage checkpoint: ")
+            .append(flowStage.reused()?"REUSED same revision":"COMPUTED for this revision")
+            .append("; no cross-session resume or runtime execution asserted.\n\n")
+            .append(flowStage.report().markdown);
         return new Report(program.getName(),program.getLanguageID().toString(),choice,sites,
             md.toString(),csv,(int)grouped.values().stream().filter(group->
                 group.stream().anyMatch(site->
