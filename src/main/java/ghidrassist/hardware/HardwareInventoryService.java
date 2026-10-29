@@ -196,6 +196,8 @@ public final class HardwareInventoryService {
           .append("- Firmware origin: currently loaded Ghidra project, NOT a device readback\n")
           .append("- MCU identity, active MM map, reached branches, connected chips and memory wiring: **NOT VERIFIED**\n")
           .append("- Register address provenance: [MC68332 User's Manual](https://www.nxp.com/docs/en/user-guide/MC68332UM.pdf)\n\n");
+        md.append(HardwareProfileAudit.inspect(concreteDevice ?
+            profile : HardwareProfiles.cpu32Family()).markdown());
         md.append("## Initialization/memory-map evidence (SIMCR/MM, TRAMBAR, CSBAR, CSOR, VBR)\n\n")
           .append("CSPAR contributes to conditional chip-select decoding but is not listed as a separate register site.\n\n");
         for(Map.Entry<String,List<Site>> group:grouped.entrySet()){
