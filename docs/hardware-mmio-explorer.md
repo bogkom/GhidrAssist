@@ -23,3 +23,14 @@ Required validation: deterministic `hardware-mmio-explorer-tests.yml`,
 complete Ghidra 12.1.4 extension build, then isolated project UI acceptance
 confirming that opening/filtering/navigating does not modify Ghidra project
 content, OAuth config, Review / Apply or RAG. No local test PASS is claimed.
+
+## 2026-10-29 — unnormalized 16-bit literals
+
+The read-only MMIO Explorer accepts a *source-only* direct word candidate
+only when the supplied value is in the unsigned 16-bit range
+`0x0000..0xFFFF`. Values outside it (negative or above 65535)
+are explicitly `UNKNOWN` with an `OUT-OF-RANGE WORD CANDIDATE` note,
+never silently masked into another plausible-looking peripheral value.
+A documented 16-bit source site still does not establish execution,
+the active MM mode or physical wiring. The original firmware/project
+is unchanged.
