@@ -3,7 +3,7 @@ package ghidrassist;
 import java.io.File;
 import ghidra.GhidraApplicationLayout;
 import ghidra.framework.Application;
-import ghidra.framework.GhidraApplicationConfiguration;
+import ghidra.framework.HeadlessGhidraApplicationConfiguration;
 import ghidra.framework.plugintool.util.PluginPackage;
 
 /**
@@ -16,8 +16,7 @@ public final class GhidrAssistPluginPackageDiscoveryMain {
     public static void main(String[] args) throws Exception {
         if(args.length!=1)
             throw new IllegalArgumentException("Expected Ghidra installation directory");
-        var config=new GhidraApplicationConfiguration();
-        config.setShowSplashScreen(false);
+        var config=new HeadlessGhidraApplicationConfiguration();
         Application.initializeApplication(
             new GhidraApplicationLayout(new File(args[0])), config);
         if(!PluginPackage.exists(GhidrAssistPluginPackage.NAME))
