@@ -3,13 +3,10 @@ package ghidrassist.hardware;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Comparator;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 import java.util.TreeMap;
 
 /**
@@ -50,45 +47,71 @@ public final class HardwareSimcrLocalFirst {
         if(!nodes.containsKey(entry))
             return new Result(function,List.of(),true,false,true,false,0);
         Map<Long,FirstSite> candidates=new TreeMap<>();
-        ArrayDeque<Long> pending=new ArrayDeque<>();
-        Set<Long> visited=new HashSet<>();
-        pending.add(entry);
+        // Iterative DFS uses WHITE/GRAY/BLACK state, not merely a visited
+        // set. A second predecessor of a completed (BLACK) node is a CFG
+        // join, NOT proof of a cycle. Only an edge back to the active
+        // (GRAY) traversal stack demonstrates a modeled cycle.
+        //
+        // First SIMCR writes terminate that path, so successors beyond an
+        // already identified first write cannot create false uncertainty.
+        Map<Long,Byte> color=new HashMap<>();
+        ArrayDeque<TraversalFrame> pending=new ArrayDeque<>();
+        pending.push(new TraversalFrame(nodes.get(entry)));
         boolean unknown=otherUncertainty,exit=false,uncertainEdges=false,limited=false;
         while(!pending.isEmpty()) {
-            long pc=pending.removeFirst();
-            if(visited.contains(pc)){
-                // Cycles admit paths of arbitrary length. Never infer that
-                // one discovered candidate necessarily executes first.
-                uncertainEdges=true;unknown=true;
-                continue;
-            }
-            if(visited.size()>=visitBudget) {
-                limited=true;unknown=true;
-                break;
-            }
-            visited.add(pc);
-            Node n=nodes.get(pc);
-            if(n==null) {unknown=true;uncertainEdges=true;continue;}
-            if(n.effect()==Effect.WORD_LITERAL) {
-                candidates.put(pc,new FirstSite(pc,n.word()));
-                continue; // The first matching write on this modeled path.
-            }
-            if(n.effect()==Effect.UNKNOWN_WORD) {
-                unknown=true;continue; // First write value is unresolved.
-            }
-            if(n.effect()==Effect.ALIAS_OR_CALL_BARRIER)
-                unknown=true; // Could write SIMCR, or leave it unchanged.
-            if(n.successors().isEmpty())exit=true;
-            for(long successor:n.successors()) {
-                if(!nodes.containsKey(successor)){
-                    unknown=true;uncertainEdges=true;
+            TraversalFrame frame=pending.peek();
+            Node n=frame.node;
+            if(!frame.entered) {
+                if(color.size()>=visitBudget) {
+                    limited=true;unknown=true;
+                    break;
+                }
+                frame.entered=true;
+                color.put(n.pc(),(byte)1); // GRAY: active DFS ancestry
+                if(n.effect()==Effect.WORD_LITERAL) {
+                    candidates.put(n.pc(),new FirstSite(n.pc(),n.word()));
+                    color.put(n.pc(),(byte)2);
+                    pending.pop();
                     continue;
                 }
-                pending.addLast(successor);
+                if(n.effect()==Effect.UNKNOWN_WORD) {
+                    unknown=true; // A possible first write has unknown value.
+                    color.put(n.pc(),(byte)2);
+                    pending.pop();
+                    continue;
+                }
+                if(n.effect()==Effect.ALIAS_OR_CALL_BARRIER)
+                    unknown=true; // May or may not write SIMCR.
+                if(n.successors().isEmpty())exit=true;
+            }
+            if(frame.successorIndex==n.successors().size()) {
+                color.put(n.pc(),(byte)2); // BLACK: all successors explored
+                pending.pop();
+                continue;
+            }
+            long successor=n.successors().get(frame.successorIndex++);
+            Node next=nodes.get(successor);
+            if(next==null) {
+                unknown=true;uncertainEdges=true;
+            }else {
+                Byte state=color.get(successor);
+                if(state==null) {
+                    pending.push(new TraversalFrame(next));
+                }else if(state==1) {
+                    // A real graph back-edge may permit indefinite looping.
+                    // Do not confuse a converging diamond with a cycle.
+                    unknown=true;uncertainEdges=true;
+                }
             }
         }
         return new Result(function,new ArrayList<>(candidates.values()),
-            unknown,exit,uncertainEdges,limited,visited.size());
+            unknown,exit,uncertainEdges,limited,color.size());
+    }
+    private static final class TraversalFrame {
+        final Node node;
+        int successorIndex;
+        boolean entered;
+        TraversalFrame(Node node){this.node=node;}
     }
     public static String markdown(List<Result> results,int omittedFunctions) {
         if(results==null || omittedFunctions<0)
