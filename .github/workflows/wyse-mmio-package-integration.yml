@@ -1,0 +1,163 @@
+name: Wyse candidate — MMIO PR56 + PluginPackage PR92 — Ghidra 12.1.4
+on:
+  pull_request:
+    paths:
+      - 'src/main/java/ghidrassist/GhidrAssistPlugin.java'
+      - 'src/main/java/ghidrassist/GhidrAssistPluginPackage.java'
+      - 'src/main/java/ghidrassist/ui/tabs/HardwareAnalysisTab.java'
+      - 'src/main/java/ghidrassist/hardware/**'
+      - 'tests/codebrowser_harness/**'
+      - 'src/test/java/ghidrassist/GhidrAssistPluginPackage*.java'
+      - '.github/workflows/wyse-mmio-package-integration.yml'
+      - 'docs/wyse-mmio-pr56-pr92-install-test.md'
+  push:
+    branches:
+      - 'integration/mmio-pr56-plugin-package-pr92-wyse-20261029'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-test-package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Never publish PR synthetic merge refs as the source identity:
+          # the package must be pinned to an actual branch source commit.
+          ref: ${ github.event.pull_request.head.sha || github.sha }
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Install synthetic GUI prerequisites
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends xvfb xauth openbox
+      - name: Download immutable Ghidra 12.1.4 PUBLIC
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fLsS --retry 3 --connect-timeout 20 \
+            -o "$RUNNER_TEMP/ghidra.zip" \
+            "https://github.com/NationalSecurityAgency/ghidra/releases/download/Ghidra_12.1.4_build/ghidra_12.1.4_PUBLIC_20260921.zip"
+          echo "ddac49f903da9d5bac833e5cc79395098b9c33cfd3279be5f31bd00387d2d4db  $RUNNER_TEMP/ghidra.zip" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/ghidra"
+          unzip -q "$RUNNER_TEMP/ghidra.zip" -d "$RUNNER_TEMP/ghidra"
+          dir=$(find "$RUNNER_TEMP/ghidra" -mindepth 1 -maxdepth 1 -type d -name 'ghidra_12.1.4_PUBLIC' -print -quit)
+          test -n "$dir"
+          echo "GHIDRA_INSTALL_DIR=$dir" >> "$GITHUB_ENV"
+      - name: Compile complete extension, verify library and registrar
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$GHIDRA_INSTALL_DIR/support/gradle/gradlew" --no-daemon --stacktrace buildExtension
+          shopt -s nullglob
+          archives=(dist/ghidra_12.1.4_PUBLIC_*_GhidrAssist.zip)
+          test "${#archives[@]}" -eq 1
+          archive="${archives[0]}"
+          unzip -tq "$archive"
+          echo "EXTENSION=$PWD/$archive" >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/unpacked"
+          unzip -q "$archive" -d "$RUNNER_TEMP/unpacked"
+          jarfile="$RUNNER_TEMP/unpacked/GhidrAssist/lib/GhidrAssist.jar"
+          test -s "$jarfile"
+          jar tf "$jarfile" | grep -Fx 'ghidrassist/GhidrAssistPlugin.class'
+          jar tf "$jarfile" | grep -Fx 'ghidrassist/GhidrAssistPluginPackage.class'
+          jar tf "$jarfile" | grep -Fx 'ghidrassist/hardware/HardwareMmioExplorer.class'
+          grep -Ex 'version=12\.1\.4' "$RUNNER_TEMP/unpacked/GhidrAssist/extension.properties"
+          sha256sum "$archive" "$jarfile"
+      - name: Test actual Ghidra package registry via ClassSearcher in disposable profile
+        shell: bash
+        run: |
+          set -euo pipefail
+          registry="$RUNNER_TEMP/package-profile"
+          destination="$registry/$USER-ghidra/ghidra_12.1.4_PUBLIC/Extensions"
+          mkdir -p "$destination"
+          cp -a "$RUNNER_TEMP/unpacked/GhidrAssist" "$destination/GhidrAssist"
+          cp=""
+          while IFS= read -r -d '' jarfile; do
+            cp="${cp:+$cp:}$jarfile"
+          done < <(find "$GHIDRA_INSTALL_DIR" "$destination/GhidrAssist/lib" -type f -name '*.jar' -print0)
+          mkdir -p "$RUNNER_TEMP/package-classes"
+          javac -cp "$cp" -d "$RUNNER_TEMP/package-classes" \
+            src/test/java/ghidrassist/GhidrAssistPluginPackageSelfTest.java \
+            src/test/java/ghidrassist/GhidrAssistPluginPackageDiscoveryMain.java
+          java -Djava.awt.headless=true -cp "$RUNNER_TEMP/package-classes:$cp" \
+            ghidrassist.GhidrAssistPluginPackageSelfTest
+          mkdir -p "$RUNNER_TEMP/package-home" "$RUNNER_TEMP/package-cache"
+          java -Djava.awt.headless=true \
+            -Djava.system.class.loader=ghidra.GhidraClassLoader \
+            -Dapplication.settingsdir="$registry" \
+            -Dapplication.cachedir="$RUNNER_TEMP/package-cache" \
+            -Duser.home="$RUNNER_TEMP/package-home" \
+            -cp "$RUNNER_TEMP/package-classes:$cp" \
+            ghidrassist.GhidrAssistPluginPackageDiscoveryMain "$GHIDRA_INSTALL_DIR"
+      - name: Real CodeBrowser + MMIO + stale Listing guard + separate JVM restart
+        shell: bash
+        run: |
+          set -euo pipefail
+          xvfb-run -a -s '-screen 0 1400x1050x24' \
+            bash -c 'openbox --sm-disable >/dev/null 2>&1 & wm=$!; trap "kill $wm 2>/dev/null || true" EXIT; sleep 1; python3 tests/codebrowser_harness/run.py "$@"' codebrowser \
+              --ghidra "$GHIDRA_INSTALL_DIR" \
+              --java-home "$JAVA_HOME" \
+              --extension-zip "$EXTENSION" \
+              --extension-sha256 "$(sha256sum "$EXTENSION" | cut -d' ' -f1)" \
+              --output "$RUNNER_TEMP/codebrowser-evidence" --timeout 300
+          python3 -c 'import json,os,pathlib; p=pathlib.Path(os.environ["RUNNER_TEMP"])/"codebrowser-evidence"; a=json.loads((p/"result.json").read_text()); b=json.loads((p/"restart-results.json").read_text()); assert a["status"]=="PASSED_SYNTHETIC_CODEBROWSER" and a["restart_process_verified"] and b["no_repeated_plugin_prompt"] and b["codebrowser_restored"] and b["ghidrassist_restored"] and not a["supervisor_ack"]'
+      - name: Prepare immutable source-attested ZIP distribution (installer nested in Actions archive)
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha=$(git rev-parse HEAD)
+          test "$sha" = "${ github.event.pull_request.head.sha || github.sha }"
+          target="$RUNNER_TEMP/Wyse-GhidrAssist-MMIO-12.1.4"
+          mkdir -p "$target"
+          cp "$EXTENSION" "$target/$(basename "$EXTENSION")"
+          zipfile="$target/$(basename "$EXTENSION")"
+          hash=$(sha256sum "$zipfile" | cut -d' ' -f1)
+          python3 - "$target" "$sha" "$zipfile" "$hash" <<'PY'
+          import json,sys,pathlib
+          target=pathlib.Path(sys.argv[1])
+          manifest={
+            "schema":1,
+            "status":"CI_TESTED_RELEASE_CANDIDATE",
+            "repository":"bogkom/GhidrAssist",
+            "source_commit":sys.argv[2],
+            "based_on_pr56":"ed53849141141da7810736c61d8e8a7669aa8767",
+            "plugin_package_pr92":"cb70ce89afb55844e50eb69a71d40b8802bf6e0a",
+            "codebrowser_harness_pr93":"c1608e61a69773ca8380976d2f17453a3a99e329",
+            "ghidra_version":"12.1.4 PUBLIC",
+            "jdk_ci":"25",
+            "installable_zip":pathlib.Path(sys.argv[3]).name,
+            "installable_zip_sha256":sys.argv[4],
+            "ci_run_id": "${ github.run_id }",
+            "supervisor_status":"NOT_RUN_NO_ACK",
+            "host_acceptance":"PENDING",
+            "synthetic_only_ci":True
+          }
+          (target/"manifest.json").write_text(json.dumps(manifest,indent=2)+"\n")
+          PY
+          (cd "$target" && sha256sum "$(basename "$EXTENSION")" > SHA256SUMS.txt)
+          echo "Installer SHA256: $hash"
+          echo "Source SHA: $sha"
+          echo "CI run: ${ github.run_id }"
+      - name: Always publish test diagnostics (not an acceptance receipt)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Wyse-MMIO-Integration-Diagnostics-${ github.run_id }
+          path: |
+            ${ runner.temp }/codebrowser-evidence/
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Upload Ghidra installable ZIP + manifest only after full CI pass
+        uses: actions/upload-artifact@v4
+        with:
+          name: GhidrAssist-MMIO-PluginPackage-Ghidra-12.1.4-${ github.run_id }
+          path: ${ runner.temp }/Wyse-GhidrAssist-MMIO-12.1.4/
+          if-no-files-found: error
+          retention-days: 30
