@@ -57,11 +57,13 @@ public final class HardwareInventoryService {
         public final String detailsMarkdown;
         public final String namePreviewCsv;
         public final String configurationEvidenceCsv;
+        public final HardwareCsbarUnifiedReview.Review csbarReview;
         public final List<HardwareFunctionNamingReview.Proposal> functionProposals;
         private Report(String program,String language,String selection,List<Site> sites,
                 String overviewMarkdown,String detailsMarkdown,String namePreviewCsv,
                 String configurationEvidenceCsv,int functions,
-                List<HardwareFunctionNamingReview.Proposal> functionProposals){
+                List<HardwareFunctionNamingReview.Proposal> functionProposals,
+                HardwareCsbarUnifiedReview.Review csbarReview){
             this.program=program;
             this.language=language;
             this.selection=selection;
@@ -75,6 +77,7 @@ public final class HardwareInventoryService {
             this.configurationEvidenceCsv=configurationEvidenceCsv;
             this.functions=functions;
             this.functionProposals=List.copyOf(functionProposals);
+            this.csbarReview=java.util.Objects.requireNonNull(csbarReview);
         }
     }
 
@@ -396,10 +399,13 @@ public final class HardwareInventoryService {
             flowStage.report().resetCandidateFunctions,
             flowStage.report().resetGraphIncomplete,startupSites);
         md.append("\n\n").append(startup.markdown());
+        var guardedCsbar=HardwareCsbarUnifiedReview.inspect(concreteDevice,merged);
+        md.append("\n\n## Review / Apply source-safety gate\n\n- ")
+            .append(guardedCsbar.summary()).append("\n");
         return new Report(program.getName(),program.getLanguageID().toString(),choice,sites,
             overview,md.toString(),csv,
             HardwareConfigurationEvidenceCsv.withUnifiedSources(
                 flowStage.report().configurationEvidenceCsv,merged,concreteDevice),
-            initializationFunctions,functionProposals);
+            initializationFunctions,functionProposals,guardedCsbar);
     }
 }

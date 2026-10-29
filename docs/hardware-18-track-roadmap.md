@@ -239,3 +239,22 @@ Full MCU/peripheral emulation, physical CS electrical simulation, generic automa
   `READY` and automatically selected. Explicit operator selection
   and final confirmation are still necessary; existing preflight
   and Undo support are retained.
+
+
+## 2026-10-29 — GA-05 Review proposals now consume unified CFG+Listing safety
+
+- Stacked draft from PR #73 (immutable SHA `7b008b63c54c326023179b341e3d8d822736d868`).
+- Read-only `HardwareCsbarUnifiedReview` consumes deduplicated Ghidra
+  Listing + CFG/P-code candidate stores, rather than the historical
+  Listing-only collection. Conflicting words, byte/long/unknown-width
+  writes or unknown call/path hazards poison the affected register.
+- An unresolved P-code pointer alias to an UNKNOWN destination may
+  address any CSBAR; **all CSBAR memory-window proposals are suppressed**
+  until a clean scan without such aliases. Generic CPU32 emits none.
+  This may reject safe possibilities but never fabricates hardware state.
+- The filtered immutable result is captured with the completed, versioned
+  Analyze snapshot and is the only source used by Review/Apply.
+  The source-gate status is visible in the Review dialog. Existing manual
+  CS_WINDOW default and Ghidra Undo remain unchanged.
+- Full Ghidra 12.1.4 build and synthetic safety checks required;
+  real isolated host GUI acceptance remains pending.

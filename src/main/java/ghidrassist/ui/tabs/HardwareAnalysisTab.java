@@ -104,6 +104,7 @@ public final class HardwareAnalysisTab extends JPanel {
     private volatile boolean latestConcrete;
     private volatile List<HardwareFunctionNamingReview.Proposal> latestFunctionProposals=List.of();
     private volatile List<HardwareInventoryService.Site> latestSites=List.of();
+    private volatile ghidrassist.hardware.HardwareCsbarUnifiedReview.Review latestCsbarReview;
 
     public HardwareAnalysisTab(GhidrAssistPlugin plugin){
         super(new BorderLayout(5,5));
@@ -393,6 +394,7 @@ public final class HardwareAnalysisTab extends JPanel {
         latestRevision=null;
         latestFunctionProposals=List.of();
         latestSites=List.of();
+        latestCsbarReview=null;
         approve.setEnabled(false);
         reviewNames.setEnabled(false);
         export.setEnabled(false);exportConfigCsv.setEnabled(false);
@@ -537,6 +539,7 @@ public final class HardwareAnalysisTab extends JPanel {
         reviewNames.setEnabled(false);
         latestFunctionProposals=List.of();
         latestSites=List.of();
+        latestCsbarReview=null;
         latestMarkdown=null;latestConfigCsv=null;latestNameCsv=null;latestProgram=null;
         latestRevision=null;
         ghidrassist.hardware.HardwareEvidenceCache.clear(program);
@@ -579,6 +582,7 @@ public final class HardwareAnalysisTab extends JPanel {
                     latestConcrete=concrete;
                     latestFunctionProposals=finished.functionProposals;
                     latestSites=finished.sites;
+                    latestCsbarReview=finished.csbarReview;
                     exploreMmio.setEnabled(!latestSites.isEmpty());
                     approve.setEnabled(true);
                     reviewNames.setEnabled(concrete && latestFunctionProposals.stream()
@@ -867,22 +871,15 @@ public final class HardwareAnalysisTab extends JPanel {
      * relocated RAM and unverified VBR are unchecked.
      */
     private List<HardwareApplyPlan.CsbarEvidence> csbarEvidence(){
-        List<ghidrassist.hardware.HardwareCsbarReviewGate.Source> sources=
-            new ArrayList<>();
-        for(HardwareInventoryService.Site site:latestSites){
-            if(site==null)continue;
-            sources.add(new ghidrassist.hardware.HardwareCsbarReviewGate.Source(
-                site.function,site.register,site.registerAddress,
-                site.write,site.literal));
-        }
-        var evidence=ghidrassist.hardware.HardwareCsbarReviewGate
-            .reviewCandidates(sources);
-        // This is a conservative proposal filter, NOT evidence that a
-        // chip select actually decoded the address at runtime.
+        // Do not regenerate a less-conservative Listing-only proposal set.
+        // Only the current completed, revision-bound reconciled CFG+Listing
+        // evidence may reach Review/Apply.
+        var reviewed=latestCsbarReview;
+        if(!currentScan() || !latestConcrete || reviewed==null)return List.of();
         List<HardwareApplyPlan.CsbarEvidence> candidates=new ArrayList<>();
-        for(var candidate:evidence.candidates())
+        for(var proposed:reviewed.candidates())
             candidates.add(new HardwareApplyPlan.CsbarEvidence(
-                candidate.register(),candidate.word(),candidate.origin()));
+                proposed.register(),proposed.word(),proposed.origin()));
         return List.copyOf(candidates);
     }
 
@@ -969,7 +966,10 @@ public final class HardwareAnalysisTab extends JPanel {
             "Already defined or conflicting items are not. "+
             "Unverified VBR and external chip selects require manual selection. "+
             "Reserved module bytes remain undefined.<br>Ghidra SourceType is NOT proof of a human, script or AI author. "+
-            "Export the review snapshot before Apply if an audit is needed.</html>");
+            "Export the review snapshot before Apply if an audit is needed."+
+            "<br>CSBAR source gate: "+
+            (latestCsbarReview==null?"UNKNOWN — rerun Analyze":
+                latestCsbarReview.summary())+"</html>");
         introduction.setBorder(BorderFactory.createEmptyBorder(8,10,8,10));
 
         JTextField vbrField=new JTextField("000000",9);
