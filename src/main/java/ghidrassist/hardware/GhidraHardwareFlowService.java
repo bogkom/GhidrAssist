@@ -35,6 +35,7 @@ public final class GhidraHardwareFlowService {
     private static final Pattern OFFSET=Pattern.compile("(?<![A-Z0-9])(-?0[Xx][0-9A-F]+|-?[0-9]+)(?![A-Z0-9])");
     public static final class Report {
         public final String markdown;
+        public final String configurationEvidenceCsv;
         public final List<HardwarePointerRoleReview.Proposal> pointerRoles;
         public final java.util.Set<Long> resetCandidateFunctions;
         public final boolean resetCandidateRecognized,resetGraphIncomplete;
@@ -43,8 +44,9 @@ public final class GhidraHardwareFlowService {
         Report(String md,int fn,int indirect,int vbr,int unresolved,int visited,
                 boolean limited,List<HardwarePointerRoleReview.Proposal> pointers,
                 java.util.Set<Long> resetCandidates,boolean resetRecognized,
-                boolean resetUnresolved){
-            markdown=md;pointerRoles=List.copyOf(pointers);
+                boolean resetUnresolved,String configurationCsv){
+            markdown=md;configurationEvidenceCsv=configurationCsv;
+            pointerRoles=List.copyOf(pointers);
             resetCandidateFunctions=java.util.Set.copyOf(resetCandidates);
             resetCandidateRecognized=resetRecognized;
             resetGraphIncomplete=resetUnresolved;
@@ -690,8 +692,11 @@ public final class GhidraHardwareFlowService {
             cfgMmioSites).markdown());
         out.append(HardwareCfgStorePaths.markdown(
             cfgStoreRelations,cfgPathLimitedFunctions));
+        String evidenceCsv=HardwareConfigurationEvidenceCsv.serialize(
+            HardwareCfgWriteAudit.inspect(mc68332Selected,cfgMmioSites),
+            cfgStoreRelations,mc68332Selected);
         return new Report(out.toString(),foundFunctions,indirect,vbr,unresolved,
             visited,limited,roles,reset.visited(),
-            reset.recognized(),reset.incomplete());
+            reset.recognized(),reset.incomplete(),evidenceCsv);
     }
 }
