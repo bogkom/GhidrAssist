@@ -216,7 +216,7 @@ def execute(args: argparse.Namespace) -> dict:
             config_file.write_text(json.dumps(config), encoding="utf-8")
             ghcmd = [str(ghidra / "support" / "analyzeHeadless"),
                      str(work / "project"), "GuiFixture", "-import", str(sample),
-                     "-loader", "ghidra.app.util.opinion.BinaryLoader",
+                     "-loader", "BinaryLoader",
                      "-processor", LANGUAGE, "-cspec", "default", "-noanalysis"]
             run_logged(ghcmd, cwd=work, env=env, log=out / "import.log", timeout=180)
             if not (work / "project" / "GuiFixture.gpr").exists():
