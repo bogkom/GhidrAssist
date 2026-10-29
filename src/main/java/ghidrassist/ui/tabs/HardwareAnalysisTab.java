@@ -76,6 +76,7 @@ public final class HardwareAnalysisTab extends JPanel {
     private final JButton export=new JButton("Export MD");
     private final JButton namePreview=new JButton("Export CSV");
     private final JButton approve=new JButton("Review / Apply...");
+    private final JButton exploreMmio=new JButton("MMIO accesses...");
     private final JButton reviewNames=new JButton("Review names...");
     private final JTextArea report=new JTextArea();
     private final JTextField reportSearch=new JTextField(21);
@@ -105,6 +106,7 @@ public final class HardwareAnalysisTab extends JPanel {
         JPanel actionRow=new JPanel(new FlowLayout(FlowLayout.LEFT,5,1));
         actionRow.add(run);
         actionRow.add(approve);
+        actionRow.add(exploreMmio);
         actionRow.add(export);
         actionRow.add(namePreview);
         controls.add(profileRow,BorderLayout.NORTH);
@@ -145,6 +147,8 @@ public final class HardwareAnalysisTab extends JPanel {
         export.setToolTipText("Export Hardware Evidence as Markdown for RAG");
         namePreview.setToolTipText("Export review-only hardware label suggestions as CSV");
         approve.setEnabled(false);
+        exploreMmio.setEnabled(false);
+        exploreMmio.setToolTipText("Read-only, searchable table of all referenced MCU register addresses; double-click or Go To Listing");
         reviewNames.setEnabled(false);
         reviewNames.setToolTipText("Review function role names and apply explicitly approved, collision-free proposals in one Undo transaction");
         export.setEnabled(false);
@@ -175,6 +179,7 @@ public final class HardwareAnalysisTab extends JPanel {
         export.addActionListener(e->exportMarkdown());
         namePreview.addActionListener(e->exportNamingPreview());
         approve.addActionListener(e->reviewHardwareChanges());
+        exploreMmio.addActionListener(e->showMmioExplorer());
         reviewNames.addActionListener(e->reviewFunctionNames());
     }
 
@@ -257,6 +262,120 @@ public final class HardwareAnalysisTab extends JPanel {
             return;
         }
     }
+    /**
+     * Read-only full register-reference explorer, separate from the focused
+     * Analyze report and all mutating Review / Apply operations.
+     */
+    private void showMmioExplorer(){
+        Program program=plugin.getCurrentProgram();
+        if(program==null || program!=latestProgram || latestMarkdown==null){
+            status.setText("Program changed; rerun Analyze before opening MMIO accesses.");
+            return;
+        }
+        List<ghidrassist.hardware.HardwareMmioExplorer.Observation> raw=new ArrayList<>();
+        for(HardwareInventoryService.Site site:latestSites){
+            raw.add(new ghidrassist.hardware.HardwareMmioExplorer.Observation(
+                site.pc.getOffset(),site.registerAddress,site.register,site.function,
+                site.asm,site.write,site.literal));
+        }
+        final List<ghidrassist.hardware.HardwareMmioExplorer.Row> rows=
+            ghidrassist.hardware.HardwareMmioExplorer.rows(raw,latestConcrete);
+        final List<ghidrassist.hardware.HardwareMmioExplorer.Row> visible=new ArrayList<>();
+        DefaultTableModel model=new DefaultTableModel(
+            new Object[]{"PC","Register","MMIO address","Access","Literal word",
+                "Evidence quality","Function","Instruction","Profile scope"},0){
+            @Override public boolean isCellEditable(int row,int column){return false;}
+        };
+        JTable table=new JTable(model);
+        table.setSelectionMode(javax.swing.ListSelectionModel.SINGLE_SELECTION);
+        table.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
+        table.setRowHeight(Math.max(25,table.getFont().getSize()+8));
+        int[] widths={125,120,125,150,110,350,190,350,270};
+        for(int i=0;i<widths.length;i++)
+            table.getColumnModel().getColumn(i).setPreferredWidth(widths[i]);
+        JTextField search=new JTextField(30);
+        JLabel count=new JLabel();
+        Runnable refill=()->{
+            visible.clear();
+            model.setRowCount(0);
+            for(var candidate:rows){
+                if(!candidate.matches(search.getText()))continue;
+                visible.add(candidate);
+                model.addRow(new Object[]{candidate.pcHex(),candidate.register(),
+                    candidate.addressHex(),candidate.access(),candidate.value(),
+                    candidate.evidence(),candidate.function(),candidate.instruction(),
+                    candidate.deviceScope()});
+            }
+            count.setText(visible.size()+" / "+rows.size()+" reference site(s)");
+        };
+        search.getDocument().addDocumentListener(new DocumentListener(){
+            public void insertUpdate(DocumentEvent e){refill.run();}
+            public void removeUpdate(DocumentEvent e){refill.run();}
+            public void changedUpdate(DocumentEvent e){refill.run();}
+        });
+        refill.run();
+
+        Window owner=SwingUtilities.getWindowAncestor(this);
+        JDialog dialog=new JDialog(owner,"MMIO access references — read-only",
+            Dialog.ModalityType.MODELESS);
+        dialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
+        JLabel explanation=new JLabel("<html>Ghidra static references, not a runtime trace. "+
+            "Only literal complete word writes have a known candidate value; "+
+            "CPU32 survey does not establish MC68332 identity. No project edits.</html>");
+        JPanel top=new JPanel(new BorderLayout(4,4));
+        explanation.setBorder(BorderFactory.createEmptyBorder(7,8,6,8));
+        top.add(explanation,BorderLayout.NORTH);
+        JPanel filters=new JPanel(new FlowLayout(FlowLayout.LEFT,8,3));
+        filters.add(new JLabel("Filter:"));filters.add(search);filters.add(count);
+        top.add(filters,BorderLayout.SOUTH);
+
+        JButton go=new JButton("Go To Listing");
+        JButton close=new JButton("Close");
+        Runnable navigate=()->{
+            if(program!=plugin.getCurrentProgram() || latestProgram!=program){
+                count.setText("Active program changed; rerun Analyze.");
+                return;
+            }
+            int selected=table.getSelectedRow();
+            if(selected<0 || selected>=visible.size()){
+                count.setText("Select an instruction before navigation.");
+                return;
+            }
+            long pc=visible.get(selected).pc();
+            try{
+                Address address=program.getAddressFactory().getDefaultAddressSpace()
+                    .getAddress(pc);
+                GoToService service=plugin.getTool().getService(GoToService.class);
+                if(service==null || !service.goTo(address,program))
+                    count.setText("Cannot navigate to "+address);
+                else status.setText("Listing: "+address);
+            }catch(Exception ex){count.setText("Navigation error: "+ex.getMessage());}
+        };
+        go.addActionListener(e->navigate.run());
+        close.addActionListener(e->dialog.dispose());
+        table.addMouseListener(new MouseAdapter(){
+            @Override public void mouseClicked(MouseEvent event){
+                if(event.getClickCount()==2 && table.getSelectedRow()>=0)
+                    navigate.run();
+            }
+        });
+        JPanel footer=new JPanel(new FlowLayout(FlowLayout.RIGHT,8,4));
+        footer.add(go);footer.add(close);
+        JPanel panel=new JPanel(new BorderLayout(5,5));
+        panel.add(top,BorderLayout.NORTH);
+        panel.add(new JScrollPane(table),BorderLayout.CENTER);
+        panel.add(footer,BorderLayout.SOUTH);
+        panel.setBorder(BorderFactory.createEmptyBorder(5,5,5,5));
+        dialog.setContentPane(panel);
+        dialog.setMinimumSize(new Dimension(640,380));
+        Dimension screen=Toolkit.getDefaultToolkit().getScreenSize();
+        dialog.setSize(Math.min(1330,screen.width-70),
+            Math.min(780,screen.height-90));
+        dialog.setLocationRelativeTo(this);
+        dialog.setResizable(true);
+        dialog.setVisible(true);
+    }
+
     private void startScan(){
         final Program program=plugin.getCurrentProgram();
         if(program==null){
@@ -266,6 +385,7 @@ public final class HardwareAnalysisTab extends JPanel {
         }
         final boolean concrete=selection.getSelectedIndex()==1;
         run.setEnabled(false);export.setEnabled(false);namePreview.setEnabled(false);
+        exploreMmio.setEnabled(false);
         approve.setEnabled(false);
         reviewNames.setEnabled(false);
         latestFunctionProposals=List.of();
@@ -300,6 +420,7 @@ public final class HardwareAnalysisTab extends JPanel {
                     latestConcrete=concrete;
                     latestFunctionProposals=finished.functionProposals;
                     latestSites=finished.sites;
+                    exploreMmio.setEnabled(!latestSites.isEmpty());
                     approve.setEnabled(true);
                     reviewNames.setEnabled(concrete && latestFunctionProposals.stream()
                         .anyMatch(p->p.status==ghidrassist.hardware.HardwareNamingReview.Status.REVIEW_REQUIRED));
@@ -804,6 +925,7 @@ public final class HardwareAnalysisTab extends JPanel {
             approve.setEnabled(false);export.setEnabled(false);
             namePreview.setEnabled(false);
             reviewNames.setEnabled(false);
+            exploreMmio.setEnabled(false);
             latestFunctionProposals=List.of();
         }catch(Exception ex){
             ghidra.util.Msg.error(this,
