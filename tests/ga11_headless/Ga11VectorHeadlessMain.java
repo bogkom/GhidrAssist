@@ -78,7 +78,8 @@ public final class Ga11VectorHeadlessMain {
             "csbar-independent","csbar-identical","csbar-unknown-word",
             "simcr-partial","vector-edit-undo","cache-program-isolation",
             "generic-profile","trambar-source","csbar-mm0-reject",
-            "mmio-read-reference","csbar-csor-conditional").contains(ga18Mode),
+            "mmio-read-reference","csbar-csor-conditional",
+            "simcr-mm0-literal","trambar-unknown","csor-alternatives").contains(ga18Mode),
             "Unknown GA-18 acceptance mode");
         var config=new HeadlessGhidraApplicationConfiguration();
         config.setApplicationLogFile(out.resolve("ghidra.log").toFile());
@@ -701,6 +702,93 @@ public final class Ga11VectorHeadlessMain {
                     result.addProperty("csbar_csor_not_active_cs_map",true);
                     result.addProperty("csbar_csor_review_manual_only",true);
                     result.addProperty("csbar_csor_analysis_read_only",true);
+
+                } else if("simcr-mm0-literal".equals(ga18Mode)) {
+                    // Source-only MM=0 word candidate. Hardware MM is still
+                    // write-once and unknown at runtime.
+                    int t=full.startTransaction("GA18 SIMCR zero-word fixture");
+                    try {
+                        full.getMemory().setBytes(address(full,0x5a0L),
+                            java.util.HexFormat.of().parseHex(
+                                "33fc000000fffa004e75"));
+                    } finally {full.endTransaction(t,true);}
+                    defineFixtureFunction(full,0x5a0L,10,"fixture_simcr_mm0_word");
+                    long rev=full.getModificationNumber();
+                    var cfg=new GhidraHardwareFlowService().analyze(
+                        full,TaskMonitor.DUMMY,true);
+                    check(cfg.rawCfgMmioSites.stream().anyMatch(site->
+                            site.pc()==0x5a0L &&
+                            "SIMCR".equals(site.register()) &&
+                            site.widthBits()==16 &&
+                            Integer.valueOf(0).equals(site.literal())),
+                        "Real P-code did not preserve SIMCR zero-word literal");
+                    check(cfg.markdown.contains("candidate MM=0") &&
+                          cfg.markdown.contains("first successful write UNKNOWN"),
+                        "SIMCR zero word falsely became runtime MM state");
+                    check(full.getModificationNumber()==rev,
+                        "SIMCR zero literal scan mutated Ghidra project");
+                    result.addProperty("simcr_mm0_real_word_zero_detected",true);
+                    result.addProperty("simcr_mm0_source_not_runtime_latch",true);
+                    result.addProperty("simcr_mm0_scan_read_only",true);
+                } else if("trambar-unknown".equals(ga18Mode)) {
+                    // A known width but unknown D0 value must not establish
+                    // even a conditional TPURAM base.
+                    int t=full.startTransaction("GA18 unknown TRAMBAR fixture");
+                    try {
+                        full.getMemory().setBytes(address(full,0x5a0L),
+                            java.util.HexFormat.of().parseHex(
+                                "33c000fffb044e75"));
+                    } finally {full.endTransaction(t,true);}
+                    defineFixtureFunction(full,0x5a0L,8,"fixture_trambar_from_d0");
+                    long rev=full.getModificationNumber();
+                    var cfg=new GhidraHardwareFlowService().analyze(
+                        full,TaskMonitor.DUMMY,true);
+                    check(cfg.rawCfgMmioSites.stream().anyMatch(site->
+                            site.pc()==0x5a0L &&
+                            "TRAMBAR".equals(site.register()) &&
+                            site.widthBits()==16 && site.literal()==null),
+                        "Real P-code incorrectly invented D0-to-TRAMBAR word");
+                    check(!cfg.markdown.contains("possible MC68332 TPURAM=") &&
+                          cfg.markdown.contains("TRAMBAR") &&
+                          full.getModificationNumber()==rev,
+                        "Unknown-word TRAMBAR incorrectly yielded SRAM address");
+                    result.addProperty("trambar_unknown_real_word_detected",true);
+                    result.addProperty("trambar_unknown_no_ram_window",true);
+                    result.addProperty("trambar_unknown_scan_read_only",true);
+                } else if("csor-alternatives".equals(ga18Mode)) {
+                    // Conflicting CSOR0 literal writes within one Ghidra
+                    // function cannot become one active chip-select timing.
+                    int t=full.startTransaction("GA18 dual-CSOR0 fixture");
+                    try {
+                        full.getMemory().setBytes(address(full,0x5a0L),
+                            java.util.HexFormat.of().parseHex(
+                                "33fc7c3000fffa4e33fc7c3200fffa4e4e75"));
+                    } finally {full.endTransaction(t,true);}
+                    defineFixtureFunction(full,0x5a0L,18,"fixture_csor_two_words");
+                    long rev=full.getModificationNumber();
+                    var cfg=new GhidraHardwareFlowService().analyze(
+                        full,TaskMonitor.DUMMY,true);
+                    check(cfg.rawCfgMmioSites.stream().anyMatch(site->
+                            site.pc()==0x5a0L &&
+                            "CSOR0".equals(site.register()) &&
+                            Integer.valueOf(0x7c30).equals(site.literal())) &&
+                          cfg.rawCfgMmioSites.stream().anyMatch(site->
+                            site.pc()==0x5a8L &&
+                            "CSOR0".equals(site.register()) &&
+                            Integer.valueOf(0x7c32).equals(site.literal())),
+                        "Decoded competing CSOR0 literal writes missing");
+                    var report=new HardwareInventoryService().scan(
+                        full,true,TaskMonitor.DUMMY);
+                    check(report.markdown.contains("MULTIPLE_LITERAL_ALTERNATIVES") &&
+                          report.markdown.contains("0x7C30, 0x7C32") &&
+                          report.markdown.contains(
+                              "NOT one simultaneous active CS map") &&
+                          full.getModificationNumber()==rev,
+                        "Conflicting CSOR source values falsely collapsed or edited");
+                    result.addProperty("csor_two_real_words_detected",true);
+                    result.addProperty("csor_conflicting_alternatives_preserved",true);
+                    result.addProperty("csor_no_active_map_inferred",true);
+                    result.addProperty("csor_alternative_scan_read_only",true);
                 } else if("revision".equals(ga18Mode)) {
                     // A real Ghidra transaction changes DomainObject revision;
                     // Undo/Redo must never reinstate obsolete CFG stage evidence.
