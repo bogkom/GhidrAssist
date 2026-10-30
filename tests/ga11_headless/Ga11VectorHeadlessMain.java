@@ -280,7 +280,7 @@ public final class Ga11VectorHeadlessMain {
                     check(mc.markdown.contains("MULTIPLE_LITERAL_ALTERNATIVES") &&
                           mc.markdown.contains("0x40CA, 0x4848") &&
                           mc.markdown.contains("SIMCR/MM write-once caveat") &&
-                          mc.markdown.contains("not the first executed write"),
+                          mc.markdown.contains("NOT the first executed write"),
                         "Competing source words were falsely reduced to MM latch");
                     check(mc.overviewMarkdown.contains("static evidence") &&
                           mc.markdown.contains("latched hardware value"),
