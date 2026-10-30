@@ -91,7 +91,8 @@ def main():
     parser.add_argument("--ga18-mode",choices=("none","overview","cache","startup","csbar","revision","simcr-alternatives","csbar-width",
                         "csbar-independent","csbar-identical","csbar-unknown-word",
                         "simcr-partial","vector-edit-undo","cache-program-isolation",
-                        "generic-profile"),
+                        "generic-profile","trambar-source","csbar-mm0-reject",
+                        "mmio-read-reference","csbar-csor-conditional"),
                         default="none",help="Run GA-07/12 or GA-02/03 genuine headless source-evidence checks")
     args=parser.parse_args()
     out=Path(args.output).absolute()
@@ -217,6 +218,24 @@ def main():
                         "generic_cpu32_kept_address_only",
                         "generic_mc68332_csbar_proposals_disabled",
                         "generic_model_switch_read_only"),
+                    "trambar-source":(
+                        "trambar_real_word_literal_decoded",
+                        "trambar_conditional_window_only",
+                        "trambar_real_analysis_read_only"),
+                    "csbar-mm0-reject":(
+                        "csbar_mm0_actual_source_decoded",
+                        "csbar_mm0_unsafe_review_rejected",
+                        "csbar_mm0_analysis_read_only"),
+                    "mmio-read-reference":(
+                        "mmio_real_read_disassembled",
+                        "mmio_read_not_cfg_store",
+                        "mmio_read_does_not_change_review",
+                        "mmio_read_analysis_read_only"),
+                    "csbar-csor-conditional":(
+                        "csbar_csor_real_sources_detected",
+                        "csbar_csor_not_active_cs_map",
+                        "csbar_csor_review_manual_only",
+                        "csbar_csor_analysis_read_only"),
                     "revision":("revision_real_edit_invalidated",
                         "revision_stale_capture_rejected",
                         "revision_undo_invalidated",
