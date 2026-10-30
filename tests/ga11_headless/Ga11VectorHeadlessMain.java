@@ -803,6 +803,16 @@ public final class Ga11VectorHeadlessMain {
                     } finally {full.endTransaction(t,true);}
                     defineFixtureFunction(full,0x5a0L,22,
                         "fixture_branch_simcr_alternatives");
+                    // Ghidra's headless DisassembleCommand does not always
+                    // follow both targets of a conditionally-entered stub.
+                    // Independently request the second code-flow target.
+                    int branches=full.startTransaction(
+                        "GA18 A decode conditional second target");
+                    try {
+                        check(new DisassembleCommand(address(full,0x5acL),
+                            null,false).applyTo(full,TaskMonitor.DUMMY),
+                            "Ghidra failed to decode synthetic second branch");
+                    } finally {full.endTransaction(branches,true);}
                     long rev=full.getModificationNumber();
                     var cfg=new GhidraHardwareFlowService().analyze(
                         full,TaskMonitor.DUMMY,true);
