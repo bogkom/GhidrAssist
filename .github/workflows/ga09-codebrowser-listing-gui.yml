@@ -74,6 +74,20 @@ jobs:
               tail -n 90 "$filename"
             fi
           done
+      - name: Bundle tested extension, GUI harness and SHA256SUMS for future isolated host acceptance
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/codebrowser-bundle"
+          cp "$EXTENSION" "$RUNNER_TEMP/codebrowser-bundle/"
+          cp tests/codebrowser_harness/run.py tests/codebrowser_harness/CodeBrowserMmioMain.java "$RUNNER_TEMP/codebrowser-bundle/"
+          cd "$RUNNER_TEMP/codebrowser-bundle"
+          archive="$(basename "$EXTENSION")"
+          sha256sum "$archive" > SHA256SUMS.txt
+          sha256sum run.py CodeBrowserMmioMain.java > HARNESS-SHA256SUMS.txt
+          sha256sum -c SHA256SUMS.txt
+          sha256sum -c HARNESS-SHA256SUMS.txt
       - name: Publish synthetic-only test logs (even on failure)
         if: always()
         uses: actions/upload-artifact@v4
@@ -81,6 +95,7 @@ jobs:
           name: GhidrAssist-CodeBrowser-12.1.4-${{ github.run_id }}
           path: |
             ${{ runner.temp }}/codebrowser-evidence/
+            ${{ runner.temp }}/codebrowser-bundle/
             ${{ runner.temp }}/extension.sha256
           if-no-files-found: warn
           retention-days: 14
