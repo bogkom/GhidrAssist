@@ -83,8 +83,8 @@ def main():
     parser.add_argument("--extension-sha256",required=True)
     parser.add_argument("--output",required=True)
     parser.add_argument("--strict-entry",action="store_true")
-    parser.add_argument("--ga18-mode",choices=("none","overview","cache"),
-                        default="none",help="Run additional real Ghidra GA-07 or GA-12 integration checks")
+    parser.add_argument("--ga18-mode",choices=("none","overview","cache","startup","csbar"),
+                        default="none",help="Run GA-07/12 or GA-02/03 genuine headless source-evidence checks")
     args=parser.parse_args()
     out=Path(args.output).absolute()
     if out.is_symlink() or (out.exists() and
@@ -159,13 +159,20 @@ def main():
             if proof.get("truncated_image_unreadable")!=244:
                 raise RuntimeError("Missing truncated mapping proof")
             if args.ga18_mode != "none":
-                required_extra=(
-                    ("synthetic_simcr_detected","overview_three_parts_verified",
-                     "cpu32_scope_conservative","read_only_analysis_verified")
-                    if args.ga18_mode=="overview" else
-                    ("cfg_stage_first_computed","cfg_stage_cache_reused",
-                     "cfg_stage_clear_invalidated","cfg_stage_scope_isolated",
-                     "read_only_analysis_verified"))
+                mode_fields={
+                    "overview":("synthetic_simcr_detected",
+                        "overview_three_parts_verified","cpu32_scope_conservative"),
+                    "cache":("cfg_stage_first_computed","cfg_stage_cache_reused",
+                        "cfg_stage_clear_invalidated","cfg_stage_scope_isolated"),
+                    "startup":("simcr_real_listing_pcode_verified",
+                        "simcr_local_first_only_verified",
+                        "listing_cfg_reconciliation_verified"),
+                    "csbar":("csbar_real_literal_proposal_manual_only",
+                        "csbar_real_conflicting_literals_blocked",
+                        "unknown_store_all_cs_windows_blocked"),
+                }
+                required_extra=mode_fields[args.ga18_mode]+(
+                    "read_only_analysis_verified",)
                 for key in required_extra:
                     if proof.get(key) is not True:
                         raise RuntimeError("Missing GA-18 real Ghidra proof: "+key)
