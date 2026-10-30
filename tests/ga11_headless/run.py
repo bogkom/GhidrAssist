@@ -88,7 +88,10 @@ def main():
     parser.add_argument("--extension-sha256",required=True)
     parser.add_argument("--output",required=True)
     parser.add_argument("--strict-entry",action="store_true")
-    parser.add_argument("--ga18-mode",choices=("none","overview","cache","startup","csbar","revision","simcr-alternatives","csbar-width"),
+    parser.add_argument("--ga18-mode",choices=("none","overview","cache","startup","csbar","revision","simcr-alternatives","csbar-width",
+                        "csbar-independent","csbar-identical","csbar-unknown-word",
+                        "simcr-partial","vector-edit-undo","cache-program-isolation",
+                        "generic-profile"),
                         default="none",help="Run GA-07/12 or GA-02/03 genuine headless source-evidence checks")
     args=parser.parse_args()
     out=Path(args.output).absolute()
@@ -183,6 +186,37 @@ def main():
                         "csbar_partial_width_rejected",
                         "csbar_positive_control_retained",
                         "csbar_width_read_only"),
+                    "csbar-independent":(
+                        "csbar_two_registers_independently_detected",
+                        "csbar_distinct_windows_not_combined",
+                        "csbar_independent_scan_read_only"),
+                    "csbar-identical":(
+                        "csbar_identical_sources_collapsed_to_candidate",
+                        "csbar_two_distinct_site_origins",
+                        "csbar_repeated_source_read_only"),
+                    "csbar-unknown-word":(
+                        "csbar_unknown_word_real_pcode",
+                        "csbar_unknown_word_blocks_proposal",
+                        "csbar_unknown_word_read_only"),
+                    "simcr-partial":(
+                        "simcr_real_partial_and_word_decoded",
+                        "simcr_partial_unknown_alternative",
+                        "simcr_partial_runtime_mm_unproven",
+                        "simcr_partial_read_only"),
+                    "vector-edit-undo":(
+                        "vector_real_edit_reclassified",
+                        "vector_native_undo_restored",
+                        "vector_runtime_vbr_unproven",
+                        "vector_scan_after_undo_read_only"),
+                    "cache-program-isolation":(
+                        "cache_real_two_programs_isolated",
+                        "cache_each_revision_reused_only_locally",
+                        "cache_wrong_identity_fail_closed",
+                        "cache_cross_program_read_only"),
+                    "generic-profile":(
+                        "generic_cpu32_kept_address_only",
+                        "generic_mc68332_csbar_proposals_disabled",
+                        "generic_model_switch_read_only"),
                     "revision":("revision_real_edit_invalidated",
                         "revision_stale_capture_rejected",
                         "revision_undo_invalidated",
