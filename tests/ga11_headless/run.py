@@ -88,7 +88,7 @@ def main():
     parser.add_argument("--extension-sha256",required=True)
     parser.add_argument("--output",required=True)
     parser.add_argument("--strict-entry",action="store_true")
-    parser.add_argument("--ga18-mode",choices=("none","overview","cache","startup","csbar","revision"),
+    parser.add_argument("--ga18-mode",choices=("none","overview","cache","startup","csbar","revision","simcr-alternatives","csbar-width"),
                         default="none",help="Run GA-07/12 or GA-02/03 genuine headless source-evidence checks")
     args=parser.parse_args()
     out=Path(args.output).absolute()
@@ -175,6 +175,14 @@ def main():
                     "csbar":("csbar_real_literal_proposal_manual_only",
                         "csbar_real_conflicting_literals_blocked",
                         "unknown_store_all_cs_windows_blocked"),
+                    "simcr-alternatives":("simcr_real_two_literals_detected",
+                        "simcr_same_function_alternatives",
+                        "simcr_write_once_runtime_unknown",
+                        "simcr_alternatives_read_only"),
+                    "csbar-width":("csbar_real_byte_store_detected",
+                        "csbar_partial_width_rejected",
+                        "csbar_positive_control_retained",
+                        "csbar_width_read_only"),
                     "revision":("revision_real_edit_invalidated",
                         "revision_stale_capture_rejected",
                         "revision_undo_invalidated",
