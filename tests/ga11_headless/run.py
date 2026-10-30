@@ -94,7 +94,9 @@ def main():
                         "generic-profile","trambar-source","csbar-mm0-reject",
                         "mmio-read-reference","csbar-csor-conditional",
                         "simcr-mm0-literal","trambar-unknown","csor-alternatives",
-                        "branch-simcr","call-barrier","cancel-incomplete"),
+                        "branch-simcr","call-barrier","cancel-incomplete",
+                        "function-rename","apply-preserve",
+                        "provenance-csv","movec-vbr"),
                         default="none",help="Run GA-07/12 or GA-02/03 genuine headless source-evidence checks")
     args=parser.parse_args()
     out=Path(args.output).absolute()
@@ -264,6 +266,26 @@ def main():
                         "cancel_clean_retry_computed",
                         "cancel_complete_stage_reused",
                         "cancel_real_program_unchanged"),
+                    "function-rename":(
+                        "rename_real_functions_and_collision",
+                        "rename_atomic_rollback",
+                        "rename_transactional_two_function_apply",
+                        "rename_native_undo_restored"),
+                    "apply-preserve":(
+                        "apply_real_label_protected",
+                        "apply_real_typed_data_preserved",
+                        "apply_existing_code_protected",
+                        "apply_native_undo_restored"),
+                    "provenance-csv":(
+                        "provenance_actual_source_types",
+                        "provenance_authorship_not_invented",
+                        "provenance_csv_formula_escaped",
+                        "provenance_csv_read_only"),
+                    "movec-vbr":(
+                        "movec_actual_cpu32_decoded",
+                        "movec_source_vbr_recognized",
+                        "movec_runtime_vbr_unknown",
+                        "movec_vector_scan_read_only"),
                     "revision":("revision_real_edit_invalidated",
                         "revision_stale_capture_rejected",
                         "revision_undo_invalidated",
