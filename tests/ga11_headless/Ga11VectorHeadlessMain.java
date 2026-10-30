@@ -813,7 +813,13 @@ public final class Ga11VectorHeadlessMain {
                           cfg.rawCfgMmioSites.stream().anyMatch(site->
                             site.pc()==0x5acL && "SIMCR".equals(site.register()) &&
                             Integer.valueOf(0x4848).equals(site.literal())),
-                        "Real conditional CPU32 SIMCR branches lost literal evidence");
+                        "Real conditional CPU32 SIMCR branches lost literal evidence; raw="+
+                            cfg.rawCfgMmioSites.stream().filter(site->
+                                site.function()==0x5a0L).toList()+
+                            "; Listing="+full.getListing().getInstructionAt(
+                                address(full,0x5a2L))+"/"+
+                                full.getListing().getInstructionAt(
+                                    address(full,0x5acL)));
                     check(cfg.markdown.contains("Possible first SIMCR source sites") &&
                           cfg.markdown.contains("0x000005A2") &&
                           cfg.markdown.contains("0x000005AC") &&
