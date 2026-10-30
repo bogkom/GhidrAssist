@@ -186,7 +186,10 @@ def main():
                       "listing_navigation","stale_go_to_rejected",
                       "stale_double_click_rejected",
                       "listing_remained_second_program",
-                      "read_only_analyze","tool_template_saved",
+                      "read_only_analyze",
+                      "synthetic_apply_undo_verified",
+                      "cs_review_never_auto_selected",
+                      "tool_template_saved",
                       "extension_metadata_serialized",
                       "tool_template_reloaded",
                       "no_new_extension_prompt_on_restore")
