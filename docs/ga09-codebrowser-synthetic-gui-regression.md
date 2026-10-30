@@ -86,3 +86,38 @@ extension-discovery dialog may require separate profile-save/reopen
 investigation and is not automatically solved by the PluginPackage
 registration. This test intentionally does not modify the user's
 installed Ghidra profile or any of the above pinned commits.
+
+
+## GA-18 — real X11 CodeBrowser screenshot proof (synthetic only)
+
+In the existing isolated Xvfb/Openbox CodeBrowser regression, after verifying
+actual `GoToService` navigation to the synthetic SIMCR Listing, Java checks
+the visible Ghidra tool-frame identity, grabs the **real displayed X11 pixels**
+with `java.awt.Robot.createScreenCapture` (not `JComponent.printAll`, a
+rendered/mock PNG, or a generated image), and writes `codebrowser-x11.png`.
+The Python runner separately validates PNG signature, IHDR/CRC, bounded width
+and height, and exact SHA-256 against `gui-results.json`. The GitHub Actions
+artifact contains the screenshot from this synthetic fixture along with
+`result.json` and the Ghidra logs.
+
+**Evidence levels intentionally separated:**
+
+- `window_identity_verified=true`, `codebrowser_listing_verified=true`,
+  `x11_capture_proof_verified=true`: programmatic checks against an actual
+  Ghidra CodeBrowser and native X11 screenshot (the existing navigation and
+  Ghidra Undo assertions remain mandatory).
+- `x11_screenshot_sha256`: a digest of the captured PNG, independently
+  checked by the Python runner; not proof that a human or Codex viewed it.
+- `visual_readback_verified=false`,
+  `human_visual_readback=NOT_PERFORMED`,
+  `supervisor_ack=false`: no independent visual readback, authorized GUI
+  worker, native Supervisor test turn or nonce ACK has occurred.
+
+This **does not** qualify a `GUI_REQUIRED` or `LISTING_REQUIRED`
+Supervisor plan as `HEADLESS_SAFE`. A genuine GUI/Listing plan still requires
+a separately authorized operational GUI lane, actual visual inspection of
+the matched captured PNG, target commit/window identity, and an authentic
+completed Codex turn with nonce/ACK. Do not use the original Wyse project,
+firmware, credentials or graphical display. An isolated disposable Xvfb
+screen is sufficient for this automated regression, not for operator GUI
+acceptance.
