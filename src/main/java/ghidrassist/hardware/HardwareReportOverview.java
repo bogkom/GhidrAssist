@@ -38,9 +38,14 @@ public final class HardwareReportOverview {
         if(listingScanned<0 || initializationFunctions<0 || vbrCandidates<0 ||
                 unknownIndirectStores<0 || input==null)
             throw new IllegalArgumentException("Invalid overview evidence");
+        if(input.size()>200000)
+            throw new IllegalArgumentException(
+                "Oversized overview evidence: counts not known to be complete");
         int visible=0,hidden=0,simcr=0,tram=0,csbar=0,csor=0,known=0,unknown=0;
         for(Site site:input) {
-            if(site==null)continue;
+            if(site==null || site.register()==null || site.register().isBlank() ||
+                    (site.literalKnown() && !site.writeCandidate()))
+                throw new IllegalArgumentException("Invalid/inconsistent overview evidence row");
             if(!HardwareReportScope.isInitializationRegister(site.register())) {
                 hidden++;
                 continue;
@@ -60,7 +65,11 @@ public final class HardwareReportOverview {
                 "MC68332 — user-selected HYPOTHESIS":"CPU32 — address survey ONLY") +
             "**; firmware execution, hardware wiring and actual MM/VBR states UNKNOWN.\n" +
             "- This overview, full evidence tab, exported Markdown and RAG context " +
-            "use the same completed scan; no Ghidra database or firmware writes.\n\n" +
+            "use the same current-revision evidence; scan completeness must "+
+            "be checked separately. No Ghidra database or firmware writes.\n" +
+            "- CFG/P-code source coverage: **" +
+                (cfgLimited ? "INCOMPLETE / TRUNCATED" : "BOUNDED PASS COMPLETE") +
+                "**; neither status proves dynamic execution.\n\n" +
             "## 1. Initialization candidates\n\n" +
             "- Listing instructions inspected: "+listingScanned+
             "; focused initialization register sites: "+visible+
@@ -68,14 +77,16 @@ public final class HardwareReportOverview {
             "- SIMCR/MM sites: "+simcr+"; TRAMBAR sites: "+tram+
             "; CSBAR sites: "+csbar+"; CSOR sites: "+csor+
             "; VBR MOVEC sightings: "+vbrCandidates+".\n"+
-            "- Other peripheral references: "+hidden+
+            "- Other/omitted register references (including CSPAR): "+hidden+
             " (not expanded in focused overview; full register definitions are " +
             "available in Review / Apply).\n\n"+
             "## 2. Register write history — static evidence\n\n"+
             "- Focused write candidates with direct word values: "+known+
             "; writes with UNKNOWN literal: "+unknown+
             "; unresolved register-indirect stores in bounded CFG pass: "+
-            unknownIndirectStores+"; propagation cap reached: "+cfgLimited+".\n"+
+            (cfgLimited?"at least ":"")+unknownIndirectStores+
+            (cfgLimited?" (lower bound; scan truncated)":"")+
+            "; propagation cap reached: "+cfgLimited+".\n"+
             "- Local branch paths, caller effects, first successful write to " +
             "write-once MM and actual execution ordering remain UNKNOWN. " +
             "See **Full evidence** for source instruction addresses and " +
