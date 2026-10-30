@@ -38,6 +38,8 @@ def fixture(path, short=False):
         for n in range(20,55):
             word(n,0x9000+2*n)  # >32 nonempty entries forces row cap
         data[0x400:0x406]=bytes.fromhex("4e714e714e75")
+        # Separate synthetic MMIO routine for optional GA-18 hardware checks.
+        data[0x500:0x50a]=bytes.fromhex("33fc40ca00fffa004e75")
     path.write_bytes(data)
 
 def install(zip_path,target):
@@ -81,6 +83,8 @@ def main():
     parser.add_argument("--extension-sha256",required=True)
     parser.add_argument("--output",required=True)
     parser.add_argument("--strict-entry",action="store_true")
+    parser.add_argument("--verify-hardware",action="store_true",
+                        help="Also exercise real Ghidra inventory and GA-12 revision cache")
     args=parser.parse_args()
     out=Path(args.output).absolute()
     if out.is_symlink() or (out.exists() and
@@ -139,7 +143,9 @@ def main():
                   "-cp",str(work/"classes")+os.pathsep+cp,
                   "Ga11VectorHeadlessMain",
                   str(ghidra),str(work/"project"),str(out),
-                  str(args.strict_entry).lower()],work,env,out/"integration.log",
+                  str(args.strict_entry).lower(),
+                  "hardware" if args.verify_hardware else "baseline"],
+                 work,env,out/"integration.log",
                  timeout=240)
             proof=json.loads((out/"result.json").read_text())
             required=("function_entry_and_body_verified",
@@ -152,6 +158,14 @@ def main():
                     raise RuntimeError("Missing proof: "+key)
             if proof.get("truncated_image_unreadable")!=244:
                 raise RuntimeError("Missing truncated mapping proof")
+            if args.verify_hardware:
+                extra=("synthetic_simcr_detected","overview_three_parts_verified",
+                       "cpu32_scope_conservative","cfg_stage_cache_reused",
+                       "cfg_stage_clear_invalidated","read_only_analysis_verified")
+                for key in extra:
+                    if proof.get(key) is not True:
+                        raise RuntimeError("Missing GA-18 headless integration proof: "+key)
+                summary["ga18_hardware_verified"]=True
             summary.update({"status":"PASSED_SYNTHETIC_REAL_GHIDRA_HEADLESS",
                             "ghidra_version":"12.1.4",
                             "validated_fields":list(required),
