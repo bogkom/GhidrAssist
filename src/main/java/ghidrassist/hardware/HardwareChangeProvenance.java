@@ -45,6 +45,10 @@ public final class HardwareChangeProvenance {
 
     /** Bound exported evidence independently of an untrusted Review row list. */
     public static final int MAX_CSV_ROWS=5000;
+    /** Even with bounded row count, untrusted text fields must have a bound. */
+    public static final int MAX_CSV_CELL_CHARS=512;
+    private static final String CELL_TRUNCATION=" [SOURCE_TRUNCATED]";
+
 
     /**
      * RFC-style quoted cells. Excel/Calc may still evaluate a CSV field as a
@@ -53,6 +57,11 @@ public final class HardwareChangeProvenance {
      */
     private static String cell(String value) {
         if(value==null)value="";
+        // Bound raw input BEFORE chaining replace() (which would otherwise
+        // duplicate a multi-MB string) and explicitly show evidence loss.
+        if(value.length()>MAX_CSV_CELL_CHARS)
+            value=value.substring(0,MAX_CSV_CELL_CHARS-CELL_TRUNCATION.length())
+                +CELL_TRUNCATION;
         String normalized=value.replace("\r"," ").replace("\n"," ")
             .replace("\u0000"," ").replace("\u2028"," ")
             .replace("\u2029"," ");

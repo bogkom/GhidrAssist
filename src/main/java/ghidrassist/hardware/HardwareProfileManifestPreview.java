@@ -88,9 +88,13 @@ public final class HardwareProfileManifestPreview {
         return s;
     }
     private static boolean paginated(String page){
-        String p=page.toLowerCase(Locale.ROOT);
-        return p.contains("pdf page") && !p.contains("unknown") &&
-            !p.contains("unverified");
+        // Page labels remain unverified external claims; do not count a
+        // bare or ambiguous "PDF page" string as a concrete numbered claim.
+        String p=page.toUpperCase(Locale.ROOT);
+        if(p.contains("UNKNOWN") || p.contains("UNVERIFIED") ||
+                p.contains("AMBIGUOUS") || p.contains("TO BE VERIFIED") ||
+                p.contains("TO BE CHECKED"))return false;
+        return p.matches(".*\\bPDF PAGES? [1-9][0-9]*(?:-[1-9][0-9]*)?\\b.*");
     }
     private static IllegalArgumentException fail(int line,String why){
         return new IllegalArgumentException("Manifest line "+line+": "+why);
@@ -143,19 +147,19 @@ public final class HardwareProfileManifestPreview {
                     if(size<1 || (long)offset+size>4096)
                         throw fail(ln,"module must lie in the 4 KiB device aperture");
                     Module proposed=new Module(name,offset,size,page(v[4],ln));
-                    if(modules.containsKey(name))
-                        throw fail(ln,"duplicate module");
+                    if(modules.containsKey(name.toUpperCase(Locale.ROOT)))
+                        throw fail(ln,"duplicate module (case-insensitive)");
                     for(Module m:modules.values())
                         if(offset<m.end() && m.offset()<proposed.end())
                             throw fail(ln,"overlapping module apertures");
-                    modules.put(name,proposed);
+                    modules.put(name.toUpperCase(Locale.ROOT),proposed);
                     if(!paginated(proposed.page()))pageMissing++;
                 }
                 case "REGISTER" -> {
                     if(src==null || v.length!=6)
                         throw fail(ln,"REGISTER requires DOCUMENT and five fields");
                     String module=id(v[1],ln),name=id(v[2],ln);
-                    Module m=modules.get(module);
+                    Module m=modules.get(module.toUpperCase(Locale.ROOT));
                     if(m==null)throw fail(ln,"unknown module: "+module);
                     int offset=parseHex(v[3],"register offset",ln);
                     int width;
@@ -166,7 +170,7 @@ public final class HardwareProfileManifestPreview {
                     if(offset%(width/8)!=0 ||
                             offset<m.offset() || (long)offset+width/8>m.end())
                         throw fail(ln,"unaligned or outside module");
-                    Register candidate=new Register(module,name,offset,width,page(v[5],ln));
+                    Register candidate=new Register(m.id(),name,offset,width,page(v[5],ln));
                     if(registers.containsKey(name.toUpperCase(Locale.ROOT)))
                         throw fail(ln,"duplicate register name");
                     for(Register old:registers.values())
