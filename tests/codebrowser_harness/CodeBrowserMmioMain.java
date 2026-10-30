@@ -99,6 +99,18 @@ public final class CodeBrowserMmioMain {
             }
         return null;
     }
+    static JDialog dialogWithTitle(String prefix) {
+        JDialog found=null;
+        for(Window w:Window.getWindows()){
+            if(w instanceof JDialog d && d.isShowing() &&
+                    d.getTitle().startsWith(prefix)){
+                if(found!=null)throw new AssertionError(
+                    "Ambiguous synthetic GUI dialog: "+prefix);
+                found=d;
+            }
+        }
+        return found;
+    }
     static JDialog mmioDialog() {
         JDialog found=null;
         for(Window window:Window.getWindows()){
@@ -322,8 +334,19 @@ public final class CodeBrowserMmioMain {
             require(first.getListing().getInstructionAt(site).toString().equals(before),
                 "Hardware Analyze mutated synthetic Listing");
             result.addProperty("read_only_analyze",true);
-            // Actual Ghidra transaction/Undo on a disposable synthetic
-            // Program ONLY. Never call Apply on the owner's firmware/project.
+            // Isolated *production Swing* Review/Apply workflow. The actual
+            // UI must neither mutate on Cancel nor bypass final consent.
+            // Both fixture Programs belong to the disposable project.
+            edt(()->{
+                dialog.dispose();
+                tool[0].getService(ProgramManager.class).setCurrentProgram(first);
+                ((JButton)fieldUnchecked(tab,"run")).doClick();
+            });
+            until(()->{
+                try{return evalEdt(()->((JButton)fieldUnchecked(tab,"approve"))
+                    .isEnabled());}
+                catch(Exception e){throw new RuntimeException(e);}
+            },35);
             var region=ghidrassist.hardware.HardwareApplyPlan
                 .mc68332Mm1Candidates(0).stream()
                 .filter(item->item.kind==
@@ -334,29 +357,133 @@ public final class CodeBrowserMmioMain {
                 .getDefaultAddressSpace().getAddress(region.address);
             require(!first.getMemory().contains(regionStart),
                 "Synthetic fixture unexpectedly has SIM MMIO region mapped");
-            var preflight=ghidrassist.hardware.HardwareApplyService.preflight(
-                first,region,List.of(region));
-            require(preflight.state==ghidrassist.hardware.HardwareApplyService.State.READY &&
-                preflight.selectedByDefault,
-                "Safe synthetic SIM module failed read-only preflight");
-            var apply=ghidrassist.hardware.HardwareApplyService.apply(
-                first,List.of(region));
-            require(apply.changed==1 && first.getMemory().contains(regionStart),
-                "Approved synthetic memory region was not committed");
-            require(first.canUndo(),"Ghidra did not offer transaction Undo");
+            SwingUtilities.invokeLater(
+                ()->((JButton)fieldUnchecked(tab,"approve")).doClick());
+            until(()->{
+                try{return evalEdt(()->dialogWithTitle(
+                    "Review / Apply hardware definitions")!=null);}
+                catch(Exception e){throw new RuntimeException(e);}
+            },15);
+            JDialog review=dialogWithTitle("Review / Apply hardware definitions");
+            JTable reviewTable=child(review.getContentPane(),JTable.class);
+            require(reviewTable!=null,"Production Review table not shown");
+            int simRow=-1,ramRow=-1;
+            for(int i=0;i<reviewTable.getRowCount();i++){
+                String name=String.valueOf(reviewTable.getValueAt(i,3));
+                if("SIM_REGISTERS_MM1".equals(name))simRow=i;
+                if("TPURAM_2K_CANDIDATE".equals(name))ramRow=i;
+                require(!name.startsWith("CS_WINDOW_"),
+                    "No unproven synthetic CSBAR source may yield a UI CS window");
+            }
+            require(simRow>=0 && ramRow>=0,
+                "Missing real Review SIM/TPURAM proposals");
+            require(Boolean.TRUE.equals(reviewTable.getValueAt(simRow,0)) &&
+                    !Boolean.TRUE.equals(reviewTable.getValueAt(ramRow,0)),
+                "Safe SIM region should default selected; speculative TPURAM must not");
+            require(!first.getMemory().contains(regionStart),
+                "Opening Review unexpectedly modified Ghidra memory");
+            JButton cancelReview=button(review.getContentPane(),"Cancel");
+            require(cancelReview!=null,"Review Cancel button missing");
+            edt(()->cancelReview.doClick());
+            require(!first.getMemory().contains(regionStart),
+                "Cancel Review must not apply default-selected rows");
+            result.addProperty("review_gui_cancel_no_change",true);
+
+            // Reopen Review and select only one verified internal SIM module.
+            SwingUtilities.invokeLater(
+                ()->((JButton)fieldUnchecked(tab,"approve")).doClick());
+            until(()->{
+                try{return evalEdt(()->dialogWithTitle(
+                    "Review / Apply hardware definitions")!=null);}
+                catch(Exception e){throw new RuntimeException(e);}
+            },15);
+            JDialog approvedReview=dialogWithTitle("Review / Apply hardware definitions");
+            JTable approvedTable=child(approvedReview.getContentPane(),JTable.class);
+            require(approvedTable!=null,"Approved Review table missing");
+            int chosen=-1;
+            for(int i=0;i<approvedTable.getRowCount();i++)
+                if("SIM_REGISTERS_MM1".equals(
+                        String.valueOf(approvedTable.getValueAt(i,3))))chosen=i;
+            require(chosen>=0,"Synthetic SIM region not offered for approval");
+            final int chosenRow=chosen;
+            JButton clearReview=button(approvedReview.getContentPane(),"Clear selection");
+            JButton applyReview=button(approvedReview.getContentPane(),"Apply selected...");
+            require(clearReview!=null && applyReview!=null,
+                "Production Review controls absent");
+            edt(()->{
+                clearReview.doClick();
+                approvedTable.getModel().setValueAt(true,chosenRow,0);
+                applyReview.doClick();
+            });
+            until(()->{
+                try{return evalEdt(()->dialogWithTitle(
+                    "Final confirmation: modify Ghidra database")!=null);}
+                catch(Exception e){throw new RuntimeException(e);}
+            },15);
+            require(!first.getMemory().contains(regionStart),
+                "Ghidra memory changed BEFORE final user consent");
+            JDialog confirmation=dialogWithTitle(
+                "Final confirmation: modify Ghidra database");
+            JOptionPane consent=child(confirmation.getContentPane(),JOptionPane.class);
+            require(consent!=null,"Actual final confirmation UI not present");
+            edt(()->consent.setValue(JOptionPane.YES_OPTION));
+            until(()->{
+                try{return evalEdt(()->dialogWithTitle(
+                    "Review / Apply result")!=null);}
+                catch(Exception e){throw new RuntimeException(e);}
+            },20);
+            require(first.getMemory().contains(regionStart),
+                "Approved production GUI Apply did not commit synthetic SIM region");
+            JDialog outcomeDialog=dialogWithTitle("Review / Apply result");
+            edt(outcomeDialog::dispose);
+            require(first.canUndo(),"Production Ghidra Apply did not provide Undo");
             first.undo();
             require(!first.getMemory().contains(regionStart),
-                "Ghidra Undo failed to remove disposable SIM module region");
+                "Ghidra Undo failed to remove GUI-applied disposable SIM region");
             require(first.getListing().getInstructionAt(site)!=null &&
                 first.getListing().getInstructionAt(site).toString().equals(before),
-                "Synthetic Listing unexpectedly changed across Apply/Undo");
+                "Synthetic Listing unexpectedly changed across GUI Apply/Undo");
+            result.addProperty("review_gui_consent_and_undo_verified",true);
             result.addProperty("synthetic_apply_undo_verified",true);
-            // A candidate chip-select window must not be auto-selected:
-            // its real decode and external wiring are unproven.
+
+            // Reconciled source-gating must never invent an active CS window
+            // from contradictory words, an unknown indirect STORE, or a
+            // truncated CFG pass. These are hypotheses, not firmware execution.
+            var good=new ghidrassist.hardware.HardwareStartupEvidenceMerge.Observation(
+                0x100,0x120,0xfffa4c,"CSBAR0",
+                ghidrassist.hardware.HardwareStartupEvidenceMerge.Source.CFG_PCODE,
+                true,16,0x1000,false);
+            var other=new ghidrassist.hardware.HardwareStartupEvidenceMerge.Observation(
+                0x100,0x124,0xfffa4c,"CSBAR0",
+                ghidrassist.hardware.HardwareStartupEvidenceMerge.Source.CFG_PCODE,
+                true,16,0x2000,false);
+            var alias=new ghidrassist.hardware.HardwareStartupEvidenceMerge.Observation(
+                0x100,0x128,-1,"UNKNOWN_ADDRESS",
+                ghidrassist.hardware.HardwareStartupEvidenceMerge.Source.CFG_PCODE,
+                true,0,null,true);
+            var conflict=ghidrassist.hardware.HardwareCsbarUnifiedReview.inspect(
+                true,ghidrassist.hardware.HardwareStartupEvidenceMerge.reconcile(
+                    List.of(good,other)));
+            var unknown=ghidrassist.hardware.HardwareCsbarUnifiedReview.inspect(
+                true,ghidrassist.hardware.HardwareStartupEvidenceMerge.reconcile(
+                    List.of(good,alias)));
+            var incomplete=ghidrassist.hardware.HardwareCsbarUnifiedReview.inspect(
+                true,ghidrassist.hardware.HardwareStartupEvidenceMerge.reconcile(
+                    List.of(good)),false);
+            require(conflict.candidates().isEmpty() &&
+                    unknown.candidates().isEmpty() &&
+                    incomplete.candidates().isEmpty(),
+                "Conflicting/unknown/truncated CSBAR source escaped unified Review gate");
+            var safe=ghidrassist.hardware.HardwareCsbarUnifiedReview.inspect(
+                true,ghidrassist.hardware.HardwareStartupEvidenceMerge.reconcile(
+                    List.of(good)));
+            require(safe.candidates().size()==1,
+                "Unambiguous synthetic CSBAR control case missing");
             var csCandidates=ghidrassist.hardware.HardwareApplyPlan
                 .chipSelectWindowCandidates(List.of(
                     new ghidrassist.hardware.HardwareApplyPlan.CsbarEvidence(
-                        "CSBAR0",0x0000,"SYNTHETIC_ONLY")));
+                        safe.candidates().get(0).register(),
+                        safe.candidates().get(0).word(),"SYNTHETIC_ONLY")));
             require(!csCandidates.isEmpty(),
                 "Synthetic CSBAR candidate was not decoded");
             var csStatus=ghidrassist.hardware.HardwareApplyService.preflight(
@@ -365,6 +492,7 @@ public final class CodeBrowserMmioMain {
                 !csStatus.selectedByDefault,
                 "Unverified CS window must require explicit operator review");
             result.addProperty("cs_review_never_auto_selected",true);
+            result.addProperty("conflict_alias_cs_windows_blocked",true);
             // This is serialized tool *configuration*, not user preference persistence
             // across a real application restart.
             ToolTemplate saved=tool[0].saveToolToToolTemplate();
