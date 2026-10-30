@@ -18,10 +18,16 @@ public final class HardwareReportOverview {
      */
     public static String withUnifiedSources(String listingOverview,
             HardwareStartupEvidenceMerge.Report merged) {
-        if(listingOverview==null || merged==null ||
-                !listingOverview.contains("## 2. Register write history"))
-            throw new IllegalArgumentException("Invalid overview/unified evidence");
         String marker="## 2. Register write history — static evidence\n\n";
+        // A loose prefix check accepted slightly different heading text,
+        // then String.replace silently did nothing. This would present a
+        // supposedly unified Overview without its reconciled Listing/CFG
+        // source counts. Fail closed instead of dropping source provenance.
+        if(listingOverview==null || merged==null ||
+                !listingOverview.contains(marker) ||
+                listingOverview.indexOf(marker)!=listingOverview.lastIndexOf(marker))
+            throw new IllegalArgumentException(
+                "Missing or ambiguous exact overview provenance insertion point");
         String note="- Source-reconciled Listing + CFG/P-code candidate sites: "+
             merged.rows().size()+" (raw source observations: "+merged.rawSites()+
             ", deduplicated matches: "+merged.duplicateSources()+
