@@ -415,7 +415,10 @@ public final class HardwareAnalysisTab extends JPanel {
 
     private void discardStale(String reason) {
         Program old=latestProgram;
-        if(old!=null)ghidrassist.hardware.HardwareEvidenceCache.clear(old);
+        if(old!=null){
+            ghidrassist.hardware.HardwareEvidenceCache.clear(old);
+            ghidrassist.hardware.HardwareFlowStageCache.clear(old);
+        }
         latestMarkdown=null;latestConfigCsv=null;
         latestNameCsv=null;
         latestProgram=null;
