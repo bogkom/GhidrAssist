@@ -66,6 +66,24 @@ public final class HardwareReportOverviewSelfTest {
         require(unified.indexOf("## 1.")<unified.indexOf("## 2.") &&
             unified.indexOf("## 2.")<unified.indexOf("## 3."),
             "unified provenance must preserve overview hierarchy");
+        // Regression: a weakened prefix guard accepted an altered heading
+        // even though the exact replace() anchor was absent, silently
+        // omitting reconciled Listing/CFG provenance from Overview.
+        for(String malformed:new String[]{
+                selected.replace("## 2. Register write history — static evidence",
+                    "## 2. Register write history (reformatted)"),
+                selected+selected.substring(
+                    selected.indexOf("## 2. Register write history — static evidence"),
+                    selected.indexOf("## 2. Register write history — static evidence")+
+                        "## 2. Register write history — static evidence\\n\\n".length()
+                    ).replace("\\n","\n")
+        }){
+            boolean rejectedAnchor=false;
+            try{HardwareReportOverview.withUnifiedSources(malformed,merged);}
+            catch(IllegalArgumentException expected){rejectedAnchor=true;}
+            require(rejectedAnchor,
+                "malformed or repeated Overview anchor must reject absent source counts");
+        }
         boolean invalid=false;
         try{HardwareReportOverview.render(true,-1,0,0,0,false,sites);}
         catch(IllegalArgumentException expected){invalid=true;}
