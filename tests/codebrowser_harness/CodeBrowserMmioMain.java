@@ -35,6 +35,10 @@ import java.awt.*;
 import java.awt.event.*;
 import java.lang.reflect.*;
 import java.nio.file.*;
+import java.awt.image.BufferedImage;
+import javax.imageio.ImageIO;
+import java.security.MessageDigest;
+import java.util.HexFormat;
 import java.util.*;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
@@ -306,6 +310,42 @@ public final class CodeBrowserMmioMain {
                 catch(Exception e){throw new RuntimeException(e);}
             },15);
             result.addProperty("listing_navigation",true);
+            // Robot captures X11 pixels from the *real displayed window*.
+            // Swing printAll()/paint() output is NOT a screen capture; the
+            // screenshot is evidence only, never a model/human visual readback.
+            Frame browser=tool[0].getToolFrame();
+            require(browser!=null && browser.isShowing() &&
+                    browser.getTitle().contains("GhidrAssist isolated CodeBrowser MMIO"),
+                "Genuine Ghidra CodeBrowser window identity was not verified");
+            Rectangle bounds=browser.getBounds().intersection(
+                browser.getGraphicsConfiguration().getBounds());
+            require(bounds.width>=640 && bounds.height>=400,
+                "Ghidra CodeBrowser window not sufficiently visible on X11");
+            Robot robot=new Robot(browser.getGraphicsConfiguration().getDevice());
+            robot.waitForIdle();
+            BufferedImage pixels=robot.createScreenCapture(bounds);
+            require(pixels!=null && pixels.getWidth()==bounds.width &&
+                    pixels.getHeight()==bounds.height,
+                "X11 Robot screenshot dimensions mismatched real window");
+            Path screenshot=out.resolve("codebrowser-x11.png");
+            require(ImageIO.write(pixels,"png",screenshot.toFile()),
+                "No actual PNG encoder for X11 screenshot");
+            byte[] imageBytes=Files.readAllBytes(screenshot);
+            require(imageBytes.length>4096 &&
+                    ImageIO.read(screenshot.toFile())!=null,
+                "X11 screenshot missing or undecodable");
+            String imageDigest=HexFormat.of().formatHex(
+                MessageDigest.getInstance("SHA-256").digest(imageBytes));
+            require(imageDigest.matches("[0-9a-f]{64}"),
+                "X11 screenshot SHA-256 missing");
+            result.addProperty("window_identity_verified",true);
+            result.addProperty("codebrowser_listing_verified",true);
+            result.addProperty("x11_screenshot_captured",true);
+            result.addProperty("x11_screenshot_sha256",imageDigest);
+            result.addProperty("x11_screenshot_width",bounds.width);
+            result.addProperty("x11_screenshot_height",bounds.height);
+            result.addProperty("visual_readback_verified",false);
+            result.addProperty("human_visual_readback","NOT_PERFORMED");
             edt(()->{
                 ProgramManager managerService=tool[0].getService(ProgramManager.class);
                 managerService.setCurrentProgram(second);
