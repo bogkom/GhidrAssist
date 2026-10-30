@@ -40,6 +40,11 @@ def fixture(path, short=False):
         data[0x400:0x406]=bytes.fromhex("4e714e714e75")
         # Separate synthetic MMIO routine for optional GA-18 hardware checks.
         data[0x500:0x50a]=bytes.fromhex("33fc40ca00fffa004e75")
+        # Conditional CSBAR source candidates: two contradictory complete
+        # words plus a real register-indirect STORE with UNKNOWN A0 target.
+        data[0x520:0x52a]=bytes.fromhex("33fc387c00fffa4c4e75")
+        data[0x530:0x53a]=bytes.fromhex("33fc387e00fffa4c4e75")
+        data[0x540:0x544]=bytes.fromhex("30804e75")
     path.write_bytes(data)
 
 def install(zip_path,target):
