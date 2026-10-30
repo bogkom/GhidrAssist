@@ -74,7 +74,7 @@ public final class Ga11VectorHeadlessMain {
         Path out=Path.of(args[2]).toRealPath();
         boolean strictEntry=Boolean.parseBoolean(args[3]);
         String ga18Mode=args.length>4?args[4]:"none";
-        check(Set.of("none","overview","cache","startup","csbar","revision").contains(ga18Mode),
+        check(Set.of("none","overview","cache","startup","csbar","revision","simcr-alternatives","csbar-width").contains(ga18Mode),
             "Unknown GA-18 acceptance mode");
         var config=new HeadlessGhidraApplicationConfiguration();
         config.setApplicationLogFile(out.resolve("ghidra.log").toFile());
@@ -247,6 +247,99 @@ public final class Ga11VectorHeadlessMain {
                     result.addProperty("cfg_stage_cache_reused",true);
                     result.addProperty("cfg_stage_clear_invalidated",true);
                     result.addProperty("cfg_stage_scope_isolated",true);
+                } else if("simcr-alternatives".equals(ga18Mode)) {
+                    // Two contradictory real decoded SIMCR words IN ONE
+                    // function. Source order is not the MM write-once order.
+                    int writeSites=full.startTransaction(
+                        "GA18 test-only contradictory SIMCR fixture bytes");
+                    boolean writeSitesCommit=false;
+                    try {
+                        byte[] opcodes=java.util.HexFormat.of().parseHex(
+                            "33fc40ca00fffa0033fc484800fffa004e75");
+                        full.getMemory().setBytes(address(full,0x560L),opcodes);
+                        writeSitesCommit=true;
+                    } finally { full.endTransaction(writeSites,writeSitesCommit); }
+                    defineFixtureFunction(full,0x560L,18,
+                        "synthetic_simcr_two_alternatives");
+                    long afterSetup=full.getModificationNumber();
+                    GhidraHardwareFlowService.Report realCfg=
+                        new GhidraHardwareFlowService().analyze(
+                            full,TaskMonitor.DUMMY,true);
+                    check(realCfg.rawCfgMmioSites.stream().anyMatch(s->
+                            s.pc()==0x560L && "SIMCR".equals(s.register()) &&
+                            s.widthBits()==16 &&
+                            Integer.valueOf(0x40ca).equals(s.literal())),
+                        "Real CFG missed first competing SIMCR word");
+                    check(realCfg.rawCfgMmioSites.stream().anyMatch(s->
+                            s.pc()==0x568L && "SIMCR".equals(s.register()) &&
+                            s.widthBits()==16 &&
+                            Integer.valueOf(0x4848).equals(s.literal())),
+                        "Real CFG missed second competing SIMCR word");
+                    var mc=new HardwareInventoryService().scan(
+                        full,true,TaskMonitor.DUMMY);
+                    check(mc.markdown.contains("MULTIPLE_LITERAL_ALTERNATIVES") &&
+                          mc.markdown.contains("0x40CA, 0x4848") &&
+                          mc.markdown.contains("SIMCR/MM write-once caveat") &&
+                          mc.markdown.contains("not the first executed write"),
+                        "Competing source words were falsely reduced to MM latch");
+                    check(mc.overviewMarkdown.contains("static evidence") &&
+                          mc.markdown.contains("latched hardware value"),
+                        "Source alternatives incorrectly imply hardware execution");
+                    check(full.getModificationNumber()==afterSetup,
+                        "SIMCR alternatives analysis modified real Program");
+                    result.addProperty("simcr_real_two_literals_detected",true);
+                    result.addProperty("simcr_same_function_alternatives",true);
+                    result.addProperty("simcr_write_once_runtime_unknown",true);
+                    result.addProperty("simcr_alternatives_read_only",true);
+                    Files.writeString(out.resolve("ga18-simcr-alternatives.md"),
+                                      mc.markdown);
+                } else if("csbar-width".equals(ga18Mode)) {
+                    // Control: an otherwise complete real 16-bit CSBAR
+                    // literal is only a manual candidate. A real 8-bit
+                    // write to that same register must poison the proposal.
+                    defineFixtureFunction(full,0x520L,10,
+                        "synthetic_csbar_width_positive_control");
+                    var positive=new HardwareInventoryService().scan(
+                        full,true,TaskMonitor.DUMMY);
+                    check(positive.csbarReview.candidates().stream().anyMatch(c->
+                            "CSBAR0".equals(c.register()) && c.word()==0x387c),
+                        "Real positive control missing full-word CSBAR");
+                    int widthTx=full.startTransaction(
+                        "GA18 test-only byte-width CSBAR fixture");
+                    boolean widthCommit=false;
+                    try {
+                        full.getMemory().setBytes(address(full,0x580L),
+                            java.util.HexFormat.of().parseHex(
+                                "13fc00ff00fffa4c4e75"));
+                        widthCommit=true;
+                    } finally {full.endTransaction(widthTx,widthCommit);}
+                    defineFixtureFunction(full,0x580L,10,
+                        "synthetic_csbar_byte_partial_write");
+                    long beforeWidthScan=full.getModificationNumber();
+                    GhidraHardwareFlowService.Report cfg=
+                        new GhidraHardwareFlowService().analyze(
+                            full,TaskMonitor.DUMMY,true);
+                    check(cfg.rawCfgMmioSites.stream().anyMatch(s->
+                            s.pc()==0x580L &&
+                            "CSBAR0".equals(s.register()) &&
+                            s.widthBits()==8),
+                        "Real P-code missing byte-width CSBAR STORE evidence");
+                    var poisoned=new HardwareInventoryService().scan(
+                        full,true,TaskMonitor.DUMMY);
+                    check(poisoned.csbarReview.candidates().isEmpty() &&
+                          poisoned.csbarReview.uncertainSites()>0,
+                        "Partial-width write promoted full CSBAR window");
+                    check(poisoned.csbarReview.summary().contains(
+                            "MM latch and actual chip-select assertion UNKNOWN"),
+                        "CSBAR width review inferred real active hardware");
+                    check(full.getModificationNumber()==beforeWidthScan,
+                        "Width safety analysis changed disposable Program");
+                    result.addProperty("csbar_real_byte_store_detected",true);
+                    result.addProperty("csbar_partial_width_rejected",true);
+                    result.addProperty("csbar_positive_control_retained",true);
+                    result.addProperty("csbar_width_read_only",true);
+                    Files.writeString(out.resolve("ga18-csbar-width.md"),
+                                      poisoned.markdown);
                 } else if("revision".equals(ga18Mode)) {
                     // A real Ghidra transaction changes DomainObject revision;
                     // Undo/Redo must never reinstate obsolete CFG stage evidence.
