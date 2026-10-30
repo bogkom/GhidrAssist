@@ -72,7 +72,7 @@ public final class HardwareReportOverviewSelfTest {
         for(String malformed:new String[]{
                 selected.replace("## 2. Register write history — static evidence",
                     "## 2. Register write history (reformatted)"),
-                selected+"## 2. Register write history — static evidence\\n\\n"
+                selected+"## 2. Register write history — static evidence\n\n"
         }){
             boolean rejectedAnchor=false;
             try{HardwareReportOverview.withUnifiedSources(malformed,merged);}
