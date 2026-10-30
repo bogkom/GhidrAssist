@@ -77,7 +77,8 @@ public final class Ga11VectorHeadlessMain {
         check(Set.of("none","overview","cache","startup","csbar","revision","simcr-alternatives","csbar-width",
             "csbar-independent","csbar-identical","csbar-unknown-word",
             "simcr-partial","vector-edit-undo","cache-program-isolation",
-            "generic-profile").contains(ga18Mode),
+            "generic-profile","trambar-source","csbar-mm0-reject",
+            "mmio-read-reference","csbar-csor-conditional").contains(ga18Mode),
             "Unknown GA-18 acceptance mode");
         var config=new HeadlessGhidraApplicationConfiguration();
         config.setApplicationLogFile(out.resolve("ghidra.log").toFile());
@@ -568,6 +569,138 @@ public final class Ga11VectorHeadlessMain {
                     result.addProperty("generic_cpu32_kept_address_only",true);
                     result.addProperty("generic_mc68332_csbar_proposals_disabled",true);
                     result.addProperty("generic_model_switch_read_only",true);
+
+                } else if("trambar-source".equals(ga18Mode)) {
+                    // The TPU RAM base is a conditional literal sketch,
+                    // never proof of physical RAM enablement.
+                    int t=full.startTransaction("GA18 synthetic TRAMBAR literal");
+                    try {
+                        full.getMemory().setBytes(address(full,0x5a0L),
+                            java.util.HexFormat.of().parseHex(
+                                "33fcfff000fffb044e75"));
+                    } finally {full.endTransaction(t,true);}
+                    defineFixtureFunction(full,0x5a0L,10,"fixture_trambar_word");
+                    long rev=full.getModificationNumber();
+                    var cfg=new GhidraHardwareFlowService().analyze(
+                        full,TaskMonitor.DUMMY,true);
+                    check(cfg.rawCfgMmioSites.stream().anyMatch(site->
+                            site.pc()==0x5a0L &&
+                            "TRAMBAR".equals(site.register()) &&
+                            site.widthBits()==16 &&
+                            Integer.valueOf(0xfff0).equals(site.literal())),
+                        "Genuine Ghidra CPU32 TRAMBAR word source missing");
+                    check(cfg.markdown.contains("possible MC68332 TPURAM=") &&
+                          cfg.markdown.contains("not active until MCU/reset state verified"),
+                        "Literal TRAMBAR incorrectly promoted to enabled RAM");
+                    var report=new HardwareInventoryService().scan(
+                        full,true,TaskMonitor.DUMMY);
+                    check(report.markdown.contains("TRAMBAR") &&
+                          report.markdown.contains("STATIC POSSIBILITY") &&
+                          full.getModificationNumber()==rev,
+                        "TRAMBAR source incorrectly asserted runtime state or edited Program");
+                    result.addProperty("trambar_real_word_literal_decoded",true);
+                    result.addProperty("trambar_conditional_window_only",true);
+                    result.addProperty("trambar_real_analysis_read_only",true);
+                } else if("csbar-mm0-reject".equals(ga18Mode)) {
+                    // A source address in MM0 may be statically matched but
+                    // must never inherit MM1-specific safe Review candidates.
+                    int t=full.startTransaction("GA18 synthetic MM0 CSBAR");
+                    try {
+                        full.getMemory().setBytes(address(full,0x5a0L),
+                            java.util.HexFormat.of().parseHex(
+                                "33fc387c007ffa4c4e75"));
+                    } finally {full.endTransaction(t,true);}
+                    defineFixtureFunction(full,0x5a0L,10,"fixture_csbar0_mm0");
+                    long rev=full.getModificationNumber();
+                    var cfg=new GhidraHardwareFlowService().analyze(
+                        full,TaskMonitor.DUMMY,true);
+                    check(cfg.rawCfgMmioSites.stream().anyMatch(site->
+                            site.pc()==0x5a0L &&
+                            site.address()==0x7ffa4cL &&
+                            "CSBAR0".equals(site.register()) &&
+                            Integer.valueOf(0x387c).equals(site.literal())),
+                        "Genuine Ghidra CFG lost MM0 CSBAR candidate source");
+                    var report=new HardwareInventoryService().scan(
+                        full,true,TaskMonitor.DUMMY);
+                    check(report.csbarReview.candidates().isEmpty() &&
+                          report.csbarReview.matchedSites()>0 &&
+                          report.markdown.contains("conditional candidate snapshot") &&
+                          full.getModificationNumber()==rev,
+                        "MM0 CSBAR source was used to define MM1 Review memory window");
+                    result.addProperty("csbar_mm0_actual_source_decoded",true);
+                    result.addProperty("csbar_mm0_unsafe_review_rejected",true);
+                    result.addProperty("csbar_mm0_analysis_read_only",true);
+                } else if("mmio-read-reference".equals(ga18Mode)) {
+                    // MOVE.W (CSBAR0),D0 is a read, not a write.
+                    // The positive control at 0x520 remains a single proposal.
+                    defineFixtureFunction(full,0x520L,10,"fixture_csbar0_write_control");
+                    int t=full.startTransaction("GA18 synthetic CSBAR read");
+                    try {
+                        full.getMemory().setBytes(address(full,0x5a0L),
+                            java.util.HexFormat.of().parseHex(
+                                "303900fffa4c4e75"));
+                    } finally {full.endTransaction(t,true);}
+                    defineFixtureFunction(full,0x5a0L,8,"fixture_csbar0_read_only");
+                    check(full.getListing().getInstructionAt(
+                        address(full,0x5a0L)).getMnemonicString()
+                        .equalsIgnoreCase("MOVE.W"),
+                        "Real Ghidra did not disassemble memory read");
+                    long rev=full.getModificationNumber();
+                    var cfg=new GhidraHardwareFlowService().analyze(
+                        full,TaskMonitor.DUMMY,true);
+                    check(cfg.rawCfgMmioSites.stream().noneMatch(site->
+                            site.pc()==0x5a0L && "CSBAR0".equals(site.register())),
+                        "Actual read-only instruction misclassified as CFG STORE");
+                    var report=new HardwareInventoryService().scan(
+                        full,true,TaskMonitor.DUMMY);
+                    check(report.csbarReview.candidates().size()==1 &&
+                          "CSBAR0".equals(
+                              report.csbarReview.candidates().get(0).register()) &&
+                          report.csbarReview.candidates().get(0).word()==0x387c &&
+                          full.getModificationNumber()==rev,
+                        "Read reference poisoned or promoted a CSBAR write");
+                    result.addProperty("mmio_real_read_disassembled",true);
+                    result.addProperty("mmio_read_not_cfg_store",true);
+                    result.addProperty("mmio_read_does_not_change_review",true);
+                    result.addProperty("mmio_read_analysis_read_only",true);
+                } else if("csbar-csor-conditional".equals(ga18Mode)) {
+                    // Two required CS source registers in separate functions
+                    // are not one simultaneous active physical configuration.
+                    defineFixtureFunction(full,0x520L,10,"fixture_csbar0_source");
+                    int t=full.startTransaction("GA18 synthetic CSOR0");
+                    try {
+                        full.getMemory().setBytes(address(full,0x5a0L),
+                            java.util.HexFormat.of().parseHex(
+                                "33fc7c3000fffa4e4e75"));
+                    } finally {full.endTransaction(t,true);}
+                    defineFixtureFunction(full,0x5a0L,10,"fixture_csor0_source");
+                    long rev=full.getModificationNumber();
+                    var cfg=new GhidraHardwareFlowService().analyze(
+                        full,TaskMonitor.DUMMY,true);
+                    check(cfg.rawCfgMmioSites.stream().anyMatch(site->
+                            site.pc()==0x520L &&
+                            "CSBAR0".equals(site.register()) &&
+                            Integer.valueOf(0x387c).equals(site.literal())) &&
+                          cfg.rawCfgMmioSites.stream().anyMatch(site->
+                            site.pc()==0x5a0L &&
+                            "CSOR0".equals(site.register()) &&
+                            Integer.valueOf(0x7c30).equals(site.literal())),
+                        "Actual Ghidra disassembly missed CSBAR0/CSOR0 sources");
+                    var report=new HardwareInventoryService().scan(
+                        full,true,TaskMonitor.DUMMY);
+                    check(report.markdown.contains("CSBAR0") &&
+                          report.markdown.contains("CSOR0") &&
+                          report.markdown.contains("one simultaneous active CS map") &&
+                          report.csbarReview.candidates().stream().anyMatch(c->
+                              "CSBAR0".equals(c.register()) && c.word()==0x387c) &&
+                          report.csbarReview.summary().contains(
+                              "actual chip-select assertion UNKNOWN") &&
+                          full.getModificationNumber()==rev,
+                        "Separate CS source sites were incorrectly combined as active hardware");
+                    result.addProperty("csbar_csor_real_sources_detected",true);
+                    result.addProperty("csbar_csor_not_active_cs_map",true);
+                    result.addProperty("csbar_csor_review_manual_only",true);
+                    result.addProperty("csbar_csor_analysis_read_only",true);
                 } else if("revision".equals(ga18Mode)) {
                     // A real Ghidra transaction changes DomainObject revision;
                     // Undo/Redo must never reinstate obsolete CFG stage evidence.
