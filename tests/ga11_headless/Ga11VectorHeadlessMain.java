@@ -80,7 +80,8 @@ public final class Ga11VectorHeadlessMain {
             "generic-profile","trambar-source","csbar-mm0-reject",
             "mmio-read-reference","csbar-csor-conditional",
             "simcr-mm0-literal","trambar-unknown","csor-alternatives",
-            "branch-simcr","call-barrier","cancel-incomplete").contains(ga18Mode),
+            "branch-simcr","call-barrier","cancel-incomplete",
+            "function-rename","apply-preserve","provenance-csv","movec-vbr").contains(ga18Mode),
             "Unknown GA-18 acceptance mode");
         var config=new HeadlessGhidraApplicationConfiguration();
         config.setApplicationLogFile(out.resolve("ghidra.log").toFile());
@@ -903,6 +904,253 @@ public final class Ga11VectorHeadlessMain {
                     result.addProperty("cancel_clean_retry_computed",true);
                     result.addProperty("cancel_complete_stage_reused",true);
                     result.addProperty("cancel_real_program_unchanged",true);
+
+                } else if("function-rename".equals(ga18Mode)) {
+                    // Two genuine FunctionManager objects, three decoded
+                    // register writes each. Collision must roll back a
+                    // two-item approval batch; a later clean Apply is undoable.
+                    byte[] code=java.util.HexFormat.of().parseHex(
+                        "33fc387c00fffa4c33fc7c3000fffa4e" +
+                        "33fc2f7f00fffa444e75");
+                    int t=full.startTransaction("GA18 B function proposal fixtures");
+                    try {
+                        full.getMemory().setBytes(address(full,0x5a0L),code);
+                        full.getMemory().setBytes(address(full,0x640L),code);
+                    } finally {full.endTransaction(t,true);}
+                    defineFixtureFunction(full,0x5a0L,26,"FUN_000005A0");
+                    defineFixtureFunction(full,0x640L,26,"FUN_00000640");
+                    var fn1=full.getFunctionManager().getFunctionAt(
+                        address(full,0x5a0L));
+                    var fn2=full.getFunctionManager().getFunctionAt(
+                        address(full,0x640L));
+                    check(fn1!=null && fn2!=null,
+                        "Real Ghidra FunctionManager lost naming fixture");
+                    java.util.List<ghidrassist.hardware.HardwareFunctionNamingReview.Observation>
+                        observations=new java.util.ArrayList<>();
+                    for(long entry2:new long[]{0x5a0L,0x640L}) {
+                        var fn=full.getFunctionManager().getFunctionAt(
+                            address(full,entry2));
+                        String[] registers={"CSBAR0","CSOR0","CSPAR0"};
+                        for(int idx=0;idx<3;idx++){
+                            long pc=entry2+8L*idx;
+                            check(full.getListing().getInstructionAt(
+                                address(full,pc))!=null,
+                                "Missing real instruction for function naming receipt");
+                            observations.add(new
+                                ghidrassist.hardware.HardwareFunctionNamingReview
+                                    .Observation(entry2,fn.getName(),pc,
+                                        registers[idx],true));
+                        }
+                    }
+                    var proposals=ghidrassist.hardware.HardwareFunctionNamingReview
+                        .propose(true,observations,List.of());
+                    check(proposals.size()==2 &&
+                          proposals.stream().allMatch(p->
+                            p.status==ghidrassist.hardware.HardwareNamingReview
+                                .Status.REVIEW_REQUIRED),
+                        "Function proposal generator did not approve three real writes");
+                    var first=proposals.get(0);
+                    var second=proposals.get(1);
+                    String firstName=fn1.getName(),secondName=fn2.getName();
+                    int conflict=full.startTransaction(
+                        "GA18 B create genuine user function-name collision");
+                    try {
+                        full.getSymbolTable().createLabel(address(full,0x680L),
+                            second.proposedName,SourceType.USER_DEFINED);
+                    } finally {full.endTransaction(conflict,true);}
+                    check(ghidrassist.hardware.HardwareFunctionRenameService
+                        .preflight(full,second)==
+                        ghidrassist.hardware.HardwareFunctionRenamePolicy.Decision
+                            .NAME_COLLISION,
+                        "Ghidra global name collision not found in preflight");
+                    boolean rolledBack=false;
+                    try {
+                        ghidrassist.hardware.HardwareFunctionRenameService.apply(
+                            full,List.of(first,second));
+                    }catch(IllegalStateException expected) {rolledBack=true;}
+                    check(rolledBack &&
+                          fn1.getName().equals(firstName) &&
+                          fn2.getName().equals(secondName),
+                        "Name collision committed a partial batch rename");
+                    int remove=full.startTransaction(
+                        "GA18 B remove test-only collision");
+                    try {
+                        check(full.getSymbolTable().getPrimarySymbol(
+                            address(full,0x680L)).delete(),
+                            "Failed to remove test-only collision");
+                    } finally {full.endTransaction(remove,true);}
+                    check(ghidrassist.hardware.HardwareFunctionRenameService
+                        .preflight(full,first)==
+                            ghidrassist.hardware.HardwareFunctionRenamePolicy
+                                .Decision.READY &&
+                          ghidrassist.hardware.HardwareFunctionRenameService
+                        .preflight(full,second)==
+                            ghidrassist.hardware.HardwareFunctionRenamePolicy
+                                .Decision.READY,
+                        "Clean real-Ghidra naming preflight was not READY");
+                    var renamed=ghidrassist.hardware.HardwareFunctionRenameService
+                        .apply(full,List.of(first,second));
+                    check(renamed.renamed()==2 &&
+                          fn1.getName().equals(first.proposedName) &&
+                          fn2.getName().equals(second.proposedName),
+                        "Actual Ghidra USER_DEFINED function rename failed");
+                    check(full.canUndo(),"Real Ghidra Undo unavailable after renames");
+                    full.undo();
+                    check(fn1.getName().equals(firstName) &&
+                          fn2.getName().equals(secondName),
+                        "Ghidra native Undo failed to restore both function names");
+                    result.addProperty("rename_real_functions_and_collision",true);
+                    result.addProperty("rename_atomic_rollback",true);
+                    result.addProperty("rename_transactional_two_function_apply",true);
+                    result.addProperty("rename_native_undo_restored",true);
+                } else if("apply-preserve".equals(ga18Mode)) {
+                    // Two disposable MC68332 MM1 blocks: preserve a user
+                    // symbol, existing Word data and real CPU32 code while
+                    // applying ONLY an explicitly approved register row.
+                    var items=ghidrassist.hardware.HardwareApplyPlan
+                        .mc68332Mm1Candidates(0);
+                    var simcrItem=items.stream().filter(p->p.name.equals("SIMCR"))
+                        .findFirst().orElseThrow();
+                    var syncrItem=items.stream().filter(p->p.name.equals("SYNCR"))
+                        .findFirst().orElseThrow();
+                    var qsmcrItem=items.stream().filter(p->p.name.equals("QSMCR"))
+                        .findFirst().orElseThrow();
+                    int tx2=full.startTransaction("GA18 B test-only MM1 mapped memory");
+                    try {
+                        full.getMemory().createInitializedBlock("GA18_USER_SIM",
+                            address(full,0xfffa00L),128,(byte)0,
+                            TaskMonitor.DUMMY,false);
+                        full.getMemory().createInitializedBlock("GA18_USER_QSM",
+                            address(full,0xfffc00L),128,(byte)0,
+                            TaskMonitor.DUMMY,false);
+                        full.getMemory().setBytes(address(full,0xfffc00L),
+                            java.util.HexFormat.of().parseHex("4e75"));
+                        full.getSymbolTable().createLabel(
+                            address(full,0xfffa00L),"USER_SIMCR_KEEP",
+                            SourceType.USER_DEFINED);
+                        full.getListing().createData(address(full,0xfffa04L),
+                            ghidra.program.model.data.WordDataType.dataType);
+                        check(new DisassembleCommand(address(full,0xfffc00L),
+                            null,false).applyTo(full,TaskMonitor.DUMMY),
+                            "Actual CPU32 QSM source code fixture did not disassemble");
+                    } finally {full.endTransaction(tx2,true);}
+                    var wordBefore=full.getListing().getDataAt(
+                        address(full,0xfffa04L)).getDataType().getName();
+                    check(ghidrassist.hardware.HardwareApplyService.preflight(
+                            full,simcrItem,items).state==
+                          ghidrassist.hardware.HardwareApplyService.State.BLOCKED,
+                        "Real user-defined SIMCR label was not guarded");
+                    check(ghidrassist.hardware.HardwareApplyService.preflight(
+                            full,syncrItem,items).state==
+                          ghidrassist.hardware.HardwareApplyService.State.UPGRADE,
+                        "Existing typed Word should allow label-only upgrade");
+                    check(full.getListing().getInstructionAt(
+                        address(full,0xfffc00L))!=null,
+                        "Real CPU32 QSM instruction missing");
+                    var outcome=ghidrassist.hardware.HardwareApplyService.apply(
+                        full,List.of(simcrItem,syncrItem,qsmcrItem));
+                    check(outcome.changed==1 &&
+                          "USER_SIMCR_KEEP".equals(full.getSymbolTable()
+                            .getPrimarySymbol(address(full,0xfffa00L)).getName()) &&
+                          "SYNCR".equals(full.getSymbolTable()
+                            .getPrimarySymbol(address(full,0xfffa04L)).getName()) &&
+                          wordBefore.equals(full.getListing().getDataAt(
+                            address(full,0xfffa04L)).getDataType().getName()) &&
+                          full.getListing().getInstructionAt(
+                            address(full,0xfffc00L))!=null,
+                        "Unsafe Apply changed existing label, type, or code");
+                    full.undo();
+                    check(full.getSymbolTable().getPrimarySymbol(
+                              address(full,0xfffa04L))==null &&
+                          "USER_SIMCR_KEEP".equals(full.getSymbolTable()
+                            .getPrimarySymbol(address(full,0xfffa00L)).getName()) &&
+                          wordBefore.equals(full.getListing().getDataAt(
+                            address(full,0xfffa04L)).getDataType().getName()),
+                        "Ghidra Undo failed to retain pre-existing user content");
+                    result.addProperty("apply_real_label_protected",true);
+                    result.addProperty("apply_real_typed_data_preserved",true);
+                    result.addProperty("apply_existing_code_protected",true);
+                    result.addProperty("apply_native_undo_restored",true);
+                } else if("provenance-csv".equals(ga18Mode)) {
+                    // SourceType is a real Ghidra symbol classification,
+                    // never evidence of a human, model or importer identity.
+                    int tx2=full.startTransaction(
+                        "GA18 B test-only SourceType labels");
+                    try {
+                        full.getSymbolTable().createLabel(
+                            address(full,0x680L),"USER_ORIGIN_UNKNOWN",
+                            SourceType.USER_DEFINED);
+                        full.getSymbolTable().createLabel(
+                            address(full,0x682L),"ANALYSIS_ORIGIN_UNKNOWN",
+                            SourceType.ANALYSIS);
+                    } finally {full.endTransaction(tx2,true);}
+                    var userSym=full.getSymbolTable().getPrimarySymbol(
+                        address(full,0x680L));
+                    var analyzerSym=full.getSymbolTable().getPrimarySymbol(
+                        address(full,0x682L));
+                    check(userSym!=null && analyzerSym!=null &&
+                          userSym.getSource()==SourceType.USER_DEFINED &&
+                          analyzerSym.getSource()==SourceType.ANALYSIS,
+                        "Actual Ghidra source classifications not observed");
+                    long rev=full.getModificationNumber();
+                    var rows=List.of(
+                        new ghidrassist.hardware.HardwareChangeProvenance
+                            .ReviewRow("REGISTER","0x00000680","=HYPERLINK(1)",
+                                userSym.getName(),userSym.getSource().name(),
+                                "BLOCKED",false," \u200b=2+2"),
+                        new ghidrassist.hardware.HardwareChangeProvenance
+                            .ReviewRow("REGISTER","0x00000682","SAFE_CANDIDATE",
+                                analyzerSym.getName(),
+                                analyzerSym.getSource().name(),
+                                "MANUAL_REVIEW",false,"SOURCE UNKNOWN"));
+                    String csv=ghidrassist.hardware.HardwareChangeProvenance
+                        .csv(rows);
+                    check(csv.contains("USER_DEFINED") &&
+                          csv.contains("ANALYSIS") &&
+                          csv.contains("author UNKNOWN") &&
+                          csv.contains("analyzer/tool identity UNKNOWN") &&
+                          csv.contains("'=HYPERLINK(1)") &&
+                          csv.contains("LOCAL_READ_ONLY_CSV")==false &&
+                          full.getModificationNumber()==rev,
+                        "CSV lost genuine SourceType or failed formula sanitization");
+                    result.addProperty("provenance_actual_source_types",true);
+                    result.addProperty("provenance_authorship_not_invented",true);
+                    result.addProperty("provenance_csv_formula_escaped",true);
+                    result.addProperty("provenance_csv_read_only",true);
+                    Files.writeString(out.resolve("ga18-provenance-source.csv"),csv);
+                } else if("movec-vbr".equals(ga18Mode)) {
+                    // MOVE.L #0x400,D0; MOVEC D0,VBR; RTS. Static Ghidra
+                    // decode does not prove any MCU-executed VBR write.
+                    int t=full.startTransaction("GA18 B test-only MOVEC VBR");
+                    try {
+                        full.getMemory().setBytes(address(full,0x5a0L),
+                            java.util.HexFormat.of().parseHex(
+                                "203c000004004e7b08014e75"));
+                    } finally {full.endTransaction(t,true);}
+                    defineFixtureFunction(full,0x5a0L,12,"fixture_movec_vbr");
+                    var movec=full.getListing().getInstructionAt(
+                        address(full,0x5a6L));
+                    check(movec!=null &&
+                          movec.getMnemonicString().toUpperCase(Locale.ROOT)
+                            .startsWith("MOVEC") &&
+                          movec.toString().toUpperCase(Locale.ROOT)
+                            .contains("VBR"),
+                        "Real Ghidra CPU32 failed to decode MOVEC D0,VBR");
+                    long rev=full.getModificationNumber();
+                    var cfg=new GhidraHardwareFlowService().analyze(
+                        full,TaskMonitor.DUMMY,true);
+                    check(cfg.markdown.contains("VBR") &&
+                          cfg.markdown.contains("runtime VBR UNKNOWN"),
+                        "MOVEC source was presented as confirmed active VBR");
+                    var vector=GhidraInterruptVectorService.analyze(
+                        full,TaskMonitor.DUMMY);
+                    expectUncertain(vector);
+                    check(full.getModificationNumber()==rev,
+                        "Static MOVEC/VBR scan edited Ghidra Program");
+                    result.addProperty("movec_actual_cpu32_decoded",true);
+                    result.addProperty("movec_source_vbr_recognized",true);
+                    result.addProperty("movec_runtime_vbr_unknown",true);
+                    result.addProperty("movec_vector_scan_read_only",true);
                 } else if("revision".equals(ga18Mode)) {
                     // A real Ghidra transaction changes DomainObject revision;
                     // Undo/Redo must never reinstate obsolete CFG stage evidence.
