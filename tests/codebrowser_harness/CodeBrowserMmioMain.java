@@ -322,6 +322,49 @@ public final class CodeBrowserMmioMain {
             require(first.getListing().getInstructionAt(site).toString().equals(before),
                 "Hardware Analyze mutated synthetic Listing");
             result.addProperty("read_only_analyze",true);
+            // Actual Ghidra transaction/Undo on a disposable synthetic
+            // Program ONLY. Never call Apply on the owner's firmware/project.
+            var region=ghidrassist.hardware.HardwareApplyPlan
+                .mc68332Mm1Candidates(0).stream()
+                .filter(item->item.kind==
+                    ghidrassist.hardware.HardwareApplyPlan.Kind.MEMORY &&
+                    item.name.equals("SIM_REGISTERS_MM1"))
+                .findFirst().orElseThrow();
+            Address regionStart=first.getAddressFactory()
+                .getDefaultAddressSpace().getAddress(region.address);
+            require(!first.getMemory().contains(regionStart),
+                "Synthetic fixture unexpectedly has SIM MMIO region mapped");
+            var preflight=ghidrassist.hardware.HardwareApplyService.preflight(
+                first,region,List.of(region));
+            require(preflight.state==ghidrassist.hardware.HardwareApplyService.State.READY &&
+                preflight.selectedByDefault,
+                "Safe synthetic SIM module failed read-only preflight");
+            var apply=ghidrassist.hardware.HardwareApplyService.apply(
+                first,List.of(region));
+            require(apply.changed==1 && first.getMemory().contains(regionStart),
+                "Approved synthetic memory region was not committed");
+            require(first.canUndo(),"Ghidra did not offer transaction Undo");
+            first.undo();
+            require(!first.getMemory().contains(regionStart),
+                "Ghidra Undo failed to remove disposable SIM module region");
+            require(first.getListing().getInstructionAt(site)!=null &&
+                first.getListing().getInstructionAt(site).toString().equals(before),
+                "Synthetic Listing unexpectedly changed across Apply/Undo");
+            result.addProperty("synthetic_apply_undo_verified",true);
+            // A candidate chip-select window must not be auto-selected:
+            // its real decode and external wiring are unproven.
+            var csCandidates=ghidrassist.hardware.HardwareApplyPlan
+                .chipSelectWindowCandidates(List.of(
+                    new ghidrassist.hardware.HardwareApplyPlan.CsbarEvidence(
+                        "CSBAR0",0x0000,"SYNTHETIC_ONLY")));
+            require(!csCandidates.isEmpty(),
+                "Synthetic CSBAR candidate was not decoded");
+            var csStatus=ghidrassist.hardware.HardwareApplyService.preflight(
+                first,csCandidates.get(0),csCandidates);
+            require(csStatus.state==ghidrassist.hardware.HardwareApplyService.State.MANUAL_REVIEW &&
+                !csStatus.selectedByDefault,
+                "Unverified CS window must require explicit operator review");
+            result.addProperty("cs_review_never_auto_selected",true);
             // This is serialized tool *configuration*, not user preference persistence
             // across a real application restart.
             ToolTemplate saved=tool[0].saveToolToToolTemplate();
