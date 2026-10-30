@@ -79,7 +79,8 @@ public final class Ga11VectorHeadlessMain {
             "simcr-partial","vector-edit-undo","cache-program-isolation",
             "generic-profile","trambar-source","csbar-mm0-reject",
             "mmio-read-reference","csbar-csor-conditional",
-            "simcr-mm0-literal","trambar-unknown","csor-alternatives").contains(ga18Mode),
+            "simcr-mm0-literal","trambar-unknown","csor-alternatives",
+            "branch-simcr","call-barrier","cancel-incomplete").contains(ga18Mode),
             "Unknown GA-18 acceptance mode");
         var config=new HeadlessGhidraApplicationConfiguration();
         config.setApplicationLogFile(out.resolve("ghidra.log").toFile());
@@ -789,6 +790,119 @@ public final class Ga11VectorHeadlessMain {
                     result.addProperty("csor_conflicting_alternatives_preserved",true);
                     result.addProperty("csor_no_active_map_inferred",true);
                     result.addProperty("csor_alternative_scan_read_only",true);
+
+                } else if("branch-simcr".equals(ga18Mode)) {
+                    // BNE skips the first full word, BRA skips the second.
+                    // Both are possible first source sites, never a hardware
+                    // execution trace or the first write-once MM latch.
+                    int t=full.startTransaction("GA18 A synthetic CFG branch");
+                    try {
+                        full.getMemory().setBytes(address(full,0x5a0L),
+                            java.util.HexFormat.of().parseHex(
+                                "660a33fc40ca00fffa00600833fc484800fffa004e75"));
+                    } finally {full.endTransaction(t,true);}
+                    defineFixtureFunction(full,0x5a0L,22,
+                        "fixture_branch_simcr_alternatives");
+                    long rev=full.getModificationNumber();
+                    var cfg=new GhidraHardwareFlowService().analyze(
+                        full,TaskMonitor.DUMMY,true);
+                    check(cfg.rawCfgMmioSites.stream().anyMatch(site->
+                            site.pc()==0x5a2L && "SIMCR".equals(site.register()) &&
+                            Integer.valueOf(0x40ca).equals(site.literal())) &&
+                          cfg.rawCfgMmioSites.stream().anyMatch(site->
+                            site.pc()==0x5acL && "SIMCR".equals(site.register()) &&
+                            Integer.valueOf(0x4848).equals(site.literal())),
+                        "Real conditional CPU32 SIMCR branches lost literal evidence");
+                    check(cfg.markdown.contains("Possible first SIMCR source sites") &&
+                          cfg.markdown.contains("0x000005A2") &&
+                          cfg.markdown.contains("0x000005AC") &&
+                          cfg.markdown.contains("MM write-once"),
+                        "Alternative branch sites falsely reduced to an MM latch");
+                    check(full.getModificationNumber()==rev,
+                        "CFG alternatives analyzer modified Ghidra Program");
+                    result.addProperty("branch_real_cfg_two_sources",true);
+                    result.addProperty("branch_local_first_alternatives",true);
+                    result.addProperty("branch_runtime_mm_unknown",true);
+                    result.addProperty("branch_read_only",true);
+                } else if("call-barrier".equals(ga18Mode)) {
+                    // A0 is initially derived from SIMCR; the JSR may clobber
+                    // it. The subsequent indirect write must not re-use
+                    // a pre-call constant or turn it into a known MM word.
+                    int t=full.startTransaction("GA18 A call barrier fixture");
+                    try {
+                        full.getMemory().setBytes(address(full,0x5a0L),
+                            java.util.HexFormat.of().parseHex(
+                                "207c00fffa004eb90000040030bc40ca4e75"));
+                    } finally {full.endTransaction(t,true);}
+                    defineFixtureFunction(full,0x5a0L,18,"fixture_simcr_call_barrier");
+                    long rev=full.getModificationNumber();
+                    var cfg=new GhidraHardwareFlowService().analyze(
+                        full,TaskMonitor.DUMMY,true);
+                    check(cfg.rawCfgMmioSites.stream().anyMatch(site->
+                            site.pc()==0x5acL &&
+                            "UNRESOLVED_ALIAS".equals(site.register()) &&
+                            site.indirect()),
+                        "Unknown call failed to invalidate A0 MMIO pointer");
+                    check(cfg.rawCfgMmioSites.stream().noneMatch(site->
+                            site.pc()==0x5acL && "SIMCR".equals(site.register()) &&
+                            Integer.valueOf(0x40ca).equals(site.literal())),
+                        "Indirect SIMCR constant was invented across CALL");
+                    var inventory=new HardwareInventoryService().scan(
+                        full,true,TaskMonitor.DUMMY);
+                    check(inventory.csbarReview.candidates().isEmpty() &&
+                          full.getModificationNumber()==rev,
+                        "Unresolved call alias promoted unsafe CSBAR Review");
+                    result.addProperty("call_real_jsr_barrier",true);
+                    result.addProperty("call_clobbered_pointer_not_reused",true);
+                    result.addProperty("call_alias_blocks_review",true);
+                    result.addProperty("call_read_only",true);
+                } else if("cancel-incomplete".equals(ga18Mode)) {
+                    // Deterministic cancellation *during* a real Ghidra
+                    // traversal (not only before entry). No partial report
+                    // may be published as completed CFG/RAG evidence.
+                    HardwareFlowStageCache.clear(full);
+                    ghidrassist.hardware.HardwareEvidenceCache.clear(full);
+                    long rev=full.getModificationNumber();
+                    HardwareAnalysisRevision started=HardwareAnalysisRevision.capture(
+                        full,rev,full.getLanguageID().toString(),
+                        full.getExecutableSHA256(),true);
+                    java.util.concurrent.atomic.AtomicInteger checks=
+                        new java.util.concurrent.atomic.AtomicInteger();
+                    TaskMonitor cancelling=(TaskMonitor)java.lang.reflect.Proxy
+                        .newProxyInstance(TaskMonitor.class.getClassLoader(),
+                            new Class[]{TaskMonitor.class},(proxy,method,args2)-> {
+                            if(method.getName().equals("checkCancelled")) {
+                                if(checks.incrementAndGet()>35)
+                                    throw new CancelledException();
+                                return null;
+                            }
+                            return method.invoke(TaskMonitor.DUMMY,args2);
+                        });
+                    boolean cancelled=false;
+                    try {
+                        new HardwareInventoryService().scan(
+                            full,true,cancelling,started);
+                    } catch(CancelledException expected) {cancelled=true;}
+                    check(cancelled && checks.get()>35,
+                        "Real analysis did not cancel during traversal");
+                    check(!ghidrassist.hardware.HardwareEvidenceCache.hasEvidence(full),
+                        "Cancelled analysis published incomplete RAG evidence");
+                    check(full.getModificationNumber()==rev,
+                        "Cancelled read-only analysis modified Program");
+                    var first=HardwareFlowStageCache.loadOrAnalyze(
+                        full,started,TaskMonitor.DUMMY);
+                    var retry=HardwareFlowStageCache.loadOrAnalyze(
+                        full,started,TaskMonitor.DUMMY);
+                    check(!first.reused() && retry.reused() &&
+                          first.report()==retry.report(),
+                        "Cancelled stage leaked into a supposedly complete cache");
+                    check(!ghidrassist.hardware.HardwareEvidenceCache.hasEvidence(full),
+                        "CFG checkpoint auto-published incomplete AI context");
+                    result.addProperty("cancel_real_scan_mid_traversal",true);
+                    result.addProperty("cancel_incomplete_rag_not_published",true);
+                    result.addProperty("cancel_clean_retry_computed",true);
+                    result.addProperty("cancel_complete_stage_reused",true);
+                    result.addProperty("cancel_real_program_unchanged",true);
                 } else if("revision".equals(ga18Mode)) {
                     // A real Ghidra transaction changes DomainObject revision;
                     // Undo/Redo must never reinstate obsolete CFG stage evidence.
