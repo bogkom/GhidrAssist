@@ -83,8 +83,8 @@ def main():
     parser.add_argument("--extension-sha256",required=True)
     parser.add_argument("--output",required=True)
     parser.add_argument("--strict-entry",action="store_true")
-    parser.add_argument("--verify-hardware",action="store_true",
-                        help="Also exercise real Ghidra inventory and GA-12 revision cache")
+    parser.add_argument("--ga18-mode",choices=("none","overview","cache"),
+                        default="none",help="Run additional real Ghidra GA-07 or GA-12 integration checks")
     args=parser.parse_args()
     out=Path(args.output).absolute()
     if out.is_symlink() or (out.exists() and
@@ -144,7 +144,7 @@ def main():
                   "Ga11VectorHeadlessMain",
                   str(ghidra),str(work/"project"),str(out),
                   str(args.strict_entry).lower(),
-                  "hardware" if args.verify_hardware else "baseline"],
+                  args.ga18_mode],
                  work,env,out/"integration.log",
                  timeout=240)
             proof=json.loads((out/"result.json").read_text())
@@ -158,13 +158,18 @@ def main():
                     raise RuntimeError("Missing proof: "+key)
             if proof.get("truncated_image_unreadable")!=244:
                 raise RuntimeError("Missing truncated mapping proof")
-            if args.verify_hardware:
-                extra=("synthetic_simcr_detected","overview_three_parts_verified",
-                       "cpu32_scope_conservative","cfg_stage_cache_reused",
-                       "cfg_stage_clear_invalidated","read_only_analysis_verified")
-                for key in extra:
+            if args.ga18_mode != "none":
+                required_extra=(
+                    ("synthetic_simcr_detected","overview_three_parts_verified",
+                     "cpu32_scope_conservative","read_only_analysis_verified")
+                    if args.ga18_mode=="overview" else
+                    ("cfg_stage_first_computed","cfg_stage_cache_reused",
+                     "cfg_stage_clear_invalidated","cfg_stage_scope_isolated",
+                     "read_only_analysis_verified"))
+                for key in required_extra:
                     if proof.get(key) is not True:
-                        raise RuntimeError("Missing GA-18 headless integration proof: "+key)
+                        raise RuntimeError("Missing GA-18 real Ghidra proof: "+key)
+                summary["ga18_mode"]=args.ga18_mode
                 summary["ga18_hardware_verified"]=True
             summary.update({"status":"PASSED_SYNTHETIC_REAL_GHIDRA_HEADLESS",
                             "ghidra_version":"12.1.4",
