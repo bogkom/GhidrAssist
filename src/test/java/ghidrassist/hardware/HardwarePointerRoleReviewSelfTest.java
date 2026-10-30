@@ -37,6 +37,49 @@ public final class HardwarePointerRoleReviewSelfTest {
         boolean immutable=false;
         try{hints.clear();}catch(UnsupportedOperationException ex){immutable=true;}
         check(immutable,"result immutable");
+        var crossScope=HardwarePointerRoleReview.propose(true,List.of(
+            new HardwarePointerRoleReview.Site(0x2bc0,"fun_reset",0x2bca,
+                "A0","SIM",1,"SIMCR",false),
+            new HardwarePointerRoleReview.Site(0x2bc0,"fun_reset",0x2bd0,
+                "A0","SIM",1,"CSBAR0",false),
+            new HardwarePointerRoleReview.Site(0x2bc0,"fun_reset",0x2bd2,
+                "A0","QSM",1,"QSMCR",false),
+            new HardwarePointerRoleReview.Site(0x2bc0,"fun_reset",0x2bd4,
+                "A0","QSM",1,"SPCR0",false)),false);
+        check(crossScope.size()==2 &&
+            crossScope.stream().allMatch(p->
+                p.status()==HardwarePointerRoleReview.Status.SCOPE_CONFLICT &&
+                p.hint().isBlank()),
+            "same A0 reused for SIM and QSM cannot imply stable register role");
+        var crossMm=HardwarePointerRoleReview.propose(true,List.of(
+            new HardwarePointerRoleReview.Site(0x2bc0,"fun_reset",0x2bca,
+                "A0","SIM",0,"SIMCR",false),
+            new HardwarePointerRoleReview.Site(0x2bc0,"fun_reset",0x2bd0,
+                "A0","SIM",0,"CSBAR0",false),
+            new HardwarePointerRoleReview.Site(0x2bc0,"fun_reset",0x2bd2,
+                "A0","SIM",1,"SIMCR",false),
+            new HardwarePointerRoleReview.Site(0x2bc0,"fun_reset",0x2bd4,
+                "A0","SIM",1,"CSBAR0",false)),false);
+        check(crossMm.size()==2 &&
+            crossMm.stream().allMatch(p->
+                p.status()==HardwarePointerRoleReview.Status.SCOPE_CONFLICT),
+            "MM0 and MM1 reuse does not produce confident role hints");
+        var differentPointer=HardwarePointerRoleReview.propose(true,List.of(
+            new HardwarePointerRoleReview.Site(0x2bc0,"fun_reset",0x2bca,
+                "A0","SIM",1,"SIMCR",false),
+            new HardwarePointerRoleReview.Site(0x2bc0,"fun_reset",0x2bd0,
+                "A0","SIM",1,"CSBAR0",false),
+            new HardwarePointerRoleReview.Site(0x2bc0,"fun_reset",0x2bd2,
+                "A1","QSM",1,"QSMCR",false),
+            new HardwarePointerRoleReview.Site(0x2bc0,"fun_reset",0x2bd4,
+                "A1","QSM",1,"SPCR0",false)),false);
+        check(differentPointer.size()==2 &&
+            differentPointer.stream().allMatch(p->
+                p.status()==HardwarePointerRoleReview.Status.REVIEW_ONLY),
+            "different registers A0 and A1 have independent role evidence");
+        check(HardwarePointerRoleReview.csvRows(crossScope)
+            .contains("SCOPE_CONFLICT; NEVER_AUTO_APPLY"),
+            "scope conflict remains CSV review only");
         System.out.println("HardwarePointerRoleReviewSelfTest OK");
     }
 }
