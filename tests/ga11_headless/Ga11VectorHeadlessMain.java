@@ -50,13 +50,30 @@ public final class Ga11VectorHeadlessMain {
             "mapped target incorrectly asserted as runnable ISR");
         check(!report.contains("active ISR verified"),"false ISR assertion");
     }
+    /** Test-only function definition; every transaction is on a disposable fixture. */
+    static void defineFixtureFunction(Program program,long pc,int byteLength,String name)
+            throws Exception {
+        Address start=address(program,pc);
+        int tx=program.startTransaction("GA18 test-only decoded MMIO source "+name);
+        boolean commit=false;
+        try {
+            check(new DisassembleCommand(start,null,false)
+                .applyTo(program,TaskMonitor.DUMMY),
+                "Real Ghidra CPU32 disassembler rejected "+name);
+            Function defined=program.getFunctionManager().createFunction(name,start,
+                new AddressSet(start,start.add(byteLength-1)),SourceType.ANALYSIS);
+            check(defined!=null && defined.getEntryPoint().equals(start),
+                "Real Ghidra FunctionManager rejected "+name);
+            commit=true;
+        } finally { program.endTransaction(tx,commit); }
+    }
     public static void main(String[] args)throws Exception {
         Path ghidra=Path.of(args[0]).toRealPath();
         Path projectDir=Path.of(args[1]).toRealPath();
         Path out=Path.of(args[2]).toRealPath();
         boolean strictEntry=Boolean.parseBoolean(args[3]);
         String ga18Mode=args.length>4?args[4]:"none";
-        check(Set.of("none","overview","cache").contains(ga18Mode),
+        check(Set.of("none","overview","cache","startup","csbar").contains(ga18Mode),
             "Unknown GA-18 acceptance mode");
         var config=new HeadlessGhidraApplicationConfiguration();
         config.setApplicationLogFile(out.resolve("ghidra.log").toFile());
@@ -196,7 +213,7 @@ public final class Ga11VectorHeadlessMain {
                     Files.writeString(out.resolve("ga18-overview.md"),overview);
                     Files.writeString(out.resolve("ga18-overview-cpu32.md"),
                                       generic.overviewMarkdown);
-                } else {
+                } else if("cache".equals(ga18Mode)){
                     HardwareAnalysisRevision revision=
                         HardwareAnalysisRevision.capture(
                             full,hwBefore,full.getLanguageID().toString(),
@@ -229,6 +246,75 @@ public final class Ga11VectorHeadlessMain {
                     result.addProperty("cfg_stage_cache_reused",true);
                     result.addProperty("cfg_stage_clear_invalidated",true);
                     result.addProperty("cfg_stage_scope_isolated",true);
+                } else if("startup".equals(ga18Mode)) {
+                    // These sites are decoded by Ghidra, not model-only nodes.
+                    // The first SITE in a FUNCTION is not first hardware write.
+                    GhidraHardwareFlowService.Report cfg=
+                        new GhidraHardwareFlowService().analyze(
+                            full,TaskMonitor.DUMMY,true);
+                    check(cfg.rawCfgMmioSites.stream().anyMatch(s->
+                            "SIMCR".equals(s.register()) &&
+                            s.pc()==0x500L && s.widthBits()==16 &&
+                            Integer.valueOf(0x40ca).equals(s.literal())),
+                        "CFG/P-code missed real decoded 16-bit SIMCR literal");
+                    check(cfg.markdown.contains(
+                            "Possible first SIMCR source sites within individual functions") &&
+                          cfg.markdown.contains("PC 0x00000500 -> word 0x40CA") &&
+                          cfg.markdown.contains("NOT") &&
+                          cfg.markdown.contains("MM write-once"),
+                        "Potential local-first path incorrectly became runtime order");
+                    HardwareInventoryService.Report inventory=
+                        new HardwareInventoryService().scan(
+                            full,true,TaskMonitor.DUMMY);
+                    check(inventory.overviewMarkdown.contains(
+                            "Source-reconciled Listing + CFG/P-code candidate sites:") &&
+                          inventory.markdown.contains(
+                            "Unified startup write evidence") &&
+                          inventory.csbarReview.candidates().isEmpty(),
+                        "Real inventory did not reconcile CFG/Listing conservatively");
+                    check(full.getModificationNumber()==hwBefore,
+                        "Read-only startup scan changed real Ghidra Program");
+                    result.addProperty("simcr_real_listing_pcode_verified",true);
+                    result.addProperty("simcr_local_first_only_verified",true);
+                    result.addProperty("listing_cfg_reconciliation_verified",true);
+                    Files.writeString(out.resolve("ga18-startup.md"),cfg.markdown);
+                } else if("csbar".equals(ga18Mode)) {
+                    // Three independent, real disassembled CPU32 functions.
+                    // No static source address order establishes CS activation.
+                    defineFixtureFunction(full,0x520L,10,"synthetic_csbar0_a");
+                    long beforeOne=full.getModificationNumber();
+                    HardwareInventoryService service=new HardwareInventoryService();
+                    var one=service.scan(full,true,TaskMonitor.DUMMY);
+                    check(one.csbarReview.candidates().stream().anyMatch(c->
+                            "CSBAR0".equals(c.register()) && c.word()==0x387c),
+                        "One complete real CSBAR source should be manual proposal only");
+                    check(full.getModificationNumber()==beforeOne,
+                        "CSBAR candidate scan must remain read-only");
+                    defineFixtureFunction(full,0x530L,10,"synthetic_csbar0_conflict");
+                    long beforeTwo=full.getModificationNumber();
+                    var conflict=service.scan(full,true,TaskMonitor.DUMMY);
+                    check(conflict.csbarReview.candidates().stream().noneMatch(c->
+                            "CSBAR0".equals(c.register())),
+                        "Conflicting real CSBAR literal must block its window proposal");
+                    check(full.getModificationNumber()==beforeTwo,
+                        "CSBAR conflict scan modified the Program");
+                    defineFixtureFunction(full,0x540L,4,"synthetic_unknown_address_store");
+                    long beforeAlias=full.getModificationNumber();
+                    var alias=service.scan(full,true,TaskMonitor.DUMMY);
+                    check(alias.csbarReview.unresolvedAliasWrites()>0 &&
+                          alias.csbarReview.candidates().isEmpty(),
+                        "Unknown real P-code STORE may alias ANY CSBAR");
+                    check(alias.csbarReview.summary().contains(
+                            "MM latch and actual chip-select assertion UNKNOWN") &&
+                          full.getModificationNumber()==beforeAlias,
+                        "Source-only CSBAR Review must not infer active hardware or edit Ghidra");
+                    result.addProperty("csbar_real_literal_proposal_manual_only",true);
+                    result.addProperty("csbar_real_conflicting_literals_blocked",true);
+                    result.addProperty("unknown_store_all_cs_windows_blocked",true);
+                    Files.writeString(out.resolve("ga18-csbar-conflict.md"),
+                                      conflict.markdown);
+                    Files.writeString(out.resolve("ga18-csbar-alias.md"),
+                                      alias.markdown);
                 }
                 result.addProperty("read_only_analysis_verified",true);
                 result.addProperty("ga18_mode",ga18Mode);
