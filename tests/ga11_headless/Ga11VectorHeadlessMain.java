@@ -74,7 +74,10 @@ public final class Ga11VectorHeadlessMain {
         Path out=Path.of(args[2]).toRealPath();
         boolean strictEntry=Boolean.parseBoolean(args[3]);
         String ga18Mode=args.length>4?args[4]:"none";
-        check(Set.of("none","overview","cache","startup","csbar","revision","simcr-alternatives","csbar-width").contains(ga18Mode),
+        check(Set.of("none","overview","cache","startup","csbar","revision","simcr-alternatives","csbar-width",
+            "csbar-independent","csbar-identical","csbar-unknown-word",
+            "simcr-partial","vector-edit-undo","cache-program-isolation",
+            "generic-profile").contains(ga18Mode),
             "Unknown GA-18 acceptance mode");
         var config=new HeadlessGhidraApplicationConfiguration();
         config.setApplicationLogFile(out.resolve("ghidra.log").toFile());
@@ -340,6 +343,231 @@ public final class Ga11VectorHeadlessMain {
                     result.addProperty("csbar_width_read_only",true);
                     Files.writeString(out.resolve("ga18-csbar-width.md"),
                                       poisoned.markdown);
+
+                } else if("csbar-independent".equals(ga18Mode)) {
+                    // Two different CSBAR index addresses must remain two
+                    // *independent manual proposals*, never one CS map.
+                    defineFixtureFunction(full,0x520L,10,"fixture_csbar0");
+                    int t=full.startTransaction("GA18 fixture separate CSBAR1");
+                    try {
+                        full.getMemory().setBytes(address(full,0x5a0L),
+                            java.util.HexFormat.of().parseHex(
+                                "33fc387e00fffa504e75"));
+                    } finally {full.endTransaction(t,true);}
+                    defineFixtureFunction(full,0x5a0L,10,"fixture_csbar1");
+                    long rev=full.getModificationNumber();
+                    var report=new HardwareInventoryService().scan(
+                        full,true,TaskMonitor.DUMMY);
+                    check(report.csbarReview.candidates().size()==2 &&
+                          report.csbarReview.candidates().stream().anyMatch(c->
+                            "CSBAR0".equals(c.register()) && c.word()==0x387c) &&
+                          report.csbarReview.candidates().stream().anyMatch(c->
+                            "CSBAR1".equals(c.register()) && c.word()==0x387e),
+                        "Independent register candidates were dropped/combined");
+                    check(report.csbarReview.summary().contains(
+                            "actual chip-select assertion UNKNOWN") &&
+                          full.getModificationNumber()==rev,
+                        "Separate source words became physical CS assertion or edited Program");
+                    result.addProperty("csbar_two_registers_independently_detected",true);
+                    result.addProperty("csbar_distinct_windows_not_combined",true);
+                    result.addProperty("csbar_independent_scan_read_only",true);
+                    Files.writeString(out.resolve("ga18-csbar-independent.md"),
+                                      report.markdown);
+                } else if("csbar-identical".equals(ga18Mode)) {
+                    // Two distinct functions with identical full word are
+                    // consistent but still *not* two physical assertions.
+                    defineFixtureFunction(full,0x520L,10,"fixture_csbar_first");
+                    int t=full.startTransaction("GA18 fixture repeated CSBAR0");
+                    try {
+                        full.getMemory().setBytes(address(full,0x5a0L),
+                            java.util.HexFormat.of().parseHex(
+                                "33fc387c00fffa4c4e75"));
+                    } finally {full.endTransaction(t,true);}
+                    defineFixtureFunction(full,0x5a0L,10,"fixture_csbar_repeat");
+                    long rev=full.getModificationNumber();
+                    var report=new HardwareInventoryService().scan(
+                        full,true,TaskMonitor.DUMMY);
+                    check(report.csbarReview.candidates().size()==1 &&
+                          report.csbarReview.candidates().get(0).word()==0x387c &&
+                          report.csbarReview.candidates().get(0)
+                              .independentSiteCount()==2,
+                        "Identical distinct source PCs not preserved as one reviewed candidate");
+                    check(report.csbarReview.matchedSites()>=2 &&
+                          report.csbarReview.summary().contains(
+                              "until manual Review/Apply") &&
+                          full.getModificationNumber()==rev,
+                        "Repeat writes incorrectly activated CS or changed Program");
+                    result.addProperty("csbar_identical_sources_collapsed_to_candidate",true);
+                    result.addProperty("csbar_two_distinct_site_origins",true);
+                    result.addProperty("csbar_repeated_source_read_only",true);
+                } else if("csbar-unknown-word".equals(ga18Mode)) {
+                    // Decoded MOVE.W D0,(CSBAR0) is 16 bits but value UNKNOWN.
+                    defineFixtureFunction(full,0x520L,10,
+                        "fixture_csbar_known_literal");
+                    int t=full.startTransaction("GA18 fixture unknown D0 CSBAR");
+                    try {
+                        full.getMemory().setBytes(address(full,0x5a0L),
+                            java.util.HexFormat.of().parseHex(
+                                "33c000fffa4c4e75"));
+                    } finally {full.endTransaction(t,true);}
+                    defineFixtureFunction(full,0x5a0L,8,"fixture_csbar_d0_unknown");
+                    long rev=full.getModificationNumber();
+                    var cfg=new GhidraHardwareFlowService().analyze(
+                        full,TaskMonitor.DUMMY,true);
+                    check(cfg.rawCfgMmioSites.stream().anyMatch(site->
+                            site.pc()==0x5a0L &&
+                            "CSBAR0".equals(site.register()) &&
+                            site.widthBits()==16 && site.literal()==null),
+                        "Actual Ghidra P-code missed unknown-value full-word STORE");
+                    var report=new HardwareInventoryService().scan(
+                        full,true,TaskMonitor.DUMMY);
+                    check(report.csbarReview.candidates().isEmpty() &&
+                          report.csbarReview.uncertainSites()>0 &&
+                          full.getModificationNumber()==rev,
+                        "Unknown D0 16-bit word was guessed from earlier constant");
+                    result.addProperty("csbar_unknown_word_real_pcode",true);
+                    result.addProperty("csbar_unknown_word_blocks_proposal",true);
+                    result.addProperty("csbar_unknown_word_read_only",true);
+                    Files.writeString(out.resolve("ga18-csbar-unknown-word.md"),
+                                      report.markdown);
+                } else if("simcr-partial".equals(ga18Mode)) {
+                    // Same recognized function writes a byte then a word:
+                    // a byte store cannot establish a full SIMCR/MM snapshot.
+                    int t=full.startTransaction("GA18 fixture partial SIMCR");
+                    try {
+                        full.getMemory().setBytes(address(full,0x5a0L),
+                            java.util.HexFormat.of().parseHex(
+                                "13fc00ff00fffa0033fc40ca00fffa004e75"));
+                    } finally {full.endTransaction(t,true);}
+                    defineFixtureFunction(full,0x5a0L,18,"fixture_simcr_byte_word");
+                    long rev=full.getModificationNumber();
+                    var cfg=new GhidraHardwareFlowService().analyze(
+                        full,TaskMonitor.DUMMY,true);
+                    check(cfg.rawCfgMmioSites.stream().anyMatch(site->
+                            site.pc()==0x5a0L &&
+                            "SIMCR".equals(site.register()) &&
+                            site.widthBits()==8) &&
+                          cfg.rawCfgMmioSites.stream().anyMatch(site->
+                            site.pc()==0x5a8L &&
+                            "SIMCR".equals(site.register()) &&
+                            site.widthBits()==16 &&
+                            Integer.valueOf(0x40ca).equals(site.literal())),
+                        "Actual Ghidra P-code failed mixed-size SIMCR source capture");
+                    var report=new HardwareInventoryService().scan(
+                        full,true,TaskMonitor.DUMMY);
+                    check(report.markdown.contains("UNKNOWN_WRITE_VALUE") &&
+                          report.markdown.contains("SIMCR/MM write-once caveat") &&
+                          report.markdown.contains("hardware value") &&
+                          full.getModificationNumber()==rev,
+                        "Partial SIMCR write was promoted to known runtime MM latch");
+                    result.addProperty("simcr_real_partial_and_word_decoded",true);
+                    result.addProperty("simcr_partial_unknown_alternative",true);
+                    result.addProperty("simcr_partial_runtime_mm_unproven",true);
+                    result.addProperty("simcr_partial_read_only",true);
+                    Files.writeString(out.resolve("ga18-simcr-partial.md"),report.markdown);
+                } else if("vector-edit-undo".equals(ga18Mode)) {
+                    // Source-image vector slot changes must be observed,
+                    // with native Ghidra Undo, no stale ISR claims.
+                    Address slot=address(full,16L); // vector #4
+                    byte[] original=new byte[4];
+                    full.getMemory().getBytes(slot,original);
+                    String baseline=GhidraInterruptVectorService.analyze(
+                        full,TaskMonitor.DUMMY);
+                    checkState(row(baseline,4),"MAPPED_TARGET");
+                    int t=full.startTransaction("GA18 synthetic vector rewrite");
+                    try {
+                        full.getMemory().setBytes(slot,
+                            java.util.HexFormat.of().parseHex("00000400"));
+                    } finally {full.endTransaction(t,true);}
+                    long changed=full.getModificationNumber();
+                    String modified=GhidraInterruptVectorService.analyze(
+                        full,TaskMonitor.DUMMY);
+                    checkState(row(modified,4),"RECOGNIZED_FUNCTION_CANDIDATE");
+                    expectUncertain(modified);
+                    check(changed==full.getModificationNumber(),
+                        "Vector scan mutated Ghidra Program");
+                    check(full.canUndo(),"Native Ghidra Undo unavailable for vector edit");
+                    full.undo();
+                    byte[] restored=new byte[4];
+                    full.getMemory().getBytes(slot,restored);
+                    check(java.util.Arrays.equals(restored,original),
+                        "Native Ghidra Undo did not restore vector source bytes");
+                    long undone=full.getModificationNumber();
+                    String again=GhidraInterruptVectorService.analyze(
+                        full,TaskMonitor.DUMMY);
+                    checkState(row(again,4),"MAPPED_TARGET");
+                    check(full.getModificationNumber()==undone,
+                        "Vector re-scan edited Program after Undo");
+                    expectUncertain(again);
+                    result.addProperty("vector_real_edit_reclassified",true);
+                    result.addProperty("vector_native_undo_restored",true);
+                    result.addProperty("vector_runtime_vbr_unproven",true);
+                    result.addProperty("vector_scan_after_undo_read_only",true);
+                } else if("cache-program-isolation".equals(ga18Mode)) {
+                    // Two real Program instances share JVM and classloader
+                    // but may not share a completed CFG cache.
+                    HardwareFlowStageCache.clear(full);
+                    HardwareFlowStageCache.clear(shortImage);
+                    long shortRev=shortImage.getModificationNumber();
+                    var longInput=HardwareAnalysisRevision.capture(
+                        full,hwBefore,full.getLanguageID().toString(),
+                        full.getExecutableSHA256(),true);
+                    var shortInput=HardwareAnalysisRevision.capture(
+                        shortImage,shortRev,shortImage.getLanguageID().toString(),
+                        shortImage.getExecutableSHA256(),true);
+                    var first=HardwareFlowStageCache.loadOrAnalyze(
+                        full,longInput,TaskMonitor.DUMMY);
+                    var second=HardwareFlowStageCache.loadOrAnalyze(
+                        shortImage,shortInput,TaskMonitor.DUMMY);
+                    check(!first.reused() && !second.reused() &&
+                          first.report()!=second.report(),
+                        "Different genuine Ghidra Programs shared cached CFG stage");
+                    check(HardwareFlowStageCache.loadOrAnalyze(
+                            full,longInput,TaskMonitor.DUMMY).reused() &&
+                          HardwareFlowStageCache.loadOrAnalyze(
+                            shortImage,shortInput,TaskMonitor.DUMMY).reused(),
+                        "Stable separate Ghidra Program revisions did not reuse cache");
+                    var forged=HardwareAnalysisRevision.capture(
+                        full,shortRev,shortImage.getLanguageID().toString(),
+                        shortImage.getExecutableSHA256(),true);
+                    try {
+                        HardwareFlowStageCache.loadOrAnalyze(
+                            shortImage,forged,TaskMonitor.DUMMY);
+                        throw new AssertionError(
+                            "Wrong Program identity accepted despite matching revision fields");
+                    } catch(CancelledException expected) { /* fail closed */ }
+                    check(full.getModificationNumber()==hwBefore &&
+                          shortImage.getModificationNumber()==shortRev,
+                        "Cross-program cache test wrote test data");
+                    result.addProperty("cache_real_two_programs_isolated",true);
+                    result.addProperty("cache_each_revision_reused_only_locally",true);
+                    result.addProperty("cache_wrong_identity_fail_closed",true);
+                    result.addProperty("cache_cross_program_read_only",true);
+                } else if("generic-profile".equals(ga18Mode)) {
+                    // No concrete model selected means no MC68332 hardware
+                    // Review proposals, even with actual decoded CSBAR site.
+                    defineFixtureFunction(full,0x520L,10,
+                        "fixture_generic_cpu32_csbar_candidate");
+                    long rev=full.getModificationNumber();
+                    var mc=new HardwareInventoryService().scan(
+                        full,true,TaskMonitor.DUMMY);
+                    check(mc.csbarReview.candidates().stream().anyMatch(c->
+                            "CSBAR0".equals(c.register()) && c.word()==0x387c),
+                        "Concrete-MCU source control absent");
+                    var generic=new HardwareInventoryService().scan(
+                        full,false,TaskMonitor.DUMMY);
+                    check(generic.csbarReview.candidates().isEmpty() &&
+                          generic.overviewMarkdown.contains(
+                              "CPU32 — address survey ONLY") &&
+                          generic.overviewMarkdown.contains(
+                              "No MC68332 CS ranges are asserted") &&
+                          generic.csbarReview.summary().contains(
+                              "model selected: false") &&
+                          full.getModificationNumber()==rev,
+                        "Unselected MCU inherited concrete CSBAR Review or edited Program");
+                    result.addProperty("generic_cpu32_kept_address_only",true);
+                    result.addProperty("generic_mc68332_csbar_proposals_disabled",true);
+                    result.addProperty("generic_model_switch_read_only",true);
                 } else if("revision".equals(ga18Mode)) {
                     // A real Ghidra transaction changes DomainObject revision;
                     // Undo/Redo must never reinstate obsolete CFG stage evidence.
