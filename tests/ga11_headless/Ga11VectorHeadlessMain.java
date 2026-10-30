@@ -16,6 +16,7 @@ import ghidra.program.model.listing.Function;
 import ghidra.program.model.listing.Program;
 import ghidra.program.model.symbol.SourceType;
 import ghidra.util.task.TaskMonitor;
+import ghidra.util.exception.CancelledException;
 import ghidrassist.hardware.GhidraInterruptVectorService;
 import ghidrassist.hardware.GhidraHardwareFlowService;
 import ghidrassist.hardware.HardwareInventoryService;
@@ -73,7 +74,7 @@ public final class Ga11VectorHeadlessMain {
         Path out=Path.of(args[2]).toRealPath();
         boolean strictEntry=Boolean.parseBoolean(args[3]);
         String ga18Mode=args.length>4?args[4]:"none";
-        check(Set.of("none","overview","cache","startup","csbar").contains(ga18Mode),
+        check(Set.of("none","overview","cache","startup","csbar","revision").contains(ga18Mode),
             "Unknown GA-18 acceptance mode");
         var config=new HeadlessGhidraApplicationConfiguration();
         config.setApplicationLogFile(out.resolve("ghidra.log").toFile());
@@ -246,6 +247,116 @@ public final class Ga11VectorHeadlessMain {
                     result.addProperty("cfg_stage_cache_reused",true);
                     result.addProperty("cfg_stage_clear_invalidated",true);
                     result.addProperty("cfg_stage_scope_isolated",true);
+                } else if("revision".equals(ga18Mode)) {
+                    // A real Ghidra transaction changes DomainObject revision;
+                    // Undo/Redo must never reinstate obsolete CFG stage evidence.
+                    Address scratch=address(full,0x560L);
+                    byte initial=full.getMemory().getByte(scratch);
+                    String importedSha=full.getExecutableSHA256();
+                    HardwareFlowStageCache.clear(full);
+                    HardwareAnalysisRevision initialRevision=
+                        HardwareAnalysisRevision.capture(
+                            full,hwBefore,full.getLanguageID().toString(),
+                            importedSha,true);
+                    var baseline=HardwareFlowStageCache.loadOrAnalyze(
+                        full,initialRevision,TaskMonitor.DUMMY);
+                    check(!baseline.reused(),"Revision baseline must compute");
+                    check(HardwareFlowStageCache.loadOrAnalyze(
+                            full,initialRevision,TaskMonitor.DUMMY).reused(),
+                        "Revision baseline must reuse exact stage");
+                    int editTx=full.startTransaction(
+                        "GA18 test-only raw byte revision edit");
+                    boolean editCommit=false;
+                    try {
+                        full.getMemory().setByte(scratch,(byte)(initial^0x7f));
+                        editCommit=true;
+                    } finally { full.endTransaction(editTx,editCommit); }
+                    long edited=full.getModificationNumber();
+                    check(edited!=hwBefore &&
+                          full.getMemory().getByte(scratch)!=(byte)initial,
+                        "Real Ghidra test edit did not change program revision");
+                    check(Objects.equals(importedSha,full.getExecutableSHA256()),
+                        "Original import SHA is metadata, not mutable memory hash");
+                    try {
+                        HardwareFlowStageCache.loadOrAnalyze(
+                            full,initialRevision,TaskMonitor.DUMMY);
+                        throw new AssertionError(
+                            "Stale captured revision accepted after real edit");
+                    } catch(CancelledException expected) {
+                        // Fail closed before any stale stage is published.
+                    }
+                    HardwareAnalysisRevision editRevision=
+                        HardwareAnalysisRevision.capture(
+                            full,edited,full.getLanguageID().toString(),
+                            importedSha,true);
+                    var changed=HardwareFlowStageCache.loadOrAnalyze(
+                        full,editRevision,TaskMonitor.DUMMY);
+                    check(!changed.reused() && changed.report()!=baseline.report(),
+                        "Changed real Ghidra Program reused stale CFG stage");
+                    check(HardwareFlowStageCache.loadOrAnalyze(
+                            full,editRevision,TaskMonitor.DUMMY).reused(),
+                        "Edited stable revision should reuse complete stage");
+                    check(full.canUndo(),
+                        "Ghidra test Program has no native Undo after edit");
+                    full.undo();
+                    long undone=full.getModificationNumber();
+                    check(undone!=edited &&
+                          full.getMemory().getByte(scratch)==initial,
+                        "Native Ghidra Undo did not restore test byte/revision");
+                    try {
+                        HardwareFlowStageCache.loadOrAnalyze(
+                            full,editRevision,TaskMonitor.DUMMY);
+                        throw new AssertionError(
+                            "Cached edited stage survived native Ghidra Undo");
+                    } catch(CancelledException expected) {
+                        // Expected stale-revision rejection.
+                    }
+                    HardwareAnalysisRevision undoRevision=
+                        HardwareAnalysisRevision.capture(
+                            full,undone,full.getLanguageID().toString(),
+                            importedSha,true);
+                    var afterUndo=HardwareFlowStageCache.loadOrAnalyze(
+                        full,undoRevision,TaskMonitor.DUMMY);
+                    check(!afterUndo.reused() &&
+                          afterUndo.report()!=changed.report(),
+                        "Undo must recompute stage despite restored byte contents");
+                    check(full.canRedo(),"Ghidra test Program has no native Redo");
+                    full.redo();
+                    long redone=full.getModificationNumber();
+                    check(redone!=undone &&
+                          full.getMemory().getByte(scratch)!=(byte)initial,
+                        "Ghidra Redo failed to reinstate test edit and new revision");
+                    try {
+                        HardwareFlowStageCache.loadOrAnalyze(
+                            full,undoRevision,TaskMonitor.DUMMY);
+                        throw new AssertionError(
+                            "Cached Undo stage survived native Ghidra Redo");
+                    } catch(CancelledException expected) {
+                        // Expected stale-revision rejection.
+                    }
+                    HardwareAnalysisRevision redoRevision=
+                        HardwareAnalysisRevision.capture(
+                            full,redone,full.getLanguageID().toString(),
+                            importedSha,true);
+                    var afterRedo=HardwareFlowStageCache.loadOrAnalyze(
+                        full,redoRevision,TaskMonitor.DUMMY);
+                    check(!afterRedo.reused() &&
+                          afterRedo.report()!=afterUndo.report(),
+                        "Redo must recompute completed stage for exact input");
+                    check(HardwareFlowStageCache.loadOrAnalyze(
+                            full,redoRevision,TaskMonitor.DUMMY).reused(),
+                        "Current redo revision must reuse stage on retry");
+                    // Leave this disposable project as originally imported,
+                    // without altering any external project/firmware.
+                    full.undo();
+                    check(full.getMemory().getByte(scratch)==initial,
+                        "Final native Undo must restore initial test bytes");
+                    result.addProperty("revision_real_edit_invalidated",true);
+                    result.addProperty("revision_stale_capture_rejected",true);
+                    result.addProperty("revision_undo_invalidated",true);
+                    result.addProperty("revision_redo_invalidated",true);
+                    result.addProperty("revision_original_bytes_restored",true);
+                    result.addProperty("revision_import_sha_stable",true);
                 } else if("startup".equals(ga18Mode)) {
                     // These sites are decoded by Ghidra, not model-only nodes.
                     // The first SITE in a FUNCTION is not first hardware write.
