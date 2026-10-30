@@ -1,0 +1,86 @@
+name: GA-18 four real Ghidra MMIO register safety boundaries
+on:
+  pull_request:
+    paths:
+      - 'tests/ga11_headless/**'
+      - '.github/workflows/ga18-four-mmio-boundaries-headless.yml'
+      - 'src/main/java/ghidrassist/hardware/**'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  genuine-ghidra:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Fetch SHA-verified Ghidra 12.1.4 PUBLIC
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fLsS --retry 3 --connect-timeout 20 -o "$RUNNER_TEMP/ghidra.zip" \
+            "https://github.com/NationalSecurityAgency/ghidra/releases/download/Ghidra_12.1.4_build/ghidra_12.1.4_PUBLIC_20260921.zip"
+          echo "ddac49f903da9d5bac833e5cc79395098b9c33cfd3279be5f31bd00387d2d4db  $RUNNER_TEMP/ghidra.zip" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/ghidra"
+          unzip -q "$RUNNER_TEMP/ghidra.zip" -d "$RUNNER_TEMP/ghidra"
+          GHIDRA_DIR="$(find "$RUNNER_TEMP/ghidra" -mindepth 1 -maxdepth 1 -type d -name 'ghidra_*' -print -quit)"
+          test -n "$GHIDRA_DIR"
+          echo "GHIDRA_INSTALL_DIR=$GHIDRA_DIR" >> "$GITHUB_ENV"
+      - name: Build full GhidrAssist extension
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$GHIDRA_INSTALL_DIR/support/gradle/gradlew" --no-daemon buildExtension
+          shopt -s nullglob
+          zips=(dist/ghidra_12.1.4_PUBLIC_*_GhidrAssist.zip)
+          test "${#zips[@]}" -eq 1
+          unzip -tq "${zips[0]}"
+          echo "EXTENSION=$PWD/${zips[0]}" >> "$GITHUB_ENV"
+          sha256sum "${zips[0]}"
+      - name: Run actual isolated Ghidra 12.1.4 hardware integration
+        shell: bash
+        run: |
+          set -euo pipefail
+          HASH="$(sha256sum "$EXTENSION" | cut -d' ' -f1)"
+          for mode in trambar-source csbar-mm0-reject mmio-read-reference csbar-csor-conditional; do
+            python3 tests/ga11_headless/run.py \
+              --ghidra "$GHIDRA_INSTALL_DIR" \
+              --java-home "$JAVA_HOME" \
+              --extension-zip "$EXTENSION" --extension-sha256 "$HASH" \
+              --output "$RUNNER_TEMP/ga18-$mode" \
+              --strict-entry --ga18-mode "$mode"
+            python3 -c 'import json,sys; p=json.load(open(sys.argv[1])); assert p["status"]=="PASSED_SYNTHETIC_REAL_GHIDRA_HEADLESS" and p["ga18_hardware_verified"] is True and p["ga18_mode"]==sys.argv[2]' \
+              "$RUNNER_TEMP/ga18-$mode/summary.json" "$mode"
+          done
+      - name: Package immutable tested harness with signed-off extension
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/ga18-bundle"
+          cp "$EXTENSION" "$RUNNER_TEMP/ga18-bundle/"
+          cp tests/ga11_headless/run.py tests/ga11_headless/Ga11VectorHeadlessMain.java "$RUNNER_TEMP/ga18-bundle/"
+          cd "$RUNNER_TEMP/ga18-bundle"
+          sha256sum "$(basename "$EXTENSION")" > SHA256SUMS.txt
+          sha256sum run.py Ga11VectorHeadlessMain.java > HARNESS-SHA256SUMS.txt
+          cat SHA256SUMS.txt HARNESS-SHA256SUMS.txt
+      - name: Bounded failure diagnostics
+        if: failure()
+        shell: bash
+        run: |
+          for mode in trambar-source csbar-mm0-reject mmio-read-reference csbar-csor-conditional; do
+            for p in "$RUNNER_TEMP"/ga18-$mode/{integration,compile,vectors-full.bin.import}.log; do
+              if test -f "$p"; then echo "== $(basename "$p") ($mode) =="; tail -n 60 "$p"; fi
+            done
+          done
+      - name: Upload host-verifiable extension, harness and genuine Ghidra results
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: GhidrAssist-Ghidra-12.1.4-GA18-MMIO-Boundaries-Headless-${{ github.run_id }}
+          path: ${{ runner.temp }}/ga18-bundle/
+          if-no-files-found: error
+          retention-days: 21
