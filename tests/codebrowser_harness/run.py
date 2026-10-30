@@ -188,7 +188,7 @@ def main():
             # The PNG contents are still NOT a human/model visual readback.
             shot=out/"codebrowser-x11.png"
             raw=shot.read_bytes()
-            if len(raw)<4096 or raw[:8]!=b"\\x89PNG\\r\\n\\x1a\\n":
+            if len(raw)<4096 or raw[:8]!=b"\x89PNG\r\n\x1a\n":
                 raise RuntimeError("Missing or invalid real X11 PNG screenshot")
             length=struct.unpack(">I",raw[8:12])[0]
             if length!=13 or raw[12:16]!=b"IHDR":
