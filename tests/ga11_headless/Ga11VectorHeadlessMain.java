@@ -18,6 +18,9 @@ import ghidra.program.model.symbol.SourceType;
 import ghidra.util.task.TaskMonitor;
 import ghidrassist.hardware.GhidraInterruptVectorService;
 import ghidrassist.hardware.GhidraHardwareFlowService;
+import ghidrassist.hardware.HardwareInventoryService;
+import ghidrassist.hardware.HardwareFlowStageCache;
+import ghidrassist.hardware.HardwareAnalysisRevision;
 import java.awt.GraphicsEnvironment;
 import java.nio.file.*;
 import java.util.*;
@@ -52,6 +55,9 @@ public final class Ga11VectorHeadlessMain {
         Path projectDir=Path.of(args[1]).toRealPath();
         Path out=Path.of(args[2]).toRealPath();
         boolean strictEntry=Boolean.parseBoolean(args[3]);
+        String ga18Mode=args.length>4?args[4]:"none";
+        check(Set.of("none","overview","cache").contains(ga18Mode),
+            "Unknown GA-18 acceptance mode");
         var config=new HeadlessGhidraApplicationConfiguration();
         config.setApplicationLogFile(out.resolve("ghidra.log").toFile());
         Application.initializeApplication(new GhidraApplicationLayout(ghidra.toFile()),config);
@@ -134,6 +140,99 @@ public final class Ga11VectorHeadlessMain {
                 shortReport.contains("unreadable: 244"),
                 "Short real memory import must classify missing slots UNREADABLE");
             expectUncertain(shortReport);
+            if(!"none".equals(ga18Mode)) {
+                // Optional synthetic-only integration against an ACTUAL
+                // Ghidra Program. Existing vectors remain untouched.
+                Address mmio=address(full,0x500L);
+                int writeTx=full.startTransaction(
+                    "GA18 TEST-ONLY synthetic SIMCR definition");
+                try {
+                    check(new DisassembleCommand(mmio,null,false)
+                        .applyTo(full,TaskMonitor.DUMMY),
+                        "Real CPU32 disassembler rejected synthetic SIMCR write");
+                    Function mmioFunction=full.getFunctionManager().createFunction(
+                        "synthetic_simcr_write",mmio,
+                        new AddressSet(mmio,mmio.add(9)),SourceType.ANALYSIS);
+                    check(mmioFunction!=null &&
+                          mmioFunction.getEntryPoint().equals(mmio),
+                        "Real synthetic SIMCR function entry absent");
+                } finally { full.endTransaction(writeTx,true); }
+                long hwBefore=full.getModificationNumber();
+                if("overview".equals(ga18Mode)){
+                    HardwareInventoryService inventoryService=
+                        new HardwareInventoryService();
+                    HardwareInventoryService.Report mc=
+                        inventoryService.scan(full,true,TaskMonitor.DUMMY);
+                    check(mc.sites.stream().anyMatch(site->
+                            site.pc.equals(mmio) &&
+                            "SIMCR".equals(site.register) &&
+                            site.write && site.literal!=null &&
+                            site.literal==0x40ca),
+                        "Production MMIO inventory missed actual synthetic SIMCR");
+                    String overview=mc.overviewMarkdown;
+                    check(overview.contains("## 1. Initialization candidates") &&
+                          overview.contains("## 2. Register write history") &&
+                          overview.contains("## 3. Chip Select map"),
+                        "Real inventory failed to render three-part overview");
+                    check(overview.contains("SIMCR/MM sites:") &&
+                          overview.contains("static evidence") &&
+                          overview.contains("UNKNOWN"),
+                        "Overview lost site count, source uncertainty, or labels");
+                    check(mc.detailsMarkdown.contains("Full evidence") ||
+                          mc.markdown.contains("## Review / Apply source-safety gate"),
+                        "Real inventory missing detail or source-safety gate");
+                    HardwareInventoryService.Report generic=
+                        inventoryService.scan(full,false,TaskMonitor.DUMMY);
+                    check(generic.overviewMarkdown.contains(
+                            "CPU32 — address survey ONLY") &&
+                          generic.overviewMarkdown.contains(
+                            "No MC68332 CS ranges are asserted"),
+                        "Generic CPU32 report claimed MC68332 hardware ranges");
+                    check(full.getModificationNumber()==hwBefore,
+                        "Real inventory overview modified synthetic Ghidra Program");
+                    result.addProperty("synthetic_simcr_detected",true);
+                    result.addProperty("overview_three_parts_verified",true);
+                    result.addProperty("cpu32_scope_conservative",true);
+                    Files.writeString(out.resolve("ga18-overview.md"),overview);
+                    Files.writeString(out.resolve("ga18-overview-cpu32.md"),
+                                      generic.overviewMarkdown);
+                } else {
+                    HardwareAnalysisRevision revision=
+                        HardwareAnalysisRevision.capture(
+                            full,hwBefore,full.getLanguageID().toString(),
+                            full.getExecutableSHA256(),true);
+                    HardwareFlowStageCache.clear(full);
+                    var first=HardwareFlowStageCache.loadOrAnalyze(
+                        full,revision,TaskMonitor.DUMMY);
+                    check(!first.reused(),
+                        "After clear, first real CFG stage must be computed");
+                    var second=HardwareFlowStageCache.loadOrAnalyze(
+                        full,revision,TaskMonitor.DUMMY);
+                    check(second.reused() && second.report()==first.report(),
+                        "Matching Ghidra Program/revision must reuse completed CFG stage");
+                    HardwareFlowStageCache.clear(full);
+                    var third=HardwareFlowStageCache.loadOrAnalyze(
+                        full,revision,TaskMonitor.DUMMY);
+                    check(!third.reused() && third.report()!=first.report(),
+                        "Explicit stage invalidation did not recompute");
+                    HardwareAnalysisRevision generic=
+                        HardwareAnalysisRevision.capture(
+                            full,hwBefore,full.getLanguageID().toString(),
+                            full.getExecutableSHA256(),false);
+                    var otherMode=HardwareFlowStageCache.loadOrAnalyze(
+                        full,generic,TaskMonitor.DUMMY);
+                    check(!otherMode.reused(),
+                        "Different MCU selection reused stale cache report");
+                    check(full.getModificationNumber()==hwBefore,
+                        "CFG stage computation/cache mutated synthetic Ghidra Program");
+                    result.addProperty("cfg_stage_first_computed",true);
+                    result.addProperty("cfg_stage_cache_reused",true);
+                    result.addProperty("cfg_stage_clear_invalidated",true);
+                    result.addProperty("cfg_stage_scope_isolated",true);
+                }
+                result.addProperty("read_only_analysis_verified",true);
+                result.addProperty("ga18_mode",ga18Mode);
+            }
             result.addProperty("state","PASSED_SYNTHETIC_REAL_GHIDRA_HEADLESS");
             result.addProperty("full_program_vectors",254);
             result.addProperty("truncated_image_unreadable",244);
