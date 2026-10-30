@@ -14,6 +14,7 @@ import ghidra.program.model.address.Address;
 import ghidra.program.model.address.AddressSet;
 import ghidra.program.model.listing.Function;
 import ghidra.program.model.listing.Program;
+import ghidra.program.model.data.WordDataType;
 import ghidra.program.model.symbol.SourceType;
 import ghidra.util.task.TaskMonitor;
 import ghidra.util.exception.CancelledException;
@@ -1035,7 +1036,7 @@ public final class Ga11VectorHeadlessMain {
                             address(full,0xfffa00L),"USER_SIMCR_KEEP",
                             SourceType.USER_DEFINED);
                         full.getListing().createData(address(full,0xfffa04L),
-                            ghidra.program.model.data.WordDataType.dataType);
+                            WordDataType.dataType);
                         check(new DisassembleCommand(address(full,0xfffc00L),
                             null,false).applyTo(full,TaskMonitor.DUMMY),
                             "Actual CPU32 QSM source code fixture did not disassemble");
