@@ -92,7 +92,8 @@ def main():
                         "csbar-independent","csbar-identical","csbar-unknown-word",
                         "simcr-partial","vector-edit-undo","cache-program-isolation",
                         "generic-profile","trambar-source","csbar-mm0-reject",
-                        "mmio-read-reference","csbar-csor-conditional"),
+                        "mmio-read-reference","csbar-csor-conditional",
+                        "simcr-mm0-literal","trambar-unknown","csor-alternatives"),
                         default="none",help="Run GA-07/12 or GA-02/03 genuine headless source-evidence checks")
     args=parser.parse_args()
     out=Path(args.output).absolute()
@@ -236,6 +237,19 @@ def main():
                         "csbar_csor_not_active_cs_map",
                         "csbar_csor_review_manual_only",
                         "csbar_csor_analysis_read_only"),
+                    "simcr-mm0-literal":(
+                        "simcr_mm0_real_word_zero_detected",
+                        "simcr_mm0_source_not_runtime_latch",
+                        "simcr_mm0_scan_read_only"),
+                    "trambar-unknown":(
+                        "trambar_unknown_real_word_detected",
+                        "trambar_unknown_no_ram_window",
+                        "trambar_unknown_scan_read_only"),
+                    "csor-alternatives":(
+                        "csor_two_real_words_detected",
+                        "csor_conflicting_alternatives_preserved",
+                        "csor_no_active_map_inferred",
+                        "csor_alternative_scan_read_only"),
                     "revision":("revision_real_edit_invalidated",
                         "revision_stale_capture_rejected",
                         "revision_undo_invalidated",
