@@ -8,6 +8,8 @@ import os
 from pathlib import Path
 import re
 import signal
+import struct
+import zlib
 import subprocess
 import sys
 import tempfile
@@ -182,6 +184,27 @@ def main():
                 if restart.get(name) is not True:
                     raise RuntimeError("CodeBrowser restart failed: "+name)
             data=json.loads((out/"gui-results.json").read_text(encoding="utf-8"))
+            # Independently check real X11 Robot screenshot evidence.
+            # The PNG contents are still NOT a human/model visual readback.
+            shot=out/"codebrowser-x11.png"
+            raw=shot.read_bytes()
+            if len(raw)<4096 or raw[:8]!=b"\\x89PNG\\r\\n\\x1a\\n":
+                raise RuntimeError("Missing or invalid real X11 PNG screenshot")
+            length=struct.unpack(">I",raw[8:12])[0]
+            if length!=13 or raw[12:16]!=b"IHDR":
+                raise RuntimeError("X11 screenshot missing bounded PNG IHDR")
+            if (zlib.crc32(raw[12:29]) & 0xffffffff)!=struct.unpack(
+                    ">I",raw[29:33])[0]:
+                raise RuntimeError("X11 screenshot IHDR checksum invalid")
+            width,height=struct.unpack(">II",raw[16:24])
+            if (width<640 or height<400 or width>8192 or height>8192 or
+                    data.get("x11_screenshot_width")!=width or
+                    data.get("x11_screenshot_height")!=height or
+                    data.get("x11_screenshot_sha256")!=sha256(shot)):
+                raise RuntimeError("X11 screenshot SHA-256 / dimensions invalid")
+            if data.get("visual_readback_verified") is not False or (
+                    data.get("human_visual_readback")!="NOT_PERFORMED"):
+                raise RuntimeError("Synthetic screenshot cannot claim human visual verification")
             expected=("synthetic_simcr_site","hardware_analyze_gui",
                       "listing_navigation","stale_go_to_rejected",
                       "stale_double_click_rejected",
@@ -195,7 +218,10 @@ def main():
                       "tool_template_saved",
                       "extension_metadata_serialized",
                       "tool_template_reloaded",
-                      "no_new_extension_prompt_on_restore")
+                      "no_new_extension_prompt_on_restore",
+                      "window_identity_verified",
+                      "codebrowser_listing_verified",
+                      "x11_screenshot_captured")
             for name in expected:
                 if data.get(name) is not True:
                     raise RuntimeError("Missing actual GUI evidence: "+name)
@@ -205,7 +231,12 @@ def main():
                            "ghidra_version":VERSION,
                            "synthetic_only":True,"assertions":list(expected),
                            "restart_process_verified":True,
-                           "no_repeated_plugin_prompt":True})
+                           "no_repeated_plugin_prompt":True,
+                           "window_identity_verified":True,
+                           "codebrowser_listing_verified":True,
+                           "x11_screenshot_sha256":sha256(shot),
+                           "x11_capture_proof_verified":True,
+                           "visual_readback_verified":False})
     except (OSError, ValueError, RuntimeError, subprocess.TimeoutExpired,
             zipfile.BadZipFile) as error:
         result["reason"]=str(error)[:400]
