@@ -93,7 +93,8 @@ def main():
                         "simcr-partial","vector-edit-undo","cache-program-isolation",
                         "generic-profile","trambar-source","csbar-mm0-reject",
                         "mmio-read-reference","csbar-csor-conditional",
-                        "simcr-mm0-literal","trambar-unknown","csor-alternatives"),
+                        "simcr-mm0-literal","trambar-unknown","csor-alternatives",
+                        "branch-simcr","call-barrier","cancel-incomplete"),
                         default="none",help="Run GA-07/12 or GA-02/03 genuine headless source-evidence checks")
     args=parser.parse_args()
     out=Path(args.output).absolute()
@@ -250,6 +251,19 @@ def main():
                         "csor_conflicting_alternatives_preserved",
                         "csor_no_active_map_inferred",
                         "csor_alternative_scan_read_only"),
+                    "branch-simcr":(
+                        "branch_real_cfg_two_sources",
+                        "branch_local_first_alternatives",
+                        "branch_runtime_mm_unknown","branch_read_only"),
+                    "call-barrier":(
+                        "call_real_jsr_barrier","call_clobbered_pointer_not_reused",
+                        "call_alias_blocks_review","call_read_only"),
+                    "cancel-incomplete":(
+                        "cancel_real_scan_mid_traversal",
+                        "cancel_incomplete_rag_not_published",
+                        "cancel_clean_retry_computed",
+                        "cancel_complete_stage_reused",
+                        "cancel_real_program_unchanged"),
                     "revision":("revision_real_edit_invalidated",
                         "revision_stale_capture_rejected",
                         "revision_undo_invalidated",
