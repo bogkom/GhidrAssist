@@ -27,11 +27,11 @@ public final class HardwareReportOverviewSelfTest {
             selected.contains("SIMCR/MM sites: 2") &&
             selected.contains("CSBAR sites: 1") &&
             selected.contains("CSOR sites: 1") &&
-            selected.contains("Other peripheral references: 2"),
+            selected.contains("Other/omitted register references (including CSPAR): 2"),
             "focused site counts and complete inventory count are separate");
         require(selected.contains("direct word values: 2") &&
             selected.contains("writes with UNKNOWN literal: 2") &&
-            selected.contains("stores in bounded CFG pass: 9"),
+            selected.contains("stores in bounded CFG pass: at least 9"),
             "known/unknown only for visible candidate writes");
         require(selected.contains("propagation cap reached: true") &&
             selected.contains("first successful write") &&
@@ -74,6 +74,30 @@ public final class HardwareReportOverviewSelfTest {
         try{HardwareReportOverview.render(true,0,0,0,0,false,null);}
         catch(IllegalArgumentException expected){invalid=true;}
         require(invalid,"reject absent source evidence");
+        require(selected.contains("INCOMPLETE / TRUNCATED") &&
+            selected.contains("lower bound; scan truncated"),
+            "bounded CFG counts must not appear exhaustive");
+        require(cpu.contains("BOUNDED PASS COMPLETE") &&
+            !cpu.contains("INCOMPLETE / TRUNCATED"),
+            "nontruncated scan should not invent truncation");
+        for(HardwareReportOverview.Site invalidSite:new HardwareReportOverview.Site[]{
+                null,new HardwareReportOverview.Site(null,true,true),
+                new HardwareReportOverview.Site(" ",false,false),
+                new HardwareReportOverview.Site("SIMCR",false,true)
+        }){
+            boolean rejected=false;
+            var badRows=new java.util.ArrayList<HardwareReportOverview.Site>(sites);
+            badRows.add(invalidSite);
+            try{HardwareReportOverview.render(true,1500,3,4,9,true,badRows);}
+            catch(IllegalArgumentException expected){rejected=true;}
+            require(rejected,"corrupt/inconsistent overview input must fail closed");
+        }
+        boolean largeRejected=false;
+        try{HardwareReportOverview.render(true,1500,3,4,9,false,
+            java.util.Collections.nCopies(200001,
+                new HardwareReportOverview.Site("SIMCR",true,true)));}
+        catch(IllegalArgumentException expected){largeRejected=true;}
+        require(largeRejected,"oversized source inventory must fail closed");
         System.out.println("HardwareReportOverviewSelfTest OK");
     }
 }
