@@ -202,3 +202,68 @@ revision should require an externally approved, exact expected WM_CLASS
 per case, distinguishing this synthetic Java launch from the production
 Ghidra CodeBrowser on Wyse; it must retain independent provenance and
 native visual/ACK restrictions. No Supervisor source or queue was changed.
+
+
+## GA-18 GUI-06 — bounded host-owned live window handshake (31 Oct 2026)
+
+The existing PR101 harness now supports `--bridge-mode host --bridge-timeout 60`.
+This does not start the Supervisor, Codex worker, GUI permissions, or any
+new timer. The `--output` argument in this mode is an EXISTING owner-private
+`0700` `ga18-gui` workspace; the runner creates fresh
+`evidence/pilot-ghidra-<run_id>` (0700), never overwrites a run and
+generates a fresh random 32-lowercase-hex `run_id` internally.
+All original per-run report and PNG files use mode 0600.
+
+The existing synthetic Ghidra Program is opened through CodeBrowser in
+an isolated test-only profile. Before external capture Java checks the
+actual ProgramManager program `synthetic-mmio.bin`, CodeViewerService
+Listing address `0x00000020`, FunctionManager `FUN_00000020` and
+DecompilerController `FUN_00000020`. It queries actual X11 window
+identity with xwininfo/xprop: class
+`CodeBrowserMmioMain.CodeBrowserMmioMain`, exact full title
+`GhidrAssist isolated CodeBrowser MMIO: CodeBrowserFixture:/synthetic-mmio.bin`,
+and a true XID rendered as wmctrl-compatible zero-padded 8-digit hex.
+
+After these checks it creates `capture-ready.json` with case/run/XID/class/
+title and pre-observation. Java keeps CodeBrowser alive, without keyboard
+or mouse input, for `5..180` seconds while an operator explicitly runs
+the separately authorized Supervisor PR92 **host-owned** read-only bridge
+on the *same actual display* with that XID/run. This bridge creates
+`evidence/pilot-x11-<run_id>/ghidra-window.png` and
+`bridge-capture.json`. GhidrAssist waits only for this exact new private
+report, checks run/case/XID/class/title/PNG digest/timestamp and false
+GUI ACK flags, then captures its **different** original Robot screenshot,
+rechecks actual X11 identity, Program/Listing/Decompiler and writes the
+original 31-field PR90 `codebrowser-assertions.json`. The pre/post window
+encloses the external capture; a timeout or changed state aborts without
+creating a false PASS. `four-original-sha256.json` contains four candidate
+file digests only; a trusted host must rehash/pin them independently.
+
+Workflow `GA-09 real CodeBrowser Listing synthetic GUI` additionally
+executes `--bridge-mode ci` under disposable Xvfb/Openbox. Its separate
+`ci_x11_observer.py` calls wmctrl and ImageMagick import on that exact
+live XID. This is a CI-only stand-in for the **already written**
+Supervisor PR92 bridge, not a deployment or alternate worker on Wyse.
+39 fail-closed receipt/GUI06 cases exercise stale state, wrong XID,
+window change, missing PNG, capture timeout, mismatched SHA, run reuse,
+forged ACK, incomplete reports. CI is synthetic GUI evidence only.
+
+Precondition for host-owned bridge: the operator has separately approved
+a private X11 capture on the isolated CodeBrowser only; GUI display
+and Xauthority must meet Supervisor PR92's exact rules, including
+`DISPLAY=:0` and the approved local Xauthority path. Do NOT call the
+host bridge from a Codex sandbox or through GitHub Actions. Operator
+reads the fresh `capture-ready.json`, pins `window_id`/`run_id` and
+invokes only the Supervisor-owned tool. The waiting Java subprocess
+will fail closed after the specified deadline, even if no host screenshot
+was taken. For demonstration with *no* actual host controller, use
+`--bridge-mode ci` inside the isolated CI display, never on a user display.
+
+Conservative status always: `trusted_ghidra_provenance_verified=false`,
+`same_run_semantics_verified=false`,
+`independent_semantic_visual_readback=false`,
+`visual_readback_verified=false`, `native_nonce_ack=false`,
+`supervisor_ack=false`, `formal_gui_pass=false`. These remain false
+until a separately authorized visual reader, host attestation and native
+ACK actually exist. Old PR56 BLOCKED and PR96 CLOSED_FAILED remain
+historical, not retroactively PASS.
