@@ -14,6 +14,9 @@ import subprocess
 import sys
 import tempfile
 import zipfile
+import uuid
+
+from assertion_audit import validate_files, sha256 as byte_sha256
 
 ROOT = Path(__file__).resolve().parents[2]
 VERSION = "12.1.4"
@@ -128,14 +131,17 @@ def main():
             project=work/"project"/"CodeBrowserFixture.gpr"
             if not project.is_file():
                 raise RuntimeError("Synthetic Ghidra project was not created")
+            run_id=uuid.uuid4().hex
+            case_id="synthetic-codebrowser-001"
             conf={"ghidra":str(ghidra),"project_dir":str(work/"project"),
-                  "index":str(work/"index")}
+                  "index":str(work/"index"),"run_id":run_id,"case_id":case_id}
             conf_path=work/"config.json"
             conf_path.write_text(json.dumps(conf),encoding="utf-8")
             jars=sorted(set(ghidra.rglob("*.jar")) | set(ext.rglob("*.jar")))
             cp=os.pathsep.join(map(str,jars))
             subprocess_checked([str(java/"bin/javac"),"-cp",cp,
-                "-d",str(work/"classes"),str(SRC)],
+                "-d",str(work/"classes"),str(SRC),
+                str(SRC.parent/"CodeBrowserAssertionReceipt.java")],
                 work,env,out/"compile.log",120)
             cmd=[str(java/"bin/java"),
                  "-Djava.system.class.loader=ghidra.GhidraClassLoader",
@@ -184,6 +190,21 @@ def main():
                 if restart.get(name) is not True:
                     raise RuntimeError("CodeBrowser restart failed: "+name)
             data=json.loads((out/"gui-results.json").read_text(encoding="utf-8"))
+            # Receipt is emitted from the SAME Java JVM that navigated to
+            # the actual synthetic Listing and captured the unmodified X11 PNG.
+            # The verification here is structural consistency, NOT trusted
+            # provenance, semantic visual readback or native GUI acceptance.
+            proof=validate_files(out/"codebrowser-assertions.json",
+                                 out/"ghidra-window.png",
+                                 case_id=case_id,run_id=run_id)
+            if not proof["structural_evidence_consistent"]:
+                raise RuntimeError("Incomplete in-process CodeBrowser receipt")
+            original=out/"ghidra-window.png"
+            # Legacy screenshot path must have identical original bytes.
+            if sha256(original)!=sha256(out/"codebrowser-x11.png"):
+                raise RuntimeError("Original X11 screenshot and compatibility copy differ")
+            if data.get("same_run_receipt_created") is not True:
+                raise RuntimeError("CodeBrowser did not emit authenticated-in-run receipt")
             # Independently check real X11 Robot screenshot evidence.
             # The PNG contents are still NOT a human/model visual readback.
             shot=out/"codebrowser-x11.png"
@@ -236,7 +257,13 @@ def main():
                            "codebrowser_listing_verified":True,
                            "x11_screenshot_sha256":sha256(shot),
                            "x11_capture_proof_verified":True,
-                           "visual_readback_verified":False})
+                           "assertions_report_sha256":sha256(out/"codebrowser-assertions.json"),
+                           "same_run_structural_receipt":True,
+                           "case_id":case_id,"run_id":run_id,
+                           "trusted_ghidra_provenance_verified":False,
+                           "same_run_semantics_verified":False,
+                           "visual_readback_verified":False,
+                           "supervisor_ack":False,"formal_gui_pass":False})
     except (OSError, ValueError, RuntimeError, subprocess.TimeoutExpired,
             zipfile.BadZipFile) as error:
         result["reason"]=str(error)[:400]
