@@ -366,6 +366,17 @@ public final class CodeBrowserMmioMain {
                 tool[0],first,site,out,conf.get("run_id").getAsString(),
                 conf.get("case_id").getAsString(),
                 conf.has("bridge_timeout")?conf.get("bridge_timeout").getAsInt():0);
+            if(conf.has("cua_hold_seconds") &&
+                    conf.get("cua_hold_seconds").getAsInt()>0) {
+                // One fresh, isolated synthetic window for a *future* CUA turn.
+                // Release is host-only synchronization, NOT native CUA proof.
+                CodeBrowserCuaHold.waitForHost(tool[0],first,site,out,receipt,
+                    conf.get("run_id").getAsString(),
+                    conf.get("cua_hold_seconds").getAsInt());
+                result.addProperty("cua_live_hold_structural_only",true);
+                result.addProperty("cua_native_verified",false);
+                result.addProperty("native_nonce_ack",false);
+            }
             result.addProperty("window_identity_verified",true);
             result.addProperty("codebrowser_listing_verified",true);
             result.addProperty("x11_screenshot_captured",true);

@@ -49,7 +49,7 @@ final class CodeBrowserAssertionReceipt {
             "X11 inspector failed: "+String.join(" ",command));
         return new String(bytes,java.nio.charset.StandardCharsets.UTF_8);
     }
-    private static String[] x11(Frame frame)throws Exception {
+    static String[] x11(Frame frame)throws Exception {
         // Window ID comes from the live X server, NOT from an invented Java
         // Swing handle, report field, or synthetic title alone.
         String tree=cmd("xwininfo","-root","-tree");
@@ -123,9 +123,9 @@ final class CodeBrowserAssertionReceipt {
         Object function=getFunction.invoke(controller);
         return function instanceof Function f?f:null;
     }
-    private record State(String program,String address,String function,
+    record State(String program,String address,String function,
                          String decompilerFunction,long observedMs){}
-    private static State observe(GhidraTool tool,Program expected,Address address)
+    static State observe(GhidraTool tool,Program expected,Address address)
             throws Exception {
         ProgramManager pm=tool.getService(ProgramManager.class);
         CodeViewerService view=tool.getService(CodeViewerService.class);

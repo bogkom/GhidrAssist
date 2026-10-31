@@ -85,13 +85,25 @@ def main():
     ap.add_argument("--timeout",type=int,default=300)
     ap.add_argument("--bridge-mode",choices=("off","ci","host"),default="off")
     ap.add_argument("--bridge-timeout",type=int,default=60)
+    ap.add_argument("--cua-live",action="store_true",
+                    help="Bounded live synthetic window for separate future native CUA")
+    ap.add_argument("--cua-timeout",type=int,default=30)
+    ap.add_argument("--cua-ci-response",choices=("none","release","unavailable",
+                                                 "window-changed"),default="none",
+                    help="CI-only synthetic host response; never a native CUA proof")
     args=ap.parse_args()
     if args.timeout<90 or args.timeout>900:
         ap.error("timeout must be 90..900 seconds")
     if not 5<=args.bridge_timeout<=180:
         ap.error("bridge-timeout must be 5..180 seconds")
+    if args.cua_live and args.bridge_mode!="off":
+        ap.error("CUA hold is a separate mode; no previous X11 bridge replay")
+    if not 5<=args.cua_timeout<=180:
+        ap.error("cua-timeout must be 5..180 seconds")
+    if args.cua_ci_response!="none" and not args.cua_live:
+        ap.error("CI response requires --cua-live")
     run_id=uuid.uuid4().hex
-    bridged=args.bridge_mode!="off"
+    bridged=args.bridge_mode!="off" or args.cua_live
     target=Path(args.output).expanduser().absolute()
     if bridged:
         # Live output is a strict owner-private ga18-gui workspace.
@@ -164,14 +176,16 @@ def main():
             case_id="synthetic-codebrowser-001"
             conf={"ghidra":str(ghidra),"project_dir":str(work/"project"),
                   "index":str(work/"index"),"run_id":run_id,"case_id":case_id,
-                  "bridge_timeout":args.bridge_timeout if bridged else 0}
+                  "bridge_timeout":args.bridge_timeout if args.bridge_mode!="off" else 0,
+                  "cua_hold_seconds":args.cua_timeout if args.cua_live else 0}
             conf_path=work/"config.json"
             conf_path.write_text(json.dumps(conf),encoding="utf-8")
             jars=sorted(set(ghidra.rglob("*.jar")) | set(ext.rglob("*.jar")))
             cp=os.pathsep.join(map(str,jars))
             subprocess_checked([str(java/"bin/javac"),"-cp",cp,
                 "-d",str(work/"classes"),str(SRC),
-                str(SRC.parent/"CodeBrowserAssertionReceipt.java")],
+                str(SRC.parent/"CodeBrowserAssertionReceipt.java"),
+                str(SRC.parent/"CodeBrowserCuaHold.java")],
                 work,env,out/"compile.log",120)
             cmd=[str(java/"bin/java"),
                  "-Djava.system.class.loader=ghidra.GhidraClassLoader",
@@ -187,7 +201,17 @@ def main():
                     start_new_session=True)
                 observer=None
                 try:
-                    if args.bridge_mode=="ci":
+                    if args.cua_live and args.cua_ci_response!="none":
+                        with (out/"cua-observer.log").open("x") as observer_log:
+                            observer=subprocess.Popen(
+                                [sys.executable,str(SRC.parent/"ci_cua_observer.py"),
+                                 "--workspace",str(target),"--run-id",run_id,
+                                 "--mode",args.cua_ci_response,
+                                 "--timeout",str(args.cua_timeout)],
+                                cwd=work,env=env,stdout=observer_log,
+                                stderr=subprocess.STDOUT,start_new_session=True)
+                        code=process.wait(timeout=args.timeout)
+                    elif args.bridge_mode=="ci":
                         # Distinct disposable CI process observes live X11.
                         # Actual Wyse bridge remains Supervisor-owned.
                         with (out/"observer.log").open("x") as observer_log:
@@ -255,7 +279,19 @@ def main():
                     f"Assertion receipt invalid: {error}; X11={observed.get('window_id')!r}, "
                     f"WM_CLASS={observed.get('window_class')!r}, "
                     f"full_title={observed.get('window_title')!r}") from error
-            if bridged:
+            if args.cua_live:
+                hold=json.loads((out/"cua-live-result.json").read_text())
+                captured=json.loads((out/"codebrowser-assertions.json").read_text())
+                if (hold.get("result")!="LIVE_CUA_WINDOW_RELEASED_STRUCTURAL_ONLY"
+                        or hold.get("run_id")!=run_id
+                        or hold.get("cua_native_verified") is not False
+                        or hold.get("native_nonce_ack") is not False
+                        or hold.get("formal_gui_pass") is not False
+                        or hold.get("pre_window_id")!=captured["window_id"]
+                        or hold.get("post_window_id")!=captured["window_id"]):
+                    raise RuntimeError("BLOCKED_CUA_HOLD_INVALID_POST_STATE")
+                result["live_cua_hold_result"]=hold["result"]
+            if args.bridge_mode!="off":
                 ready=json.loads((out/"capture-ready.json").read_text())
                 receipt=json.loads((out/"codebrowser-assertions.json").read_text())
                 host_dir=evidence/("pilot-x11-"+run_id)
@@ -352,7 +388,9 @@ def main():
                     raise RuntimeError("Missing actual GUI evidence: "+name)
             if data.get("application_headless") or data.get("awt_headless"):
                 raise RuntimeError("Headless simulation is not real CodeBrowser")
-            result.update({"status":"PASSED_SYNTHETIC_CODEBROWSER",
+            result.update({"status":("LIVE_CUA_WINDOW_RELEASED_STRUCTURAL_ONLY"
+                                     if args.cua_live else
+                                     "PASSED_SYNTHETIC_CODEBROWSER"),
                            "ghidra_version":VERSION,
                            "synthetic_only":True,"assertions":list(expected),
                            "restart_process_verified":True,
@@ -375,7 +413,9 @@ def main():
         (out/"result.json").write_text(json.dumps(result,indent=2)+"\n",
                                        encoding="utf-8")
     print(json.dumps(result,indent=2))
-    return 0 if result["status"]=="PASSED_SYNTHETIC_CODEBROWSER" else 1
+    return 0 if result["status"] in (
+        "PASSED_SYNTHETIC_CODEBROWSER",
+        "LIVE_CUA_WINDOW_RELEASED_STRUCTURAL_ONLY") else 1
 
 
 if __name__=="__main__":
