@@ -176,3 +176,29 @@ Dedicated CI uses the existing full-extension build and Xvfb/Openbox
 CodeBrowser harness, bundles the report, original PNG, Java/Python source,
 test cases and SHA256 manifests. Never retroactively alter older FAILED
 or BLOCKED GUI Supervisor reports.
+
+
+### Live evidence from the isolated CI JVM and Supervisor PR #90 WM_CLASS gap
+
+The first actual X11 capture proves the source limitation rather than
+just supplying a guessed class string: xprop on the isolated Java main
+reported WM_CLASS=CodeBrowserMmioMain.CodeBrowserMmioMain, while the
+full live title was
+GhidrAssist isolated CodeBrowser MMIO: CodeBrowserFixture:/synthetic-mmio.bin.
+The source Program and Decompiler both showed synthetic-mmio.bin,
+0x00000020, FUN_00000020 before and after capture; XID was 0x400026.
+The captured PNG was 1300x950, SHA256
+94b90affc9de9cfb14fad1403b338b3d3ef82b1d51b6ce680cdec6287c3b24e3.
+Both PNG output paths matched byte-for-byte. The original isolated CI
+attempt failed *only at the structural checker* because it incorrectly
+expected the production Ghidra X11 WM_CLASS. This is a test-contract
+mismatch, not a GhidrAssist product defect or a GUI/semantic PASS.
+
+Supervisor PR #90 currently hardcodes WM_CLASS=ghidra-Ghidra.ghidra-Ghidra.
+For isolated Java-main CI, the explicitly pinned case must instead use
+CodeBrowserMmioMain.CodeBrowserMmioMain. Do not relax this to arbitrary
+classes or rewrite captured metadata. A future Supervisor contract
+revision should require an externally approved, exact expected WM_CLASS
+per case, distinguishing this synthetic Java launch from the production
+Ghidra CodeBrowser on Wyse; it must retain independent provenance and
+native visual/ACK restrictions. No Supervisor source or queue was changed.
