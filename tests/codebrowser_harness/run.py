@@ -265,6 +265,23 @@ def main():
                     (host_dir/"ghidra-window.png").read_bytes(),run_id)
                 if not verified["structurally_correlated"]:
                     raise RuntimeError("GUI-06 structural correlation missing")
+                # Four hashes are candidate pins only; the actual Supervisor
+                # must independently hash the two original sources on host.
+                digest_manifest={
+                    "schema":1,"kind":"ga18-gui06-original-four-sha256",
+                    "case_id":case_id,"run_id":run_id,
+                    "window_id":receipt["window_id"],
+                    "harness_json_sha256":sha256(out/"codebrowser-assertions.json"),
+                    "harness_png_sha256":sha256(out/"ghidra-window.png"),
+                    "bridge_json_sha256":sha256(host_dir/"bridge-capture.json"),
+                    "bridge_png_sha256":sha256(host_dir/"ghidra-window.png"),
+                    "independently_pinned_by_supervisor":False,
+                    "visual_readback_verified":False,
+                    "supervisor_ack":False,"formal_gui_pass":False,
+                }
+                (out/"four-original-sha256.json").write_text(
+                    json.dumps(digest_manifest,indent=2)+"\\n",
+                    encoding="utf-8")
                 result["external_capture_correlated_structurally"]=True
                 result["external_png_sha256"]=bridge["captured_screenshot_sha256"]
             if not proof["structural_evidence_consistent"]:
