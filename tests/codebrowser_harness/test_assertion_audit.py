@@ -119,7 +119,7 @@ class AssertionsAuditTest(unittest.TestCase):
         self.fail(lambda r:r.update(window_class="unknown"))
 
     def test_wrong_title(self):
-        self.fail(lambda r:r.update(window_title="not the CodeBrowser"))
+        self.fail(lambda r:r.update(window_title="not the tool window"))
 
     def test_stale_time_order(self):
         self.fail(lambda r:r.update(post_capture_epoch_ms=101))
