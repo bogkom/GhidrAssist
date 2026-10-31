@@ -151,13 +151,15 @@ final class CodeBrowserAssertionReceipt {
         // Wait for the real DecompilerService to catch up with Listing navigation.
         long deadline=System.nanoTime()+15_000_000_000L;
         State before=null;
+        String lastFailure="NO_OBSERVATION";
         while(System.nanoTime()<deadline) {
             try {before=observe(tool,expected,address);break;}
             catch(AssertionError | ReflectiveOperationException e){
+                lastFailure=e.getClass().getSimpleName()+": "+e.getMessage();
                 Thread.sleep(100);
             }
         }
-        check(before!=null,"real Listing/Decompiler failed to converge");
+        check(before!=null,"real Listing/Decompiler failed to converge; last="+lastFailure);
         String[] winBefore=x11(frame);
         Rectangle bounds=frame.getBounds().intersection(
             frame.getGraphicsConfiguration().getBounds());
