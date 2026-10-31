@@ -30,8 +30,8 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends xvfb xauth openbox x11-utils wmctrl imagemagick
-      - name: Fail-closed receipt contract positive and negative regressions
-        run: python3 -m unittest discover -s tests/codebrowser_harness -p 'test_assertion_audit.py' -v
+      - name: Fail-closed CodeBrowser receipt and GUI-06 bridge protocol regressions
+        run: python3 -m unittest discover -s tests/codebrowser_harness -p 'test_*.py' -v
       - name: Download hash-pinned Ghidra 12.1.4 PUBLIC
         shell: bash
         run: |
@@ -100,6 +100,8 @@ jobs:
           cp tests/codebrowser_harness/run.py tests/codebrowser_harness/CodeBrowserMmioMain.java \
              tests/codebrowser_harness/CodeBrowserAssertionReceipt.java \
              tests/codebrowser_harness/ci_x11_observer.py \
+             tests/codebrowser_harness/gui06_protocol.py \
+             tests/codebrowser_harness/test_gui06_protocol.py \
              tests/codebrowser_harness/assertion_audit.py \
              tests/codebrowser_harness/test_assertion_audit.py \
              "$RUNNER_TEMP/codebrowser-bundle/"
@@ -108,7 +110,7 @@ jobs:
           # Upload paths are relative to runner.temp. The host verifier
           # matches SHA256SUMS member names against the outer ZIP exactly.
           sha256sum "$archive" | sed 's#  #  codebrowser-bundle/#' > SHA256SUMS.txt
-          sha256sum run.py CodeBrowserMmioMain.java CodeBrowserAssertionReceipt.java ci_x11_observer.py assertion_audit.py test_assertion_audit.py > HARNESS-SHA256SUMS.txt
+          sha256sum run.py CodeBrowserMmioMain.java CodeBrowserAssertionReceipt.java ci_x11_observer.py gui06_protocol.py test_gui06_protocol.py assertion_audit.py test_assertion_audit.py > HARNESS-SHA256SUMS.txt
           (cd "$RUNNER_TEMP" && sha256sum -c codebrowser-bundle/SHA256SUMS.txt)
           sha256sum -c HARNESS-SHA256SUMS.txt
       - name: Publish synthetic-only test logs (even on failure)
