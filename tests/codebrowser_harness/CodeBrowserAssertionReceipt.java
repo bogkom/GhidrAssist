@@ -58,7 +58,8 @@ final class CodeBrowserAssertionReceipt {
             Matcher m=XID.matcher(line);
             if(m.matches() && m.group(2).equals(frame.getTitle())){
                 check(xid==null,"duplicate X11 windows sharing full frame title");
-                xid=m.group(1).toLowerCase(Locale.ROOT);
+                xid=String.format(Locale.ROOT,"0x%08x",
+                    Long.parseUnsignedLong(m.group(1).substring(2),16));
             }
         }
         check(xid!=null,"live X11 CodeBrowser window not found by exact title");
