@@ -1,12 +1,14 @@
 """Deterministic fail-closed GUI-06 READY/bridge linking negative tests."""
 import copy
 import hashlib
+import json
+import os
 from pathlib import Path
 import tempfile
 import unittest
 
 from assertion_audit import png_info
-from gui06_protocol import verify, reserve_run, CASE, PROGRAM, ADDRESS, FUNCTION, CLASS, TITLE
+from gui06_protocol import verify, reserve_run, read_private_capture, CASE, PROGRAM, ADDRESS, FUNCTION, CLASS, TITLE
 from test_assertion_audit import fixture_image
 
 
@@ -41,8 +43,8 @@ class Gui06ProtocolTest(unittest.TestCase):
             visual_readback_verified=False,native_nonce_ack=False,
             supervisor_ack=False,formal_gui_pass=False)
         self.receipt["pre_capture_epoch_ms"]=1000
-        self.receipt["capture_start_epoch_ms"]=1100
-        self.receipt["capture_end_epoch_ms"]=1200
+        self.receipt["capture_start_epoch_ms"]=1200
+        self.receipt["capture_end_epoch_ms"]=1250
         self.receipt["post_capture_epoch_ms"]=1400
         self.ready=dict(run_id=RUN,case_id=CASE,window_id=XID,
                         window_title=TITLE,window_class=CLASS,program=PROGRAM,
@@ -144,6 +146,55 @@ class Gui06ProtocolTest(unittest.TestCase):
             (evidence/("pilot-x11-"+RUN)).mkdir()
             with self.assertRaises(ValueError):
                 reserve_run(root,RUN)
+
+
+    def test_unverified_listing_and_forged_capture_timing_rejected(self):
+        self.bad("receipt","listing_verified",False)
+        self.bad("receipt","decompiler_verified",False)
+        self.bad("receipt","inprocess_consistency_verified",False)
+        self.bad("ready","pre_capture_epoch_ms",999)
+        self.bad("receipt","capture_start_epoch_ms",1170)
+        self.bad("receipt","capture_end_epoch_ms",1450)
+
+    def test_bridge_originals_are_private_regular_single_link_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            evidence=Path(tmp)/"evidence"
+            evidence.mkdir(mode=0o700)
+            source=evidence/("pilot-x11-"+RUN)
+            source.mkdir(mode=0o700)
+            report=source/"bridge-capture.json"
+            image=source/"ghidra-window.png"
+            report.write_text(json.dumps(self.bridge))
+            image.write_bytes(self.png)
+            report.chmod(0o600)
+            image.chmod(0o600)
+            linked,report_raw,image_raw=read_private_capture(evidence,RUN)
+            self.assertEqual(linked,self.bridge)
+            self.assertEqual(image_raw,self.png)
+            self.assertEqual(report_raw,report.read_bytes())
+            image.chmod(0o644)
+            with self.assertRaises(ValueError):
+                read_private_capture(evidence,RUN)
+            image.chmod(0o600)
+            report.unlink()
+            report.symlink_to(image)
+            with self.assertRaises(ValueError):
+                read_private_capture(evidence,RUN)
+            report.unlink()
+            report.write_text('{"run_id":"a","run_id":"b"}')
+            report.chmod(0o600)
+            with self.assertRaises(ValueError):
+                read_private_capture(evidence,RUN)
+            report.write_text(json.dumps(self.bridge))
+            report.chmod(0o600)
+            alias=source/"another-link.json"
+            os.link(report,alias)
+            with self.assertRaises(ValueError):
+                read_private_capture(evidence,RUN)
+            alias.unlink()
+            source.chmod(0o755)
+            with self.assertRaises(ValueError):
+                read_private_capture(evidence,RUN)
 
 
 if __name__=="__main__":

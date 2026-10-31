@@ -18,7 +18,7 @@ import uuid
 import stat
 
 from assertion_audit import validate_files, sha256 as byte_sha256
-from gui06_protocol import verify as verify_bridge, reserve_run
+from gui06_protocol import verify as verify_bridge, reserve_run, read_private_capture
 
 ROOT = Path(__file__).resolve().parents[2]
 VERSION = "12.1.4"
@@ -259,10 +259,10 @@ def main():
                 ready=json.loads((out/"capture-ready.json").read_text())
                 receipt=json.loads((out/"codebrowser-assertions.json").read_text())
                 host_dir=evidence/("pilot-x11-"+run_id)
-                bridge=json.loads((host_dir/"bridge-capture.json").read_text())
+                bridge,bridge_json_raw,bridge_png_raw=read_private_capture(
+                    evidence,run_id)
                 verified=verify_bridge(
-                    ready,receipt,bridge,
-                    (host_dir/"ghidra-window.png").read_bytes(),run_id)
+                    ready,receipt,bridge,bridge_png_raw,run_id)
                 if not verified["structurally_correlated"]:
                     raise RuntimeError("GUI-06 structural correlation missing")
                 # Four hashes are candidate pins only; the actual Supervisor
@@ -273,8 +273,8 @@ def main():
                     "window_id":receipt["window_id"],
                     "harness_json_sha256":sha256(out/"codebrowser-assertions.json"),
                     "harness_png_sha256":sha256(out/"ghidra-window.png"),
-                    "bridge_json_sha256":sha256(host_dir/"bridge-capture.json"),
-                    "bridge_png_sha256":sha256(host_dir/"ghidra-window.png"),
+                    "bridge_json_sha256":byte_sha256(bridge_json_raw),
+                    "bridge_png_sha256":byte_sha256(bridge_png_raw),
                     "independently_pinned_by_supervisor":False,
                     "visual_readback_verified":False,
                     "supervisor_ack":False,"formal_gui_pass":False,
@@ -284,14 +284,21 @@ def main():
                     encoding="utf-8")
                 saved_manifest=json.loads(
                     (out/"four-original-sha256.json").read_text(encoding="utf-8"))
-                for field,source in (
-                    ("harness_json_sha256",out/"codebrowser-assertions.json"),
-                    ("harness_png_sha256",out/"ghidra-window.png"),
-                    ("bridge_json_sha256",host_dir/"bridge-capture.json"),
-                    ("bridge_png_sha256",host_dir/"ghidra-window.png"),
-                ):
-                    if saved_manifest[field]!=sha256(source):
-                        raise RuntimeError("Four-source digest verification failed: "+field)
+                checks={
+                    "harness_json_sha256":sha256(out/"codebrowser-assertions.json"),
+                    "harness_png_sha256":sha256(out/"ghidra-window.png"),
+                    "bridge_json_sha256":byte_sha256(bridge_json_raw),
+                    "bridge_png_sha256":byte_sha256(bridge_png_raw),
+                }
+                if any(saved_manifest[key]!=value
+                       for key,value in checks.items()):
+                    raise RuntimeError("Four-source digest verification failed")
+                # Reject a bridge that replaces any original after validation.
+                _,rechecked_json,rechecked_png=read_private_capture(
+                    evidence,run_id)
+                if (rechecked_json!=bridge_json_raw or
+                        rechecked_png!=bridge_png_raw):
+                    raise RuntimeError("Bridge originals changed after verification")
                 result["external_capture_correlated_structurally"]=True
                 result["external_png_sha256"]=bridge["captured_screenshot_sha256"]
             if not proof["structural_evidence_consistent"]:
