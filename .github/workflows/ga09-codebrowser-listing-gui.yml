@@ -80,6 +80,25 @@ jobs:
               --bridge-timeout 60 --timeout 300
           test "$(find "$RUNNER_TEMP/ga18-gui/evidence" -maxdepth 1 -type d -name 'pilot-ghidra-*' | wc -l)" = 1
           test "$(find "$RUNNER_TEMP/ga18-gui/evidence" -maxdepth 1 -type d -name 'pilot-x11-*' | wc -l)" = 1
+      - name: GUI-06 negative live timeout without any host X11 capture
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -m 700 "$RUNNER_TEMP/ga18-timeout"
+          if xvfb-run -a -s '-screen 0 1400x1050x24' \
+            bash -c 'openbox --sm-disable >/dev/null 2>&1 & wm=$!; trap "kill $wm 2>/dev/null || true" EXIT; sleep 1; python3 tests/codebrowser_harness/run.py "$@"' codebrowser-timeout \
+              --ghidra "$GHIDRA_INSTALL_DIR" --java-home "$JAVA_HOME" \
+              --extension-zip "$EXTENSION" \
+              --extension-sha256 "$(cut -d' ' -f1 "$RUNNER_TEMP/extension.sha256")" \
+              --output "$RUNNER_TEMP/ga18-timeout" --bridge-mode host \
+              --bridge-timeout 5 --timeout 300; then
+            echo "Unexpected GUI-06 host capture PASS without host screenshot" >&2
+            exit 1
+          fi
+          log=$(find "$RUNNER_TEMP/ga18-timeout/evidence" -maxdepth 2 -name java.log -print -quit)
+          test -n "$log"
+          grep -F "bounded external host X11 capture timeout" "$log"
+          test "$(find "$RUNNER_TEMP/ga18-timeout/evidence" -name bridge-capture.json | wc -l)" = 0
       - name: Print last synthetic-only Ghidra log on test failure
         if: failure()
         shell: bash
@@ -121,6 +140,7 @@ jobs:
           path: |
             ${{ runner.temp }}/codebrowser-evidence/
             ${{ runner.temp }}/ga18-gui/evidence/
+            ${{ runner.temp }}/ga18-timeout/evidence/
             ${{ runner.temp }}/codebrowser-bundle/
             ${{ runner.temp }}/extension.sha256
           if-no-files-found: warn
