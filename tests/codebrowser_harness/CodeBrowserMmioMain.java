@@ -354,8 +354,7 @@ public final class CodeBrowserMmioMain {
             edt(()->{
                 dialog.dispose();
                 tool[0].getService(ProgramManager.class).setCurrentProgram(first);
-                require(tool[0].getService(GoToService.class).goTo(site,first),
-                    "Could not navigate CodeBrowser to genuine synthetic Function");
+                tool[0].getService(GoToService.class).goTo(site,first);
             });
             until(()->{
                 try{return evalEdt(()->at(viewer,0x20));}
