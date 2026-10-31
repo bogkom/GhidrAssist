@@ -228,6 +228,15 @@ public final class CodeBrowserMmioMain {
                 require(new DisassembleCommand(site,null,false)
                     .applyTo(first,TaskMonitor.DUMMY),
                     "Failed to disassemble synthetic MOVE.W");
+                Address last=site.add(9);
+                require(new DisassembleCommand(site.add(8),null,false)
+                    .applyTo(first,TaskMonitor.DUMMY),
+                    "Failed to disassemble synthetic RTS");
+                require(first.getFunctionManager().createFunction(
+                    "FUN_00000020",site,
+                    new ghidra.program.model.address.AddressSet(site,last),
+                    ghidra.program.model.symbol.SourceType.ANALYSIS)!=null,
+                    "Failed to create real synthetic CPU32 Function");
             }finally{first.endTransaction(tx,true);}
             Instruction instruction=first.getListing().getInstructionAt(site);
             require(instruction!=null && instruction.toString()
@@ -247,6 +256,7 @@ public final class CodeBrowserMmioMain {
                     "ghidra.app.plugin.core.gotoquery.GoToServicePlugin",
                     "ghidra.app.plugin.core.clipboard.ClipboardPlugin",
                     "ghidra.app.plugin.core.codebrowser.CodeBrowserPlugin",
+                    "ghidra.app.plugin.core.decompile.DecompilerPlugin",
                     "ghidrassist.GhidrAssistPlugin"));
                 ProgramManager pm=tool[0].getService(ProgramManager.class);
                 pm.openProgram(first);
@@ -310,42 +320,6 @@ public final class CodeBrowserMmioMain {
                 catch(Exception e){throw new RuntimeException(e);}
             },15);
             result.addProperty("listing_navigation",true);
-            // Robot captures X11 pixels from the *real displayed window*.
-            // Swing printAll()/paint() output is NOT a screen capture; the
-            // screenshot is evidence only, never a model/human visual readback.
-            Frame browser=tool[0].getToolFrame();
-            require(browser!=null && browser.isShowing() &&
-                    browser.getTitle().contains("GhidrAssist isolated CodeBrowser MMIO"),
-                "Genuine Ghidra CodeBrowser window identity was not verified");
-            Rectangle bounds=browser.getBounds().intersection(
-                browser.getGraphicsConfiguration().getBounds());
-            require(bounds.width>=640 && bounds.height>=400,
-                "Ghidra CodeBrowser window not sufficiently visible on X11");
-            Robot robot=new Robot(browser.getGraphicsConfiguration().getDevice());
-            robot.waitForIdle();
-            BufferedImage pixels=robot.createScreenCapture(bounds);
-            require(pixels!=null && pixels.getWidth()==bounds.width &&
-                    pixels.getHeight()==bounds.height,
-                "X11 Robot screenshot dimensions mismatched real window");
-            Path screenshot=out.resolve("codebrowser-x11.png");
-            require(ImageIO.write(pixels,"png",screenshot.toFile()),
-                "No actual PNG encoder for X11 screenshot");
-            byte[] imageBytes=Files.readAllBytes(screenshot);
-            require(imageBytes.length>4096 &&
-                    ImageIO.read(screenshot.toFile())!=null,
-                "X11 screenshot missing or undecodable");
-            String imageDigest=HexFormat.of().formatHex(
-                MessageDigest.getInstance("SHA-256").digest(imageBytes));
-            require(imageDigest.matches("[0-9a-f]{64}"),
-                "X11 screenshot SHA-256 missing");
-            result.addProperty("window_identity_verified",true);
-            result.addProperty("codebrowser_listing_verified",true);
-            result.addProperty("x11_screenshot_captured",true);
-            result.addProperty("x11_screenshot_sha256",imageDigest);
-            result.addProperty("x11_screenshot_width",bounds.width);
-            result.addProperty("x11_screenshot_height",bounds.height);
-            result.addProperty("visual_readback_verified",false);
-            result.addProperty("human_visual_readback","NOT_PERFORMED");
             edt(()->{
                 ProgramManager managerService=tool[0].getService(ProgramManager.class);
                 managerService.setCurrentProgram(second);
@@ -380,8 +354,32 @@ public final class CodeBrowserMmioMain {
             edt(()->{
                 dialog.dispose();
                 tool[0].getService(ProgramManager.class).setCurrentProgram(first);
-                ((JButton)fieldUnchecked(tab,"run")).doClick();
+                require(tool[0].getService(GoToService.class).goTo(site,first),
+                    "Could not navigate CodeBrowser to genuine synthetic Function");
             });
+            until(()->{
+                try{return evalEdt(()->at(viewer,0x20));}
+                catch(Exception e){throw new RuntimeException(e);}
+            },15);
+            // Now the modal MMIO dialog is gone, so the real CodeBrowser
+            // Listing and Decompiler are not hidden by that dialog.
+            JsonObject receipt=CodeBrowserAssertionReceipt.capture(
+                tool[0],first,site,out,conf.get("run_id").getAsString(),
+                conf.get("case_id").getAsString());
+            result.addProperty("window_identity_verified",true);
+            result.addProperty("codebrowser_listing_verified",true);
+            result.addProperty("x11_screenshot_captured",true);
+            result.addProperty("x11_screenshot_sha256",
+                receipt.get("image_sha256").getAsString());
+            result.addProperty("x11_screenshot_width",
+                receipt.get("image_width").getAsInt());
+            result.addProperty("x11_screenshot_height",
+                receipt.get("image_height").getAsInt());
+            result.addProperty("same_run_receipt_created",true);
+            result.addProperty("visual_readback_verified",false);
+            result.addProperty("formal_gui_pass",false);
+            result.addProperty("human_visual_readback","NOT_PERFORMED");
+            edt(()->((JButton)fieldUnchecked(tab,"run")).doClick());
             until(()->{
                 try{return evalEdt(()->((JButton)fieldUnchecked(tab,"approve"))
                     .isEnabled());}
