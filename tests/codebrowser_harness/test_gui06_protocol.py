@@ -7,7 +7,7 @@ import unittest
 
 from assertion_audit import png_info
 from gui06_protocol import verify, reserve_run, CASE, PROGRAM, ADDRESS, FUNCTION, CLASS, TITLE
-from test_assertion_audit import AssertionsAuditTest
+from test_assertion_audit import fixture_image
 
 
 RUN="a"*32
@@ -17,17 +17,29 @@ XID="0x04000026"
 class Gui06ProtocolTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.png=AssertionsAuditTest.fixture_image if hasattr(
-            AssertionsAuditTest,"fixture_image") else None
-        from test_assertion_audit import fixture_image
         cls.png=fixture_image()
 
     def setUp(self):
-        f=AssertionsAuditTest("test_structurally_consistent_but_not_formally_trusted")
-        f.setUp()
-        self.receipt=copy.deepcopy(f.receipt)
-        self.receipt.update(run_id=RUN,case_id=CASE,
-                            window_id=XID,window_class=CLASS,window_title=TITLE)
+        self.receipt=dict(
+            schema=1,kind="ga18-codebrowser-listing-assertions",
+            source_kind="ghidra-inprocess-codebrowser",
+            run_id=RUN,case_id=CASE,window_id=XID,
+            window_class=CLASS,window_title=TITLE,
+            program=PROGRAM,address=ADDRESS,function=FUNCTION,
+            decompiler_function=FUNCTION,listing_verified=True,
+            decompiler_verified=True,
+            image_sha256=hashlib.sha256(self.png).hexdigest(),
+            image_width=640,image_height=400,
+            pre_capture=dict(program=PROGRAM,address=ADDRESS,function=FUNCTION,
+                decompiler_function=FUNCTION,observed_epoch_ms=1000),
+            post_capture=dict(program=PROGRAM,address=ADDRESS,function=FUNCTION,
+                decompiler_function=FUNCTION,observed_epoch_ms=1400),
+            inprocess_consistency_verified=True,
+            trusted_ghidra_provenance_verified=False,
+            same_run_semantics_verified=False,
+            independent_visual_readback=False,
+            visual_readback_verified=False,native_nonce_ack=False,
+            supervisor_ack=False,formal_gui_pass=False)
         self.receipt["pre_capture_epoch_ms"]=1000
         self.receipt["capture_start_epoch_ms"]=1100
         self.receipt["capture_end_epoch_ms"]=1200
