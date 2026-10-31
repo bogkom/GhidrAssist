@@ -90,13 +90,26 @@ final class CodeBrowserAssertionReceipt {
         }
         throw new NoSuchFieldException(name);
     }
-    private static Function shownDecompilerFunction(GhidraTool tool)throws Exception {
+    private static Object connectedDecompiler(GhidraTool tool)throws Exception {
         Object plugin=tool.getManagedPlugins().stream()
             .filter(p->p.getClass().getSimpleName().equals("DecompilePlugin"))
             .findFirst().orElseThrow(()->new AssertionError(
-                "real DecompilerPlugin was not installed"));
+                "real DecompilePlugin was not installed"));
         Object provider=field(plugin,"connectedProvider");
         check(provider!=null,"real connected DecompilerProvider missing");
+        return provider;
+    }
+    private static void displayDecompiler(GhidraTool tool)throws Exception {
+        Object provider=connectedDecompiler(tool);
+        check(provider instanceof docking.ComponentProvider,
+            "Ghidra provider is not a real dockable Decompiler");
+        javax.swing.SwingUtilities.invokeAndWait(() -> {
+            tool.showComponentProvider((docking.ComponentProvider)provider,true);
+            tool.toFront((docking.ComponentProvider)provider);
+        });
+    }
+    private static Function shownDecompilerFunction(GhidraTool tool)throws Exception {
+        Object provider=connectedDecompiler(tool);
         // Invoke actual DecompilerProvider accessor, never infer it from
         // Listing cursor, title, or a hard-coded fixture address.
         Object controller=provider.getClass().getMethod("getController").invoke(provider);
@@ -120,7 +133,8 @@ final class CodeBrowserAssertionReceipt {
         Function fn=active.getFunctionManager()
             .getFunctionContaining(location.getAddress());
         Function decomp=shownDecompilerFunction(tool);
-        check(fn!=null && decomp!=null,"Listing or Decompiler Function missing");
+        check(fn!=null,"Listing Function missing from actual FunctionManager");
+        check(decomp!=null,"Decompiler Function missing from actual DecompilerController");
         check(fn.getProgram()==expected && decomp.getProgram()==expected,
             "Listing/Decompiler function refers to another Program");
         check(location.getAddress().equals(address) &&
@@ -148,8 +162,15 @@ final class CodeBrowserAssertionReceipt {
             "invalid synthetic test case ID");
         Frame frame=tool.getToolFrame();
         check(frame!=null && frame.isShowing(),"actual CodeBrowser frame not displayed");
-        // Wait for the real DecompilerService to catch up with Listing navigation.
-        long deadline=System.nanoTime()+15_000_000_000L;
+        // Make the actual Ghidra Decompiler component visible, not merely
+        // a loaded plugin whose provider has never been shown/decompiled.
+        displayDecompiler(tool);
+        javax.swing.SwingUtilities.invokeAndWait(() -> {
+            tool.getService(ghidra.app.services.GoToService.class)
+                .goTo(address,expected);
+        });
+        // Wait for the real asynchronous DecompilePlugin location update.
+        long deadline=System.nanoTime()+20_000_000_000L;
         State before=null;
         String lastFailure="NO_OBSERVATION";
         while(System.nanoTime()<deadline) {
