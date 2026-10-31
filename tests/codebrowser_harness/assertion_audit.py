@@ -92,7 +92,7 @@ def validate(receipt, image, *, case_id, run_id,
          "missing genuine in-process assertion result")
     need(ID.fullmatch(receipt["window_id"]) is not None and
          receipt["window_class"] and
-         "Ghidra" in receipt["window_class"] and
+         receipt["window_class"]=="CodeBrowserMmioMain.CodeBrowserMmioMain" and
          receipt["window_title"].startswith("GhidrAssist isolated CodeBrowser MMIO"),
          "invalid X11 window identity/class/full title")
     for moment in ("pre_capture","post_capture"):
