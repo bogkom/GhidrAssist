@@ -1,0 +1,37 @@
+name: RESET candidate configuration alternatives
+on:
+  pull_request:
+    paths:
+      - 'src/main/java/ghidrassist/hardware/HardwareStartupConfig.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareResetFlow.java'
+      - 'src/main/java/ghidrassist/hardware/GhidraHardwareFlowService.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareInventoryService.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareStartupConfigSelfTest.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareStartupResetIntegrationSelfTest.java'
+      - '.github/workflows/hardware-startup-alternatives.yml'
+  workflow_dispatch:
+jobs:
+  static-evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Compile source-only startup model
+        run: |
+          mkdir -p "$RUNNER_TEMP/startup"
+          javac --release 21 -d "$RUNNER_TEMP/startup" \
+            src/main/java/ghidrassist/hardware/HardwareCallEffects.java \
+            src/main/java/ghidrassist/hardware/HardwareResetFlow.java \
+            src/main/java/ghidrassist/hardware/HardwareStartupConfig.java \
+            src/test/java/ghidrassist/hardware/HardwareStartupConfigSelfTest.java \
+            src/test/java/ghidrassist/hardware/HardwareStartupResetIntegrationSelfTest.java
+      - name: Assert no false MM/CS execution conclusions
+        run: |
+          java -cp "$RUNNER_TEMP/startup" ghidrassist.hardware.HardwareStartupConfigSelfTest
+          java -cp "$RUNNER_TEMP/startup" ghidrassist.hardware.HardwareStartupResetIntegrationSelfTest

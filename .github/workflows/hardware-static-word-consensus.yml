@@ -1,0 +1,36 @@
+name: Hardware conditional word-literal consensus regression
+on:
+  pull_request:
+    paths:
+      - 'src/main/java/ghidrassist/hardware/HardwareStaticWordConsensus.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareInventoryService.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareStaticWordConsensusSelfTest.java'
+      - '.github/workflows/hardware-static-word-consensus.yml'
+  push:
+    paths:
+      - 'src/main/java/ghidrassist/hardware/HardwareStaticWordConsensus.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareInventoryService.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareStaticWordConsensusSelfTest.java'
+      - '.github/workflows/hardware-static-word-consensus.yml'
+  workflow_dispatch:
+jobs:
+  consensus:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Compile conditional source word consensus
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/consensus"
+          javac --release 21 -d "$RUNNER_TEMP/consensus" \
+            src/main/java/ghidrassist/hardware/HardwareStaticWordConsensus.java \
+            src/test/java/ghidrassist/hardware/HardwareStaticWordConsensusSelfTest.java
+      - name: No lexical last-write-wins chip-select assumptions
+        run: java -cp "$RUNNER_TEMP/consensus" ghidrassist.hardware.HardwareStaticWordConsensusSelfTest

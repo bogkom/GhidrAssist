@@ -53,20 +53,31 @@ public final class HardwareInventoryService {
         public final int uniqueSites,functions;
         public final List<Site> sites;
         public final String markdown;
+        public final String overviewMarkdown;
+        public final String detailsMarkdown;
         public final String namePreviewCsv;
+        public final String configurationEvidenceCsv;
+        public final HardwareCsbarUnifiedReview.Review csbarReview;
         public final List<HardwareFunctionNamingReview.Proposal> functionProposals;
         private Report(String program,String language,String selection,List<Site> sites,
-                String markdown,String namePreviewCsv,int functions,
-                List<HardwareFunctionNamingReview.Proposal> functionProposals){
+                String overviewMarkdown,String detailsMarkdown,String namePreviewCsv,
+                String configurationEvidenceCsv,int functions,
+                List<HardwareFunctionNamingReview.Proposal> functionProposals,
+                HardwareCsbarUnifiedReview.Review csbarReview){
             this.program=program;
             this.language=language;
             this.selection=selection;
-            this.uniqueSites=sites.size();
+            this.uniqueSites=(int)sites.stream().filter(site->
+                HardwareReportScope.isInitializationRegister(site.register)).count();
             this.sites=List.copyOf(sites);
-            this.markdown=markdown;
+            this.overviewMarkdown=overviewMarkdown;
+            this.detailsMarkdown=detailsMarkdown;
+            this.markdown=overviewMarkdown+"\n\n---\n\n"+detailsMarkdown;
             this.namePreviewCsv=namePreviewCsv;
+            this.configurationEvidenceCsv=configurationEvidenceCsv;
             this.functions=functions;
             this.functionProposals=List.copyOf(functionProposals);
+            this.csbarReview=java.util.Objects.requireNonNull(csbarReview);
         }
     }
 
@@ -114,7 +125,23 @@ public final class HardwareInventoryService {
     public Report scan(Program program,boolean concreteDevice,TaskMonitor monitor)
             throws CancelledException {
         if(program==null)throw new IllegalArgumentException("A loaded Ghidra program is required");
+        return scan(program,concreteDevice,monitor,HardwareAnalysisRevision.capture(
+            program,program.getModificationNumber(),
+            program.getLanguageID().toString(),program.getExecutableSHA256(),
+            concreteDevice));
+    }
+
+    public Report scan(Program program,boolean concreteDevice,TaskMonitor monitor,
+            HardwareAnalysisRevision revision) throws CancelledException {
+        if(program==null)throw new IllegalArgumentException("A loaded Ghidra program is required");
         if(monitor==null)monitor=TaskMonitor.DUMMY;
+        monitor.checkCancelled();
+        // A complete CFG stage is saved BEFORE the reference-inventory stage.
+        // If the user cancels the later stage, a same-revision retry can
+        // reuse this exact conservative CFG evidence without recalculating it.
+        HardwareFlowStageCache.Result flowStage=
+            HardwareFlowStageCache.loadOrAnalyze(program,revision,monitor);
+        monitor.checkCancelled();
         HardwareProfiles.Profile profile=HardwareProfiles.mc68332();
         Map<Long,HardwareProfiles.Register> byAddress=new LinkedHashMap<>();
         for(HardwareProfiles.Register r:profile.registers)
@@ -175,7 +202,10 @@ public final class HardwareInventoryService {
         sites.sort(Comparator.comparing((Site s)->s.function)
             .thenComparing(s->s.pc).thenComparingLong(s->s.registerAddress));
         Map<String,List<Site>> grouped=new LinkedHashMap<>();
-        for(Site site:sites)grouped.computeIfAbsent(site.function,k->new ArrayList<>()).add(site);
+        // Keep the full register set for CS pin-state inference; display below
+        // only the focused initialization sites and their parent functions.
+        for(Site site:sites)
+            grouped.computeIfAbsent(site.function,k->new ArrayList<>()).add(site);
         String choice=concreteDevice?"MC68332 (MANUALLY ASSUMED)":"CPU32 (MC68332-ADDRESS RECONNAISSANCE)";
         StringBuilder md=new StringBuilder();
         md.append("# Hardware Evidence — read-only\n\n")
@@ -183,49 +213,74 @@ public final class HardwareInventoryService {
           .append("- Ghidra language: `").append(program.getLanguageID()).append("`\n")
           .append("- Selection: **").append(choice).append("**\n")
           .append("- Scanned Listing instructions: ").append(scanned).append("\n")
-          .append("- Unique instruction/register reference sites: ").append(sites.size()).append("\n")
+          .append("- Initialization-register reference sites shown: ")
+            .append(sites.stream().filter(s->HardwareReportScope.isInitializationRegister(s.register)).count())
+            .append("\n")
+          .append("- Other MCU register references: ")
+            .append(sites.stream().filter(s->!HardwareReportScope.isInitializationRegister(s.register)).count())
+            .append(" (retained internally; definitions available in Review / Apply)\n")
           .append("- Firmware origin: currently loaded Ghidra project, NOT a device readback\n")
           .append("- MCU identity, active MM map, reached branches, connected chips and memory wiring: **NOT VERIFIED**\n")
           .append("- Register address provenance: [MC68332 User's Manual](https://www.nxp.com/docs/en/user-guide/MC68332UM.pdf)\n\n");
-        md.append("## Function-local evidence (no runtime ordering guarantee)\n\n");
-        ChipSelectModel.Decoder decoder=new ChipSelectModel.Decoder(
-            "MC68332","MC68332 manual; provisional code-site constants");
+        md.append(HardwareProfileAudit.inspect(concreteDevice ?
+            profile : HardwareProfiles.cpu32Family()).markdown());
+        md.append("## Initialization/memory-map evidence (SIMCR/MM, TRAMBAR, CSBAR, CSOR, VBR)\n\n")
+          .append("CSPAR contributes to conditional chip-select decoding but is not listed as a separate register site.\n\nMC68332 sourced bitfields are shown only for exact full-word literal SIMCR MOVEs; they are static candidate values, not proven execution or latched MM state.\n\n");
         for(Map.Entry<String,List<Site>> group:grouped.entrySet()){
             monitor.checkCancelled();
+            if(group.getValue().stream().noneMatch(site->
+                    HardwareReportScope.isInitializationRegister(site.register)))
+                continue;
             md.append("### ").append(group.getKey()).append("\n\n");
             // Different MM windows never form one combined state.
             for(int mm=0;mm<=1;mm++){
-                Map<String,Integer> values=new LinkedHashMap<>();
+                List<HardwareStaticWordConsensus.Observation> localWrites=
+                    new ArrayList<>();
+                for(Site site:group.getValue())
+                    if((site.registerAddress<0x800000L?0:1)==mm)
+                        localWrites.add(new HardwareStaticWordConsensus.Observation(
+                            site.register,site.write,site.literal));
+                var consensus=HardwareStaticWordConsensus.inspect(localWrites);
+                // No source-PC last-write-wins: any conflicting or unknown
+                // write excludes the register from a single-value sketch.
+                Map<String,Integer> values=consensus.singleLiteralCandidates();
                 boolean any=false;
                 for(Site site:group.getValue()){
                     if((site.registerAddress<0x800000L?0:1)!=mm)continue;
+                    // CSPAR and other register writes update internal context,
+                    // but only key initialization registers appear as rows.
+                    if(!HardwareReportScope.isInitializationRegister(site.register))
+                        continue;
                     any=true;
                     md.append("- `").append(site.pc).append("` ")
                       .append(site.register).append(" `")
                       .append(hex(site.registerAddress,6)).append("` — ")
                       .append(site.write?"WRITE":"READ/REFERENCE")
                       .append("; ").append(site.literal==null?"value UNKNOWN":hex(site.literal,4))
-                      .append("; `").append(site.asm).append("`\n");
-                    if(site.write){
-                        if(site.literal==null)values.remove(site.register);
-                        else values.put(site.register,site.literal);
+                      .append("; `").append(site.asm).append("`");
+                    // Only a literal full-width word MOVE supports exact SIMCR
+                    // bit decoding. Byte/indirect/derived writes remain UNKNOWN.
+                    if (concreteDevice && site.write && site.literal != null &&
+                            "SIMCR".equals(site.register) &&
+                            site.asm.stripLeading().toUpperCase(Locale.ROOT)
+                                .matches("MOVE\\.W\\s+#.*")) {
+                        md.append("; ")
+                          .append(HardwareBitfieldDecoder.decode(
+                              profile,"SIMCR",site.literal,16).summary());
                     }
+                    md.append("\n");
                 }
                 if(!any)continue;
-                md.append("\n**MM=").append(mm).append(" conditional linear-code snapshot**\n\n");
-                if(!values.isEmpty()){
-                    List<ChipSelectModel.Window> windows=new ArrayList<>();
-                    for(int cs=-1;cs<=10;cs++){
-                        String label=cs<0?"BT":Integer.toString(cs);
-                        String pin=cs<=5?"CSPAR0":"CSPAR1";
-                        ChipSelectModel.Window window=decoder.window(cs,
-                            values.get("CSBAR"+label),values.get("CSOR"+label),values.get(pin));
-                        if(window==null)continue;
-                        windows.add(window);
-                        md.append("- ").append(window.toSummary()).append("\n");
-                    }
-                    List<String> overlaps=ChipSelectModel.overlaps(windows);
-                    for(String overlap:overlaps)md.append("- shared address hypothesis: ").append(overlap).append("\n");
+                md.append("\n**MM=").append(mm)
+                    .append(" conditional candidate snapshot (NOT active state)**\n\n");
+                md.append("- ").append(consensus.description()).append(". ")
+                    .append("Alternative/unknown sites are excluded from any ")
+                    .append("single-value CS table.\n\n");
+                if(concreteDevice && !values.isEmpty()){
+                    md.append("**Per-select Chip Select table (conditional; function-local code sites)**\n\n");
+                    md.append(ChipSelectTable.markdown(values, true));
+                } else if(!concreteDevice) {
+                    md.append(ChipSelectTable.markdown(values, false));
                 }
                 md.append("\n");
             }
@@ -288,12 +343,70 @@ public final class HardwareInventoryService {
           .append(" (direct multi-register write evidence only; no renaming performed).\n")
           .append("Function rows in the same CSV have register column FUNCTION_ROLE; ")
           .append("unknown/indirect-only roles and runtime reachability remain unresolved.\n");
-        // A second, conservative CFG pass supplies address-register and
-        // conditional branch-join evidence. No binary bytes or labels are changed.
-        GhidraHardwareFlowService.Report flow=new GhidraHardwareFlowService()
-            .analyze(program,monitor);
-        md.append("\n\n").append(flow.markdown);
+        // The completed CFG stage came from the matching program revision;
+        // never treat this as a successful partial CFG resume.
+        md.append("\n\n- CFG/P-code completed-stage checkpoint: ")
+            .append(flowStage.reused()?"REUSED same revision":"COMPUTED for this revision")
+            .append("; no cross-session resume or runtime execution asserted.\n\n")
+            .append(flowStage.report().markdown);
+        int initializationFunctions=(int)grouped.values().stream().filter(group->
+            group.stream().anyMatch(site->
+                HardwareReportScope.isInitializationRegister(site.register))).count();
+        List<HardwareReportOverview.Site> overviewSites=new ArrayList<>();
+        for(Site site:sites)
+            overviewSites.add(new HardwareReportOverview.Site(
+                site.register,site.write,site.literal!=null));
+        String overview=HardwareReportOverview.render(concreteDevice,scanned,
+            initializationFunctions,vbrCount,flowStage.report().unresolved,
+            flowStage.report().limited,overviewSites);
+        csv+=HardwarePointerRoleReview.csvRows(flowStage.report().pointerRoles);
+        // One source PC can be observed in both Listing/XREF and CFG/P-code.
+        // The reconciler counts it only once and refuses to combine
+        // contradictory widths/words into a confident literal.
+        List<HardwareStartupEvidenceMerge.Observation> sources=new ArrayList<>();
+        for(Site site:sites){
+            monitor.checkCancelled();
+            Function f=program.getFunctionManager().getFunctionContaining(site.pc);
+            if(f==null)continue; // UNKNOWN owning function: do not invent call ancestry
+            Instruction instruction=program.getListing().getInstructionAt(site.pc);
+            String mnemonic=instruction==null?"":instruction.getMnemonicString()
+                .toUpperCase(Locale.ROOT);
+            int width=mnemonic.endsWith(".W")?16:
+                mnemonic.endsWith(".B")?8:mnemonic.endsWith(".L")?32:0;
+            sources.add(new HardwareStartupEvidenceMerge.Observation(
+                f.getEntryPoint().getOffset(),site.pc.getOffset(),
+                site.registerAddress,site.register,
+                HardwareStartupEvidenceMerge.Source.LISTING_REFERENCE,
+                site.write,width,site.literal,false));
+        }
+        for(HardwareCfgWriteAudit.Site s:flowStage.report().rawCfgMmioSites){
+            monitor.checkCancelled();
+            sources.add(new HardwareStartupEvidenceMerge.Observation(
+                s.function(),s.pc(),s.address(),s.register(),
+                HardwareStartupEvidenceMerge.Source.CFG_PCODE,
+                true,s.widthBits(),s.literal(),
+                s.unknownCall() || s.unknownStore() || s.functionIncomplete()));
+        }
+        var merged=HardwareStartupEvidenceMerge.reconcile(sources);
+        md.append("\n\n").append(merged.markdown(concreteDevice));
+        overview=HardwareReportOverview.withUnifiedSources(overview,merged);
+        List<HardwareStartupConfig.Site> startupSites=new ArrayList<>();
+        for(var item:merged.rows())
+            startupSites.add(item.forStartup(
+                merged.functionsWithUnknownAlias().contains(item.function())));
+        var startup=HardwareStartupConfig.analyze(concreteDevice,
+            flowStage.report().resetCandidateRecognized,
+            flowStage.report().resetCandidateFunctions,
+            flowStage.report().resetGraphIncomplete,startupSites);
+        md.append("\n\n").append(startup.markdown());
+        var guardedCsbar=HardwareCsbarUnifiedReview.inspect(concreteDevice,merged,
+            flowStage.report().cfgReviewComplete);
+        md.append("\n\n## Review / Apply source-safety gate\n\n- ")
+            .append(guardedCsbar.summary()).append("\n");
         return new Report(program.getName(),program.getLanguageID().toString(),choice,sites,
-            md.toString(),csv,grouped.size(),functionProposals);
+            overview,md.toString(),csv,
+            HardwareConfigurationEvidenceCsv.withUnifiedSources(
+                flowStage.report().configurationEvidenceCsv,merged,concreteDevice),
+            initializationFunctions,functionProposals,guardedCsbar);
     }
 }

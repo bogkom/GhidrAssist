@@ -20,6 +20,9 @@ import ghidrassist.apiprovider.capabilities.ChatProvider;
 import ghidrassist.apiprovider.exceptions.*;
 import okhttp3.OkHttpClient;
 import okhttp3.Response;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 
 public abstract class APIProvider implements ChatProvider {
     public enum ProviderType {
@@ -340,7 +343,12 @@ public abstract class APIProvider implements ChatProvider {
      * Extract API error code from response body (provider-specific)
      */
     protected String extractApiErrorCode(String responseBody) {
-        // Default implementation - subclasses should override for provider-specific logic
+        try {
+            JsonObject root = JsonParser.parseString(responseBody).getAsJsonObject();
+            JsonObject error = root.has("error") && root.get("error").isJsonObject() ? root.getAsJsonObject("error") : root;
+            if (error.has("code") && error.get("code").isJsonPrimitive())
+                return sanitizeDiagnosticText(error.get("code").getAsString());
+        } catch (RuntimeException ignored) { }
         return null;
     }
     
@@ -348,26 +356,48 @@ public abstract class APIProvider implements ChatProvider {
      * Extract error message from response body (provider-specific)
      */
     protected String extractErrorMessage(String responseBody, int statusCode) {
-        // Default implementation - subclasses should override for provider-specific logic
-        if (responseBody != null && !responseBody.isEmpty()) {
-            // Try to extract a simple error message
-            if (responseBody.contains("\"message\"")) {
-                try {
-                    int start = responseBody.indexOf("\"message\"") + 10;
-                    int end = responseBody.indexOf("\"", start + 1);
-                    if (end > start) {
-                        return responseBody.substring(start + 1, end);
-                    }
-                } catch (Exception e) {
-                    // Ignore parsing errors
-                }
+        if (responseBody == null || responseBody.isBlank()) return null;
+        try {
+            JsonObject root = JsonParser.parseString(responseBody).getAsJsonObject();
+            JsonObject error = root.has("error") && root.get("error").isJsonObject() ? root.getAsJsonObject("error") : root;
+            for (String field : List.of("message", "detail")) {
+                JsonElement message = error.get(field);
+                if (message != null && message.isJsonPrimitive() && !message.getAsString().isBlank())
+                    return sanitizeDiagnosticText(message.getAsString());
             }
-            
-            // Fallback: return truncated response body
-            return responseBody.length() > 200 ? responseBody.substring(0, 200) + "..." : responseBody;
+            if (root.has("error") && root.get("error").isJsonPrimitive())
+                return sanitizeDiagnosticText(root.get("error").getAsString());
+        } catch (RuntimeException ignored) { }
+        // HTML or arbitrary response bodies can contain credentials or identifiers.
+        return "HTTP " + statusCode + " response did not contain a supported API error message";
+    }
+
+    protected String sanitizeDiagnosticText(String message) {
+        if (message == null) return null;
+        if (key != null && !key.isBlank()) {
+            message = message.replace(key, "[REDACTED]");
+            try { message = redactCredentialValues(message, JsonParser.parseString(key)); }
+            catch (RuntimeException ignored) { }
         }
-        
-        return null;
+        message = message.replaceAll("(?i)(Bearer\\s+)[^\\s\\\"']+", "$1[REDACTED]")
+            .replaceAll("eyJ[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+", "[REDACTED]")
+            .replaceAll("sk-[A-Za-z0-9_-]{12,}", "[REDACTED]")
+            .replaceAll("(?i)(session[_ -]?id\\s*[:=]\\s*)[^\\s,;]+", "$1[REDACTED]")
+            .replaceAll("(?i)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", "[REDACTED_ID]");
+        return message.length() > 2000 ? message.substring(0, 2000) + "..." : message;
+    }
+
+    private String redactCredentialValues(String message, JsonElement credentials) {
+        if (credentials.isJsonObject()) {
+            for (var entry : credentials.getAsJsonObject().entrySet())
+                message = redactCredentialValues(message, entry.getValue());
+        } else if (credentials.isJsonArray()) {
+            for (JsonElement item : credentials.getAsJsonArray()) message = redactCredentialValues(message, item);
+        } else if (credentials.isJsonPrimitive() && credentials.getAsJsonPrimitive().isString()) {
+            String value = credentials.getAsString();
+            if (value.length() > 8) message = message.replace(value, "[REDACTED]");
+        }
+        return message;
     }
     
     /**

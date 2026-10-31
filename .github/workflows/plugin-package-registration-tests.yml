@@ -1,0 +1,117 @@
+name: GhidrAssist PluginPackage registration — Ghidra 12.1.4
+on:
+  pull_request:
+    paths:
+      - 'src/main/java/ghidrassist/GhidrAssistPluginPackage.java'
+      - 'src/main/java/ghidrassist/GhidrAssistPlugin.java'
+      - 'src/test/java/ghidrassist/GhidrAssistPluginPackageSelfTest.java'
+      - 'src/test/java/ghidrassist/GhidrAssistPluginPackageDiscoveryMain.java'
+      - '.github/workflows/plugin-package-registration-tests.yml'
+  push:
+    branches: [master]
+    paths:
+      - 'src/main/java/ghidrassist/GhidrAssistPluginPackage.java'
+      - 'src/main/java/ghidrassist/GhidrAssistPlugin.java'
+      - 'src/test/java/ghidrassist/GhidrAssistPluginPackageSelfTest.java'
+      - 'src/test/java/ghidrassist/GhidrAssistPluginPackageDiscoveryMain.java'
+      - '.github/workflows/plugin-package-registration-tests.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  plugin-package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Download exact hash-pinned Ghidra 12.1.4 PUBLIC
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fLsS --retry 3 --connect-timeout 20 \
+            -o "$RUNNER_TEMP/ghidra.zip" \
+            "https://github.com/NationalSecurityAgency/ghidra/releases/download/Ghidra_12.1.4_build/ghidra_12.1.4_PUBLIC_20260921.zip"
+          echo "ddac49f903da9d5bac833e5cc79395098b9c33cfd3279be5f31bd00387d2d4db  $RUNNER_TEMP/ghidra.zip" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/ghidra"
+          unzip -q "$RUNNER_TEMP/ghidra.zip" -d "$RUNNER_TEMP/ghidra"
+          GHIDRA_DIR=$(find "$RUNNER_TEMP/ghidra" -mindepth 1 -maxdepth 1 -type d -name 'ghidra_*' -print -quit)
+          test -n "$GHIDRA_DIR"
+          echo "GHIDRA_INSTALL_DIR=$GHIDRA_DIR" >> "$GITHUB_ENV"
+      - name: Build complete extension
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$GHIDRA_INSTALL_DIR/support/gradle/gradlew" --no-daemon buildExtension
+      - name: Assert discoverable extension-point and executable JAR are packaged
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          packages=(dist/ghidra_12.1.4_PUBLIC_*_GhidrAssist.zip)
+          test "${#packages[@]}" -eq 1
+          unzip -tq "${packages[0]}"
+          mkdir -p "$RUNNER_TEMP/unpacked"
+          unzip -q "${packages[0]}" -d "$RUNNER_TEMP/unpacked"
+          test -f "$RUNNER_TEMP/unpacked/GhidrAssist/lib/GhidrAssist.jar"
+          jar tf "$RUNNER_TEMP/unpacked/GhidrAssist/lib/GhidrAssist.jar" |
+            grep -Fxq 'ghidrassist/GhidrAssistPluginPackage.class'
+          jar tf "$RUNNER_TEMP/unpacked/GhidrAssist/lib/GhidrAssist.jar" |
+            grep -Fxq 'ghidrassist/GhidrAssistPlugin.class'
+          test -f "$RUNNER_TEMP/unpacked/GhidrAssist/extension.properties"
+          grep -E '^version=12\.1\.4$' "$RUNNER_TEMP/unpacked/GhidrAssist/extension.properties"
+          sha256sum "$RUNNER_TEMP/unpacked/GhidrAssist/lib/GhidrAssist.jar"
+      - name: Verify runtime annotation and public extension-point metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp=""
+          while IFS= read -r -d '' jarfile; do
+            cp="${cp:+$cp:}$jarfile"
+          done < <(find "$GHIDRA_INSTALL_DIR" "$RUNNER_TEMP/unpacked/GhidrAssist/lib" -type f -name '*.jar' -print0)
+          mkdir -p "$RUNNER_TEMP/pkg-test"
+          javac -cp "$cp" -d "$RUNNER_TEMP/pkg-test" \
+            src/test/java/ghidrassist/GhidrAssistPluginPackageSelfTest.java
+          java -Djava.awt.headless=true \
+            -cp "$RUNNER_TEMP/pkg-test:$cp" \
+            ghidrassist.GhidrAssistPluginPackageSelfTest
+      - name: Resolve package through real Ghidra ClassSearcher (isolated profile)
+        shell: bash
+        run: |
+          set -euo pipefail
+          PROFILE="$RUNNER_TEMP/registry-profile"
+          mkdir -p "$PROFILE"
+          EXT="$PROFILE/${USER}-ghidra/ghidra_12.1.4_PUBLIC/Extensions"
+          mkdir -p "$EXT"
+          cp -a "$RUNNER_TEMP/unpacked/GhidrAssist" "$EXT/GhidrAssist"
+          cp=""
+          while IFS= read -r -d '' jarfile; do
+            cp="${cp:+$cp:}$jarfile"
+          done < <(find "$GHIDRA_INSTALL_DIR" "$EXT/GhidrAssist/lib" -type f -name '*.jar' -print0)
+          mkdir -p "$RUNNER_TEMP/registry-classes"
+          javac -cp "$cp" -d "$RUNNER_TEMP/registry-classes" \
+            src/test/java/ghidrassist/GhidrAssistPluginPackageDiscoveryMain.java
+          java -Djava.awt.headless=true \
+            -Djava.system.class.loader=ghidra.GhidraClassLoader \
+            -Dapplication.settingsdir="$PROFILE" \
+            -Dapplication.cachedir="$RUNNER_TEMP/registry-cache" \
+            -Duser.home="$RUNNER_TEMP/registry-home" \
+            -cp "$RUNNER_TEMP/registry-classes:$cp" \
+            ghidrassist.GhidrAssistPluginPackageDiscoveryMain "$GHIDRA_INSTALL_DIR"
+      - name: Save nonprivate extension smoke metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/unpacked/GhidrAssist/lib"
+          sha256sum GhidrAssist.jar > "$RUNNER_TEMP/plugin-package-SHA256SUMS.txt"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GhidrAssist-PluginPackage-12.1.4-${{ github.run_id }}
+          path: ${{ runner.temp }}/plugin-package-SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 14

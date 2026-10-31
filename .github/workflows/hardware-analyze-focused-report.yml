@@ -1,0 +1,35 @@
+name: Focused Hardware Analyze report
+
+on:
+  pull_request:
+    paths:
+      - 'src/main/java/ghidrassist/hardware/HardwareInventoryService.java'
+      - 'src/main/java/ghidrassist/hardware/GhidraHardwareFlowService.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareReportScope.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareReportScopeSelfTest.java'
+      - '.github/workflows/hardware-analyze-focused-report.yml'
+  workflow_dispatch:
+
+jobs:
+  report-scope:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Verify Analyze filter and complete Review / Apply catalog
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/report-scope"
+          javac --release 21 -d "$RUNNER_TEMP/report-scope" \
+            src/main/java/ghidrassist/hardware/HardwareReportScope.java \
+            src/main/java/ghidrassist/hardware/HardwareProfiles.java \
+            src/main/java/ghidrassist/hardware/HardwareApplyPlan.java \
+            src/main/java/ghidrassist/hardware/ChipSelectModel.java \
+            src/test/java/ghidrassist/hardware/HardwareReportScopeSelfTest.java
+          java -cp "$RUNNER_TEMP/report-scope" ghidrassist.hardware.HardwareReportScopeSelfTest

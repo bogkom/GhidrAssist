@@ -110,6 +110,7 @@ public final class HardwareDataflow {
         public final Kind kind;
         public final Long effectiveAddress;
         public final Integer writtenWord;
+        public final int writeBits;
         public final String pointerRegister;
         public final Long vbr;
         public final Map<Long,Integer> knownPeripheralWords;
@@ -122,7 +123,7 @@ public final class HardwareDataflow {
         public final boolean priorUnknownStore;
         private Snapshot(Step step,Long address,Integer value,State before,State after) {
             instruction=step.address;kind=step.kind;effectiveAddress=address;
-            writtenWord=value;pointerRegister=step.register;
+            writtenWord=value;writeBits=step.writeBits;pointerRegister=step.register;
             vbr=after.vbr;
             knownPeripheralWords=Map.copyOf(after.peripherals);
             indirect=step.kind==Kind.STORE_INDIRECT;

@@ -54,6 +54,7 @@ public class ConversationalToolHandler {
     private static final int MAX_CONVERSATION_CHARS = 600000; // ~150K tokens at 4 chars/token
     private static final double COMPRESSION_THRESHOLD = 0.75; // Trigger compression at 75% of char limit
     private static final int MIN_RECENT_MESSAGES = 8; // Always keep last 8 messages
+    private int executionCountAtBatchStart;
     private final int maxToolRounds; // Maximum tool calling rounds per iteration (configurable)
 
     private static final String SUMMARY_PROMPT = "Summarize the following investigation conversation concisely.\n\n" +
@@ -1119,6 +1120,7 @@ public class ConversationalToolHandler {
      * Execute tools sequentially and collect results
      */
     private void executeToolsSequentially(JsonArray toolCalls, int index, List<JsonObject> toolResults) {
+        if (index == 0) executionCountAtBatchStart = toolRegistry.getInvestigationToolCallCount();
         // Check cancellation before processing next tool
         if (isCancelled) {
             // Flush any collected results to prevent orphaned tool_calls in history.
@@ -1133,6 +1135,7 @@ public class ConversationalToolHandler {
                 JsonObject cancelResult = new JsonObject();
                 cancelResult.addProperty("tool_call_id", cancelledId);
                 cancelResult.addProperty("role", "tool");
+                cancelResult.addProperty("is_error", true);
                 cancelResult.addProperty("content", "Error: Tool execution was cancelled.");
                 toolResults.add(cancelResult);
             }
@@ -1144,8 +1147,9 @@ public class ConversationalToolHandler {
             // All tools executed, add results to conversation and continue
             addToolResultsToConversation(toolResults);
 
-            // Signal tool execution to handler
-            userHandler.onToolsExecuted(toolCalls.size());
+            // Rejected proposals are not completed tool actions.
+            int executed = toolRegistry.getInvestigationToolCallCount() - executionCountAtBatchStart;
+            if (executed > 0) userHandler.onToolsExecuted(executed);
 
             // Add a small delay before making the next API call to avoid rapid sequential requests
             // that could trigger rate limits
@@ -1192,6 +1196,7 @@ public class ConversationalToolHandler {
                         JsonObject errorResult = new JsonObject();
                         errorResult.addProperty("tool_call_id", errorToolCallId);
                         errorResult.addProperty("role", "tool");
+                        errorResult.addProperty("is_error", true);
                         errorResult.addProperty("content", "Error: " + throwable.getMessage());
                         toolResults.add(errorResult);
 
@@ -1210,6 +1215,7 @@ public class ConversationalToolHandler {
                     JsonObject fallbackResult = new JsonObject();
                     fallbackResult.addProperty("tool_call_id", "call_error_" + index);
                     fallbackResult.addProperty("role", "tool");
+                    fallbackResult.addProperty("is_error", true);
                     fallbackResult.addProperty("content", "Error: Internal error during tool execution");
                     toolResults.add(fallbackResult);
 
@@ -1249,13 +1255,17 @@ public class ConversationalToolHandler {
                     // Debug logging for development (keep for troubleshooting)
                     Msg.debug(this, String.format("Tool '%s' completed: success=%s, length=%d",
                         toolName, result.isSuccess(),
-                        result.getContent() != null ? result.getContent().length() : 0));
+                        result.getContentOrError() != null ? result.getContentOrError().length() : 0));
 
                     // Create tool result for conversation
                     JsonObject toolResult = new JsonObject();
                     toolResult.addProperty("tool_call_id", toolCallId);
                     toolResult.addProperty("role", "tool");
-                    toolResult.addProperty("content", result.getContent());
+                    toolResult.addProperty("is_error", result.isError());
+                    String returnedContent = result.getContentOrError();
+                    toolResult.addProperty("content", result.isError()
+                        ? "Error: " + (returnedContent == null ? "Tool execution failed without a reason" : returnedContent)
+                        : returnedContent);
 
                     return toolResult;
                 });
@@ -1280,7 +1290,8 @@ public class ConversationalToolHandler {
             }
 
             // Truncate tool results via ContextWindowManager if available
-            if (contextWindowManager != null && content != null && !content.isEmpty()) {
+            boolean isError = result.has("is_error") && result.get("is_error").getAsBoolean();
+            if (!isError && contextWindowManager != null && content != null && !content.isEmpty()) {
                 content = contextWindowManager.truncateToolResult(content);
             }
 
@@ -1971,6 +1982,8 @@ public class ConversationalToolHandler {
         }
 
         // Execute tool call on background thread to avoid blocking EDT
+        ghidrassist.tools.registry.ToolExecutionJournal dispatcherJournal = toolRegistry.getExecutionJournal();
+        java.util.concurrent.atomic.AtomicBoolean dispatched = new java.util.concurrent.atomic.AtomicBoolean(false);
         CompletableFuture.runAsync(() -> {
             // Start transaction on EDT
             final int[] transaction = new int[1];
@@ -1983,6 +1996,7 @@ public class ConversationalToolHandler {
             }
 
             // Execute tool via ToolRegistry
+            dispatched.set(true);
             toolRegistry.execute(toolName, arguments)
                 .thenAccept(result -> {
                     // End transaction on EDT
@@ -2004,6 +2018,7 @@ public class ConversationalToolHandler {
 
         }).exceptionally(throwable -> {
             Msg.error(this, "Failed to start transaction: " + throwable.getMessage());
+            if (!dispatched.get()) toolRegistry.recordPreDispatchFailure(dispatcherJournal, toolName, arguments, throwable.toString());
             future.complete(ToolResult.error("Failed to start transaction: " + throwable.getMessage()));
             return null;
         });

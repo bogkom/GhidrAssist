@@ -1,0 +1,39 @@
+name: Hardware review provenance regression
+
+on:
+  push:
+    paths:
+      - 'src/main/java/ghidrassist/hardware/HardwareChangeProvenance.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareChangeProvenanceSelfTest.java'
+      - 'src/main/java/ghidrassist/ui/tabs/HardwareAnalysisTab.java'
+      - '.github/workflows/hardware-change-provenance-tests.yml'
+  pull_request:
+    paths:
+      - 'src/main/java/ghidrassist/hardware/HardwareChangeProvenance.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareChangeProvenanceSelfTest.java'
+      - 'src/main/java/ghidrassist/ui/tabs/HardwareAnalysisTab.java'
+      - '.github/workflows/hardware-change-provenance-tests.yml'
+  workflow_dispatch:
+
+jobs:
+  provenance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Compile pure Java provenance evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/provenance"
+          javac --release 21 -d "$RUNNER_TEMP/provenance" \
+            src/main/java/ghidrassist/hardware/HardwareChangeProvenance.java \
+            src/test/java/ghidrassist/hardware/HardwareChangeProvenanceSelfTest.java
+      - name: Reject unsupported human/AI authorship claims
+        run: java -cp "$RUNNER_TEMP/provenance" ghidrassist.hardware.HardwareChangeProvenanceSelfTest

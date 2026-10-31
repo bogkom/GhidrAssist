@@ -7,6 +7,7 @@ import ghidra.program.model.listing.FunctionIterator;
 import ghidra.program.model.listing.Instruction;
 import ghidra.program.model.listing.InstructionIterator;
 import ghidra.program.model.listing.Program;
+import ghidra.program.model.mem.MemoryAccessException;
 import ghidra.program.model.pcode.PcodeOp;
 import ghidra.program.model.pcode.Varnode;
 import ghidra.program.model.scalar.Scalar;
@@ -30,15 +31,37 @@ import java.util.regex.Pattern;
  * no physical/program execution and no interprocedural call state.
  */
 public final class GhidraHardwareFlowService {
+    private static final int MAX_CFG_MMIO_SITES=12000;
+    private static final int MAX_POINTER_ROLE_SITES=8000;
     private static final Pattern REG=Pattern.compile("(?<![A-Z0-9])([AD][0-7])(?![A-Z0-9])");
     private static final Pattern OFFSET=Pattern.compile("(?<![A-Z0-9])(-?0[Xx][0-9A-F]+|-?[0-9]+)(?![A-Z0-9])");
     public static final class Report {
         public final String markdown;
+        public final String configurationEvidenceCsv;
+        public final List<HardwareCfgWriteAudit.Site> rawCfgMmioSites;
+        public final List<HardwarePointerRoleReview.Proposal> pointerRoles;
+        public final java.util.Set<Long> resetCandidateFunctions;
+        public final boolean resetCandidateRecognized,resetGraphIncomplete;
         public final int functions,indirect,vbr,unresolved,visited;
         public final boolean limited;
-        Report(String md,int fn,int indirect,int vbr,int unresolved,int visited,boolean limited){
-            markdown=md;functions=fn;this.indirect=indirect;this.vbr=vbr;
+        public final boolean cfgReviewComplete;
+        public final long cfgSitesOmitted,pointerSitesOmitted;
+        Report(String md,int fn,int indirect,int vbr,int unresolved,int visited,
+                boolean limited,List<HardwarePointerRoleReview.Proposal> pointers,
+                java.util.Set<Long> resetCandidates,boolean resetRecognized,
+                boolean resetUnresolved,String configurationCsv,
+                List<HardwareCfgWriteAudit.Site> cfgSites,
+                boolean cfgReviewComplete,long cfgOmitted,long pointerOmitted){
+            markdown=md;configurationEvidenceCsv=configurationCsv;
+            rawCfgMmioSites=List.copyOf(cfgSites);
+            pointerRoles=List.copyOf(pointers);
+            resetCandidateFunctions=java.util.Set.copyOf(resetCandidates);
+            resetCandidateRecognized=resetRecognized;
+            resetGraphIncomplete=resetUnresolved;
+            functions=fn;this.indirect=indirect;this.vbr=vbr;
             this.unresolved=unresolved;this.visited=visited;this.limited=limited;
+            this.cfgReviewComplete=cfgReviewComplete;
+            this.cfgSitesOmitted=cfgOmitted;this.pointerSitesOmitted=pointerOmitted;
         }
     }
     private static String opcode(Instruction i){
@@ -323,7 +346,83 @@ public final class GhidraHardwareFlowService {
         }
         return lines.toString();
     }
+    /**
+     * Candidate boot vector and direct-call graph. The zero address is only
+     * inspected for a compatible 68000 big-endian language. Reset vectors,
+     * static edges and MMIO sightings are NOT evidence that code ran.
+     */
+    private record ResetCandidates(String markdown,java.util.Set<Long> visited,
+            boolean recognized,boolean incomplete) {}
+    private static ResetCandidates resetStaticCandidates(Program program,
+            List<HardwareCallEffects.FunctionNode> graph,
+            List<Long> evidencedFunctions) {
+        StringBuilder md=new StringBuilder();
+        md.append("## Candidate RESET vector and bounded static-call paths\n\n");
+        String language=program.getLanguageID().toString().toUpperCase(Locale.ROOT);
+        if(!language.startsWith("68000:BE:")){
+            md.append("- Not evaluated: this program is not a 68000 big-endian "+
+                "language. No reset-vector format is assumed.\n\n");
+            return new ResetCandidates(md.toString(),java.util.Set.of(),false,true);
+        }
+        Address zero=program.getAddressFactory().getDefaultAddressSpace().getAddress(0);
+        if(!program.getMemory().contains(zero)){
+            md.append("- UNKNOWN: address 0 is not mapped; no candidate "+
+                "vector can be read. No assumption about ROM base/relocation.\n\n");
+            return new ResetCandidates(md.toString(),java.util.Set.of(),false,true);
+        }
+        byte[] data=new byte[8];
+        try {
+            if(program.getMemory().getBytes(zero,data)!=data.length){
+                md.append("- UNKNOWN: reset vector at image 0 is incomplete.\n\n");
+                return new ResetCandidates(md.toString(),java.util.Set.of(),false,true);
+            }
+        }catch(MemoryAccessException e){
+            md.append("- UNKNOWN: reset vector bytes at image 0 "+
+                "could not be read.\n\n");
+            return new ResetCandidates(md.toString(),java.util.Set.of(),false,true);
+        }
+        HardwareResetFlow.Vector vector=HardwareResetFlow.readVector(data);
+        md.append("- Image-zero vector candidate SP: ")
+          .append(String.format(Locale.ROOT,"0x%08X",vector.initialSp()))
+          .append("; PC: ")
+          .append(String.format(Locale.ROOT,"0x%08X",vector.resetPc()))
+          .append("; plausible: ").append(vector.valid())
+          .append("; ").append(vector.reason()).append("\n");
+        if(!vector.valid()){
+            md.append("- No direct-call path inferred from invalid vector.\n\n");
+            return new ResetCandidates(md.toString(),java.util.Set.of(),false,true);
+        }
+        Address reset;
+        try {
+            reset=program.getAddressFactory().getDefaultAddressSpace()
+                .getAddress(vector.resetPc());
+        }catch(RuntimeException invalidAddress){
+            md.append("- UNKNOWN: reset PC is outside the current program "+
+                "address space.\n\n");
+            return new ResetCandidates(md.toString(),java.util.Set.of(),false,true);
+        }
+        Function root=program.getFunctionManager().getFunctionContaining(reset);
+        if(root==null){
+            md.append("- UNKNOWN: reset PC is not contained in a recognized "+
+                "Ghidra function. No candidate execution path is asserted.\n\n");
+            return new ResetCandidates(md.toString(),java.util.Set.of(),false,true);
+        }
+        md.append("- Function containing vector PC: ").append(root.getName())
+          .append(" at ").append(root.getEntryPoint())
+          .append("; candidate only, not verified entry execution.\n");
+        HardwareResetFlow.Summary candidate=HardwareResetFlow.trace(
+            root.getEntryPoint().getOffset(),graph,evidencedFunctions,6,128,30);
+        md.append(candidate.markdown(vector.resetPc(),
+            root.getEntryPoint().getOffset())).append("\n");
+        return new ResetCandidates(md.toString(),candidate.visitedEntries(),
+            candidate.rootRecognized(),candidate.unresolved()||candidate.truncated());
+    }
+
     public Report analyze(Program program,TaskMonitor monitor)throws CancelledException{
+        return analyze(program,monitor,false);
+    }
+    public Report analyze(Program program,TaskMonitor monitor,
+            boolean mc68332Selected)throws CancelledException{
         if(program==null)throw new IllegalArgumentException("Open Ghidra program required");
         if(monitor==null)monitor=TaskMonitor.DUMMY;
         Map<Long,String> targets=new LinkedHashMap<>();
@@ -333,6 +432,14 @@ public final class GhidraHardwareFlowService {
         StringBuilder detail=new StringBuilder();
         List<HardwareCallEffects.FunctionNode> staticCalls=new ArrayList<>();
         List<Long> evidencedFunctions=new ArrayList<>();
+        HardwareEvidenceBudget<HardwarePointerRoleReview.Site> pointerSites=
+            new HardwareEvidenceBudget<>(MAX_POINTER_ROLE_SITES);
+        HardwareEvidenceBudget<HardwareCfgWriteAudit.Site> cfgMmioSites=
+            new HardwareEvidenceBudget<>(MAX_CFG_MMIO_SITES);
+        List<HardwareCfgStorePaths.Pair> cfgStoreRelations=new ArrayList<>();
+        List<HardwareSimcrLocalFirst.Result> localFirstPaths=new ArrayList<>();
+        int localFirstOmittedFunctions=0;
+        int cfgPathLimitedFunctions=0;
         int foundFunctions=0,indirect=0,vbr=0,unresolved=0,visited=0,shown=0;
         boolean limited=false;
         FunctionIterator funs=program.getFunctionManager().getFunctions(true);
@@ -396,12 +503,146 @@ public final class GhidraHardwareFlowService {
                 Math.min(30000,Math.max(300,steps.size()*20)));
             visited+=result.reachedNodes;
             limited|=result.truncated;
+            for(HardwareDataflow.Snapshot hit:result.snapshots){
+                if(!hit.indirect || hit.effectiveAddress==null ||
+                        hit.pointerRegister==null ||
+                        !hit.pointerRegister.matches("A[0-7]"))continue;
+                for(HardwareProfiles.Register reg:p.registers) {
+                    int matchedMm=-1;
+                    if(p.absoluteAddress(reg,0)==hit.effectiveAddress)matchedMm=0;
+                    if(p.absoluteAddress(reg,1)==hit.effectiveAddress)matchedMm=1;
+                    if(matchedMm<0)continue;
+                    pointerSites.offer(new HardwarePointerRoleReview.Site(
+                        fun.getEntryPoint().getOffset(),fun.getName(),hit.instruction,
+                        hit.pointerRegister,reg.module,matchedMm,reg.name,
+                        result.truncated || uncertainFlow ||
+                            hit.priorUnknownCall || hit.priorUnknownStore));
+                    break;
+                }
+            }
+            for(HardwareDataflow.Snapshot hit:result.snapshots) {
+                if(hit.kind!=HardwareDataflow.Kind.STORE_DIRECT &&
+                        hit.kind!=HardwareDataflow.Kind.STORE_INDIRECT)continue;
+                String target=hit.effectiveAddress==null?null:
+                    targets.get(hit.effectiveAddress);
+                if(target==null &&
+                        !(hit.kind==HardwareDataflow.Kind.STORE_INDIRECT &&
+                          hit.effectiveAddress==null))continue;
+                cfgMmioSites.offer(new HardwareCfgWriteAudit.Site(
+                    fun.getEntryPoint().getOffset(),hit.instruction,
+                    target==null?"UNRESOLVED_ALIAS":target,
+                    hit.effectiveAddress==null?-1L:hit.effectiveAddress,
+                    hit.indirect,hit.writeBits,hit.writtenWord,
+                    hit.priorMmCandidateMin,hit.priorMmCandidateMax,
+                    hit.priorUnknownCall,hit.priorUnknownStore,
+                    result.truncated || uncertainFlow));
+            }
+            if(mc68332Selected) {
+                // Separate function-local CFG path alternatives from the
+                // global reset/latch question. The entry may itself be
+                // statically unreachable from the real hardware reset.
+                boolean foundSimcr=false;
+                java.util.Map<Long,HardwareSimcrLocalFirst.Effect> effects=
+                    new java.util.HashMap<>();
+                java.util.Map<Long,Integer> words=new java.util.HashMap<>();
+                for(HardwareDataflow.Step step:steps)
+                    if(step.kind==HardwareDataflow.Kind.CALL_BARRIER)
+                        effects.put(step.address,
+                            HardwareSimcrLocalFirst.Effect.ALIAS_OR_CALL_BARRIER);
+                for(HardwareDataflow.Snapshot hit:result.snapshots){
+                    if(hit.kind!=HardwareDataflow.Kind.STORE_DIRECT &&
+                            hit.kind!=HardwareDataflow.Kind.STORE_INDIRECT)
+                        continue;
+                    HardwareSimcrLocalFirst.Effect next=null;
+                    Integer word=null;
+                    if(hit.effectiveAddress!=null &&
+                            "SIMCR".equals(targets.get(hit.effectiveAddress))){
+                        foundSimcr=true;
+                        if(hit.writeBits==16 && hit.writtenWord!=null){
+                            next=HardwareSimcrLocalFirst.Effect.WORD_LITERAL;
+                            word=hit.writtenWord;
+                        }else next=HardwareSimcrLocalFirst.Effect.UNKNOWN_WORD;
+                    }else if(hit.indirect && hit.effectiveAddress==null)
+                        next=HardwareSimcrLocalFirst.Effect.ALIAS_OR_CALL_BARRIER;
+                    if(next==null)continue;
+                    var previous=effects.putIfAbsent(hit.instruction,next);
+                    if(previous!=null &&
+                            (previous!=HardwareSimcrLocalFirst.Effect.WORD_LITERAL ||
+                             next!=HardwareSimcrLocalFirst.Effect.WORD_LITERAL ||
+                             !java.util.Objects.equals(words.get(hit.instruction),word))){
+                        // Multiple P-code stores at one PC may be
+                        // competing values; don't invent intra-PC order.
+                        effects.put(hit.instruction,
+                            HardwareSimcrLocalFirst.Effect.UNKNOWN_WORD);
+                        words.remove(hit.instruction);
+                    }else if(previous==null && word!=null)
+                        words.put(hit.instruction,word);
+                }
+                if(foundSimcr){
+                    if(steps.size()>50000 || localFirstPaths.size()>=75)
+                        localFirstOmittedFunctions++;
+                    else {
+                        List<HardwareSimcrLocalFirst.Node> graph=new ArrayList<>();
+                        for(HardwareDataflow.Step step:steps){
+                            var effect=effects.getOrDefault(step.address,
+                                HardwareSimcrLocalFirst.Effect.NONE);
+                            graph.add(new HardwareSimcrLocalFirst.Node(
+                                step.address,step.successors,effect,
+                                effect==HardwareSimcrLocalFirst.Effect.WORD_LITERAL?
+                                    words.get(step.address):null));
+                        }
+                        localFirstPaths.add(HardwareSimcrLocalFirst.inspect(
+                            fun.getEntryPoint().getOffset(),fun.getEntryPoint().getOffset(),
+                            graph,uncertainFlow || result.truncated,1500));
+                    }
+                }
+            }
+            if(mc68332Selected){
+                List<HardwareCfgStorePaths.Store> pathStores=new ArrayList<>();
+                for(HardwareDataflow.Snapshot hit:result.snapshots){
+                    if(hit.effectiveAddress==null ||
+                            (hit.kind!=HardwareDataflow.Kind.STORE_DIRECT &&
+                             hit.kind!=HardwareDataflow.Kind.STORE_INDIRECT))continue;
+                    String register=targets.get(hit.effectiveAddress);
+                    if(register==null ||
+                            !(register.equals("SIMCR") || register.equals("TRAMBAR") ||
+                              register.startsWith("CSBAR") || register.startsWith("CSOR") ||
+                              register.startsWith("CSPAR")))continue;
+                    pathStores.add(new HardwareCfgStorePaths.Store(hit.instruction,register));
+                }
+                // A function may have repeated P-code STORE sites at one
+                // instruction, or huge disassembly. Both are UNCERTAIN,
+                // not a reason to abort the whole hardware analysis.
+                java.util.LinkedHashMap<Long,HardwareCfgStorePaths.Store> uniqueStores=
+                    new java.util.LinkedHashMap<>();
+                for(var store:pathStores)
+                    if(uniqueStores.putIfAbsent(store.pc(),store)!=null)
+                        cfgPathLimitedFunctions++;
+                pathStores=new ArrayList<>(uniqueStores.values());
+                if(pathStores.size()>1 && steps.size()>50000){
+                    cfgPathLimitedFunctions++;
+                }else if(pathStores.size()>1 && cfgStoreRelations.size()<500){
+                    List<HardwareCfgStorePaths.Node> pathNodes=new ArrayList<>();
+                    for(HardwareDataflow.Step node:steps)
+                        pathNodes.add(new HardwareCfgStorePaths.Node(
+                            node.address,node.successors));
+                    var pairs=HardwareCfgStorePaths.analyze(
+                        fun.getEntryPoint().getOffset(),pathNodes,pathStores,
+                        uncertainFlow || result.truncated,1500);
+                    if(pairs.truncated())cfgPathLimitedFunctions++;
+                    if(cfgStoreRelations.size()+pairs.relations().size()<=500)
+                        cfgStoreRelations.addAll(pairs.relations());
+                    else cfgPathLimitedFunctions++;
+                }else if(pathStores.size()>1)cfgPathLimitedFunctions++;
+            }
             List<HardwareDataflow.Snapshot> found=new ArrayList<>();
             for(HardwareDataflow.Snapshot hit:result.snapshots){
                 if(hit.kind==HardwareDataflow.Kind.VBR_FROM_REGISTER){
                     found.add(hit);vbr++;
                 } else if(hit.effectiveAddress!=null &&
-                        targets.containsKey(hit.effectiveAddress)){
+                        targets.containsKey(hit.effectiveAddress) &&
+                        HardwareReportScope.isInitializationRegister(
+                            targets.get(hit.effectiveAddress))){
                     found.add(hit);
                     if(hit.indirect)indirect++;
                 } else if(hit.kind==HardwareDataflow.Kind.STORE_INDIRECT &&
@@ -409,7 +650,7 @@ public final class GhidraHardwareFlowService {
                     unresolved++;
                 }
             }
-            if(found.isEmpty()&&!result.truncated)continue;
+            if(found.isEmpty())continue; // Retain global truncation warning, omit unrelated functions.
             foundFunctions++;
             evidencedFunctions.add(fun.getEntryPoint().getOffset());
             if(shown>=350)continue;
@@ -509,8 +750,9 @@ public final class GhidraHardwareFlowService {
             effects.append("- Additional functions omitted by 60-row limit.\n");
         effects.append("\n");
 
+        ResetCandidates reset=resetStaticCandidates(program,staticCalls,evidencedFunctions);
         StringBuilder out=new StringBuilder();
-        out.append("## CFG/P-code hardware evidence (read-only)\n\n")
+        out.append("## CFG/P-code initialization evidence (SIMCR/MM, TRAMBAR, CSBAR, CSOR, VBR)\n\n")
            .append("Only predecessor-agreed intraprocedural constants survive branch joins. ")
            .append("Calls and unknown-destination memory stores invalidate "+
                "previous peripheral constants; ")
@@ -524,8 +766,36 @@ public final class GhidraHardwareFlowService {
            .append("- VBR control-register sites: ").append(vbr).append("\n")
            .append("- Unresolved register-based stores: ").append(unresolved).append("\n")
            .append("- Propagation cap reached: ").append(limited).append("\n\n")
+           .append(reset.markdown())
+           .append(GhidraInterruptVectorService.analyze(program,monitor))
            .append(detail).append(effects);
         if(shown>=350)out.append("\n[Detailed report bounded at 350 sites.]\n");
-        return new Report(out.toString(),foundFunctions,indirect,vbr,unresolved,visited,limited);
+        boolean cfgSourcesComplete=cfgMmioSites.safeAsComplete(!limited);
+        out.append("\n- Bounded CFG source capture: ")
+            .append(cfgMmioSites.provenance()).append("; pointer hints: ")
+            .append(pointerSites.provenance())
+            .append("; CSBAR source Review eligible for complete evidence: ")
+            .append(cfgSourcesComplete)
+            .append(". Missing sites MUST NOT be inferred as absent.\n");
+        List<HardwarePointerRoleReview.Proposal> roles=
+            HardwarePointerRoleReview.propose(mc68332Selected,pointerSites.snapshot(),
+                limited || pointerSites.truncated());
+        out.append(HardwarePointerRoleReview.report(roles));
+        out.append(HardwareCfgWriteAudit.inspect(mc68332Selected,
+            cfgMmioSites.snapshot()).markdown());
+        out.append(HardwareCfgStorePaths.markdown(
+            cfgStoreRelations,cfgPathLimitedFunctions));
+        out.append(mc68332Selected?
+            HardwareSimcrLocalFirst.markdown(localFirstPaths,localFirstOmittedFunctions):
+            "## Possible local first SIMCR sites\n\nGeneric CPU32: explicit "+
+            "MC68332 profile required for these candidate source paths.\n\n");
+        String evidenceCsv=HardwareConfigurationEvidenceCsv.serialize(
+            HardwareCfgWriteAudit.inspect(mc68332Selected,cfgMmioSites.snapshot()),
+            cfgStoreRelations,mc68332Selected);
+        return new Report(out.toString(),foundFunctions,indirect,vbr,unresolved,
+            visited,limited || !cfgSourcesComplete || pointerSites.truncated(),
+            roles,reset.visited(),reset.recognized(),reset.incomplete(),
+            evidenceCsv,cfgMmioSites.snapshot(),
+            cfgSourcesComplete,cfgMmioSites.omitted(),pointerSites.omitted());
     }
 }

@@ -20,6 +20,7 @@ import ghidrassist.apiprovider.APIProviderConfig;
 import ghidrassist.core.TabController;
 import ghidrassist.core.MarkdownHelper;
 import ghidrassist.ui.GhidrAssistUI;
+import ghidrassist.ui.common.ProviderSecretField;
 import ghidrassist.mcp2.server.MCPServerConfig;
 import ghidrassist.mcp2.server.MCPServerRegistry;
 import ghidrassist.services.symgraph.SymGraphService;
@@ -789,7 +790,8 @@ public class SettingsTab extends JPanel {
         JSpinner timeoutSpinner = new JSpinner(new SpinnerNumberModel(
             provider.getTimeout() != null ? provider.getTimeout() : 90, 1, 3600, 1));
         JTextField urlField = new JTextField(provider.getUrl() != null ? provider.getUrl() : "", 28);
-        JTextField keyField = new JTextField(provider.getKey() != null ? provider.getKey() : "", 28);
+        JPasswordField keyField = new JPasswordField(provider.getKey() != null ? provider.getKey() : "", 28);
+        ProviderSecretField keyControl = new ProviderSecretField(keyField);
         JComboBox<APIProvider.ProviderType> typeComboBox = new JComboBox<>(APIProvider.ProviderType.values());
         typeComboBox.setSelectedItem(provider.getType());
         JCheckBox disableTlsCheckbox = new JCheckBox("Disable TLS Verification", provider.isDisableTlsVerification());
@@ -904,7 +906,7 @@ public class SettingsTab extends JPanel {
         gbc.gridx = 0; gbc.gridy = row; gbc.weightx = 0;
         panel.add(keyLabel, gbc);
         gbc.gridx = 1; gbc.weightx = 1;
-        panel.add(keyField, gbc);
+        panel.add(keyControl, gbc);
         gbc.gridx = 2; gbc.weightx = 0;
         panel.add(authenticateButton, gbc);
         row++;
@@ -1224,7 +1226,7 @@ public class SettingsTab extends JPanel {
             JSpinner maxTokensSpinner,
             JSpinner timeoutSpinner,
             JTextField urlField,
-            JTextField keyField,
+            JPasswordField keyField,
             JCheckBox disableTlsCheckbox,
             JCheckBox bypassProxyCheckbox,
             boolean requireName,
@@ -1237,7 +1239,14 @@ public class SettingsTab extends JPanel {
         String name = nameField.getText().trim();
         String model = modelField.getText().trim();
         String url = urlField.getText().trim();
-        String key = keyField.getText().trim();
+        // Avoid deprecated JPasswordField.getText(); clear the temporary char buffer.
+        char[] password = keyField.getPassword();
+        String key;
+        try {
+            key = new String(password).trim();
+        } finally {
+            java.util.Arrays.fill(password, '\0');
+        }
         int maxTokens = ((Number) maxTokensSpinner.getValue()).intValue();
         int timeout = ((Number) timeoutSpinner.getValue()).intValue();
 

@@ -9,6 +9,9 @@ public final class HardwareApplyPlanSelfTest {
     public static void main(String[] args){
         List<HardwareApplyPlan.Item> items=HardwareApplyPlan.mc68332Mm1Candidates(0);
         check(items.size()>=57,"expanded memory/register/VBR proposals");
+        check(items.stream().anyMatch(x->x.kind==HardwareApplyPlan.Kind.ANNOTATION &&
+            x.name.equals("TPURAM_CANDIDATE") && x.address==0xfff000L),
+            "optional relocation marker must be offered independently of memory allocation");
         check(items.stream().anyMatch(x->x.name.equals("TPURAM_2K_CANDIDATE") &&
             x.address==0xfff000L && x.length==2048),"conditional TPURAM");
         check(items.stream().anyMatch(x->x.name.equals("TPURAM_CONTROL_MM1") &&
