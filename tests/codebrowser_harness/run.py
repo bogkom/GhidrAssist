@@ -15,6 +15,7 @@ import sys
 import tempfile
 import zipfile
 import uuid
+import stat
 
 from assertion_audit import validate_files, sha256 as byte_sha256
 
@@ -81,15 +82,43 @@ def main():
     ap.add_argument("--extension-sha256")
     ap.add_argument("--output",required=True)
     ap.add_argument("--timeout",type=int,default=300)
+    ap.add_argument("--bridge-mode",choices=("off","ci","host"),default="off")
+    ap.add_argument("--bridge-timeout",type=int,default=60)
     args=ap.parse_args()
     if args.timeout<90 or args.timeout>900:
         ap.error("timeout must be 90..900 seconds")
-    out=Path(args.output).expanduser()
-    if out.is_symlink() or (out.exists() and
-            (not out.is_dir() or any(out.iterdir()))):
-        ap.error("output must be an empty non-symlink directory")
-    out.mkdir(parents=True,exist_ok=True)
+    if not 5<=args.bridge_timeout<=180:
+        ap.error("bridge-timeout must be 5..180 seconds")
+    run_id=uuid.uuid4().hex
+    bridged=args.bridge_mode!="off"
+    target=Path(args.output).expanduser().absolute()
+    if bridged:
+        # Live output is a strict owner-private ga18-gui workspace.
+        if (target.is_symlink() or not target.is_dir() or
+                target.stat().st_uid!=os.getuid() or
+                stat.S_IMODE(target.stat().st_mode)&0o077):
+            ap.error("bridge requires existing owner-private 0700 workspace")
+        evidence=target/"evidence"
+        if evidence.exists():
+            if (evidence.is_symlink() or not evidence.is_dir() or
+                    evidence.stat().st_uid!=os.getuid() or
+                    stat.S_IMODE(evidence.stat().st_mode)&0o077):
+                ap.error("unsafe evidence root")
+        else:
+            evidence.mkdir(mode=0o700)
+        out=evidence/("pilot-ghidra-"+run_id)
+        if out.exists() or (evidence/("pilot-x11-"+run_id)).exists():
+            ap.error("duplicate/reused run ID")
+        out.mkdir(mode=0o700,exist_ok=False)
+    else:
+        out=target
+        if out.is_symlink() or (out.exists() and
+                (not out.is_dir() or any(out.iterdir()))):
+            ap.error("output must be empty non-symlink directory")
+        out.mkdir(parents=True,exist_ok=True)
+    os.umask(0o077)
     result={"schema":1,"status":"BLOCKED","test":"synthetic-codebrowser",
+            "run_id":run_id,"bridge_mode":args.bridge_mode,
             "supervisor_ack":False,"human_visual_readback":"NOT_PERFORMED"}
     try:
         ghidra=Path(args.ghidra).resolve(strict=True)
@@ -131,10 +160,10 @@ def main():
             project=work/"project"/"CodeBrowserFixture.gpr"
             if not project.is_file():
                 raise RuntimeError("Synthetic Ghidra project was not created")
-            run_id=uuid.uuid4().hex
             case_id="synthetic-codebrowser-001"
             conf={"ghidra":str(ghidra),"project_dir":str(work/"project"),
-                  "index":str(work/"index"),"run_id":run_id,"case_id":case_id}
+                  "index":str(work/"index"),"run_id":run_id,"case_id":case_id,
+                  "bridge_timeout":args.bridge_timeout if bridged else 0}
             conf_path=work/"config.json"
             conf_path.write_text(json.dumps(conf),encoding="utf-8")
             jars=sorted(set(ghidra.rglob("*.jar")) | set(ext.rglob("*.jar")))
@@ -155,12 +184,31 @@ def main():
                 process=subprocess.Popen(cmd,cwd=work,env=env,
                     stdout=log,stderr=subprocess.STDOUT,
                     start_new_session=True)
+                observer=None
                 try:
-                    code=process.wait(timeout=args.timeout)
+                    if args.bridge_mode=="ci":
+                        # Distinct disposable CI process observes live X11.
+                        # Actual Wyse bridge remains Supervisor-owned.
+                        with (out/"observer.log").open("x") as observer_log:
+                            observer=subprocess.Popen(
+                                [sys.executable,str(SRC.parent/"ci_x11_observer.py"),
+                                 "--workspace",str(target),"--run-id",run_id,
+                                 "--timeout",str(args.bridge_timeout)],
+                                cwd=work,env=env,stdout=observer_log,
+                                stderr=subprocess.STDOUT,start_new_session=True)
+                            code=process.wait(timeout=args.timeout)
+                    else:
+                        code=process.wait(timeout=args.timeout)
                     if code:
                         raise RuntimeError(f"Real CodeBrowser Java test exit {code}")
+                    if observer is not None and observer.wait(timeout=10):
+                        raise RuntimeError("CI external X11 observer failed")
                 finally:
-                    # Launcher may exit with a descendant JVM still in PGID.
+                    if observer is not None:
+                        with contextlib.suppress(ProcessLookupError):
+                            os.killpg(observer.pid,signal.SIGTERM)
+                        with contextlib.suppress(ProcessLookupError):
+                            os.killpg(observer.pid,signal.SIGKILL)
                     with contextlib.suppress(ProcessLookupError):
                         os.killpg(process.pid,signal.SIGTERM)
                     with contextlib.suppress(ProcessLookupError):
@@ -206,6 +254,24 @@ def main():
                     f"Assertion receipt invalid: {error}; X11={observed.get('window_id')!r}, "
                     f"WM_CLASS={observed.get('window_class')!r}, "
                     f"full_title={observed.get('window_title')!r}") from error
+            if bridged:
+                ready=json.loads((out/"capture-ready.json").read_text())
+                receipt=json.loads((out/"codebrowser-assertions.json").read_text())
+                host_dir=evidence/("pilot-x11-"+run_id)
+                bridge=json.loads((host_dir/"bridge-capture.json").read_text())
+                if (ready["run_id"]!=run_id or
+                        ready["window_id"]!=receipt["window_id"] or
+                        bridge["run_id"]!=run_id or
+                        bridge["window_id"]!=receipt["window_id"] or
+                        not receipt["pre_capture_epoch_ms"]<=
+                        bridge["capture_start_epoch_ms"]<=
+                        bridge["capture_end_epoch_ms"]<=
+                        receipt["post_capture_epoch_ms"] or
+                        sha256(host_dir/"ghidra-window.png")!=
+                        bridge["captured_screenshot_sha256"]):
+                    raise RuntimeError("external host screenshot not bound to one run")
+                result["external_capture_correlated_structurally"]=True
+                result["external_png_sha256"]=bridge["captured_screenshot_sha256"]
             if not proof["structural_evidence_consistent"]:
                 raise RuntimeError("Incomplete in-process CodeBrowser receipt")
             original=out/"ghidra-window.png"
