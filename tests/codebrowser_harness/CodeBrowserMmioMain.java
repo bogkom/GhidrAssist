@@ -364,7 +364,8 @@ public final class CodeBrowserMmioMain {
             // Listing and Decompiler are not hidden by that dialog.
             JsonObject receipt=CodeBrowserAssertionReceipt.capture(
                 tool[0],first,site,out,conf.get("run_id").getAsString(),
-                conf.get("case_id").getAsString());
+                conf.get("case_id").getAsString(),
+                conf.has("bridge_timeout")?conf.get("bridge_timeout").getAsInt():0);
             result.addProperty("window_identity_verified",true);
             result.addProperty("codebrowser_listing_verified",true);
             result.addProperty("x11_screenshot_captured",true);
