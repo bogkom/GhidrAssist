@@ -99,8 +99,10 @@ final class CodeBrowserAssertionReceipt {
         check(provider!=null,"real connected DecompilerProvider missing");
         // Invoke actual DecompilerProvider accessor, never infer it from
         // Listing cursor, title, or a hard-coded fixture address.
-        Method getFunction=provider.getClass().getMethod("getFunction");
-        Object function=getFunction.invoke(provider);
+        Object controller=provider.getClass().getMethod("getController").invoke(provider);
+        check(controller!=null,"connected DecompilerController missing");
+        Method getFunction=controller.getClass().getMethod("getFunction");
+        Object function=getFunction.invoke(controller);
         return function instanceof Function f?f:null;
     }
     private record State(String program,String address,String function,
