@@ -93,7 +93,7 @@ def validate(receipt, image, *, case_id, run_id,
     need(ID.fullmatch(receipt["window_id"]) is not None and
          receipt["window_class"] and
          "Ghidra" in receipt["window_class"] and
-         "CodeBrowser" in receipt["window_title"],
+         receipt["window_title"].startswith("GhidrAssist isolated CodeBrowser MMIO"),
          "invalid X11 window identity/class/full title")
     for moment in ("pre_capture","post_capture"):
         snap=receipt[moment]
