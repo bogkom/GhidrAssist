@@ -29,7 +29,7 @@ jobs:
       - name: Install isolated X11
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends xvfb xauth openbox x11-utils
+          sudo apt-get install -y --no-install-recommends xvfb xauth openbox x11-utils wmctrl imagemagick
       - name: Fail-closed receipt contract positive and negative regressions
         run: python3 -m unittest discover -s tests/codebrowser_harness -p 'test_assertion_audit.py' -v
       - name: Download hash-pinned Ghidra 12.1.4 PUBLIC
@@ -66,6 +66,20 @@ jobs:
               --extension-zip "$EXTENSION" \
               --extension-sha256 "$(cut -d' ' -f1 "$RUNNER_TEMP/extension.sha256")" \
               --output "$RUNNER_TEMP/codebrowser-evidence" --timeout 300
+      - name: GUI-06 external-process live X11 same-run handshake in isolated Xvfb
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -m 700 "$RUNNER_TEMP/ga18-gui"
+          xvfb-run -a -s '-screen 0 1400x1050x24' \
+            bash -c 'openbox --sm-disable >/dev/null 2>&1 & wm=$!; trap "kill $wm 2>/dev/null || true" EXIT; sleep 1; python3 tests/codebrowser_harness/run.py "$@"' codebrowser-live \
+              --ghidra "$GHIDRA_INSTALL_DIR" --java-home "$JAVA_HOME" \
+              --extension-zip "$EXTENSION" \
+              --extension-sha256 "$(cut -d' ' -f1 "$RUNNER_TEMP/extension.sha256")" \
+              --output "$RUNNER_TEMP/ga18-gui" --bridge-mode ci \
+              --bridge-timeout 60 --timeout 300
+          test "$(find "$RUNNER_TEMP/ga18-gui/evidence" -maxdepth 1 -type d -name 'pilot-ghidra-*' | wc -l)" = 1
+          test "$(find "$RUNNER_TEMP/ga18-gui/evidence" -maxdepth 1 -type d -name 'pilot-x11-*' | wc -l)" = 1
       - name: Print last synthetic-only Ghidra log on test failure
         if: failure()
         shell: bash
@@ -85,6 +99,7 @@ jobs:
           cp "$EXTENSION" "$RUNNER_TEMP/codebrowser-bundle/"
           cp tests/codebrowser_harness/run.py tests/codebrowser_harness/CodeBrowserMmioMain.java \
              tests/codebrowser_harness/CodeBrowserAssertionReceipt.java \
+             tests/codebrowser_harness/ci_x11_observer.py \
              tests/codebrowser_harness/assertion_audit.py \
              tests/codebrowser_harness/test_assertion_audit.py \
              "$RUNNER_TEMP/codebrowser-bundle/"
@@ -93,7 +108,7 @@ jobs:
           # Upload paths are relative to runner.temp. The host verifier
           # matches SHA256SUMS member names against the outer ZIP exactly.
           sha256sum "$archive" | sed 's#  #  codebrowser-bundle/#' > SHA256SUMS.txt
-          sha256sum run.py CodeBrowserMmioMain.java CodeBrowserAssertionReceipt.java assertion_audit.py test_assertion_audit.py > HARNESS-SHA256SUMS.txt
+          sha256sum run.py CodeBrowserMmioMain.java CodeBrowserAssertionReceipt.java ci_x11_observer.py assertion_audit.py test_assertion_audit.py > HARNESS-SHA256SUMS.txt
           (cd "$RUNNER_TEMP" && sha256sum -c codebrowser-bundle/SHA256SUMS.txt)
           sha256sum -c HARNESS-SHA256SUMS.txt
       - name: Publish synthetic-only test logs (even on failure)
@@ -103,6 +118,7 @@ jobs:
           name: GhidrAssist-CodeBrowser-12.1.4-${{ github.run_id }}
           path: |
             ${{ runner.temp }}/codebrowser-evidence/
+            ${{ runner.temp }}/ga18-gui/evidence/
             ${{ runner.temp }}/codebrowser-bundle/
             ${{ runner.temp }}/extension.sha256
           if-no-files-found: warn
