@@ -256,7 +256,7 @@ public final class CodeBrowserMmioMain {
                     "ghidra.app.plugin.core.gotoquery.GoToServicePlugin",
                     "ghidra.app.plugin.core.clipboard.ClipboardPlugin",
                     "ghidra.app.plugin.core.codebrowser.CodeBrowserPlugin",
-                    "ghidra.app.plugin.core.decompile.DecompilerPlugin",
+                    "ghidra.app.plugin.core.decompile.DecompilePlugin",
                     "ghidrassist.GhidrAssistPlugin"));
                 ProgramManager pm=tool[0].getService(ProgramManager.class);
                 pm.openProgram(first);
