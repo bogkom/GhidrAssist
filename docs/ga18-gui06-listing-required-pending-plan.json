@@ -1,0 +1,108 @@
+{
+  "schema": 1,
+  "kind": "codex-supervisor-test-plan",
+  "plan_id": "ga18-gui06-host-x11-same-run-pr101-20261031",
+  "execution_capability": "LISTING_REQUIRED",
+  "requires_gui": true,
+  "depends_on": [],
+  "queue_priority": 30,
+  "target": {
+    "repository": "bogkom/GhidrAssist",
+    "commit": "5ba0d788ed029caec644e6aefb31dd52e6f4b908",
+    "mode": "artifact",
+    "artifact": {
+      "run_id": 41181074003,
+      "id": 13034627639,
+      "name": "GhidrAssist-CodeBrowser-12.1.4-41181074003",
+      "sha256": "b9e1291bd1c131a428e2e15d89d9d1dc8e3900dde1aa5425eb7bb96fd4f46ed1"
+    }
+  },
+  "authorization": {
+    "policy": "ghidrassist-18-track-v1",
+    "tracks": [
+      "GA-09",
+      "GA-17",
+      "GA-18"
+    ],
+    "permissions": [
+      "run-ghidra-gui",
+      "run-ghidra-headless",
+      "install-test-extension",
+      "write-test-project",
+      "write-test-files"
+    ],
+    "network": false,
+    "sudo": false,
+    "secrets": false,
+    "source_code_edits": false,
+    "publish_private_data": false,
+    "workspace": "dedicated"
+  },
+  "steps": [
+    {
+      "id": "gui06-same-run-original-four-sha-visual-native-ack",
+      "instruction": "UNPUBLISHED DRAFT / LISTING_REQUIRED. Do not copy this file to active HEADLESS_SAFE queue. Requires fresh, independent, explicit owner permission for ONE isolated GUI-06 native test and a separately authorized host-owned original X11 capture. A test-plan file itself grants no GUI rights, permissions or worker authorization. Never create another Codex Goal/session/timer, edit user profiles or original ECU411, use xhost+, sudo, network, generic desktop control, or run any Wyse operation from GitHub.\nHost-verify source commit 5ba0d788ed029caec644e6aefb31dd52e6f4b908, Ghidra 12.1.4 PUBLIC, exact Actions run 41181074003, immutable artifact ID 13034627639 outer SHA256 b9e1291bd1c131a428e2e15d89d9d1dc8e3900dde1aa5425eb7bb96fd4f46ed1, verify extension ZIP and codebrowser-bundle/HARNESS-SHA256SUMS.txt. No execution if any host byte mismatch. CI itself is synthetic PASS only, NOT Wyse PASS.\nOnly in a manually approved, isolated owner-private 0700 ga18-gui workspace, run the unmodified pinned codebrowser-bundle/run.py with --bridge-mode host --bridge-timeout 60 --output <PRIVATE_GA18_GUI_WORKSPACE> plus original --ghidra (installed PUBLIC 12.1.4), --java-home (JDK25), --extension-zip (verified), --extension-sha256. Both X11 and host-owned bridge must observe SAME operator-approved DISPLAY=:0 and local Xauthority; do not execute host bridge in Codex sandbox.\nRead the freshly created evidence/pilot-ghidra-<RUN_ID>/capture-ready.json (0600). Strictly require case_id synthetic-codebrowser-001, Program synthetic-mmio.bin, address 0x00000020, function FUN_00000020, 32-lowercase-hex RUN_ID, actual eight-digit XID, WM_CLASS CodeBrowserMmioMain.CodeBrowserMmioMain, full title GhidrAssist isolated CodeBrowser MMIO: CodeBrowserFixture:/synthetic-mmio.bin. No invented XID or recycled run ID.\nWhile this SAME Java Ghidra process stays alive, the authorized ordinary-host controller from Supervisor PR92 (scripts/ga18_host_x11_bridge.py) must, only after fresh preview/identity match, capture ONE original screenshot into private evidence/pilot-x11-<RUN_ID>/ghidra-window.png and write original bridge-capture.json. It must finish before bounded Java timeout. If no capture, changed XID/window, permissions mismatch, unknown source, slow timeout, or lost Ghidra, report BLOCKED/INCONCLUSIVE without GUI PASS/ACK. Do not overwrite any earlier pilot.\nThe GhidrAssist JVM must then emit original evidence/pilot-ghidra-<RUN_ID>/ghidra-window.png (distinct original Robot screenshot), codebrowser-assertions.json (31 original PR90 fields) and four-original-sha256.json. Require actual ProgramManager, CodeViewer Listing and displayed Decompiler all equal fixed case/function before/after and both X11 records share exact run/XID/class/title. Host bridge capture_start/end must fall strictly within Ghidra pre/post times. Host independently rehash FOUR ORIGINALS: harness JSON, harness PNG, bridge JSON and bridge PNG. Self-reported manifest is not a trusted pin.\nRun Supervisor PR92 read-only gui_x11_bridge_link against separately pinned four original SHA256 values in the same owner-private evidence folder. Structural result is only HOST_X11_SAME_RUN_CORRELATION_STRUCTURAL_ONLY; retain trusted_ghidra_provenance_verified=false, same_run_semantics_verified=false, independent_semantic_visual_readback=false, visual_readback_verified=false, native_nonce_ack=false, supervisor_ack=false, formal_gui_pass=false. Do not infer PASS from a correct JSON or screenshot alone.\nOnly if a separately authorized trusted independent image reader genuinely verifies displayed CodeBrowser, Listing program/address/function and Decompiler for the ORIGINAL host PNG, and the authorized native LISTING_REQUIRED Codex turn returns an authentic nonce/ACK, may an independent Supervisor owner create a final reports/ga18-gui06-host-result.json with passed=true, formal_gui_pass=true, visual_readback_verified=true, supervisor_ack=true and native_nonce_ack=true, backed by original four SHA256 pins. Otherwise record BLOCKED or INCONCLUSIVE, preserving PR56 BLOCKED and PR96 CLOSED_FAILED. No historical status rewrite or master merge.",
+      "outputs": [
+        "reports/ga18-gui06-host-result.json",
+        "reports/ga18-gui06-host-x11.png",
+        "reports/ga18-gui06-host-log.txt"
+      ],
+      "checks": [
+        {
+          "type": "json_field_equals",
+          "path": "reports/ga18-gui06-host-result.json",
+          "key": "target_commit",
+          "value": "5ba0d788ed029caec644e6aefb31dd52e6f4b908"
+        },
+        {
+          "type": "json_field_equals",
+          "path": "reports/ga18-gui06-host-result.json",
+          "key": "artifact_sha256",
+          "value": "b9e1291bd1c131a428e2e15d89d9d1dc8e3900dde1aa5425eb7bb96fd4f46ed1"
+        },
+        {
+          "type": "json_field_equals",
+          "path": "reports/ga18-gui06-host-result.json",
+          "key": "ghidra_version",
+          "value": "12.1.4"
+        },
+        {
+          "type": "json_field_equals",
+          "path": "reports/ga18-gui06-host-result.json",
+          "key": "passed",
+          "value": true
+        },
+        {
+          "type": "json_field_equals",
+          "path": "reports/ga18-gui06-host-result.json",
+          "key": "visual_readback_verified",
+          "value": true
+        },
+        {
+          "type": "json_field_equals",
+          "path": "reports/ga18-gui06-host-result.json",
+          "key": "native_nonce_ack",
+          "value": true
+        },
+        {
+          "type": "json_field_equals",
+          "path": "reports/ga18-gui06-host-result.json",
+          "key": "supervisor_ack",
+          "value": true
+        },
+        {
+          "type": "json_field_equals",
+          "path": "reports/ga18-gui06-host-result.json",
+          "key": "formal_gui_pass",
+          "value": true
+        },
+        {
+          "type": "json_sha256_matches",
+          "path": "reports/ga18-gui06-host-result.json",
+          "file": "reports/ga18-gui06-host-x11.png",
+          "key": "host_screenshot_sha256"
+        }
+      ]
+    }
+  ]
+}
