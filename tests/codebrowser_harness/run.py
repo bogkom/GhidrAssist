@@ -75,6 +75,29 @@ def subprocess_checked(cmd, cwd, env, log, timeout):
         raise RuntimeError(f"Command failed: {log.name}, exit={p.returncode}")
 
 
+def validate_cua_hold(hold,captured,run_id):
+    """Necessary host-window lifecycle integrity, NEVER native CUA/ACK proof."""
+    checks={
+        "result":hold.get("result")=="LIVE_CUA_WINDOW_RELEASED_STRUCTURAL_ONLY",
+        "run_id":hold.get("run_id")==run_id,
+        "native_cua":hold.get("native_cua_verified") is False,
+        "native_ack":hold.get("native_nonce_ack") is False,
+        "supervisor_ack":hold.get("supervisor_ack") is False,
+        "formal_pass":hold.get("formal_gui_pass") is False,
+        "pre_xid":hold.get("pre_window_id")==captured.get("window_id"),
+        "post_xid":hold.get("post_window_id")==captured.get("window_id"),
+        "program":hold.get("program")=="synthetic-mmio.bin",
+        "address":hold.get("address")=="0x00000020",
+        "listing":hold.get("function")=="FUN_00000020",
+        "decompiler":hold.get("decompiler_function")=="FUN_00000020",
+        "fresh_run":hold.get("source_run_id_reused") is False,
+    }
+    failed=[key for key,ok in checks.items() if not ok]
+    if failed:
+        raise RuntimeError("BLOCKED_CUA_HOLD_INVALID_POST_STATE: "+",".join(failed))
+    return True
+
+
 def main():
     ap=argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--ghidra",required=True)
@@ -282,18 +305,7 @@ def main():
             if args.cua_live:
                 hold=json.loads((out/"cua-live-result.json").read_text())
                 captured=json.loads((out/"codebrowser-assertions.json").read_text())
-                checks={
-                    "result":hold.get("result")=="LIVE_CUA_WINDOW_RELEASED_STRUCTURAL_ONLY",
-                    "run_id":hold.get("run_id")==run_id,
-                    "native_cua":hold.get("cua_native_verified") is False,
-                    "native_ack":hold.get("native_nonce_ack") is False,
-                    "formal_pass":hold.get("formal_gui_pass") is False,
-                    "pre_xid":hold.get("pre_window_id")==captured["window_id"],
-                    "post_xid":hold.get("post_window_id")==captured["window_id"],
-                }
-                failed=[key for key,ok in checks.items() if not ok]
-                if failed:
-                    raise RuntimeError("BLOCKED_CUA_HOLD_INVALID_POST_STATE: "+",".join(failed))
+                validate_cua_hold(hold,captured,run_id)
                 result["live_cua_hold_result"]=hold["result"]
             if args.bridge_mode!="off":
                 ready=json.loads((out/"capture-ready.json").read_text())
