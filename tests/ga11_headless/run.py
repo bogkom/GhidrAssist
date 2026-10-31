@@ -38,6 +38,13 @@ def fixture(path, short=False):
         for n in range(20,55):
             word(n,0x9000+2*n)  # >32 nonempty entries forces row cap
         data[0x400:0x406]=bytes.fromhex("4e714e714e75")
+        # Separate synthetic MMIO routine for optional GA-18 hardware checks.
+        data[0x500:0x50a]=bytes.fromhex("33fc40ca00fffa004e75")
+        # Conditional CSBAR source candidates: two contradictory complete
+        # words plus a real register-indirect STORE with UNKNOWN A0 target.
+        data[0x520:0x52a]=bytes.fromhex("33fc387c00fffa4c4e75")
+        data[0x530:0x53a]=bytes.fromhex("33fc387e00fffa4c4e75")
+        data[0x540:0x544]=bytes.fromhex("30804e75")
     path.write_bytes(data)
 
 def install(zip_path,target):
@@ -81,6 +88,16 @@ def main():
     parser.add_argument("--extension-sha256",required=True)
     parser.add_argument("--output",required=True)
     parser.add_argument("--strict-entry",action="store_true")
+    parser.add_argument("--ga18-mode",choices=("none","overview","cache","startup","csbar","revision","simcr-alternatives","csbar-width",
+                        "csbar-independent","csbar-identical","csbar-unknown-word",
+                        "simcr-partial","vector-edit-undo","cache-program-isolation",
+                        "generic-profile","trambar-source","csbar-mm0-reject",
+                        "mmio-read-reference","csbar-csor-conditional",
+                        "simcr-mm0-literal","trambar-unknown","csor-alternatives",
+                        "branch-simcr","call-barrier","cancel-incomplete",
+                        "function-rename","apply-preserve",
+                        "provenance-csv","movec-vbr"),
+                        default="none",help="Run GA-07/12 or GA-02/03 genuine headless source-evidence checks")
     args=parser.parse_args()
     out=Path(args.output).absolute()
     if out.is_symlink() or (out.exists() and
@@ -139,7 +156,9 @@ def main():
                   "-cp",str(work/"classes")+os.pathsep+cp,
                   "Ga11VectorHeadlessMain",
                   str(ghidra),str(work/"project"),str(out),
-                  str(args.strict_entry).lower()],work,env,out/"integration.log",
+                  str(args.strict_entry).lower(),
+                  args.ga18_mode],
+                 work,env,out/"integration.log",
                  timeout=240)
             proof=json.loads((out/"result.json").read_text())
             required=("function_entry_and_body_verified",
@@ -152,6 +171,135 @@ def main():
                     raise RuntimeError("Missing proof: "+key)
             if proof.get("truncated_image_unreadable")!=244:
                 raise RuntimeError("Missing truncated mapping proof")
+            if args.ga18_mode != "none":
+                mode_fields={
+                    "overview":("synthetic_simcr_detected",
+                        "overview_three_parts_verified","cpu32_scope_conservative"),
+                    "cache":("cfg_stage_first_computed","cfg_stage_cache_reused",
+                        "cfg_stage_clear_invalidated","cfg_stage_scope_isolated"),
+                    "startup":("simcr_real_listing_pcode_verified",
+                        "simcr_local_first_only_verified",
+                        "listing_cfg_reconciliation_verified"),
+                    "csbar":("csbar_real_literal_proposal_manual_only",
+                        "csbar_real_conflicting_literals_blocked",
+                        "unknown_store_all_cs_windows_blocked"),
+                    "simcr-alternatives":("simcr_real_two_literals_detected",
+                        "simcr_same_function_alternatives",
+                        "simcr_write_once_runtime_unknown",
+                        "simcr_alternatives_read_only"),
+                    "csbar-width":("csbar_real_byte_store_detected",
+                        "csbar_partial_width_rejected",
+                        "csbar_positive_control_retained",
+                        "csbar_width_read_only"),
+                    "csbar-independent":(
+                        "csbar_two_registers_independently_detected",
+                        "csbar_distinct_windows_not_combined",
+                        "csbar_independent_scan_read_only"),
+                    "csbar-identical":(
+                        "csbar_identical_sources_collapsed_to_candidate",
+                        "csbar_two_distinct_site_origins",
+                        "csbar_repeated_source_read_only"),
+                    "csbar-unknown-word":(
+                        "csbar_unknown_word_real_pcode",
+                        "csbar_unknown_word_blocks_proposal",
+                        "csbar_unknown_word_read_only"),
+                    "simcr-partial":(
+                        "simcr_real_partial_and_word_decoded",
+                        "simcr_partial_unknown_alternative",
+                        "simcr_partial_runtime_mm_unproven",
+                        "simcr_partial_read_only"),
+                    "vector-edit-undo":(
+                        "vector_real_edit_reclassified",
+                        "vector_native_undo_restored",
+                        "vector_runtime_vbr_unproven",
+                        "vector_scan_after_undo_read_only"),
+                    "cache-program-isolation":(
+                        "cache_real_two_programs_isolated",
+                        "cache_each_revision_reused_only_locally",
+                        "cache_wrong_identity_fail_closed",
+                        "cache_cross_program_read_only"),
+                    "generic-profile":(
+                        "generic_cpu32_kept_address_only",
+                        "generic_mc68332_csbar_proposals_disabled",
+                        "generic_model_switch_read_only"),
+                    "trambar-source":(
+                        "trambar_real_word_literal_decoded",
+                        "trambar_conditional_window_only",
+                        "trambar_real_analysis_read_only"),
+                    "csbar-mm0-reject":(
+                        "csbar_mm0_actual_source_decoded",
+                        "csbar_mm0_unsafe_review_rejected",
+                        "csbar_mm0_analysis_read_only"),
+                    "mmio-read-reference":(
+                        "mmio_real_read_disassembled",
+                        "mmio_read_not_cfg_store",
+                        "mmio_read_does_not_change_review",
+                        "mmio_read_analysis_read_only"),
+                    "csbar-csor-conditional":(
+                        "csbar_csor_real_sources_detected",
+                        "csbar_csor_not_active_cs_map",
+                        "csbar_csor_review_manual_only",
+                        "csbar_csor_analysis_read_only"),
+                    "simcr-mm0-literal":(
+                        "simcr_mm0_real_word_zero_detected",
+                        "simcr_mm0_source_not_runtime_latch",
+                        "simcr_mm0_scan_read_only"),
+                    "trambar-unknown":(
+                        "trambar_unknown_real_word_detected",
+                        "trambar_unknown_no_ram_window",
+                        "trambar_unknown_scan_read_only"),
+                    "csor-alternatives":(
+                        "csor_two_real_words_detected",
+                        "csor_conflicting_alternatives_preserved",
+                        "csor_no_active_map_inferred",
+                        "csor_alternative_scan_read_only"),
+                    "branch-simcr":(
+                        "branch_real_cfg_two_sources",
+                        "branch_local_first_alternatives",
+                        "branch_runtime_mm_unknown","branch_read_only"),
+                    "call-barrier":(
+                        "call_real_jsr_barrier","call_clobbered_pointer_not_reused",
+                        "call_alias_blocks_review","call_read_only"),
+                    "cancel-incomplete":(
+                        "cancel_real_scan_mid_traversal",
+                        "cancel_incomplete_rag_not_published",
+                        "cancel_clean_retry_computed",
+                        "cancel_complete_stage_reused",
+                        "cancel_real_program_unchanged"),
+                    "function-rename":(
+                        "rename_real_functions_and_collision",
+                        "rename_atomic_rollback",
+                        "rename_transactional_two_function_apply",
+                        "rename_native_undo_restored"),
+                    "apply-preserve":(
+                        "apply_real_label_protected",
+                        "apply_real_typed_data_preserved",
+                        "apply_existing_code_protected",
+                        "apply_native_undo_restored"),
+                    "provenance-csv":(
+                        "provenance_actual_source_types",
+                        "provenance_authorship_not_invented",
+                        "provenance_csv_formula_escaped",
+                        "provenance_csv_read_only"),
+                    "movec-vbr":(
+                        "movec_actual_cpu32_decoded",
+                        "movec_source_vbr_recognized",
+                        "movec_runtime_vbr_unknown",
+                        "movec_vector_scan_read_only"),
+                    "revision":("revision_real_edit_invalidated",
+                        "revision_stale_capture_rejected",
+                        "revision_undo_invalidated",
+                        "revision_redo_invalidated",
+                        "revision_original_bytes_restored",
+                        "revision_import_sha_stable"),
+                }
+                required_extra=mode_fields[args.ga18_mode]+(
+                    "read_only_analysis_verified",)
+                for key in required_extra:
+                    if proof.get(key) is not True:
+                        raise RuntimeError("Missing GA-18 real Ghidra proof: "+key)
+                summary["ga18_mode"]=args.ga18_mode
+                summary["ga18_hardware_verified"]=True
             summary.update({"status":"PASSED_SYNTHETIC_REAL_GHIDRA_HEADLESS",
                             "ghidra_version":"12.1.4",
                             "validated_fields":list(required),
