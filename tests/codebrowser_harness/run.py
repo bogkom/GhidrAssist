@@ -194,9 +194,18 @@ def main():
             # the actual synthetic Listing and captured the unmodified X11 PNG.
             # The verification here is structural consistency, NOT trusted
             # provenance, semantic visual readback or native GUI acceptance.
-            proof=validate_files(out/"codebrowser-assertions.json",
-                                 out/"ghidra-window.png",
-                                 case_id=case_id,run_id=run_id)
+            try:
+                proof=validate_files(out/"codebrowser-assertions.json",
+                                     out/"ghidra-window.png",
+                                     case_id=case_id,run_id=run_id)
+            except ValueError as error:
+                # Synthetic-only Ghidra window metadata, no private data.
+                observed=json.loads((out/"codebrowser-assertions.json")
+                                    .read_text(encoding="utf-8"))
+                raise RuntimeError(
+                    f"Assertion receipt invalid: {error}; X11={observed.get('window_id')!r}, "
+                    f"WM_CLASS={observed.get('window_class')!r}, "
+                    f"full_title={observed.get('window_title')!r}") from error
             if not proof["structural_evidence_consistent"]:
                 raise RuntimeError("Incomplete in-process CodeBrowser receipt")
             original=out/"ghidra-window.png"
