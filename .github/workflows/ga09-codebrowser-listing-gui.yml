@@ -29,7 +29,9 @@ jobs:
       - name: Install isolated X11
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends xvfb xauth openbox
+          sudo apt-get install -y --no-install-recommends xvfb xauth openbox x11-utils wmctrl imagemagick
+      - name: Fail-closed CodeBrowser receipt and GUI-06 bridge protocol regressions
+        run: python3 -m unittest discover -s tests/codebrowser_harness -p 'test_*.py' -v
       - name: Download hash-pinned Ghidra 12.1.4 PUBLIC
         shell: bash
         run: |
@@ -64,6 +66,98 @@ jobs:
               --extension-zip "$EXTENSION" \
               --extension-sha256 "$(cut -d' ' -f1 "$RUNNER_TEMP/extension.sha256")" \
               --output "$RUNNER_TEMP/codebrowser-evidence" --timeout 300
+      - name: GUI-06 external-process live X11 same-run handshake in isolated Xvfb
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -m 700 "$RUNNER_TEMP/ga18-gui"
+          xvfb-run -a -s '-screen 0 1400x1050x24' \
+            bash -c 'openbox --sm-disable >/dev/null 2>&1 & wm=$!; trap "kill $wm 2>/dev/null || true" EXIT; sleep 1; python3 tests/codebrowser_harness/run.py "$@"' codebrowser-live \
+              --ghidra "$GHIDRA_INSTALL_DIR" --java-home "$JAVA_HOME" \
+              --extension-zip "$EXTENSION" \
+              --extension-sha256 "$(cut -d' ' -f1 "$RUNNER_TEMP/extension.sha256")" \
+              --output "$RUNNER_TEMP/ga18-gui" --bridge-mode ci \
+              --bridge-timeout 60 --timeout 300
+          test "$(find "$RUNNER_TEMP/ga18-gui/evidence" -maxdepth 1 -type d -name 'pilot-ghidra-*' | wc -l)" = 1
+          test "$(find "$RUNNER_TEMP/ga18-gui/evidence" -maxdepth 1 -type d -name 'pilot-x11-*' | wc -l)" = 1
+      - name: GUI-06 negative live timeout without any host X11 capture
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -m 700 "$RUNNER_TEMP/ga18-timeout"
+          if xvfb-run -a -s '-screen 0 1400x1050x24' \
+            bash -c 'openbox --sm-disable >/dev/null 2>&1 & wm=$!; trap "kill $wm 2>/dev/null || true" EXIT; sleep 1; python3 tests/codebrowser_harness/run.py "$@"' codebrowser-timeout \
+              --ghidra "$GHIDRA_INSTALL_DIR" --java-home "$JAVA_HOME" \
+              --extension-zip "$EXTENSION" \
+              --extension-sha256 "$(cut -d' ' -f1 "$RUNNER_TEMP/extension.sha256")" \
+              --output "$RUNNER_TEMP/ga18-timeout" --bridge-mode host \
+              --bridge-timeout 5 --timeout 300; then
+            echo "Unexpected GUI-06 host capture PASS without host screenshot" >&2
+            exit 1
+          fi
+          log=$(find "$RUNNER_TEMP/ga18-timeout/evidence" -maxdepth 2 -name java.log -print -quit)
+          test -n "$log"
+          grep -F "bounded external host X11 capture timeout" "$log"
+          test "$(find "$RUNNER_TEMP/ga18-timeout/evidence" -name bridge-capture.json | wc -l)" = 0
+      - name: GA-18 GUI-06 bounded live CodeBrowser hold for future CUA (structural ONLY)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -m 700 "$RUNNER_TEMP/ga18-cua-live"
+          xvfb-run -a -s '-screen 0 1400x1050x24' \
+            bash -c 'openbox --sm-disable >/dev/null 2>&1 & wm=$!; trap "kill $wm 2>/dev/null || true" EXIT; sleep 1; python3 tests/codebrowser_harness/run.py "$@"' codebrowser-cua \
+              --ghidra "$GHIDRA_INSTALL_DIR" --java-home "$JAVA_HOME" \
+              --extension-zip "$EXTENSION" \
+              --extension-sha256 "$(cut -d' ' -f1 "$RUNNER_TEMP/extension.sha256")" \
+              --output "$RUNNER_TEMP/ga18-cua-live" --cua-live \
+              --cua-timeout 20 --cua-ci-response release --timeout 450
+          test "$(find "$RUNNER_TEMP/ga18-cua-live/evidence" -name cua-live-result.json | wc -l)" = 1
+          grep -R -l LIVE_CUA_WINDOW_RELEASED_STRUCTURAL_ONLY "$RUNNER_TEMP/ga18-cua-live/evidence" >/dev/null
+      - name: GA-18 CUA unavailable is BLOCKED, never PASS/ACK
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -m 700 "$RUNNER_TEMP/ga18-cua-unavailable"
+          if xvfb-run -a -s '-screen 0 1400x1050x24' \
+            bash -c 'openbox --sm-disable >/dev/null 2>&1 & wm=$!; trap "kill $wm 2>/dev/null || true" EXIT; sleep 1; python3 tests/codebrowser_harness/run.py "$@"' codebrowser-cua-blocked \
+              --ghidra "$GHIDRA_INSTALL_DIR" --java-home "$JAVA_HOME" \
+              --extension-zip "$EXTENSION" \
+              --extension-sha256 "$(cut -d' ' -f1 "$RUNNER_TEMP/extension.sha256")" \
+              --output "$RUNNER_TEMP/ga18-cua-unavailable" --cua-live \
+              --cua-timeout 20 --cua-ci-response unavailable --timeout 450; then
+            echo 'Unavailable CUA unexpectedly passed' >&2; exit 1
+          fi
+          grep -R -F BLOCKED_NATIVE_CUA_UNAVAILABLE "$RUNNER_TEMP/ga18-cua-unavailable/evidence"
+      - name: GA-18 CUA changed X11 window identity is BLOCKED
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -m 700 "$RUNNER_TEMP/ga18-cua-changed"
+          if xvfb-run -a -s '-screen 0 1400x1050x24' \
+            bash -c 'openbox --sm-disable >/dev/null 2>&1 & wm=$!; trap "kill $wm 2>/dev/null || true" EXIT; sleep 1; python3 tests/codebrowser_harness/run.py "$@"' codebrowser-cua-changed \
+              --ghidra "$GHIDRA_INSTALL_DIR" --java-home "$JAVA_HOME" \
+              --extension-zip "$EXTENSION" \
+              --extension-sha256 "$(cut -d' ' -f1 "$RUNNER_TEMP/extension.sha256")" \
+              --output "$RUNNER_TEMP/ga18-cua-changed" --cua-live \
+              --cua-timeout 20 --cua-ci-response window-changed --timeout 450; then
+            echo 'Changed X11 window unexpectedly passed' >&2; exit 1
+          fi
+          grep -R -F BLOCKED_CUA_WINDOW_CHANGED "$RUNNER_TEMP/ga18-cua-changed/evidence"
+      - name: GA-18 CUA missing host signal is bounded and BLOCKED
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -m 700 "$RUNNER_TEMP/ga18-cua-timeout"
+          if xvfb-run -a -s '-screen 0 1400x1050x24' \
+            bash -c 'openbox --sm-disable >/dev/null 2>&1 & wm=$!; trap "kill $wm 2>/dev/null || true" EXIT; sleep 1; python3 tests/codebrowser_harness/run.py "$@"' codebrowser-cua-timeout \
+              --ghidra "$GHIDRA_INSTALL_DIR" --java-home "$JAVA_HOME" \
+              --extension-zip "$EXTENSION" \
+              --extension-sha256 "$(cut -d' ' -f1 "$RUNNER_TEMP/extension.sha256")" \
+              --output "$RUNNER_TEMP/ga18-cua-timeout" --cua-live \
+              --cua-timeout 5 --timeout 450; then
+            echo 'Missing host signal unexpectedly passed' >&2; exit 1
+          fi
+          grep -R -F BLOCKED_NATIVE_CUA_TIMEOUT "$RUNNER_TEMP/ga18-cua-timeout/evidence"
       - name: Print last synthetic-only Ghidra log on test failure
         if: failure()
         shell: bash
@@ -74,6 +168,31 @@ jobs:
               tail -n 90 "$filename"
             fi
           done
+      - name: Bundle tested extension, GUI harness and SHA256SUMS for future isolated host acceptance
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/codebrowser-bundle"
+          cp "$EXTENSION" "$RUNNER_TEMP/codebrowser-bundle/"
+          cp tests/codebrowser_harness/run.py tests/codebrowser_harness/CodeBrowserMmioMain.java \
+             tests/codebrowser_harness/CodeBrowserAssertionReceipt.java \
+             tests/codebrowser_harness/CodeBrowserCuaHold.java \
+             tests/codebrowser_harness/ci_cua_observer.py \
+             tests/codebrowser_harness/ci_x11_observer.py \
+             tests/codebrowser_harness/gui06_protocol.py \
+             tests/codebrowser_harness/test_gui06_protocol.py \
+             tests/codebrowser_harness/assertion_audit.py \
+             tests/codebrowser_harness/test_assertion_audit.py \
+             "$RUNNER_TEMP/codebrowser-bundle/"
+          cd "$RUNNER_TEMP/codebrowser-bundle"
+          archive="$(basename "$EXTENSION")"
+          # Upload paths are relative to runner.temp. The host verifier
+          # matches SHA256SUMS member names against the outer ZIP exactly.
+          sha256sum "$archive" | sed 's#  #  codebrowser-bundle/#' > SHA256SUMS.txt
+          sha256sum run.py CodeBrowserMmioMain.java CodeBrowserAssertionReceipt.java CodeBrowserCuaHold.java ci_cua_observer.py ci_x11_observer.py gui06_protocol.py test_gui06_protocol.py assertion_audit.py test_assertion_audit.py > HARNESS-SHA256SUMS.txt
+          (cd "$RUNNER_TEMP" && sha256sum -c codebrowser-bundle/SHA256SUMS.txt)
+          sha256sum -c HARNESS-SHA256SUMS.txt
       - name: Publish synthetic-only test logs (even on failure)
         if: always()
         uses: actions/upload-artifact@v4
@@ -81,6 +200,13 @@ jobs:
           name: GhidrAssist-CodeBrowser-12.1.4-${{ github.run_id }}
           path: |
             ${{ runner.temp }}/codebrowser-evidence/
+            ${{ runner.temp }}/ga18-gui/evidence/
+            ${{ runner.temp }}/ga18-timeout/evidence/
+            ${{ runner.temp }}/ga18-cua-live/evidence/
+            ${{ runner.temp }}/ga18-cua-unavailable/evidence/
+            ${{ runner.temp }}/ga18-cua-changed/evidence/
+            ${{ runner.temp }}/ga18-cua-timeout/evidence/
+            ${{ runner.temp }}/codebrowser-bundle/
             ${{ runner.temp }}/extension.sha256
           if-no-files-found: warn
           retention-days: 14

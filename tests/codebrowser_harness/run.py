@@ -8,10 +8,17 @@ import os
 from pathlib import Path
 import re
 import signal
+import struct
+import zlib
 import subprocess
 import sys
 import tempfile
 import zipfile
+import uuid
+import stat
+
+from assertion_audit import validate_files, sha256 as byte_sha256
+from gui06_protocol import verify as verify_bridge, reserve_run, read_private_capture
 
 ROOT = Path(__file__).resolve().parents[2]
 VERSION = "12.1.4"
@@ -68,6 +75,29 @@ def subprocess_checked(cmd, cwd, env, log, timeout):
         raise RuntimeError(f"Command failed: {log.name}, exit={p.returncode}")
 
 
+def validate_cua_hold(hold,captured,run_id):
+    """Necessary host-window lifecycle integrity, NEVER native CUA/ACK proof."""
+    checks={
+        "result":hold.get("result")=="LIVE_CUA_WINDOW_RELEASED_STRUCTURAL_ONLY",
+        "run_id":hold.get("run_id")==run_id,
+        "native_cua":hold.get("native_cua_verified") is False,
+        "native_ack":hold.get("native_nonce_ack") is False,
+        "supervisor_ack":hold.get("supervisor_ack") is False,
+        "formal_pass":hold.get("formal_gui_pass") is False,
+        "pre_xid":hold.get("pre_window_id")==captured.get("window_id"),
+        "post_xid":hold.get("post_window_id")==captured.get("window_id"),
+        "program":hold.get("program")=="synthetic-mmio.bin",
+        "address":hold.get("address")=="0x00000020",
+        "listing":hold.get("function")=="FUN_00000020",
+        "decompiler":hold.get("decompiler_function")=="FUN_00000020",
+        "fresh_run":hold.get("source_run_id_reused") is False,
+    }
+    failed=[key for key,ok in checks.items() if not ok]
+    if failed:
+        raise RuntimeError("BLOCKED_CUA_HOLD_INVALID_POST_STATE: "+",".join(failed))
+    return True
+
+
 def main():
     ap=argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--ghidra",required=True)
@@ -76,15 +106,55 @@ def main():
     ap.add_argument("--extension-sha256")
     ap.add_argument("--output",required=True)
     ap.add_argument("--timeout",type=int,default=300)
+    ap.add_argument("--bridge-mode",choices=("off","ci","host"),default="off")
+    ap.add_argument("--bridge-timeout",type=int,default=60)
+    ap.add_argument("--cua-live",action="store_true",
+                    help="Bounded live synthetic window for separate future native CUA")
+    ap.add_argument("--cua-timeout",type=int,default=30)
+    ap.add_argument("--cua-ci-response",choices=("none","release","unavailable",
+                                                 "window-changed"),default="none",
+                    help="CI-only synthetic host response; never a native CUA proof")
     args=ap.parse_args()
     if args.timeout<90 or args.timeout>900:
         ap.error("timeout must be 90..900 seconds")
-    out=Path(args.output).expanduser()
-    if out.is_symlink() or (out.exists() and
-            (not out.is_dir() or any(out.iterdir()))):
-        ap.error("output must be an empty non-symlink directory")
-    out.mkdir(parents=True,exist_ok=True)
+    if not 5<=args.bridge_timeout<=180:
+        ap.error("bridge-timeout must be 5..180 seconds")
+    if args.cua_live and args.bridge_mode!="off":
+        ap.error("CUA hold is a separate mode; no previous X11 bridge replay")
+    if not 5<=args.cua_timeout<=180:
+        ap.error("cua-timeout must be 5..180 seconds")
+    if args.cua_ci_response!="none" and not args.cua_live:
+        ap.error("CI response requires --cua-live")
+    run_id=uuid.uuid4().hex
+    bridged=args.bridge_mode!="off" or args.cua_live
+    target=Path(args.output).expanduser().absolute()
+    if bridged:
+        # Live output is a strict owner-private ga18-gui workspace.
+        if (target.is_symlink() or not target.is_dir() or
+                target.stat().st_uid!=os.getuid() or
+                stat.S_IMODE(target.stat().st_mode)&0o077):
+            ap.error("bridge requires existing owner-private 0700 workspace")
+        evidence=target/"evidence"
+        if evidence.exists():
+            if (evidence.is_symlink() or not evidence.is_dir() or
+                    evidence.stat().st_uid!=os.getuid() or
+                    stat.S_IMODE(evidence.stat().st_mode)&0o077):
+                ap.error("unsafe evidence root")
+        else:
+            evidence.mkdir(mode=0o700)
+        try:
+            out=reserve_run(target,run_id)
+        except ValueError as exc:
+            ap.error(str(exc))
+    else:
+        out=target
+        if out.is_symlink() or (out.exists() and
+                (not out.is_dir() or any(out.iterdir()))):
+            ap.error("output must be empty non-symlink directory")
+        out.mkdir(parents=True,exist_ok=True)
+    os.umask(0o077)
     result={"schema":1,"status":"BLOCKED","test":"synthetic-codebrowser",
+            "run_id":run_id,"bridge_mode":args.bridge_mode,
             "supervisor_ack":False,"human_visual_readback":"NOT_PERFORMED"}
     try:
         ghidra=Path(args.ghidra).resolve(strict=True)
@@ -126,14 +196,19 @@ def main():
             project=work/"project"/"CodeBrowserFixture.gpr"
             if not project.is_file():
                 raise RuntimeError("Synthetic Ghidra project was not created")
+            case_id="synthetic-codebrowser-001"
             conf={"ghidra":str(ghidra),"project_dir":str(work/"project"),
-                  "index":str(work/"index")}
+                  "index":str(work/"index"),"run_id":run_id,"case_id":case_id,
+                  "bridge_timeout":args.bridge_timeout if args.bridge_mode!="off" else 0,
+                  "cua_hold_seconds":args.cua_timeout if args.cua_live else 0}
             conf_path=work/"config.json"
             conf_path.write_text(json.dumps(conf),encoding="utf-8")
             jars=sorted(set(ghidra.rglob("*.jar")) | set(ext.rglob("*.jar")))
             cp=os.pathsep.join(map(str,jars))
             subprocess_checked([str(java/"bin/javac"),"-cp",cp,
-                "-d",str(work/"classes"),str(SRC)],
+                "-d",str(work/"classes"),str(SRC),
+                str(SRC.parent/"CodeBrowserAssertionReceipt.java"),
+                str(SRC.parent/"CodeBrowserCuaHold.java")],
                 work,env,out/"compile.log",120)
             cmd=[str(java/"bin/java"),
                  "-Djava.system.class.loader=ghidra.GhidraClassLoader",
@@ -147,12 +222,41 @@ def main():
                 process=subprocess.Popen(cmd,cwd=work,env=env,
                     stdout=log,stderr=subprocess.STDOUT,
                     start_new_session=True)
+                observer=None
                 try:
-                    code=process.wait(timeout=args.timeout)
+                    if args.cua_live and args.cua_ci_response!="none":
+                        with (out/"cua-observer.log").open("x") as observer_log:
+                            observer=subprocess.Popen(
+                                [sys.executable,str(SRC.parent/"ci_cua_observer.py"),
+                                 "--workspace",str(target),"--run-id",run_id,
+                                 "--mode",args.cua_ci_response,
+                                 "--timeout",str(args.cua_timeout)],
+                                cwd=work,env=env,stdout=observer_log,
+                                stderr=subprocess.STDOUT,start_new_session=True)
+                        code=process.wait(timeout=args.timeout)
+                    elif args.bridge_mode=="ci":
+                        # Distinct disposable CI process observes live X11.
+                        # Actual Wyse bridge remains Supervisor-owned.
+                        with (out/"observer.log").open("x") as observer_log:
+                            observer=subprocess.Popen(
+                                [sys.executable,str(SRC.parent/"ci_x11_observer.py"),
+                                 "--workspace",str(target),"--run-id",run_id,
+                                 "--timeout",str(args.bridge_timeout)],
+                                cwd=work,env=env,stdout=observer_log,
+                                stderr=subprocess.STDOUT,start_new_session=True)
+                            code=process.wait(timeout=args.timeout)
+                    else:
+                        code=process.wait(timeout=args.timeout)
                     if code:
                         raise RuntimeError(f"Real CodeBrowser Java test exit {code}")
+                    if observer is not None and observer.wait(timeout=10):
+                        raise RuntimeError("CI external X11 observer failed")
                 finally:
-                    # Launcher may exit with a descendant JVM still in PGID.
+                    if observer is not None:
+                        with contextlib.suppress(ProcessLookupError):
+                            os.killpg(observer.pid,signal.SIGTERM)
+                        with contextlib.suppress(ProcessLookupError):
+                            os.killpg(observer.pid,signal.SIGKILL)
                     with contextlib.suppress(ProcessLookupError):
                         os.killpg(process.pid,signal.SIGTERM)
                     with contextlib.suppress(ProcessLookupError):
@@ -182,6 +286,102 @@ def main():
                 if restart.get(name) is not True:
                     raise RuntimeError("CodeBrowser restart failed: "+name)
             data=json.loads((out/"gui-results.json").read_text(encoding="utf-8"))
+            # Receipt is emitted from the SAME Java JVM that navigated to
+            # the actual synthetic Listing and captured the unmodified X11 PNG.
+            # The verification here is structural consistency, NOT trusted
+            # provenance, semantic visual readback or native GUI acceptance.
+            try:
+                proof=validate_files(out/"codebrowser-assertions.json",
+                                     out/"ghidra-window.png",
+                                     case_id=case_id,run_id=run_id)
+            except ValueError as error:
+                # Synthetic-only Ghidra window metadata, no private data.
+                observed=json.loads((out/"codebrowser-assertions.json")
+                                    .read_text(encoding="utf-8"))
+                raise RuntimeError(
+                    f"Assertion receipt invalid: {error}; X11={observed.get('window_id')!r}, "
+                    f"WM_CLASS={observed.get('window_class')!r}, "
+                    f"full_title={observed.get('window_title')!r}") from error
+            if args.cua_live:
+                hold=json.loads((out/"cua-live-result.json").read_text())
+                captured=json.loads((out/"codebrowser-assertions.json").read_text())
+                validate_cua_hold(hold,captured,run_id)
+                result["live_cua_hold_result"]=hold["result"]
+            if args.bridge_mode!="off":
+                ready=json.loads((out/"capture-ready.json").read_text())
+                receipt=json.loads((out/"codebrowser-assertions.json").read_text())
+                host_dir=evidence/("pilot-x11-"+run_id)
+                bridge,bridge_json_raw,bridge_png_raw=read_private_capture(
+                    evidence,run_id)
+                verified=verify_bridge(
+                    ready,receipt,bridge,bridge_png_raw,run_id)
+                if not verified["structurally_correlated"]:
+                    raise RuntimeError("GUI-06 structural correlation missing")
+                # Four hashes are candidate pins only; the actual Supervisor
+                # must independently hash the two original sources on host.
+                digest_manifest={
+                    "schema":1,"kind":"ga18-gui06-original-four-sha256",
+                    "case_id":case_id,"run_id":run_id,
+                    "window_id":receipt["window_id"],
+                    "harness_json_sha256":sha256(out/"codebrowser-assertions.json"),
+                    "harness_png_sha256":sha256(out/"ghidra-window.png"),
+                    "bridge_json_sha256":byte_sha256(bridge_json_raw),
+                    "bridge_png_sha256":byte_sha256(bridge_png_raw),
+                    "independently_pinned_by_supervisor":False,
+                    "visual_readback_verified":False,
+                    "supervisor_ack":False,"formal_gui_pass":False,
+                }
+                (out/"four-original-sha256.json").write_text(
+                    json.dumps(digest_manifest,indent=2)+"\n",
+                    encoding="utf-8")
+                saved_manifest=json.loads(
+                    (out/"four-original-sha256.json").read_text(encoding="utf-8"))
+                checks={
+                    "harness_json_sha256":sha256(out/"codebrowser-assertions.json"),
+                    "harness_png_sha256":sha256(out/"ghidra-window.png"),
+                    "bridge_json_sha256":byte_sha256(bridge_json_raw),
+                    "bridge_png_sha256":byte_sha256(bridge_png_raw),
+                }
+                if any(saved_manifest[key]!=value
+                       for key,value in checks.items()):
+                    raise RuntimeError("Four-source digest verification failed")
+                # Reject a bridge that replaces any original after validation.
+                _,rechecked_json,rechecked_png=read_private_capture(
+                    evidence,run_id)
+                if (rechecked_json!=bridge_json_raw or
+                        rechecked_png!=bridge_png_raw):
+                    raise RuntimeError("Bridge originals changed after verification")
+                result["external_capture_correlated_structurally"]=True
+                result["external_png_sha256"]=bridge["captured_screenshot_sha256"]
+            if not proof["structural_evidence_consistent"]:
+                raise RuntimeError("Incomplete in-process CodeBrowser receipt")
+            original=out/"ghidra-window.png"
+            # Legacy screenshot path must have identical original bytes.
+            if sha256(original)!=sha256(out/"codebrowser-x11.png"):
+                raise RuntimeError("Original X11 screenshot and compatibility copy differ")
+            if data.get("same_run_receipt_created") is not True:
+                raise RuntimeError("CodeBrowser did not emit authenticated-in-run receipt")
+            # Independently check real X11 Robot screenshot evidence.
+            # The PNG contents are still NOT a human/model visual readback.
+            shot=out/"codebrowser-x11.png"
+            raw=shot.read_bytes()
+            if len(raw)<4096 or raw[:8]!=b"\x89PNG\r\n\x1a\n":
+                raise RuntimeError("Missing or invalid real X11 PNG screenshot")
+            length=struct.unpack(">I",raw[8:12])[0]
+            if length!=13 or raw[12:16]!=b"IHDR":
+                raise RuntimeError("X11 screenshot missing bounded PNG IHDR")
+            if (zlib.crc32(raw[12:29]) & 0xffffffff)!=struct.unpack(
+                    ">I",raw[29:33])[0]:
+                raise RuntimeError("X11 screenshot IHDR checksum invalid")
+            width,height=struct.unpack(">II",raw[16:24])
+            if (width<640 or height<400 or width>8192 or height>8192 or
+                    data.get("x11_screenshot_width")!=width or
+                    data.get("x11_screenshot_height")!=height or
+                    data.get("x11_screenshot_sha256")!=sha256(shot)):
+                raise RuntimeError("X11 screenshot SHA-256 / dimensions invalid")
+            if data.get("visual_readback_verified") is not False or (
+                    data.get("human_visual_readback")!="NOT_PERFORMED"):
+                raise RuntimeError("Synthetic screenshot cannot claim human visual verification")
             expected=("synthetic_simcr_site","hardware_analyze_gui",
                       "listing_navigation","stale_go_to_rejected",
                       "stale_double_click_rejected",
@@ -195,17 +395,33 @@ def main():
                       "tool_template_saved",
                       "extension_metadata_serialized",
                       "tool_template_reloaded",
-                      "no_new_extension_prompt_on_restore")
+                      "no_new_extension_prompt_on_restore",
+                      "window_identity_verified",
+                      "codebrowser_listing_verified",
+                      "x11_screenshot_captured")
             for name in expected:
                 if data.get(name) is not True:
                     raise RuntimeError("Missing actual GUI evidence: "+name)
             if data.get("application_headless") or data.get("awt_headless"):
                 raise RuntimeError("Headless simulation is not real CodeBrowser")
-            result.update({"status":"PASSED_SYNTHETIC_CODEBROWSER",
+            result.update({"status":("LIVE_CUA_WINDOW_RELEASED_STRUCTURAL_ONLY"
+                                     if args.cua_live else
+                                     "PASSED_SYNTHETIC_CODEBROWSER"),
                            "ghidra_version":VERSION,
                            "synthetic_only":True,"assertions":list(expected),
                            "restart_process_verified":True,
-                           "no_repeated_plugin_prompt":True})
+                           "no_repeated_plugin_prompt":True,
+                           "window_identity_verified":True,
+                           "codebrowser_listing_verified":True,
+                           "x11_screenshot_sha256":sha256(shot),
+                           "x11_capture_proof_verified":True,
+                           "assertions_report_sha256":sha256(out/"codebrowser-assertions.json"),
+                           "same_run_structural_receipt":True,
+                           "case_id":case_id,"run_id":run_id,
+                           "trusted_ghidra_provenance_verified":False,
+                           "same_run_semantics_verified":False,
+                           "visual_readback_verified":False,
+                           "supervisor_ack":False,"formal_gui_pass":False})
     except (OSError, ValueError, RuntimeError, subprocess.TimeoutExpired,
             zipfile.BadZipFile) as error:
         result["reason"]=str(error)[:400]
@@ -213,7 +429,9 @@ def main():
         (out/"result.json").write_text(json.dumps(result,indent=2)+"\n",
                                        encoding="utf-8")
     print(json.dumps(result,indent=2))
-    return 0 if result["status"]=="PASSED_SYNTHETIC_CODEBROWSER" else 1
+    return 0 if result["status"] in (
+        "PASSED_SYNTHETIC_CODEBROWSER",
+        "LIVE_CUA_WINDOW_RELEASED_STRUCTURAL_ONLY") else 1
 
 
 if __name__=="__main__":

@@ -35,6 +35,10 @@ import java.awt.*;
 import java.awt.event.*;
 import java.lang.reflect.*;
 import java.nio.file.*;
+import java.awt.image.BufferedImage;
+import javax.imageio.ImageIO;
+import java.security.MessageDigest;
+import java.util.HexFormat;
 import java.util.*;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
@@ -224,6 +228,15 @@ public final class CodeBrowserMmioMain {
                 require(new DisassembleCommand(site,null,false)
                     .applyTo(first,TaskMonitor.DUMMY),
                     "Failed to disassemble synthetic MOVE.W");
+                Address last=site.add(9);
+                require(new DisassembleCommand(site.add(8),null,false)
+                    .applyTo(first,TaskMonitor.DUMMY),
+                    "Failed to disassemble synthetic RTS");
+                require(first.getFunctionManager().createFunction(
+                    "FUN_00000020",site,
+                    new ghidra.program.model.address.AddressSet(site,last),
+                    ghidra.program.model.symbol.SourceType.ANALYSIS)!=null,
+                    "Failed to create real synthetic CPU32 Function");
             }finally{first.endTransaction(tx,true);}
             Instruction instruction=first.getListing().getInstructionAt(site);
             require(instruction!=null && instruction.toString()
@@ -243,6 +256,7 @@ public final class CodeBrowserMmioMain {
                     "ghidra.app.plugin.core.gotoquery.GoToServicePlugin",
                     "ghidra.app.plugin.core.clipboard.ClipboardPlugin",
                     "ghidra.app.plugin.core.codebrowser.CodeBrowserPlugin",
+                    "ghidra.app.plugin.core.decompile.DecompilePlugin",
                     "ghidrassist.GhidrAssistPlugin"));
                 ProgramManager pm=tool[0].getService(ProgramManager.class);
                 pm.openProgram(first);
@@ -340,8 +354,43 @@ public final class CodeBrowserMmioMain {
             edt(()->{
                 dialog.dispose();
                 tool[0].getService(ProgramManager.class).setCurrentProgram(first);
-                ((JButton)fieldUnchecked(tab,"run")).doClick();
+                tool[0].getService(GoToService.class).goTo(site,first);
             });
+            until(()->{
+                try{return evalEdt(()->at(viewer,0x20));}
+                catch(Exception e){throw new RuntimeException(e);}
+            },15);
+            // Now the modal MMIO dialog is gone, so the real CodeBrowser
+            // Listing and Decompiler are not hidden by that dialog.
+            JsonObject receipt=CodeBrowserAssertionReceipt.capture(
+                tool[0],first,site,out,conf.get("run_id").getAsString(),
+                conf.get("case_id").getAsString(),
+                conf.has("bridge_timeout")?conf.get("bridge_timeout").getAsInt():0);
+            if(conf.has("cua_hold_seconds") &&
+                    conf.get("cua_hold_seconds").getAsInt()>0) {
+                // One fresh, isolated synthetic window for a *future* CUA turn.
+                // Release is host-only synchronization, NOT native CUA proof.
+                CodeBrowserCuaHold.waitForHost(tool[0],first,site,out,receipt,
+                    conf.get("run_id").getAsString(),
+                    conf.get("cua_hold_seconds").getAsInt());
+                result.addProperty("cua_live_hold_structural_only",true);
+                result.addProperty("cua_native_verified",false);
+                result.addProperty("native_nonce_ack",false);
+            }
+            result.addProperty("window_identity_verified",true);
+            result.addProperty("codebrowser_listing_verified",true);
+            result.addProperty("x11_screenshot_captured",true);
+            result.addProperty("x11_screenshot_sha256",
+                receipt.get("image_sha256").getAsString());
+            result.addProperty("x11_screenshot_width",
+                receipt.get("image_width").getAsInt());
+            result.addProperty("x11_screenshot_height",
+                receipt.get("image_height").getAsInt());
+            result.addProperty("same_run_receipt_created",true);
+            result.addProperty("visual_readback_verified",false);
+            result.addProperty("formal_gui_pass",false);
+            result.addProperty("human_visual_readback","NOT_PERFORMED");
+            edt(()->((JButton)fieldUnchecked(tab,"run")).doClick());
             until(()->{
                 try{return evalEdt(()->((JButton)fieldUnchecked(tab,"approve"))
                     .isEnabled());}
