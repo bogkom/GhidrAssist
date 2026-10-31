@@ -46,7 +46,7 @@ def validate(p):
         "window_identity_verified":True,"screenshot_sha256_verified":True,
         "visual_readback_verified":True,"codebrowser_listing_verified":True,
         "original_run_id":RUN,"host_screenshot_sha256":PNG,
-        "formal_gui_pass":True,"synthetic_only":True}
+        "formal_gui_pass":False,"synthetic_only":True}
     assert actual==expected and len(bindings)==1
     assert {"passed","window_identity_verified","screenshot_sha256_verified","visual_readback_verified","codebrowser_listing_verified"} <= {k for k,v in actual.items() if v is True}
     assert "report_published" not in actual
@@ -70,7 +70,7 @@ class Contract(unittest.TestCase):
           (("authorization","sudo"),True),(("authorization","permissions"),["run-ghidra-headless"]),
           (("steps",0,"checks",0,"value"),False),
           (("steps",0,"checks",9,"value"),False),
-          (("steps",0,"checks",17,"value"),False),
+          (("steps",0,"checks",17,"value"),True),
           (("steps",0,"checks",19,"file"),"reports/fake.png")]:
             with self.subTest(keys=keys):
                 p=copy.deepcopy(self.p); o=p
