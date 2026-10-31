@@ -121,3 +121,58 @@ completed Codex turn with nonce/ACK. Do not use the original Wyse project,
 firmware, credentials or graphical display. An isolated disposable Xvfb
 screen is sufficient for this automated regression, not for operator GUI
 acceptance.
+
+
+## GA-18 — in-process Listing/Decompiler and X11 report, PR #101
+
+New isolated genuine Ghidra 12.1.4 CodeBrowser code reads active ProgramManager
+and CodeViewerService location, actual containing Function and visible
+DecompilerPlugin function (not inferred from the Listing or a title). It
+navigates to the synthetic Function at 0x00000020 *after* closing the
+MMIO modal dialog, so the original CodeBrowser window remains visible.
+The synthetic Ghidra Program is disposable and never uses ECU411.
+
+The harness queries the live X11 tree for the unique exact frame title,
+XID, WM_CLASS and WM_NAME using xwininfo/xprop. Robot captures the actual
+visible window into ghidra-window.png; codebrowser-x11.png is a byte-for-byte
+compatibility copy, not printAll(), a mock or a transformed screenshot.
+
+The same process emits codebrowser-assertions.json matching the structural
+schema from Supervisor PR #90: schema=1,
+kind=ga18-codebrowser-listing-assertions, source_kind=ghidra-inprocess-codebrowser,
+case_id, run_id, window_id, window_class, window_title, program, address,
+function, listing_verified, decompiler_verified, image_sha256 and dimensions.
+It also reports decompiler_function, pre_capture and post_capture states
+and capture timestamps to detect inconsistent in-process navigation.
+
+The Python assertion_audit.py independently verifies the original PNG
+signature, IHDR, all PNG chunk CRCs, the image SHA256 and dimensions,
+fixed expected Program/address/function, complete report, matching
+pre/post states, monotonic times, X11 window identity and false-only GUI
+ACK, provenance and formal PASS fields. 21 positive/negative regression
+tests cover wrong program/address/function, stale Listing, changed PNG,
+wrong digest, corrupt PNG, bad time ordering and incomplete report.
+
+**Important provenance limitation:** All Program state and time fields
+are self-reported by the harness. A matching report and PNG do NOT prove
+they came from a trusted instrumented Ghidra execution, or independently
+bind actual pixels to semantic state at that time. The Supervisor PR #90
+checker may only return STRUCTURAL_EVIDENCE_CONSISTENT_PROVENANCE_PENDING.
+trusted_ghidra_provenance_verified=false, same_run_semantics_verified=false,
+visual_readback_verified=false, native_nonce_ack=false,
+supervisor_ack=false and formal_gui_pass=false remain mandatory.
+
+**Supervisor handoff:** Before stronger acceptance, a trusted host must
+independently pin the complete approved source/extension/harness SHA,
+both original PNG and JSON file digests, original capture XID and title,
+a fresh host challenge with an authenticated observer/chain of custody,
+plus a genuine authorized native GUI worker receipt and semantic visual
+inspection. Merely copying a host nonce into harness JSON or taking
+another image-diff test does not establish independent provenance.
+These stronger checks belong to bogkom/codex-supervisor, not to an
+unapproved HEADLESS_SAFE queue or a new GUI Goal.
+
+Dedicated CI uses the existing full-extension build and Xvfb/Openbox
+CodeBrowser harness, bundles the report, original PNG, Java/Python source,
+test cases and SHA256 manifests. Never retroactively alter older FAILED
+or BLOCKED GUI Supervisor reports.
