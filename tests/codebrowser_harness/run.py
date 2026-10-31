@@ -18,6 +18,7 @@ import uuid
 import stat
 
 from assertion_audit import validate_files, sha256 as byte_sha256
+from gui06_protocol import verify as verify_bridge, reserve_run
 
 ROOT = Path(__file__).resolve().parents[2]
 VERSION = "12.1.4"
@@ -106,10 +107,10 @@ def main():
                 ap.error("unsafe evidence root")
         else:
             evidence.mkdir(mode=0o700)
-        out=evidence/("pilot-ghidra-"+run_id)
-        if out.exists() or (evidence/("pilot-x11-"+run_id)).exists():
-            ap.error("duplicate/reused run ID")
-        out.mkdir(mode=0o700,exist_ok=False)
+        try:
+            out=reserve_run(target,run_id)
+        except ValueError as exc:
+            ap.error(str(exc))
     else:
         out=target
         if out.is_symlink() or (out.exists() and
@@ -259,17 +260,11 @@ def main():
                 receipt=json.loads((out/"codebrowser-assertions.json").read_text())
                 host_dir=evidence/("pilot-x11-"+run_id)
                 bridge=json.loads((host_dir/"bridge-capture.json").read_text())
-                if (ready["run_id"]!=run_id or
-                        ready["window_id"]!=receipt["window_id"] or
-                        bridge["run_id"]!=run_id or
-                        bridge["window_id"]!=receipt["window_id"] or
-                        not receipt["pre_capture_epoch_ms"]<=
-                        bridge["capture_start_epoch_ms"]<=
-                        bridge["capture_end_epoch_ms"]<=
-                        receipt["post_capture_epoch_ms"] or
-                        sha256(host_dir/"ghidra-window.png")!=
-                        bridge["captured_screenshot_sha256"]):
-                    raise RuntimeError("external host screenshot not bound to one run")
+                verified=verify_bridge(
+                    ready,receipt,bridge,
+                    (host_dir/"ghidra-window.png").read_bytes(),run_id)
+                if not verified["structurally_correlated"]:
+                    raise RuntimeError("GUI-06 structural correlation missing")
                 result["external_capture_correlated_structurally"]=True
                 result["external_png_sha256"]=bridge["captured_screenshot_sha256"]
             if not proof["structural_evidence_consistent"]:
