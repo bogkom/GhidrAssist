@@ -92,7 +92,7 @@ final class CodeBrowserAssertionReceipt {
     }
     private static Function shownDecompilerFunction(GhidraTool tool)throws Exception {
         Object plugin=tool.getManagedPlugins().stream()
-            .filter(p->p.getClass().getSimpleName().equals("DecompilerPlugin"))
+            .filter(p->p.getClass().getSimpleName().equals("DecompilePlugin"))
             .findFirst().orElseThrow(()->new AssertionError(
                 "real DecompilerPlugin was not installed"));
         Object provider=field(plugin,"connectedProvider");
