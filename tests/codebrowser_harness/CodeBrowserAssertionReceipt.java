@@ -3,6 +3,7 @@
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import ghidra.app.services.ProgramManager;
 import ghidra.app.services.CodeViewerService;
 import ghidra.framework.project.tool.GhidraTool;
@@ -19,6 +20,9 @@ import java.io.InputStream;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
+import java.nio.file.attribute.PosixFilePermission;
+import java.util.Set;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.time.Instant;
@@ -156,6 +160,100 @@ final class CodeBrowserAssertionReceipt {
     }
     static JsonObject capture(GhidraTool tool,Program expected,Address address,
             Path out,String runId,String caseId)throws Exception {
+        return capture(tool,expected,address,out,runId,caseId,0);
+    }
+
+    private static boolean privateFile(Path p)throws Exception {
+        if(Files.isSymbolicLink(p) ||
+           !Files.isRegularFile(p,LinkOption.NOFOLLOW_LINKS))return false;
+        Set<PosixFilePermission> perm=Files.getPosixFilePermissions(p);
+        return !perm.contains(PosixFilePermission.GROUP_READ) &&
+            !perm.contains(PosixFilePermission.GROUP_WRITE) &&
+            !perm.contains(PosixFilePermission.GROUP_EXECUTE) &&
+            !perm.contains(PosixFilePermission.OTHERS_READ) &&
+            !perm.contains(PosixFilePermission.OTHERS_WRITE) &&
+            !perm.contains(PosixFilePermission.OTHERS_EXECUTE);
+    }
+
+    private static void externalCapture(Path out,String runId,String caseId,
+            String[] xid,State before,int seconds)throws Exception {
+        check(runId.matches("[a-f0-9]{32}"),"external run ID must be 32 hex");
+        check(caseId.equals("synthetic-codebrowser-001"),"wrong external fixture case");
+        check(xid[1].equals("CodeBrowserMmioMain.CodeBrowserMmioMain"),
+            "unexpected real X11 class for external fixture");
+        check(xid[2].equals(
+            "GhidrAssist isolated CodeBrowser MMIO: CodeBrowserFixture:/synthetic-mmio.bin"),
+            "unexpected live X11 full window title");
+        Path ready=out.resolve("capture-ready.json");
+        JsonObject signal=new JsonObject();
+        signal.addProperty("schema",1);
+        signal.addProperty("action","GA18_X11_READY");
+        signal.addProperty("case_id",caseId);
+        signal.addProperty("run_id",runId);
+        signal.addProperty("window_id",xid[0]);
+        signal.addProperty("window_class",xid[1]);
+        signal.addProperty("window_title",xid[2]);
+        signal.addProperty("program",before.program);
+        signal.addProperty("address",before.address);
+        signal.addProperty("function",before.function);
+        signal.addProperty("decompiler_function",before.decompilerFunction);
+        signal.addProperty("pre_capture_epoch_ms",before.observedMs);
+        Files.writeString(ready,JSON.toJson(signal),
+            java.nio.file.StandardOpenOption.CREATE_NEW);
+        Files.setPosixFilePermissions(ready,Set.of(
+            PosixFilePermission.OWNER_READ,PosixFilePermission.OWNER_WRITE));
+        // No GUI input, no arbitrary commands, no scanning other windows.
+        // Supervisor's host-owned capture has to write the exact
+        // pilot-x11-RUN/bridge-capture.json and original PNG.
+        Path bridge=out.getParent().resolve("pilot-x11-"+runId);
+        Path report=bridge.resolve("bridge-capture.json");
+        Path png=bridge.resolve("ghidra-window.png");
+        long deadline=System.nanoTime()+seconds*1_000_000_000L;
+        boolean done=false;
+        while(System.nanoTime()<deadline) {
+            if(Files.exists(report,LinkOption.NOFOLLOW_LINKS)) {
+                check(privateFile(report) && privateFile(png),
+                    "host capture report/PNG must be private regular files");
+                check(Files.size(report)<128*1024 && Files.size(png)<64L*1024*1024,
+                    "host capture exceeds bounded evidence sizes");
+                JsonObject obj=JsonParser.parseString(Files.readString(report))
+                    .getAsJsonObject();
+                check(obj.get("applied").getAsBoolean() &&
+                    obj.get("result").getAsString().equals(
+                      "HOST_SYNTHETIC_X11_CAPTURED_PROVENANCE_PENDING") &&
+                    obj.get("run_id").getAsString().equals(runId) &&
+                    obj.get("case_id").getAsString().equals(caseId) &&
+                    obj.get("window_id").getAsString().equals(xid[0]) &&
+                    obj.get("wm_class").getAsString().equals(xid[1]) &&
+                    obj.get("window_title").getAsString().equals(xid[2]) &&
+                    obj.get("identity_before_after_capture").getAsBoolean(),
+                    "host bridge capture did not match same XID/run/title");
+                long hostStart=obj.get("capture_start_epoch_ms").getAsLong();
+                long hostEnd=obj.get("capture_end_epoch_ms").getAsLong();
+                check(before.observedMs<=hostStart && hostStart<=hostEnd &&
+                    hostEnd<=System.currentTimeMillis() && hostEnd-hostStart<=60000,
+                    "host capture timestamps not inside pre/post interval");
+                byte[] bytes=Files.readAllBytes(png);
+                String hash=HexFormat.of().formatHex(
+                    MessageDigest.getInstance("SHA-256").digest(bytes));
+                check(hash.equals(obj.get("captured_screenshot_sha256")
+                    .getAsString()),"host X11 PNG digest does not match bridge report");
+                for(String flag:new String[]{"formal_gui_pass","supervisor_ack",
+                        "native_nonce_ack","visual_readback_verified",
+                        "trusted_ghidra_provenance_verified"}) {
+                    check(obj.get(flag)!=null && !obj.get(flag).getAsBoolean(),
+                        "unearned host GUI PASS flag: "+flag);
+                }
+                done=true;
+                break;
+            }
+            Thread.sleep(100);
+        }
+        check(done,"bounded external host X11 capture timeout");
+    }
+
+    static JsonObject capture(GhidraTool tool,Program expected,Address address,
+            Path out,String runId,String caseId,int externalWaitSeconds)throws Exception {
         check(runId!=null && runId.matches("[a-zA-Z0-9_-]{12,64}"),
             "invalid test run ID");
         check(caseId!=null && caseId.matches("[a-zA-Z0-9_-]{6,64}"),
@@ -182,6 +280,12 @@ final class CodeBrowserAssertionReceipt {
         }
         check(before!=null,"real Listing/Decompiler failed to converge; last="+lastFailure);
         String[] winBefore=x11(frame);
+        if(externalWaitSeconds>0){
+            check(externalWaitSeconds>=5 && externalWaitSeconds<=180,
+                "external capture deadline must be 5..180 seconds");
+            externalCapture(out,runId,caseId,winBefore,before,
+                externalWaitSeconds);
+        }
         Rectangle bounds=frame.getBounds().intersection(
             frame.getGraphicsConfiguration().getBounds());
         check(bounds.width>=640 && bounds.height>=400 && bounds.width<=8192 &&
