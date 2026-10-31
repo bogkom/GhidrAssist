@@ -127,7 +127,8 @@ final class CodeBrowserAssertionReceipt {
             fn.getEntryPoint().equals(address) &&
             decomp.getEntryPoint().equals(fn.getEntryPoint()),
             "stale Listing/Decompiler function or address");
-        return new State(active.getName(),location.getAddress().toString(),
+        return new State(active.getName(),String.format(Locale.ROOT,
+            "0x%08X",location.getAddress().getOffset()),
             fn.getName(),decomp.getName(),System.currentTimeMillis());
     }
     private static void state(JsonObject output,String name,State state){
