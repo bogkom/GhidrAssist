@@ -282,14 +282,18 @@ def main():
             if args.cua_live:
                 hold=json.loads((out/"cua-live-result.json").read_text())
                 captured=json.loads((out/"codebrowser-assertions.json").read_text())
-                if (hold.get("result")!="LIVE_CUA_WINDOW_RELEASED_STRUCTURAL_ONLY"
-                        or hold.get("run_id")!=run_id
-                        or hold.get("cua_native_verified") is not False
-                        or hold.get("native_nonce_ack") is not False
-                        or hold.get("formal_gui_pass") is not False
-                        or hold.get("pre_window_id")!=captured["window_id"]
-                        or hold.get("post_window_id")!=captured["window_id"]):
-                    raise RuntimeError("BLOCKED_CUA_HOLD_INVALID_POST_STATE")
+                checks={
+                    "result":hold.get("result")=="LIVE_CUA_WINDOW_RELEASED_STRUCTURAL_ONLY",
+                    "run_id":hold.get("run_id")==run_id,
+                    "native_cua":hold.get("cua_native_verified") is False,
+                    "native_ack":hold.get("native_nonce_ack") is False,
+                    "formal_pass":hold.get("formal_gui_pass") is False,
+                    "pre_xid":hold.get("pre_window_id")==captured["window_id"],
+                    "post_xid":hold.get("post_window_id")==captured["window_id"],
+                }
+                failed=[key for key,ok in checks.items() if not ok]
+                if failed:
+                    raise RuntimeError("BLOCKED_CUA_HOLD_INVALID_POST_STATE: "+",".join(failed))
                 result["live_cua_hold_result"]=hold["result"]
             if args.bridge_mode!="off":
                 ready=json.loads((out/"capture-ready.json").read_text())
