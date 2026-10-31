@@ -40,7 +40,7 @@ class AssertionsAuditTest(unittest.TestCase):
             case_id="synthetic-test-001",run_id="test-run-001",
             source_kind="ghidra-inprocess-codebrowser",
             window_id="0x01234567",
-            window_class="ghidra-Ghidra.ghidra-Ghidra",
+            window_class="CodeBrowserMmioMain.CodeBrowserMmioMain",
             window_title="GhidrAssist isolated CodeBrowser MMIO",
             program=snap["program"],address=snap["address"],
             function=snap["function"],decompiler_function=snap["decompiler_function"],
