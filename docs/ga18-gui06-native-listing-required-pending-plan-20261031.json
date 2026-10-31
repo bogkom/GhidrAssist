@@ -1,0 +1,174 @@
+{
+  "schema": 1,
+  "kind": "codex-supervisor-test-plan",
+  "plan_id": "ga18-gui06-native-ack-pr101-20261031",
+  "execution_capability": "LISTING_REQUIRED",
+  "requires_gui": true,
+  "depends_on": [],
+  "queue_priority": 30,
+  "target": {
+    "repository": "bogkom/GhidrAssist",
+    "commit": "21b17626a629bf6d999fcd5e250475814b32700e",
+    "mode": "artifact",
+    "artifact": {
+      "run_id": 41186284329,
+      "id": 13036804816,
+      "name": "GhidrAssist-CodeBrowser-12.1.4-41186284329",
+      "sha256": "975d3c538b83e6c68000c2176206ac9347e3b9098842da6b1375e059a4d6fb2d"
+    }
+  },
+  "authorization": {
+    "policy": "ghidrassist-18-track-v1",
+    "tracks": [
+      "GA-09",
+      "GA-17",
+      "GA-18"
+    ],
+    "permissions": [
+      "run-ghidra-gui",
+      "run-ghidra-headless",
+      "install-test-extension",
+      "write-test-project",
+      "write-test-files"
+    ],
+    "network": false,
+    "sudo": false,
+    "secrets": false,
+    "source_code_edits": false,
+    "publish_private_data": false,
+    "workspace": "dedicated"
+  },
+  "steps": [
+    {
+      "id": "gui06-existing-visual-native-ack",
+      "instruction": "UNPUBLISHED PENDING LISTING_REQUIRED draft. NOT authorization or dispatch. STOP: present Supervisor legacy GUI dispatch and formal GUI publication deny gates must be separately resolved/reviewed. This plan cannot bypass them.\nONLY the existing paused test thread 01a19077-0c74-7192-a782-d8f36da8b2fd: before ONE native turn independently recheck native Goal SHA/updatedAt against private policy, quota GO, 0700 workspace, lane ownership, native handoff, exact-plan approval and workflow. Require named per-turn permissions=ga18-listing-restricted, no sandboxPolicy. No new Goal/session/timer, sudo/network/xhost+, CUA bypass, ECU411/user profiles or source editing.\nExact target commit 21b17626a629bf6d999fcd5e250475814b32700e, SUCCESS Actions 41186284329, artifact 13036804816, outer SHA256 975d3c538b83e6c68000c2176206ac9347e3b9098842da6b1375e059a4d6fb2d; host-rehash ZIP/manifests, Ghidra 12.1.4 PUBLIC/JDK25. Never trust mutable branch.\nALREADY PASS: one real synthetic Wyse CodeBrowser + external X11 four-original correlation, run_id 786766dad08141dda989ae5b2cab6131, XID 0x03a0002f, program synthetic-mmio.bin, Listing 0x00000020 and Decompiler FUN_00000020. Separate independent original-PNG visual readback PASS. Host PNG SHA256 e67a128dd02309c1d6419f191221bfcb7226089902f9959a4a24385144b16792. Supervisor #40 comments 6541601735 / 6541642052. Do NOT repeat GUI/capture/visual proof or change historical false native-ACK fields.\nHost-only controller must independently attest existing four original SHA pins, exact original PNG bytes, native Goal/turn identity and authorization. Privately stage original PNG as output; no model reconstruction. A separately approved actual native turn must finish and deliver authentic nonce-bound ACK; model-reported JSON=true is NOT proof.\nOnly trusted host auditor, AFTER independently verified native turn/ACK, may finalize positive report/PNG binding. Missing handoff, approval, workflow, native turn, nonce/ACK or independent publisher => BLOCKED/INCONCLUSIVE; never formal PASS. PRIVATE Supervisor report publication and its verified receipt are a separate POST-WORKFLOW gate (not model-self-attested); current publisher deny gate stays effective until reviewed replacement. Preserve PR56/96 and HEADLESS_SAFE history.",
+      "outputs": [
+        "reports/ga18-gui06-native-ack-pr101-20261031-result.json",
+        "reports/ga18-gui06-native-ack-pr101-20261031-original-host.png",
+        "reports/ga18-gui06-native-ack-pr101-20261031-native-log.txt"
+      ],
+      "checks": [
+        {
+          "type": "json_field_equals",
+          "path": "reports/ga18-gui06-native-ack-pr101-20261031-result.json",
+          "key": "passed",
+          "value": true
+        },
+        {
+          "type": "json_field_equals",
+          "path": "reports/ga18-gui06-native-ack-pr101-20261031-result.json",
+          "key": "target_commit",
+          "value": "21b17626a629bf6d999fcd5e250475814b32700e"
+        },
+        {
+          "type": "json_field_equals",
+          "path": "reports/ga18-gui06-native-ack-pr101-20261031-result.json",
+          "key": "artifact_sha256",
+          "value": "975d3c538b83e6c68000c2176206ac9347e3b9098842da6b1375e059a4d6fb2d"
+        },
+        {
+          "type": "json_field_equals",
+          "path": "reports/ga18-gui06-native-ack-pr101-20261031-result.json",
+          "key": "native_thread_id",
+          "value": "01a19077-0c74-7192-a782-d8f36da8b2fd"
+        },
+        {
+          "type": "json_field_equals",
+          "path": "reports/ga18-gui06-native-ack-pr101-20261031-result.json",
+          "key": "native_goal_identity_verified",
+          "value": true
+        },
+        {
+          "type": "json_field_equals",
+          "path": "reports/ga18-gui06-native-ack-pr101-20261031-result.json",
+          "key": "native_handoff_verified",
+          "value": true
+        },
+        {
+          "type": "json_field_equals",
+          "path": "reports/ga18-gui06-native-ack-pr101-20261031-result.json",
+          "key": "approval_present",
+          "value": true
+        },
+        {
+          "type": "json_field_equals",
+          "path": "reports/ga18-gui06-native-ack-pr101-20261031-result.json",
+          "key": "workflow_present",
+          "value": true
+        },
+        {
+          "type": "json_field_equals",
+          "path": "reports/ga18-gui06-native-ack-pr101-20261031-result.json",
+          "key": "native_turn_completed",
+          "value": true
+        },
+        {
+          "type": "json_field_equals",
+          "path": "reports/ga18-gui06-native-ack-pr101-20261031-result.json",
+          "key": "native_nonce_ack",
+          "value": true
+        },
+        {
+          "type": "json_field_equals",
+          "path": "reports/ga18-gui06-native-ack-pr101-20261031-result.json",
+          "key": "supervisor_ack",
+          "value": true
+        },
+        {
+          "type": "json_field_equals",
+          "path": "reports/ga18-gui06-native-ack-pr101-20261031-result.json",
+          "key": "window_identity_verified",
+          "value": true
+        },
+        {
+          "type": "json_field_equals",
+          "path": "reports/ga18-gui06-native-ack-pr101-20261031-result.json",
+          "key": "screenshot_sha256_verified",
+          "value": true
+        },
+        {
+          "type": "json_field_equals",
+          "path": "reports/ga18-gui06-native-ack-pr101-20261031-result.json",
+          "key": "visual_readback_verified",
+          "value": true
+        },
+        {
+          "type": "json_field_equals",
+          "path": "reports/ga18-gui06-native-ack-pr101-20261031-result.json",
+          "key": "codebrowser_listing_verified",
+          "value": true
+        },
+        {
+          "type": "json_field_equals",
+          "path": "reports/ga18-gui06-native-ack-pr101-20261031-result.json",
+          "key": "original_run_id",
+          "value": "786766dad08141dda989ae5b2cab6131"
+        },
+        {
+          "type": "json_field_equals",
+          "path": "reports/ga18-gui06-native-ack-pr101-20261031-result.json",
+          "key": "host_screenshot_sha256",
+          "value": "e67a128dd02309c1d6419f191221bfcb7226089902f9959a4a24385144b16792"
+        },
+        {
+          "type": "json_field_equals",
+          "path": "reports/ga18-gui06-native-ack-pr101-20261031-result.json",
+          "key": "formal_gui_pass",
+          "value": true
+        },
+        {
+          "type": "json_field_equals",
+          "path": "reports/ga18-gui06-native-ack-pr101-20261031-result.json",
+          "key": "synthetic_only",
+          "value": true
+        },
+        {
+          "type": "json_sha256_matches",
+          "path": "reports/ga18-gui06-native-ack-pr101-20261031-result.json",
+          "file": "reports/ga18-gui06-native-ack-pr101-20261031-original-host.png",
+          "key": "host_screenshot_sha256"
+        }
+      ]
+    }
+  ]
+}

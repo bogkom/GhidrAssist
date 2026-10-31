@@ -1,0 +1,23 @@
+name: GA-18 GUI-06 pending native plan contract (offline)
+on:
+  pull_request:
+    paths:
+      - 'docs/ga18-gui06-native-listing-required-pending-plan-20261031.json'
+      - 'docs/ga18-gui06-native-listing-required-handoff-20261031.md'
+      - 'tests/ga18_plan_contract/**'
+      - '.github/workflows/ga18-gui06-pending-plan-validation.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate strict GUI plan schema and negative mutations without executing a worker
+        run: python3 -m unittest discover -s tests/ga18_plan_contract -p 'test_*.py' -v
+      - name: Ensure plan was never queued
+        run: |
+          test ! -e test-plans/queue/ga18-gui06-native-ack-pr101-20261031.json
+          test ! -e test-plans/pending/ga18-gui06-native-ack-pr101-20261031.json
