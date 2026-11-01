@@ -271,6 +271,25 @@ def main():
                         os.killpg(process.pid,signal.SIGTERM)
                     with contextlib.suppress(ProcessLookupError):
                         os.killpg(process.pid,signal.SIGKILL)
+            if args.automation_probe:
+                observed=json.loads((out/"automation-java-result.json").read_text())
+                final=json.loads((out/"automation-4-response.json").read_text())
+                if (observed.get("external_automation_probe") is not True or
+                        observed.get("automation_protocol_schema")!=2 or
+                        final.get("schema")!=2 or final.get("sequence")!=4 or
+                        final.get("action")!="listing.snapshot" or
+                        int(final.get("listing_address","0"),16)!=0x20):
+                    raise RuntimeError("External v2 automation contract incomplete")
+                result.update(status="PASSED_HARDWARE_AUTOMATION_V2",
+                              ghidra_version=VERSION,synthetic_only=True,
+                              automation_protocol_schema=2,
+                              assertions=["ui.snapshot","hardware.analyze",
+                                          "listing.goto","listing.snapshot"],
+                              supervisor_ack=False,formal_gui_pass=False)
+                (out/"result.json").write_text(json.dumps(result,indent=2)+"\\n",
+                                              encoding="utf-8")
+                print(json.dumps(result,indent=2))
+                return 0
             if not (out/"tool-template.xml").is_file():
                 raise RuntimeError("Persisted GhidraTool template XML missing")
             # A completely new JVM/application initialization must read the
