@@ -9,6 +9,7 @@ on:
       - 'tests/automation/test_review_preview.py'
       - 'tools/ga18-wyse-api-smoke.py'
       - 'tools/ga18-wyse-review-smoke.py'
+      - 'tools/ga18-wyse-apply-undo-smoke.py'
       - '.github/workflows/ga18-agent-launcher.yml'
   workflow_dispatch:
 
@@ -22,5 +23,5 @@ jobs:
           python-version: '3.12'
       - name: Parse and validate GhidraGo launcher
         run: |
-          python3 -m py_compile tools/ghidrassist-agent-start tools/ghidrassist-agent tools/ga18-wyse-api-smoke.py tools/ga18-wyse-review-smoke.py
+          python3 -m py_compile tools/ghidrassist-agent-start tools/ghidrassist-agent tools/ga18-wyse-api-smoke.py tools/ga18-wyse-review-smoke.py tools/ga18-wyse-apply-undo-smoke.py
           python3 -m unittest discover -s tests/automation -p 'test_*.py' -v
