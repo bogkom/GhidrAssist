@@ -132,6 +132,33 @@ public final class AutomationServer implements AutoCloseable {
                     info.addProperty("entry",function.getEntryPoint().toString());
                     info.addProperty("body_addresses",function.getBody().getNumAddresses());
                     result.add("function",info);
+                } else if ("function.xrefs".equals(method)) {
+                    var function=plugin.getCurrentFunction();
+                    if(function==null) throw new IllegalStateException("No active function");
+                    int offset=args.has("offset") ? args.get("offset").getAsInt() : 0;
+                    int limit=args.has("limit") ? args.get("limit").getAsInt() : 100;
+                    if(offset<0 || limit<1 || limit>200)
+                        throw new IllegalArgumentException("Invalid XREF pagination");
+                    com.google.gson.JsonArray refs=new com.google.gson.JsonArray();
+                    int total=0;
+                    var iterator=program.getReferenceManager().getReferencesTo(function.getEntryPoint());
+                    for(var ref:iterator) {
+                        if(total>=offset && total-offset<limit) {
+                            JsonObject row=new JsonObject();
+                            row.addProperty("from",ref.getFromAddress().toString());
+                            row.addProperty("to",ref.getToAddress().toString());
+                            row.addProperty("type",ref.getReferenceType().toString());
+                            refs.add(row);
+                        }
+                        total++;
+                    }
+                    JsonObject xrefs=new JsonObject();
+                    xrefs.addProperty("entry",function.getEntryPoint().toString());
+                    xrefs.addProperty("total",total);
+                    xrefs.addProperty("offset",offset);
+                    xrefs.addProperty("limit",limit);
+                    xrefs.add("rows",refs);
+                    result.add("xrefs",xrefs);
                 } else if ("hardware.apply.prepare".equals(method) ||
                            "hardware.apply.commit".equals(method) ||
                            "hardware.apply.undo".equals(method)) {
