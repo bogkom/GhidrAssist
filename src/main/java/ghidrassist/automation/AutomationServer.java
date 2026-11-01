@@ -125,7 +125,10 @@ public final class AutomationServer implements AutoCloseable {
                     if (go == null || !go.goTo(target, program)) throw new IllegalStateException("Listing navigation unavailable");
                     result.addProperty("requested_address", target.toString());
                 } else if ("function.snapshot".equals(method)) {
-                    var function=plugin.getCurrentFunction();
+                    var viewer=plugin.getTool().getService(ghidra.app.services.CodeViewerService.class);
+                    ProgramLocation activeLocation=viewer==null ? null : viewer.getCurrentLocation();
+                    var function=activeLocation==null || activeLocation.getAddress()==null
+                        ? null : program.getFunctionManager().getFunctionContaining(activeLocation.getAddress());
                     if(function==null) throw new IllegalStateException("No active function");
                     JsonObject info=new JsonObject();
                     info.addProperty("name",function.getName());
@@ -133,7 +136,10 @@ public final class AutomationServer implements AutoCloseable {
                     info.addProperty("body_addresses",function.getBody().getNumAddresses());
                     result.add("function",info);
                 } else if ("function.xrefs".equals(method)) {
-                    var function=plugin.getCurrentFunction();
+                    var viewer=plugin.getTool().getService(ghidra.app.services.CodeViewerService.class);
+                    ProgramLocation activeLocation=viewer==null ? null : viewer.getCurrentLocation();
+                    var function=activeLocation==null || activeLocation.getAddress()==null
+                        ? null : program.getFunctionManager().getFunctionContaining(activeLocation.getAddress());
                     if(function==null) throw new IllegalStateException("No active function");
                     int offset=args.has("offset") ? args.get("offset").getAsInt() : 0;
                     int limit=args.has("limit") ? args.get("limit").getAsInt() : 100;
