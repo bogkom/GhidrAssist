@@ -94,7 +94,7 @@ jobs:
               tail -n 100 "$RUNNER_TEMP/ga18-paths.log"; exit 1;
             }
           grep -q 'GA18 CALLGRAPH PASS: functions=20 edges=19 mmio_static_writes=4 reset_reachable=6 assertions=110' "$RUNNER_TEMP/ga18-paths.log"
-          grep -q 'GA18 PRODUCTION PATHS PASS: assertions=19' "$RUNNER_TEMP/ga18-paths.log"
+          grep -q 'GA18 PRODUCTION PATHS PASS: assertions=22' "$RUNNER_TEMP/ga18-paths.log"
           echo 'Real Ghidra native synthetic graph and production traversal assertions passed'
       - name: Verify ZIP and record SHA-256
         shell: bash
