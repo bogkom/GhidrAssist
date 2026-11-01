@@ -159,3 +159,9 @@ It does not supply a project path, start the opt-in Automation API, open a
 CodeBrowser, or enable synthetic writes. Use this mode to install extension
 ZIPs through the Ghidra Project Manager (File -> Install Extensions). Close
 that manager before `start` when updating the isolated test installation.
+
+## Unified read-only function analysis
+
+`analysis.bundle` captures the current CodeBrowser function, its source program revision, at most 100 entry XREFs, at most 100 possible MMIO references from the first 4096 body instructions, and starts a background Decompiler task. It returns `analysis.decompiler.task_id`; obtain pseudocode pages separately through `decompiler.status`. `mmio_reference_candidates` are static Ghidra references within the MC68332 peripheral address range `0xFFF000..0xFFFFFF`, not proof of executed writes, peripheral identity or physical CS mapping. `write_candidate` reflects Ghidra ReferenceType only. `incoming_total` and `mmio_candidates_total_scanned` allow detection of display truncation. The method is read-only and does not change the selected hardware profile or Ghidra project.
+
+CLI: `bash "$HOME/Projekty/Codex/ga-automation-test/ga18-test.sh" bundle`, followed by `decompile-status --offset 0 --limit 512`. The synthetic function `FUN_00000020` must already exist in the test project.
