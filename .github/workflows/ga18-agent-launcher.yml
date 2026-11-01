@@ -12,6 +12,8 @@ on:
       - 'tools/ga18-wyse-apply-undo-smoke.py'
       - 'tools/ga18-wyse-function-xrefs-smoke.py'
       - 'tools/ga18-wyse-decompiler-smoke.py'
+      - 'tools/generate-synthetic-callgraph.py'
+      - 'tests/automation/test_synthetic_callgraph.py'
       - '.github/workflows/ga18-agent-launcher.yml'
   workflow_dispatch:
 
