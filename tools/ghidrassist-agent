@@ -34,17 +34,24 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--session", default=os.environ.get(
         "GHIDRASSIST_AGENT_SESSION", str(Path.home() / ".local/state/ghidrassist-agent/session.json")))
-    parser.add_argument("action", choices=("status", "snapshot", "analyze", "listing", "goto"))
+    parser.add_argument("action", choices=("status", "snapshot", "analyze", "task", "mmio", "listing", "goto"))
     parser.add_argument("address", nargs="?")
+    parser.add_argument("--filter", default="")
+    parser.add_argument("--offset", type=int, default=0)
+    parser.add_argument("--limit", type=int, default=100)
     args = parser.parse_args()
     session = load_session(args.session)
     method = {"status": "session.status", "snapshot": "ui.snapshot",
-              "analyze": "hardware.analyze", "listing": "listing.snapshot",
+              "analyze": "hardware.analyze", "task": "hardware.task",
+              "mmio": "hardware.mmio.rows", "listing": "listing.snapshot",
               "goto": "listing.goto"}[args.action]
     if method == "listing.goto" and not args.address:
         parser.error("goto requires an address")
     try:
-        reply = rpc(session, method, {"address": args.address} if args.address else {})
+        params = ({"address": args.address} if args.address else
+                  {"filter": args.filter, "offset": args.offset, "limit": args.limit}
+                  if method == "hardware.mmio.rows" else {})
+        reply = rpc(session, method, params)
         print(json.dumps(reply, indent=2))
     except HTTPError as error:
         print(error.read().decode("utf-8", errors="replace"), file=sys.stderr)
