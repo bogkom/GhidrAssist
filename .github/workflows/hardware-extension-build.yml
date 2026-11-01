@@ -113,30 +113,15 @@ jobs:
             fi
           done < <(unzip -Z1 "$package")
           test "$found" -eq 1
-      - name: Prepare distribution bundle (outer ZIP containing installable ZIP)
-        shell: bash
-        run: |
-          set -euo pipefail
-          shopt -s nullglob
-          packages=(dist/ghidra_12.1.4_PUBLIC_*_GhidrAssist.zip)
-          test "${#packages[@]}" -eq 1
-          inner="$(basename "${packages[0]}")"
-          mkdir -p dist/bundle
-          cp "${packages[0]}" dist/bundle/
-          ( cd dist/bundle && sha256sum "$inner" > SHA256SUMS.txt )
-          printf '%s\n' 'GhidrAssist 12.1.4 PUBLIC distribution.' 'Extract this outer ZIP.' 'Run sha256sum -c SHA256SUMS.txt.' 'Install the inner ghidra_12.1.4_PUBLIC_*_GhidrAssist.zip via Ghidra File > Install Extensions.' > dist/bundle/INSTALL.txt
-          outer="dist/GhidrAssist-12.1.4-${GITHUB_RUN_ID}-distribution.zip"
-          ( cd dist/bundle && zip -q -X "../$(basename "$outer")" INSTALL.txt SHA256SUMS.txt "$inner" )
-          unzip -tq "$outer"
-          test "$(unzip -Z1 "$outer" | grep -Fc "$inner")" -eq 1
-          unzip -p "$outer" SHA256SUMS.txt | grep -Fq "$inner"
-          echo "Outer distribution bundle: $outer"
-
-      - name: Publish nested ZIP distribution (Actions artifact)
+      # upload-artifact already wraps these files in the downloaded artifact ZIP.
+      # Do not create a second distribution ZIP: the inner ZIP is installed by Ghidra.
+      - name: Publish installable extension ZIP (Actions artifact)
         uses: actions/upload-artifact@v4
         with:
           name: GhidrAssist-Ghidra-12.1.4-${{ github.run_id }}
-          path: dist/GhidrAssist-12.1.4-${{ github.run_id }}-distribution.zip
+          path: |
+            dist/ghidra_12.1.4_PUBLIC_*_GhidrAssist.zip
+            dist/SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 30
           compression-level: 0
