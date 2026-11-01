@@ -10,6 +10,7 @@ on:
       - codex/agentic-policy-and-evidence-fixes
     paths:
       - 'src/main/java/ghidrassist/hardware/**'
+      - 'src/main/java/ghidrassist/automation/**'
       - 'src/main/java/ghidrassist/agent/**'
       - 'src/main/java/ghidrassist/tools/**'
       - 'src/main/java/ghidrassist/ui/**'
@@ -26,6 +27,7 @@ on:
   pull_request:
     paths:
       - 'src/main/java/ghidrassist/hardware/**'
+      - 'src/main/java/ghidrassist/automation/**'
       - 'src/main/java/ghidrassist/agent/**'
       - 'src/main/java/ghidrassist/tools/**'
       - 'src/main/java/ghidrassist/ui/**'
