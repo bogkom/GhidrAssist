@@ -50,8 +50,8 @@ public final class AgentProjectOpenPlugin extends Plugin implements ApplicationL
             if (!actual.equals(Path.of(expected).toAbsolutePath().normalize())) return;
             String programPath = path.startsWith("/") ? path : "/" + path;
             DomainFile file = project.getProjectData().getFile(programPath);
-            if (file == null || !file.canSave() || file.isReadOnly()) {
-                Msg.error(this,"Automation program absent or not writable: " + programPath);
+            if (file == null || file.isReadOnly()) {
+                Msg.error(this,"Automation program absent or marked read-only: " + programPath);
                 poller.stop();
                 return;
             }
