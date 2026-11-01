@@ -400,6 +400,27 @@ def main():
                             raise RuntimeError("Active function XREF snapshot invalid: "+str(links))
                         (out/"api-function-xrefs.json").write_text(json.dumps(
                             {"schema":3,"function":active,"xrefs":links},indent=2))
+                        requested=http_call("decompiler.start").get("decompiler",{})
+                        if requested.get("state")!="RUNNING" or not requested.get("task_id"):
+                            raise RuntimeError("Decompiler task did not start")
+                        decomp={}
+                        for _ in range(40):
+                            decomp=http_call("decompiler.status",{"offset":0,"limit":128}).get("decompiler",{})
+                            if decomp.get("state")!="RUNNING":
+                                break
+                            time.sleep(0.25)
+                        if decomp.get("state")!="COMPLETED":
+                            raise RuntimeError("Decompiler task not complete: "+str(decomp))
+                        if "FUN_00000020" not in decomp.get("text","") and not decomp.get("total_characters",0)>0:
+                            raise RuntimeError("Decompiler empty function result")
+                        if len(decomp.get("text",""))>128:
+                            raise RuntimeError("Decompiler pagination limit exceeded")
+                        tail=http_call("decompiler.status",
+                                       {"offset":decomp["total_characters"],"limit":128}).get("decompiler",{})
+                        if tail.get("text")!="":
+                            raise RuntimeError("Decompiler end page not empty")
+                        (out/"api-decompiler.json").write_text(json.dumps(
+                            {"schema":3,"task":requested,"first_page":decomp,"end_page":tail},indent=2))
                         (out/"api-hardware-e2e.json").write_text(json.dumps(
                             {"schema":3,"task":state,"mmio":table,
                              "navigation":navigated,"listing":listing},indent=2))
