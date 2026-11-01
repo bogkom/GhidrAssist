@@ -38,9 +38,9 @@ def main():
     env = os.environ.copy()
     options = [
         "-Dghidrassist.automation.enabled=true",
-        "-Dghidrassist.automation.token=" + token,
         "-Dghidrassist.automation.ready=" + str(ready),
     ]
+    env["GHIDRASSIST_AUTOMATION_TOKEN"] = token
     env["JAVA_TOOL_OPTIONS"] = (env.get("JAVA_TOOL_OPTIONS", "") + " " + " ".join(options)).strip()
     command = [str(binary)]
     if args.project:
