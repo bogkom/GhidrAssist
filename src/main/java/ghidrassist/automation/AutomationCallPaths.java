@@ -16,10 +16,10 @@ public final class AutomationCallPaths {
     private static final long MMIO_LOW = 0xFFF000L, MMIO_HIGH = 0xFFFFFFL;
     private AutomationCallPaths() {}
 
-    private record Edge(Address callsite, Address target) {}
+    private record Edge(Address callsite, Address target, String evidence) {}
     private record Write(Address site, Address target, String kind) {}
     private record Node(Function function, List<Edge> calls, List<Write> writes, List<Address> indirectCalls) {}
-    private record Hop(Address function, Address callsite) {}
+    private record Hop(Address function, Address callsite, String evidence) {}
     private record Hit(List<Hop> chain, Write write) {}
     private static final class State {
         final List<Hit> hits = new ArrayList<>();
@@ -39,6 +39,27 @@ public final class AutomationCallPaths {
         long off=addr.getOffset();
         return Long.compareUnsigned(off, MMIO_LOW)>=0 &&
                Long.compareUnsigned(off, MMIO_HIGH)<=0;
+    }
+
+    // Only the adjacent CPU32 MOVEA.L #absolute,An ; JSR (An) pattern is
+    // resolved. No intervening instruction, no dataflow guess, no execution claim.
+    private static Address adjacentConstantRegisterCall(Program program, Instruction call) {
+        if(!"68000:BE:32:CPU32".equals(program.getLanguageID().toString())) return null;
+        byte[] callBytes=call.getBytes();
+        if(callBytes.length!=2) return null;
+        int callOp=(callBytes[0]&255)<<8 | (callBytes[1]&255);
+        if((callOp & 0xfff8)!=0x4e90) return null; // JSR (An)
+        Instruction move=program.getListing().getInstructionBefore(call.getAddress());
+        if(move==null || !move.getMaxAddress().next().equals(call.getAddress())) return null;
+        byte[] data=move.getBytes();
+        if(data.length!=6) return null;
+        int moveOp=(data[0]&255)<<8 | (data[1]&255);
+        if(moveOp != (0x207c | ((callOp & 7)<<9))) return null; // MOVEA.L #imm,An
+        long absolute=(long)(data[2]&255)<<24 | (long)(data[3]&255)<<16 |
+                      (long)(data[4]&255)<<8 | (long)(data[5]&255);
+        Address target=program.getAddressFactory().getDefaultAddressSpace().getAddress(absolute);
+        Function f=program.getFunctionManager().getFunctionAt(target);
+        return f==null?null:f.getEntryPoint();
     }
     private static Map<Address,Node> index(Program program) {
         Map<Address,Node> nodes=new TreeMap<>();
@@ -61,15 +82,18 @@ public final class AutomationCallPaths {
                     if(ref.getReferenceType().isCall()) {
                         Function target=program.getFunctionManager().getFunctionAt(ref.getToAddress());
                         if(target!=null) {
-                            calls.add(new Edge(ins.getAddress(),target.getEntryPoint()));
+                            calls.add(new Edge(ins.getAddress(),target.getEntryPoint(),"ghidra_call_reference"));
                             resolvedCall=true;
                         }
                     }
                     if(ref.getReferenceType().isWrite() && isPeripheral(ref.getToAddress()))
                         writes.add(new Write(ins.getAddress(),ref.getToAddress(),ref.getReferenceType().toString()));
                 }
-                if(ins.getFlowType().isCall() && !resolvedCall)
-                    indirectCalls.add(ins.getAddress());
+                if(ins.getFlowType().isCall() && !resolvedCall) {
+                    Address proven=adjacentConstantRegisterCall(program,ins);
+                    if(proven!=null) calls.add(new Edge(ins.getAddress(),proven,"adjacent_movea_immediate"));
+                    else indirectCalls.add(ins.getAddress());
+                }
             }
             calls.sort(Comparator.comparing(Edge::callsite).thenComparing(Edge::target));
             writes.sort(Comparator.comparing(Write::site).thenComparing(Write::target));
@@ -97,7 +121,7 @@ public final class AutomationCallPaths {
             if(chain.size()-1>=maxDepth) { state.depthStops++; continue; }
             if(!nodes.containsKey(edge.target)) { state.unresolvedCalls++; continue; }
             stack.add(edge.target);
-            chain.add(new Hop(edge.target,edge.callsite));
+            chain.add(new Hop(edge.target,edge.callsite,edge.evidence));
             walk(edge.target,nodes,maxDepth,stack,chain,state);
             chain.remove(chain.size()-1);
             stack.remove(edge.target);
@@ -127,7 +151,7 @@ public final class AutomationCallPaths {
         State state=new State();
         LinkedHashSet<Address> stack=new LinkedHashSet<>();
         stack.add(root);
-        walk(root,nodes,maxDepth,stack,new ArrayList<>(List.of(new Hop(root,null))),state);
+        walk(root,nodes,maxDepth,stack,new ArrayList<>(List.of(new Hop(root,null,null))),state);
         JsonObject out=new JsonObject();
         out.addProperty("revision",program.getModificationNumber());
         out.addProperty("origin",origin);
@@ -155,20 +179,24 @@ public final class AutomationCallPaths {
         for(int i=offset;i<Math.min((long)state.hits.size(),(long)offset+limit);i++) {
             Hit hit=state.hits.get(i);
             JsonObject row=new JsonObject();
-            JsonArray functions=new JsonArray(), calls=new JsonArray();
+            JsonArray functions=new JsonArray(), calls=new JsonArray(), callEvidence=new JsonArray();
             for(Hop hop:hit.chain) {
                 functions.add(hex(hop.function));
-                if(hop.callsite!=null) calls.add(hex(hop.callsite));
+                if(hop.callsite!=null) {
+                    calls.add(hex(hop.callsite));
+                    callEvidence.add(hop.evidence);
+                }
             }
             row.add("functions",functions);
             row.add("call_sites",calls);
+            row.add("call_evidence",callEvidence);
             row.addProperty("write_site",hex(hit.write.site));
             row.addProperty("mmio_target",hex(hit.write.target));
             row.addProperty("write_reference_type",hit.write.kind);
             rows.add(row);
         }
         out.add("paths",rows);
-        out.addProperty("evidence","Static resolved CALL and WRITE references; unresolved indirect CALL sites reported but not followed; no executed path, MM state or physical mapping established");
+        out.addProperty("evidence","Static Ghidra CALL references and narrow adjacent CPU32 MOVEA-immediate register-call patterns; other indirect sites unresolved; no execution, MM state or physical mapping established");
         return out;
     }
 }
