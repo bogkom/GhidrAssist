@@ -264,3 +264,18 @@ Further stages may resolve indirect calls *only with separately auditable
 static evidence*, such as a proven constant target at an instruction,
 and should retain distinct provenance and ambiguity flags. No runtime
 execution, register contents, or physical MMIO mapping is verified.
+
+### Proven adjacent register-indirect CALL (CPU32)
+
+A narrowly bounded proof is now supported for immediately adjacent
+`MOVEA.L #absolute,An; JSR (An)` instructions in the same decoded function
+on CPU32, with no intervening instruction. This produces a path to a
+**defined** target function with per-hop `call_evidence:
+["adjacent_movea_immediate"]`; normal Ghidra CALL-reference hops carry
+`ghidra_call_reference`. The byte pattern and destination function are
+both verified; any other register-indirect CALL remains unknown,
+included in `unresolved_call_sites`, and makes `complete=false`.
+The new `synthetic-indirect-constant.bin` fixture and native Ghidra
+verifier enforce this distinction. No generic register propagation,
+pointer-table evaluation, interprocedural value inference, or proof
+of runtime control flow is claimed.
