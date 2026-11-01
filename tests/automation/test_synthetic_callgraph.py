@@ -26,6 +26,8 @@ class Fixture(unittest.TestCase):
         self.assertIn('getReferencesTo(dst)',code)
         self.assertIn('getReferencesFrom()',code)
         self.assertIn('GA18 CALLGRAPH PASS',code)
+        self.assertIn('"JSR".equalsIgnoreCase',code)
+        self.assertIn('"MOVE.W".equalsIgnoreCase',code)
         self.assertNotIn('startTransaction(',code)
 
     def test_determinism_and_separation(self):
