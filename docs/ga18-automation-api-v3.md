@@ -177,3 +177,41 @@ The user observed **zero functions from Ghidra Auto Analyze** when opening the r
 ### Native script correction
 
 Ghidra 12.1.4 PUBLIC does not bundle an available Jython runtime by default. Use `tools/ghidra_scripts/GA18BootstrapSyntheticCallgraph.java` from Script Manager, not the historical `.py` prototype. The Java version is program/language guarded, uses Ghidra's standard Java scripting support, and does not require Jython or PyGhidra. The historical Python file remains only for audit; it is not the recommended execution path.
+
+
+## Bounded interprocedural static paths (GA-01/GA-18)
+
+New read-only RPC `analysis.paths` accepts `origin: "reset"|"entry"`,
+`entry` (address when origin is entry), `max_depth` (0..32, default 8),
+`offset` (0..50000), and `limit` (1..100, default 50).
+For reset, the 32-bit big-endian reset PC at image offset 4 selects a
+*function candidate*, not an observed boot. Entry mode resolves a requested
+address to its containing Ghidra Function. All records come from a snapshot
+of current Ghidra direct CALL and WRITE references.
+
+The response `paths` contains `root`, `revision`,
+`reachable_entries`, `unreachable_entries`, `total_paths`, and paginated
+`paths` rows with ordered `functions`, `call_sites`, `write_site`,
+`mmio_target` and `write_reference_type`. The MMIO candidate window is
+`0xFFF000..0xFFFFFF` (CPU32 project policy). Functions not reached
+*within the selected depth and graph budget* are marked unreachable **under
+those search limits only**. `cycles_cut`, `depth_cut`,
+`unresolved_calls`, `budget_exceeded`, and `complete` expose
+truncation/uncertainty. `complete` never means complete executable coverage.
+
+Traversal uses only exact function-entry direct CALL references. It does not
+assume indirect calls, interrupts, exception dispatch, computed jumps, or
+physical hardware mapping. A call path is **statically possible only**.
+Indexing is limited to 10000 functions and 50000 decoded instructions total;
+DFS is limited to 50000 visited path states, and response pages to 100 paths.
+The endpoint cannot modify the Ghidra database and never starts Decompiler.
+
+CLI: `ghidrassist-agent paths --origin reset --max-depth 8 --offset 0 --limit 50`
+or `ghidrassist-agent paths 00000220 --origin entry --max-depth 20`.
+The original `synthetic-callgraph.bin` golden fixture has a reset-rooted
+chain ending at writer function 3; writer functions 8, 13 and 18 are in
+disconnected components. Unit golden checks are in
+`tests/automation/test_call_paths.py`. A fresh **real Ghidra 12.1.4**
+end-to-end RPC traversal acceptance test must still be demonstrated before
+calling this new endpoint functionally PASS; previous Wyse 110 assertions
+validate the imported fixture, not this endpoint.
