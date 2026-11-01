@@ -22,7 +22,8 @@ def main():
     parser.add_argument("--program", help="Imported program in project, for automatic CodeBrowser opening")
     parser.add_argument("--mode", choices=("test", "trusted"), default="test")
     parser.add_argument("--synthetic-writes", action="store_true",
-                        help="Explicitly enable single-item Apply/Undo ONLY in the isolated synthetic fixture")\n    args = parser.parse_args()
+                        help="Explicitly enable single-item Apply/Undo ONLY in the isolated synthetic fixture")
+    args = parser.parse_args()
     binary = args.ghidra.expanduser().resolve() / "ghidraRun"
     if not binary.is_file():
         parser.error("ghidraRun not found")
@@ -68,7 +69,9 @@ def main():
         "-Dghidrassist.automation.enabled=true",
         "-Dghidrassist.automation.ready=" + str(ready),
     ]
-    if args.synthetic_writes:\n        options.append("-Dghidrassist.automation.syntheticWrites=true")\n    env["GHIDRASSIST_AUTOMATION_TOKEN"] = token
+    if args.synthetic_writes:
+        options.append("-Dghidrassist.automation.syntheticWrites=true")
+    env["GHIDRASSIST_AUTOMATION_TOKEN"] = token
     env["JAVA_TOOL_OPTIONS"] = (env.get("JAVA_TOOL_OPTIONS", "") + " " + " ".join(options)).strip()
     # Project Window opens the requested .gpr once; the opt-in frontend plugin
     # launches CodeBrowser in the active project without a read-only URL.
