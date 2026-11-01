@@ -162,7 +162,7 @@ jobs:
               tail -n 120 "$RUNNER_TEMP/ga18-indirect-constant.log"; exit 1;
             }
           grep -q 'GA18 INDIRECT CONSTANT BOOTSTRAP PASS: functions=2' "$RUNNER_TEMP/ga18-indirect-constant.log"
-          grep -q 'GA18 INDIRECT CONSTANT PASS: assertions=12 resolved_calls=1 paths=1' "$RUNNER_TEMP/ga18-indirect-constant.log"
+          grep -q 'GA18 INDIRECT CONSTANT PROVENANCE PASS: assertions=16 fallback=1 ghidra_reference=1 rollback=1' "$RUNNER_TEMP/ga18-indirect-constant.log"
       - name: Verify ZIP and record SHA-256
         shell: bash
         run: |
