@@ -113,7 +113,7 @@ def main():
                               "port":record["port"], "pid":record["pid"]}))
             return
         time.sleep(0.1)
-    raise TimeoutError("CodeBrowser and requested program not ready; verify GhidraGoPlugin is enabled in isolated Project Window")
+    raise TimeoutError("Requested program is not active and WRITABLE in CodeBrowser; local ghidra: URL may be read-only. Use an active writable Ghidra project; do not remove project locks.")
 
 
 if __name__ == "__main__":
