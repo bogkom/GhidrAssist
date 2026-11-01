@@ -421,6 +421,15 @@ def main():
                             raise RuntimeError("Decompiler end page not empty")
                         (out/"api-decompiler.json").write_text(json.dumps(
                             {"schema":3,"task":requested,"first_page":decomp,"end_page":tail},indent=2))
+                        merged=http_call("analysis.bundle").get("analysis",{})
+                        if (merged.get("entry") not in ("00000020","0x00000020") or
+                                merged.get("name")!="FUN_00000020" or
+                                not isinstance(merged.get("incoming_entry_xrefs"),list) or
+                                not isinstance(merged.get("mmio_reference_candidates"),list) or
+                                merged.get("decompiler",{}).get("state")!="RUNNING"):
+                            raise RuntimeError("Unified analysis bundle invalid: "+str(merged))
+                        (out/"api-analysis-bundle.json").write_text(json.dumps(
+                            {"schema":3,"bundle":merged},indent=2))
                         (out/"api-hardware-e2e.json").write_text(json.dumps(
                             {"schema":3,"task":state,"mmio":table,
                              "navigation":navigated,"listing":listing},indent=2))
