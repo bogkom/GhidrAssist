@@ -20,11 +20,11 @@ case "${1:-}" in
       python3 "$ROOT/bin/ghidrassist-agent-start" --ghidra "$GHIDRA" --project "$PROJECT" --program synthetic-mmio.bin --session "$SESSION" --mode test
     fi
     ;;
-  status|snapshot|analyze|task|mmio|review-preview|profile-select|function|xrefs|decompile|decompile-status|bundle|listing|goto)
+  status|snapshot|analyze|task|mmio|review-preview|profile-select|function|xrefs|decompile|decompile-status|bundle|paths|listing|goto)
     python3 "$ROOT/bin/ghidrassist-agent" --session "$SESSION" "$@"
     ;;
   *)
-    echo "Usage: bash tools/ga18-wyse-test.sh {manager|start|start-write|status|snapshot|analyze|task|mmio|review-preview|profile-select|function|xrefs|decompile|decompile-status|listing|goto} [args]" >&2
+    echo "Usage: bash tools/ga18-wyse-test.sh {manager|start|start-write|status|snapshot|analyze|task|mmio|review-preview|profile-select|function|xrefs|decompile|decompile-status|bundle|paths|listing|goto} [args]" >&2
     exit 2
     ;;
 esac
