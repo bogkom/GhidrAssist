@@ -42,6 +42,7 @@ public final class AutomationCallPaths {
     private static Map<Address,Node> index(Program program) {
         Map<Address,Node> nodes=new TreeMap<>();
         var it=program.getFunctionManager().getFunctions(true);
+        int totalInstructions=0;
         while(it.hasNext()) {
             if(nodes.size()>=MAX_FUNCTIONS) throw new IllegalStateException("Function index limit exceeded");
             Function f=it.next();
@@ -50,7 +51,8 @@ public final class AutomationCallPaths {
             var instructions=program.getListing().getInstructions(f.getBody(),true);
             int scanned=0;
             while(instructions.hasNext()) {
-                if(++scanned>MAX_STEPS) throw new IllegalStateException("Per-function instruction limit exceeded");
+                if(++scanned>MAX_STEPS || ++totalInstructions>MAX_STEPS)
+                    throw new IllegalStateException("Instruction index limit exceeded");
                 Instruction ins=instructions.next();
                 for(Reference ref:ins.getReferencesFrom()) {
                     if(ref.getReferenceType().isCall()) {
