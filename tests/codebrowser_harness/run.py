@@ -389,6 +389,17 @@ def main():
                             {"schema":3,"concrete_preview":proposals,
                              "generic_blocked":True,"database_edits":False},indent=2))
 
+                        active=http_call("function.snapshot").get("function",{})
+                        if (active.get("entry") not in ("00000020","0x00000020") or
+                                active.get("name")!="FUN_00000020" or
+                                active.get("body_addresses",0)<1):
+                            raise RuntimeError("Active CodeBrowser function mismatch: "+str(active))
+                        links=http_call("function.xrefs",{"offset":0,"limit":10}).get("xrefs",{})
+                        if (links.get("entry") not in ("00000020","0x00000020") or
+                                links.get("rows") is None or links.get("limit")!=10):
+                            raise RuntimeError("Active function XREF snapshot invalid: "+str(links))
+                        (out/"api-function-xrefs.json").write_text(json.dumps(
+                            {"schema":3,"function":active,"xrefs":links},indent=2))
                         (out/"api-hardware-e2e.json").write_text(json.dumps(
                             {"schema":3,"task":state,"mmio":table,
                              "navigation":navigated,"listing":listing},indent=2))
