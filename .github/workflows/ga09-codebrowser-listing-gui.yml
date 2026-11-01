@@ -70,11 +70,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          xvfb-run -a -s '-screen 0 1400x1050x24' \\
-            bash -c 'openbox --sm-disable >/dev/null 2>&1 & wm=$!; trap "kill $wm 2>/dev/null || true" EXIT; sleep 1; python3 tests/codebrowser_harness/run.py "$@"' automation \\
-              --ghidra "$GHIDRA_INSTALL_DIR" --java-home "$JAVA_HOME" \\
-              --extension-zip "$EXTENSION" \\
-              --extension-sha256 "$(cut -d' ' -f1 "$RUNNER_TEMP/extension.sha256")" \\
+          xvfb-run -a -s '-screen 0 1400x1050x24' \
+            bash -c 'openbox --sm-disable >/dev/null 2>&1 & wm=$!; trap "kill $wm 2>/dev/null || true" EXIT; sleep 1; python3 tests/codebrowser_harness/run.py "$@"' automation \
+              --ghidra "$GHIDRA_INSTALL_DIR" --java-home "$JAVA_HOME" \
+              --extension-zip "$EXTENSION" \
+              --extension-sha256 "$(cut -d' ' -f1 "$RUNNER_TEMP/extension.sha256")" \
               --output "$RUNNER_TEMP/hardware-automation-evidence" --automation-probe --timeout 300
           grep -F 'PASS: external process controlled real Swing' "$RUNNER_TEMP/hardware-automation-evidence/automation-controller.log"
       - name: GUI-06 external-process live X11 same-run handshake in isolated Xvfb
