@@ -15,7 +15,7 @@ case "${1:-}" in
       python3 "$ROOT/bin/ghidrassist-agent-start" --ghidra "$GHIDRA" --project "$PROJECT" --program synthetic-mmio.bin --session "$SESSION" --mode test
     fi
     ;;
-  status|snapshot|analyze|task|mmio|review-preview|profile-select|listing|goto)
+  status|snapshot|analyze|task|mmio|review-preview|profile-select|function|xrefs|listing|goto)
     python3 "$ROOT/bin/ghidrassist-agent" --session "$SESSION" "$@"
     ;;
   *)
