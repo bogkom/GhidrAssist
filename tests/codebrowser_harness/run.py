@@ -297,6 +297,25 @@ def main():
                         listing=http_call("listing.snapshot")
                         if int(listing.get("address","0"),16)!=int(pc,16):
                             raise RuntimeError("HTTP Listing did not reach SIMCR reference")
+                        # Production HTTP traversal, same actual CodeBrowser Program.
+                        paths_reply=http_call("analysis.paths",
+                            {"origin":"reset","max_depth":4,"offset":0,"limit":10})
+                        graph=paths_reply.get("paths",{})
+                        if (graph.get("root","").lower().removeprefix("0x")!="00000020" or
+                                graph.get("reachable_count")!=1 or
+                                graph.get("total_paths")!=1 or
+                                len(graph.get("paths",[]))!=1):
+                            raise RuntimeError("HTTP direct-call traversal invalid: "+str(graph))
+                        evidence=graph["paths"][0]
+                        if (int(evidence.get("write_site","0"),16)!=0x20 or
+                                int(evidence.get("mmio_target","0"),16)!=0xFFFA00 or
+                                evidence.get("call_sites")!=[]):
+                            raise RuntimeError("HTTP MMIO write evidence invalid: "+str(evidence))
+                        second_page=http_call("analysis.paths",
+                            {"origin":"entry","entry":"00000020",
+                             "max_depth":4,"offset":1,"limit":1}).get("paths",{})
+                        if second_page.get("total_paths")!=1 or second_page.get("paths")!=[]:
+                            raise RuntimeError("HTTP paths pagination invalid")
                         # Read-only Review gates: generic CPU32 must not
                         # inherit MC68332 proposals; explicit selection does
                         # not edit the Ghidra database.
