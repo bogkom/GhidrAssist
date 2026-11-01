@@ -136,6 +136,14 @@ public final class AutomationServer implements AutoCloseable {
                     int offset=args.has("offset") ? args.get("offset").getAsInt() : 0;
                     int limit=args.has("limit") ? args.get("limit").getAsInt() : 4096;
                     result.add("decompiler",decompiler.status(offset,limit));
+                } else if ("analysis.paths".equals(method)) {
+                    if (program == null) throw new IllegalStateException("No active program");
+                    String origin = args.has("origin") ? args.get("origin").getAsString() : "reset";
+                    String entry = args.has("entry") ? args.get("entry").getAsString() : "";
+                    int depth = args.has("max_depth") ? args.get("max_depth").getAsInt() : 8;
+                    int offset = args.has("offset") ? args.get("offset").getAsInt() : 0;
+                    int limit = args.has("limit") ? args.get("limit").getAsInt() : 50;
+                    result.add("paths", AutomationCallPaths.query(program, origin, entry, depth, offset, limit));
                 } else if ("analysis.bundle".equals(method)) {
                     if(program==null) throw new IllegalStateException("No active program");
                     var viewer=plugin.getTool().getService(ghidra.app.services.CodeViewerService.class);
