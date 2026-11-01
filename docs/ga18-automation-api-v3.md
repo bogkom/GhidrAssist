@@ -150,3 +150,12 @@ The host-only, isolated regression is
 synthetic function `FUN_00000020`; the script does not create functions
 or change the test project. It writes a private report to `reports/`.
 Do not treat absence of a synthetic function as a product regression.
+
+## Isolated Ghidra Project Manager
+
+`bash "$HOME/Projekty/Codex/ga-automation-test/ga18-test.sh" manager`
+launches only `ghidraRun` with the existing isolated test settings/cache/home.
+It does not supply a project path, start the opt-in Automation API, open a
+CodeBrowser, or enable synthetic writes. Use this mode to install extension
+ZIPs through the Ghidra Project Manager (File -> Install Extensions). Close
+that manager before `start` when updating the isolated test installation.
