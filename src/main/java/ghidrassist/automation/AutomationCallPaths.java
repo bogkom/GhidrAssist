@@ -66,7 +66,7 @@ public final class AutomationCallPaths {
     // instructions. Only CPU32 NOP and MOVEQ #imm,Dn are permitted between
     // the constant assignment and JSR (An). Both preserve all address registers;
     // any branch, unknown instruction, or register overwrite stops the proof.
-    private static Address boundedConstantRegisterCall(Program program, Instruction call)
+    private static Edge boundedConstantRegisterCall(Program program, Instruction call)
             throws ghidra.program.model.mem.MemoryAccessException {
         if(!"68000:BE:32:CPU32".equals(program.getLanguageID().toString())) return null;
         byte[] callBytes=call.getBytes();
@@ -74,6 +74,7 @@ public final class AutomationCallPaths {
         int callOp=((callBytes[0]&255)<<8)|(callBytes[1]&255);
         if((callOp&0xfff8)!=0x4e90) return null;
         Instruction cursor=call;
+        boolean sawMoveq=false;
         for(int distance=0;distance<4;distance++) {
             Instruction prev=program.getListing().getInstructionBefore(cursor.getAddress());
             if(prev==null || prev.getMaxAddress().next()==null ||
@@ -84,6 +85,7 @@ public final class AutomationCallPaths {
                 // MOVEQ #signed8,Dn modifies a data register and CCR only,
                 // never an address register; unlike branch opcodes it falls through.
                 if(middle==0x4e71 || (middle&0xf100)==0x7000) {
+                    if((middle&0xf100)==0x7000) sawMoveq=true;
                     cursor=prev;
                     continue;
                 }
@@ -95,7 +97,8 @@ public final class AutomationCallPaths {
                          ((long)(data[4]&255)<<8)|(data[5]&255);
             Address target=program.getAddressFactory().getDefaultAddressSpace().getAddress(address);
             Function f=program.getFunctionManager().getFunctionAt(target);
-            return f==null?null:f.getEntryPoint();
+            return f==null?null:new Edge(call.getAddress(),f.getEntryPoint(),
+                sawMoveq ? "bounded_movea_safe_chain" : "bounded_movea_nop_chain");
         }
         return null;
     }
@@ -132,8 +135,8 @@ public final class AutomationCallPaths {
                     Address proven=adjacentConstantRegisterCall(program,ins);
                     if(proven!=null) calls.add(new Edge(ins.getAddress(),proven,"adjacent_movea_immediate"));
                     else {
-                        Address bounded=boundedConstantRegisterCall(program,ins);
-                        if(bounded!=null) calls.add(new Edge(ins.getAddress(),bounded,"bounded_movea_safe_chain"));
+                        Edge bounded=boundedConstantRegisterCall(program,ins);
+                        if(bounded!=null) calls.add(bounded);
                         else indirectCalls.add(ins.getAddress());
                     }
                 }
