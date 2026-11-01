@@ -297,6 +297,40 @@ def main():
                         listing=http_call("listing.snapshot")
                         if int(listing.get("address","0"),16)!=int(pc,16):
                             raise RuntimeError("HTTP Listing did not reach SIMCR reference")
+                        # Read-only Review gates: generic CPU32 must not
+                        # inherit MC68332 proposals; explicit selection does
+                        # not edit the Ghidra database.
+                        from urllib.error import HTTPError
+                        try:
+                            http_call("hardware.review.preview",{"offset":0,"limit":10})
+                        except HTTPError as error:
+                            if error.code != 400:
+                                raise
+                        else:
+                            raise RuntimeError("Generic CPU32 received concrete Review proposals")
+                        selected=http_call("hardware.profile.select",
+                                           {"profile":"MC68332_USER_SELECTED"})
+                        if "MC68332" not in selected.get("ui",{}).get("hardware",{}).get("profile",""):
+                            raise RuntimeError("Explicit hardware profile not selected")
+                        http_call("hardware.analyze")
+                        deadline=time.monotonic()+45
+                        while True:
+                            review_task=http_call("hardware.task").get("task",{})
+                            if review_task.get("state")=="COMPLETED":
+                                break
+                            if review_task.get("state")!="RUNNING" or time.monotonic()>deadline:
+                                raise RuntimeError("MC68332 Review prerequisite analysis incomplete")
+                            time.sleep(0.08)
+                        reviewed=http_call("hardware.review.preview",{"offset":0,"limit":10})
+                        proposals=reviewed.get("review",{})
+                        if (not proposals.get("total") or not proposals.get("rows") or
+                                "PREVIEW ONLY" not in proposals.get("scope","")):
+                            raise RuntimeError("Concrete read-only Review failed: "+str(proposals))
+                        http_call("hardware.profile.select",{"profile":"CPU32_SURVEY"})
+                        (out/"api-review-preview.json").write_text(json.dumps(
+                            {"schema":3,"concrete_preview":proposals,
+                             "generic_blocked":True,"database_edits":False},indent=2))
+
                         (out/"api-hardware-e2e.json").write_text(json.dumps(
                             {"schema":3,"task":state,"mmio":table,
                              "navigation":navigated,"listing":listing},indent=2))
