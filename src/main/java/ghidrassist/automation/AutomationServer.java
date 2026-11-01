@@ -29,6 +29,7 @@ public final class AutomationServer implements AutoCloseable {
     private static final Gson JSON = new Gson();
     private final HttpServer server;
     private final GhidrAssistPlugin plugin;
+    private final AutomationDecompiler decompiler=new AutomationDecompiler();
 
     private AutomationServer(GhidrAssistPlugin plugin, HttpServer server) {
         this.plugin = plugin;
@@ -124,6 +125,17 @@ public final class AutomationServer implements AutoCloseable {
                     GoToService go = plugin.getTool().getService(GoToService.class);
                     if (go == null || !go.goTo(target, program)) throw new IllegalStateException("Listing navigation unavailable");
                     result.addProperty("requested_address", target.toString());
+                } else if ("decompiler.start".equals(method)) {
+                    if(program==null) throw new IllegalStateException("No active program");
+                    var viewer=plugin.getTool().getService(ghidra.app.services.CodeViewerService.class);
+                    ProgramLocation location=viewer==null ? null : viewer.getCurrentLocation();
+                    var function=location==null || location.getAddress()==null ? null :
+                        program.getFunctionManager().getFunctionContaining(location.getAddress());
+                    result.add("decompiler",decompiler.start(program,function));
+                } else if ("decompiler.status".equals(method)) {
+                    int offset=args.has("offset") ? args.get("offset").getAsInt() : 0;
+                    int limit=args.has("limit") ? args.get("limit").getAsInt() : 4096;
+                    result.add("decompiler",decompiler.status(offset,limit));
                 } else if ("function.snapshot".equals(method)) {
                     var viewer=plugin.getTool().getService(ghidra.app.services.CodeViewerService.class);
                     ProgramLocation activeLocation=viewer==null ? null : viewer.getCurrentLocation();
@@ -215,5 +227,5 @@ public final class AutomationServer implements AutoCloseable {
         return answer.get();
     }
 
-    @Override public void close() { server.stop(0); }
+    @Override public void close() { decompiler.close(); server.stop(0); }
 }
