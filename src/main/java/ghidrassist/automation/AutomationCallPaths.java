@@ -43,7 +43,8 @@ public final class AutomationCallPaths {
 
     // Only the adjacent CPU32 MOVEA.L #absolute,An ; JSR (An) pattern is
     // resolved. No intervening instruction, no dataflow guess, no execution claim.
-    private static Address adjacentConstantRegisterCall(Program program, Instruction call) {
+    private static Address adjacentConstantRegisterCall(Program program, Instruction call)
+            throws ghidra.program.model.mem.MemoryAccessException {
         if(!"68000:BE:32:CPU32".equals(program.getLanguageID().toString())) return null;
         byte[] callBytes=call.getBytes();
         if(callBytes.length!=2) return null;
@@ -61,7 +62,8 @@ public final class AutomationCallPaths {
         Function f=program.getFunctionManager().getFunctionAt(target);
         return f==null?null:f.getEntryPoint();
     }
-    private static Map<Address,Node> index(Program program) {
+    private static Map<Address,Node> index(Program program)
+            throws ghidra.program.model.mem.MemoryAccessException {
         Map<Address,Node> nodes=new TreeMap<>();
         var it=program.getFunctionManager().getFunctions(true);
         int totalInstructions=0;
