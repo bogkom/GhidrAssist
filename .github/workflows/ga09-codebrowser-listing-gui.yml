@@ -76,7 +76,7 @@ jobs:
               --extension-zip "$EXTENSION" \
               --extension-sha256 "$(cut -d' ' -f1 "$RUNNER_TEMP/extension.sha256")" \
               --output "$RUNNER_TEMP/hardware-automation-evidence" --automation-probe --timeout 300
-          grep -F 'PASS: external process controlled real Swing' "$RUNNER_TEMP/hardware-automation-evidence/automation-controller.log"
+          grep -F 'PASS: external v2 Swing snapshots, Hardware Analyze, Listing navigation' "$RUNNER_TEMP/hardware-automation-evidence/automation-controller.log"
       - name: GUI-06 external-process live X11 same-run handshake in isolated Xvfb
         shell: bash
         run: |
