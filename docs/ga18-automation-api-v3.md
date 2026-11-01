@@ -239,3 +239,28 @@ the original synthetic-callgraph 110-assertion regression remains intact.
 This is *static* reachability evidence, not hardware execution or
 physical MMIO mapping. Do not import into ECU411 or use the synthetic
 bootstrap on any nonmatching program.
+
+## Register-indirect CALL: conservative first stage
+
+The `analysis.paths` traversal reports instruction-level unresolved indirect
+CALL evidence in `unresolved_call_sites`, and increments `unresolved_calls`.
+It marks `complete=false` when traversal meets a CALL instruction without
+a Ghidra-confirmed reference to a defined function. **No guessed target and no
+fictitious path to a peripheral write are returned.** Reference-based direct
+CALL traversal and previous results remain unchanged. This does not yet resolve
+a register value, pointer-table target, or possible dynamic dispatch target.
+
+The separate `synthetic-indirect.bin` fixture from
+`tools/generate-synthetic-indirect.py` has two functions: reset at 0x100
+contains JSR (A0), while a disconnected writer at 0x130 stores to 0xFFFA00.
+Native Java scripts `GA18BootstrapSyntheticIndirect.java` and
+`GA18VerifySyntheticIndirect.java` test the production Java implementation
+in Ghidra 12.1.4 headless. The verifier requires one unresolved CALL,
+one reachable function, no invented reset-to-MMIO paths, and an explicit
+incomplete result. A separate explicit entry at the writer must still
+find its direct WRITE evidence.
+
+Further stages may resolve indirect calls *only with separately auditable
+static evidence*, such as a proven constant target at an instruction,
+and should retain distinct provenance and ambiguity flags. No runtime
+execution, register contents, or physical MMIO mapping is verified.
