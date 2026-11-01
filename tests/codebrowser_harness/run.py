@@ -219,7 +219,7 @@ def main():
                 token=uuid.uuid4().hex+uuid.uuid4().hex
                 env["JAVA_TOOL_OPTIONS"] += (
                     " -Dghidrassist.automation.enabled=true"
-                    " -Dghidrassist.automation.ready="+str(out/"api-ready.json"))
+                    " -Dghidrassist.automation.ready="+str(out/"api-ready.json")+ " -Dghidrassist.automation.syntheticWrites=true")
             if args.automation_probe:
                 env["GHIDRASSIST_AUTOMATION_TOKEN"]=token
             cmd=[str(java/"bin/java"),
@@ -326,6 +326,46 @@ def main():
                         if (not proposals.get("total") or not proposals.get("rows") or
                                 "PREVIEW ONLY" not in proposals.get("scope","")):
                             raise RuntimeError("Concrete read-only Review failed: "+str(proposals))
+                        candidates=[row for row in proposals["rows"]
+                                    if row.get("kind")=="MEMORY" and row.get("state")=="READY"
+                                    and row.get("selected_by_default") and
+                                    not row.get("name","").startswith("CS") and
+                                    "CANDIDATE" not in row.get("name","")]
+                        if not candidates:
+                            raise RuntimeError("No safe synthetic memory item for Apply")
+                        chosen=candidates[0]
+                        prepared=http_call("hardware.apply.prepare",{"index":chosen["index"]})["approval"]
+                        try:
+                            http_call("hardware.apply.commit",{"token":"invalid","name":prepared["name"]})
+                        except HTTPError as error:
+                            if error.code!=400: raise
+                        else:
+                            raise RuntimeError("Wrong approval token accepted")
+                        try:
+                            http_call("hardware.apply.commit",
+                                      {"token":prepared["token"],"name":prepared["name"]})
+                        except HTTPError as error:
+                            if error.code!=400: raise
+                        else:
+                            raise RuntimeError("Consumed approval token accepted")
+                        prepared=http_call("hardware.apply.prepare",{"index":chosen["index"]})["approval"]
+                        applied=http_call("hardware.apply.commit",
+                                          {"token":prepared["token"],"name":prepared["name"]})["apply"]
+                        if applied.get("changed")!=1 or applied.get("skipped")!=0:
+                            raise RuntimeError("Synthetic Apply outcome mismatch")
+                        undid=http_call("hardware.apply.undo")["undo"]
+                        if undid.get("undone") is not True:
+                            raise RuntimeError("Synthetic Ghidra Undo unsuccessful")
+                        try:
+                            http_call("hardware.apply.undo")
+                        except HTTPError as error:
+                            if error.code!=400: raise
+                        else:
+                            raise RuntimeError("Second Undo incorrectly succeeded")
+                        (out/"api-apply-undo.json").write_text(json.dumps(
+                            {"schema":3,"approval_name":prepared["name"],"apply":applied,
+                             "undo":undid,"wrong_token_rejected":True,
+                             "consumed_token_rejected":True,"second_undo_rejected":True},indent=2))
                         http_call("hardware.profile.select",{"profile":"CPU32_SURVEY"})
                         (out/"api-review-preview.json").write_text(json.dumps(
                             {"schema":3,"concrete_preview":proposals,
