@@ -21,7 +21,7 @@ def main():
     parser.add_argument("--session", type=Path, default=Path.home() / ".local/state/ghidrassist-agent/session.json")
     parser.add_argument("--program", help="Imported program in project, for automatic CodeBrowser opening")
     parser.add_argument("--mode", choices=("test", "trusted"), default="test")
-    args = parser.parse_args()
+    parser.add_argument("--synthetic-writes", action="store_true",\n                        help="Explicitly enable single-item Apply/Undo ONLY in the isolated synthetic fixture")\n    args = parser.parse_args()
     binary = args.ghidra.expanduser().resolve() / "ghidraRun"
     if not binary.is_file():
         parser.error("ghidraRun not found")
@@ -31,6 +31,11 @@ def main():
         parser.error("--program requires --project and a relative program path")
     if args.project and not args.project.is_file():
         parser.error("Ghidra project not found")
+    if args.synthetic_writes:
+        fixture = (Path.home() / "Projekty/Codex/ga-automation-test/project/AutomationFixture.gpr").resolve()
+        if (args.mode != "test" or args.program != "synthetic-mmio.bin" or
+                args.project is None or args.project.expanduser().resolve() != fixture):
+            parser.error("Synthetic writes require the exact isolated AutomationFixture project in test mode")
     session_file = args.session.expanduser().absolute()
     session_file.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     os.chmod(session_file.parent, 0o700)
@@ -62,7 +67,7 @@ def main():
         "-Dghidrassist.automation.enabled=true",
         "-Dghidrassist.automation.ready=" + str(ready),
     ]
-    env["GHIDRASSIST_AUTOMATION_TOKEN"] = token
+    if args.synthetic_writes:\n        options.append("-Dghidrassist.automation.syntheticWrites=true")\n    env["GHIDRASSIST_AUTOMATION_TOKEN"] = token
     env["JAVA_TOOL_OPTIONS"] = (env.get("JAVA_TOOL_OPTIONS", "") + " " + " ".join(options)).strip()
     # Project Window opens the requested .gpr once; the opt-in frontend plugin
     # launches CodeBrowser in the active project without a read-only URL.
