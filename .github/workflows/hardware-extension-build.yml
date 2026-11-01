@@ -183,6 +183,7 @@ jobs:
             > "$RUNNER_TEMP/ga18-register-flow.log" 2>&1 || {
               tail -n 130 "$RUNNER_TEMP/ga18-register-flow.log"; exit 1;
             }
+          tail -n 100 "$RUNNER_TEMP/ga18-register-flow.log"
           grep -q 'GA18 REGISTER FLOW BOOTSTRAP PASS: functions=4' "$RUNNER_TEMP/ga18-register-flow.log"
           grep -q 'GA18 REGISTER FLOW PASS: assertions=20 nop=1 clobber=1 branch=1 rollback=1' "$RUNNER_TEMP/ga18-register-flow.log"
       - name: Verify ZIP and record SHA-256
