@@ -64,8 +64,8 @@ def main():
     ]
     env["GHIDRASSIST_AUTOMATION_TOKEN"] = token
     env["JAVA_TOOL_OPTIONS"] = (env.get("JAVA_TOOL_OPTIONS", "") + " " + " ".join(options)).strip()
-    # Open the frontend once; GhidraGo alone resolves the requested project/program.
-    # Passing the .gpr here as well risks a second read-only project view.
+    # Project Window opens the requested .gpr once; the opt-in frontend plugin
+    # launches CodeBrowser in the active project without a read-only URL.
     command = [str(binary)]
     if args.project:
         command.append(str(args.project.expanduser().resolve()))
@@ -111,7 +111,7 @@ def main():
                               "port":record["port"], "pid":record["pid"]}))
             return
         time.sleep(0.1)
-    raise TimeoutError("Requested program is not active and WRITABLE in CodeBrowser; local ghidra: URL may be read-only. Use an active writable Ghidra project; do not remove project locks.")
+    raise TimeoutError("Writable CodeBrowser did not become ready. Verify the Project Window automation opener is enabled in the isolated test profile; inspect frontend diagnostics. Do not remove project locks.")
 
 
 if __name__ == "__main__":
