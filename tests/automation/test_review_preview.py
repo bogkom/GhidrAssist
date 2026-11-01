@@ -22,6 +22,16 @@ class ReviewPreviewContracts(unittest.TestCase):
         self.assertNotIn("JOptionPane", snippet)
         self.assertIn("limit>100", snippet)
 
+    def test_profile_selection_is_exact_and_nonmutating(self):
+        tab = TAB.read_text(encoding="utf-8")
+        server = SERVER.read_text(encoding="utf-8")
+        cli = CLI.read_text(encoding="utf-8")
+        self.assertIn('"CPU32_SURVEY".equals(profile)', tab)
+        self.assertIn('"MC68332_USER_SELECTED".equals(profile)', tab)
+        self.assertIn("selection.setSelectedIndex(index)", tab)
+        self.assertIn('"hardware.profile.select".equals(method)', server)
+        self.assertIn('"profile-select": "hardware.profile.select"', cli)
+
     def test_readonly_rpc_and_cli(self):
         server = SERVER.read_text(encoding="utf-8")
         cli = CLI.read_text(encoding="utf-8")
