@@ -11,7 +11,7 @@ case "${1:-}" in
     test -f "$PROJECT" || { echo "Fixture project missing: $PROJECT" >&2; exit 1; }
     python3 "$ROOT/bin/ghidrassist-agent-start" --ghidra "$GHIDRA" --project "$PROJECT" --program synthetic-mmio.bin --session "$SESSION" --mode test
     ;;
-  status|snapshot|analyze|task|mmio|review-preview|listing|goto)
+  status|snapshot|analyze|task|mmio|review-preview|profile-select|listing|goto)
     python3 "$ROOT/bin/ghidrassist-agent" --session "$SESSION" "$@"
     ;;
   *)
