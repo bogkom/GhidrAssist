@@ -63,7 +63,8 @@ class Traversal(unittest.TestCase):
         for token in ('isCall()', 'isWrite()', 'MAX_FUNCTIONS', 'MAX_STEPS',
                       'stack.contains(edge.target)', 'maxDepth>32',
                       'reachable_entries', 'unreachable_entries',
-                      'write_site', 'call_sites', 'budget_exceeded'):
+                      'write_site', 'call_sites', 'budget_exceeded',
+                      'unresolved_call_sites', 'getFlowType().isCall()'):
             self.assertIn(token,java)
         for mutation in ('startTransaction(', 'createFunction(', 'setBytes(', 'removeFunction('):
             self.assertNotIn(mutation,java)
