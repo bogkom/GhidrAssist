@@ -55,6 +55,10 @@ def run():
             check("invalid-xref-page",error.code==400,"invalid pagination rejected")
         else:
             check("invalid-xref-page",False,"invalid pagination accepted")
+    except HTTPError as error:
+        body=error.read(8192).decode("utf-8",errors="replace")
+        failure="HTTP "+str(error.code)+": "+body
+        check("api-error",False,failure)
     except Exception as error:
         failure=type(error).__name__+": "+str(error)
         check("fatal",False,failure)
