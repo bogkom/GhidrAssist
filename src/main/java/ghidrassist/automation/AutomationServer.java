@@ -54,7 +54,7 @@ public final class AutomationServer implements AutoCloseable {
         if (!status.isBlank()) {
             try {
                 Path target = Path.of(status);
-                Files.writeString(target, JSON.toJson(new Ready(http.getAddress().getPort(), ProcessHandle.current().pid())),
+                Files.writeString(target, JSON.toJson(new Ready(3, http.getAddress().getPort(), ProcessHandle.current().pid())),
                         StandardCharsets.UTF_8, StandardOpenOption.CREATE_NEW);
             } catch (Exception error) {
                 http.stop(0);
@@ -64,9 +64,7 @@ public final class AutomationServer implements AutoCloseable {
         return service;
     }
 
-    private record Ready(int port, long pid) {
-        int schema() { return 3; }
-    }
+    private record Ready(int schema, int port, long pid) {}
 
     private void handle(HttpExchange exchange) throws IOException {
         byte[] response;
