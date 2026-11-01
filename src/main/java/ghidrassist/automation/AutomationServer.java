@@ -124,6 +124,14 @@ public final class AutomationServer implements AutoCloseable {
                     GoToService go = plugin.getTool().getService(GoToService.class);
                     if (go == null || !go.goTo(target, program)) throw new IllegalStateException("Listing navigation unavailable");
                     result.addProperty("requested_address", target.toString());
+                } else if ("function.snapshot".equals(method)) {
+                    var function=plugin.getCurrentFunction();
+                    if(function==null) throw new IllegalStateException("No active function");
+                    JsonObject info=new JsonObject();
+                    info.addProperty("name",function.getName());
+                    info.addProperty("entry",function.getEntryPoint().toString());
+                    info.addProperty("body_addresses",function.getBody().getNumAddresses());
+                    result.add("function",info);
                 } else if ("hardware.apply.prepare".equals(method) ||
                            "hardware.apply.commit".equals(method) ||
                            "hardware.apply.undo".equals(method)) {
