@@ -173,3 +173,7 @@ The repository includes `tools/generate-synthetic-callgraph.py`. Run `python3 to
 ### Import/bootstrap requirement revealed by Wyse
 
 The user observed **zero functions from Ghidra Auto Analyze** when opening the raw `synthetic-callgraph.bin`. This is a fixture setup gap, not evidence of a graph traversal regression: raw binary import has no guaranteed reset-entry/function seeds. Import at base `0x00000000`, language `68000:BE:32:CPU32`. To create known synthetic function seeds in an isolated *copy*, run `tools/ghidra_scripts/GA18BootstrapSyntheticCallgraph.py` from Script Manager. The script refuses all other program names/languages, uses a single undoable transaction and 20 planned entries. Ghidra function discovery still needs an independent real-Ghidra test. This bootstrap is not intended for ECU411.
+
+### Native script correction
+
+Ghidra 12.1.4 PUBLIC does not bundle an available Jython runtime by default. Use `tools/ghidra_scripts/GA18BootstrapSyntheticCallgraph.java` from Script Manager, not the historical `.py` prototype. The Java version is program/language guarded, uses Ghidra's standard Java scripting support, and does not require Jython or PyGhidra. The historical Python file remains only for audit; it is not the recommended execution path.
