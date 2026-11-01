@@ -30,6 +30,13 @@ class LauncherContract(unittest.TestCase):
         self.assertIn("Readiness receipt invalid", code)
         self.assertIn('archive.mkdir(mode=0o700', code)
 
+    def test_manager_is_isolated_from_automation(self):
+        code = WRAPPER.read_text(encoding="utf-8")
+        manager = code.split("  manager)")[1].split("    ;;", 1)[0]
+        self.assertIn('"$GHIDRA/ghidraRun"', manager)
+        self.assertNotIn("ghidrassist-agent-start", manager)
+        self.assertNotIn("--synthetic-writes", manager)
+
     def test_wyse_wrapper_pins_synthetic_program(self):
         code = WRAPPER.read_text(encoding="utf-8")
         self.assertIn('--program synthetic-mmio.bin', code)
