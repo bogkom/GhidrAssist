@@ -118,6 +118,16 @@ public class GhidrAssistUI extends JPanel {
         hardwareAnalysisTab.automationSelectProfile(profile);
     }
 
+    public com.google.gson.JsonObject automationApplyPrepare(int index) {
+        return hardwareAnalysisTab.automationApplyPrepare(index);
+    }
+    public com.google.gson.JsonObject automationApplyCommit(String token,String name) throws Exception {
+        return hardwareAnalysisTab.automationApplyCommit(token,name);
+    }
+    public com.google.gson.JsonObject automationApplyUndo() throws Exception {
+        return hardwareAnalysisTab.automationApplyUndo();
+    }
+
     public com.google.gson.JsonObject automationReviewPreview(int offset,int limit) {
         return hardwareAnalysisTab.automationReviewPreview(offset,limit);
     }
