@@ -106,6 +106,16 @@ public final class HardwareAnalysisTab extends JPanel {
     private volatile List<HardwareInventoryService.Site> latestSites=List.of();
     private volatile ghidrassist.hardware.HardwareCsbarUnifiedReview.Review latestCsbarReview;
 
+    /** Explicit device selection; invokes the existing Swing selection listeners. */
+    public void automationSelectProfile(String profile) {
+        if (!SwingUtilities.isEventDispatchThread()) throw new IllegalStateException("EDT required");
+        int index;
+        if ("CPU32_SURVEY".equals(profile)) index=0;
+        else if ("MC68332_USER_SELECTED".equals(profile)) index=1;
+        else throw new IllegalArgumentException("Unknown or non-explicit hardware profile");
+        if (selection.getSelectedIndex()!=index) selection.setSelectedIndex(index);
+    }
+
     /** Invokes the same action as the visible button; never bypasses UI validation. */
     public void automationAnalyze() {
         if (!javax.swing.SwingUtilities.isEventDispatchThread()) throw new IllegalStateException("EDT required");
