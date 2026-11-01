@@ -1,0 +1,75 @@
+#!/usr/bin/env python3
+"""Launch isolated Ghidra GUI with opt-in local Automation API, no Supervisor."""
+import argparse
+import json
+import os
+from pathlib import Path
+import secrets
+import subprocess
+import sys
+import time
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--ghidra", type=Path, required=True,
+                        help="Ghidra 12.1.4 PUBLIC install directory")
+    parser.add_argument("--project", type=Path,
+                        help="Optional Ghidra .gpr project; only an explicitly chosen project")
+    parser.add_argument("--session", type=Path, default=Path.home() / ".local/state/ghidrassist-agent/session.json")
+    parser.add_argument("--mode", choices=("test", "trusted"), default="test")
+    args = parser.parse_args()
+    binary = args.ghidra.expanduser().resolve() / "ghidraRun"
+    if not binary.is_file():
+        parser.error("ghidraRun not found")
+    if "12.1.4_PUBLIC" not in str(binary.parent):
+        parser.error("Ghidra 12.1.4 PUBLIC required")
+    if args.project and not args.project.is_file():
+        parser.error("Ghidra project not found")
+    session_file = args.session.expanduser().absolute()
+    session_file.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    os.chmod(session_file.parent, 0o700)
+    if session_file.exists():
+        parser.error("Session already exists; stop the existing instance before starting another")
+    ready = session_file.with_suffix(".ready")
+    if ready.exists():
+        parser.error("Stale readiness file exists; remove only after confirming no live process")
+    token = secrets.token_hex(32)
+    env = os.environ.copy()
+    options = [
+        "-Dghidrassist.automation.enabled=true",
+        "-Dghidrassist.automation.token=" + token,
+        "-Dghidrassist.automation.ready=" + str(ready),
+    ]
+    env["JAVA_TOOL_OPTIONS"] = (env.get("JAVA_TOOL_OPTIONS", "") + " " + " ".join(options)).strip()
+    command = [str(binary)]
+    if args.project:
+        command.append(str(args.project.expanduser().resolve()))
+    process = subprocess.Popen(command, stdin=subprocess.DEVNULL,
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                               env=env, start_new_session=True)
+    for _ in range(600):
+        if process.poll() is not None:
+            raise RuntimeError("Ghidra launcher exited before Automation became ready")
+        if ready.exists():
+            record = json.loads(ready.read_text())
+            if record.get("schema") != 3:
+                raise RuntimeError("Invalid GhidrAssist ready receipt")
+            session = dict(record, token=token, mode=args.mode)
+            fd = os.open(session_file, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+            with os.fdopen(fd, "w") as stream:
+                json.dump(session, stream)
+            ready.unlink()
+            print(json.dumps({"status":"READY", "session":str(session_file),
+                              "port":record["port"], "pid":record["pid"]}))
+            return
+        time.sleep(0.1)
+    raise TimeoutError("GhidrAssist Automation server did not start within 60 seconds")
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except Exception as exc:
+        print("Automation startup failed: " + str(exc), file=sys.stderr)
+        sys.exit(1)
