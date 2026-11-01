@@ -1,6 +1,7 @@
 package ghidrassist.automation;
 
 import ghidra.app.plugin.PluginCategoryNames;
+import ghidra.framework.main.FrontEndable;
 import ghidra.framework.model.DomainFile;
 import ghidra.framework.model.Project;
 import ghidra.framework.plugintool.Plugin;
@@ -24,7 +25,7 @@ import java.util.List;
     shortDescription = "GhidrAssist Automation Project Opener",
     description = "Opt-in synthetic/agent fixture opening in active project"
 )
-public final class AgentProjectOpenPlugin extends Plugin {
+public final class AgentProjectOpenPlugin extends Plugin implements FrontEndable {
     private Timer poller;
     private int attempts;
 
