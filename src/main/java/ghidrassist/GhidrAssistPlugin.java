@@ -33,16 +33,22 @@ public class GhidrAssistPlugin extends ProgramPlugin {
         UNKNOWN
     }
     private GhidrAssistProvider provider;
+    private ghidrassist.automation.AutomationServer automationServer;
+
+    public GhidrAssistProvider getAutomationProvider() { return provider; }
     private String lastActiveProvider;
 
     public GhidrAssistPlugin(PluginTool tool) {
         super(tool);
         String pluginName = getName();
         provider = new GhidrAssistProvider(this, pluginName);
+        try { automationServer = ghidrassist.automation.AutomationServer.start(this); }
+        catch (java.io.IOException error) { ghidra.util.Msg.error(this, "Automation startup failed", error); }
     }
 
     @Override
     protected void dispose() {
+        if (automationServer != null) { automationServer.close(); automationServer = null; }
         if (provider != null) {
             tool.removeComponentProvider(provider);
             provider = null;
