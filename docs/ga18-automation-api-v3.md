@@ -71,3 +71,27 @@ only after the HTTP API confirms the expected program and
 This front-end integration needs both a successful exact-commit Ghidra 12.1.4
 build and independent Wyse GUI acceptance. A syntax/contract test alone is
 insufficient.
+
+## GA-18 read-only Review Automation API (in development)
+
+RPC `hardware.profile.select` takes a literal `profile` value:
+`CPU32_SURVEY` or `MC68332_USER_SELECTED`. This selects the existing UI
+profile only; it does not make the device identity a firmware fact and
+does not edit Ghidra database content. Rerun `hardware.analyze` after
+changing profiles. `hardware.review.preview` takes `offset` and
+`limit` (1..100), requires a completed analysis from the same Ghidra
+revision and an explicitly selected MC68332 profile, and returns
+bounded Review preflight decisions. No modal, Apply, Undo or firmware
+writes can be triggered by this endpoint.
+
+`tools/ga18-wyse-review-smoke.py` is a one-shot Codex test on the
+isolated synthetic `AutomationFixture` only. It checks that generic CPU32
+cannot receive concrete Review proposals, selects MC68332 explicitly,
+verifies read-only proposal rows, checks pagination/invalid bounds,
+and restores CPU32 before exit. It writes one private (0600) JSON
+report to `~/Projekty/Codex/ga-automation-test/reports/`.
+It is separate from the historical GA-18 9/9 API smoke PASS; do not
+retest those eight prior operations unnecessarily. This new feature
+is **not a writable Apply or Undo endpoint**. Future implementation
+requires a revision-bound, user-approved selection receipt and a
+Ghidra transaction/Undo regression with unchanged firmware.
