@@ -359,6 +359,8 @@ public final class CodeBrowserMmioMain {
                 }
                 result.addProperty("external_automation_probe",true);
                 result.addProperty("automation_protocol_schema",2);
+                Files.writeString(out.resolve("automation-java-result.json"),GSON.toJson(result));
+                return; // Do not mutate the Listing baseline required by the legacy test.
             }
             // Actual tab selection through the production GhidrAssist JTabbedPane.
             edt(()->{
