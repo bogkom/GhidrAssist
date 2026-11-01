@@ -105,6 +105,11 @@ public final class AutomationServer implements AutoCloseable {
                 result.addProperty("schema", 3);
                 Program program = plugin.getCurrentProgram();
                 result.addProperty("program", program == null ? "" : program.getName());
+                boolean writable = program != null && program.getDomainFile() != null &&
+                    program.getDomainFile().canSave();
+                result.addProperty("program_writable", writable);
+                result.addProperty("program_read_only", program == null ||
+                    program.getDomainFile() == null || program.getDomainFile().isReadOnly());
                 if ("session.status".equals(method)) {
                     result.addProperty("status", "READY");
                 } else if ("listing.snapshot".equals(method)) {
