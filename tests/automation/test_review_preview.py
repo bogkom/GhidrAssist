@@ -32,6 +32,19 @@ class ReviewPreviewContracts(unittest.TestCase):
         self.assertIn('"hardware.profile.select".equals(method)', server)
         self.assertIn('"profile-select": "hardware.profile.select"', cli)
 
+    def test_fixture_only_write_api_guards(self):
+        tab = TAB.read_text(encoding="utf-8")
+        server = SERVER.read_text(encoding="utf-8")
+        self.assertIn("ghidrassist.automation.syntheticWrites", tab)
+        self.assertIn("synthetic-mmio.bin", tab)
+        self.assertIn("automationApprovalRevision", tab)
+        self.assertIn("program.getModificationNumber()!=automationUndoRevision", tab)
+        self.assertIn("automationApprovalToken=null", tab)
+        self.assertIn("HardwareApplyService.apply(program,List.of(item))", tab)
+        self.assertIn("program.undo()", tab)
+        for op in ("prepare", "commit", "undo"):
+            self.assertIn('"hardware.apply.%s".equals(method)' % op, server)
+
     def test_readonly_rpc_and_cli(self):
         server = SERVER.read_text(encoding="utf-8")
         cli = CLI.read_text(encoding="utf-8")
