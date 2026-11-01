@@ -113,6 +113,47 @@ public final class HardwareAnalysisTab extends JPanel {
         run.doClick();
     }
 
+    /**
+     * Read-only proposal review. Never calls Apply or opens a modal confirmation.
+     * Concrete MCU profile and matching program revision are mandatory.
+     */
+    public com.google.gson.JsonObject automationReviewPreview(int offset,int limit) {
+        if (!SwingUtilities.isEventDispatchThread()) throw new IllegalStateException("EDT required");
+        if (offset<0 || limit<1 || limit>100) throw new IllegalArgumentException("Invalid pagination");
+        Program program=plugin.getCurrentProgram();
+        if (program==null || !currentScan() || latestMarkdown==null)
+            throw new IllegalStateException("Hardware review is stale; rerun Analyze");
+        if (!latestConcrete)
+            throw new IllegalStateException("Explicit MC68332 profile required for Review");
+        List<HardwareApplyPlan.Item> candidates=
+            new ArrayList<>(HardwareApplyPlan.mc68332Mm1Candidates(0,csbarEvidence()));
+        com.google.gson.JsonArray rows=new com.google.gson.JsonArray();
+        for (int i=offset;i<candidates.size() && i-offset<limit;i++) {
+            HardwareApplyPlan.Item item=candidates.get(i);
+            HardwareApplyService.Decision decision=
+                HardwareApplyService.preflight(program,item,candidates);
+            com.google.gson.JsonObject row=new com.google.gson.JsonObject();
+            row.addProperty("index",i);
+            row.addProperty("kind",item.kind.name());
+            row.addProperty("name",item.name);
+            row.addProperty("location",item.location());
+            row.addProperty("state",decision.state.name());
+            row.addProperty("allowed",decision.allowed());
+            row.addProperty("selected_by_default",decision.selectedByDefault);
+            row.addProperty("description",decision.description);
+            rows.add(row);
+        }
+        if (!currentScan())
+            throw new IllegalStateException("Program revision changed during Review preview");
+        com.google.gson.JsonObject answer=new com.google.gson.JsonObject();
+        answer.addProperty("scope","MC68332 EXPLICIT PROFILE; PREVIEW ONLY; NO DB EDITS");
+        answer.addProperty("total",candidates.size());
+        answer.addProperty("offset",offset);
+        answer.addProperty("limit",limit);
+        answer.add("rows",rows);
+        return answer;
+    }
+
     /** A bounded, revision-checked snapshot of the same sites as MMIO Explorer. */
     public com.google.gson.JsonObject automationMmioRows(String filter,int offset,int limit) {
         if (!SwingUtilities.isEventDispatchThread()) throw new IllegalStateException("EDT required");
