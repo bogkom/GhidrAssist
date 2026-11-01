@@ -353,9 +353,21 @@ def main():
                                           {"token":prepared["token"],"name":prepared["name"]})["apply"]
                         if applied.get("changed")!=1 or applied.get("skipped")!=0:
                             raise RuntimeError("Synthetic Apply outcome mismatch")
+                        # Ensure the transaction actually mapped memory, and
+                        # Undo actually removed that new block (not just a flag).
+                        region_start=chosen["location"].split("..",1)[0]
+                        created=http_call("listing.goto",{"address":region_start})
+                        if not created.get("requested_address"):
+                            raise RuntimeError("Applied region is not mapped")
                         undid=http_call("hardware.apply.undo")["undo"]
                         if undid.get("undone") is not True:
                             raise RuntimeError("Synthetic Ghidra Undo unsuccessful")
+                        try:
+                            http_call("listing.goto",{"address":region_start})
+                        except HTTPError as error:
+                            if error.code!=400: raise
+                        else:
+                            raise RuntimeError("Undo left synthetic module memory mapped")
                         try:
                             http_call("hardware.apply.undo")
                         except HTTPError as error:
