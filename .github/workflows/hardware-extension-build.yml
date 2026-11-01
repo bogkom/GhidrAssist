@@ -163,6 +163,28 @@ jobs:
             }
           grep -q 'GA18 INDIRECT CONSTANT BOOTSTRAP PASS: functions=2' "$RUNNER_TEMP/ga18-indirect-constant.log"
           grep -q 'GA18 INDIRECT CONSTANT PROVENANCE PASS: assertions=16 fallback=1 ghidra_reference=1 rollback=1' "$RUNNER_TEMP/ga18-indirect-constant.log"
+      - name: Real Ghidra 12.1.4 bounded CPU32 register-flow regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/generate-synthetic-register-flow.py --output "$RUNNER_TEMP/synthetic-register-flow.bin"
+          package="$(find dist -maxdepth 1 -type f -name 'ghidra_12.1.4_PUBLIC_*_GhidrAssist.zip' -print -quit)"
+          test -n "$package"
+          unzip -p "$package" GhidrAssist/lib/GhidrAssist.jar > "$RUNNER_TEMP/ga18-register-flow.jar"
+          mkdir -p "$RUNNER_TEMP/ga18-register-flow-headless"
+          JAVA_TOOL_OPTIONS="-Dga18.test.jar=$RUNNER_TEMP/ga18-register-flow.jar" \
+            "$GHIDRA_INSTALL_DIR/support/analyzeHeadless" \
+            "$RUNNER_TEMP/ga18-register-flow-headless" GA18RegisterFlowCI \
+            -import "$RUNNER_TEMP/synthetic-register-flow.bin" \
+            -loader BinaryLoader -processor 68000:BE:32:CPU32 -cspec default \
+            -noanalysis -scriptPath "$GITHUB_WORKSPACE/tools/ghidra_scripts" \
+            -postScript GA18BootstrapSyntheticRegisterFlow.java \
+            -postScript GA18VerifySyntheticRegisterFlow.java \
+            > "$RUNNER_TEMP/ga18-register-flow.log" 2>&1 || {
+              tail -n 130 "$RUNNER_TEMP/ga18-register-flow.log"; exit 1;
+            }
+          grep -q 'GA18 REGISTER FLOW BOOTSTRAP PASS: functions=4' "$RUNNER_TEMP/ga18-register-flow.log"
+          grep -q 'GA18 REGISTER FLOW PASS: assertions=20 nop=1 clobber=1 branch=1 rollback=1' "$RUNNER_TEMP/ga18-register-flow.log"
       - name: Verify ZIP and record SHA-256
         shell: bash
         run: |
