@@ -34,7 +34,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--session", default=os.environ.get(
         "GHIDRASSIST_AGENT_SESSION", str(Path.home() / ".local/state/ghidrassist-agent/session.json")))
-    parser.add_argument("action", choices=("status", "snapshot", "analyze", "task", "mmio", "review-preview", "profile-select", "listing", "goto"))
+    parser.add_argument("action", choices=("status", "snapshot", "analyze", "task", "mmio", "review-preview", "profile-select", "function", "xrefs", "listing", "goto"))
     parser.add_argument("address", nargs="?")
     parser.add_argument("--filter", default="")
     parser.add_argument("--offset", type=int, default=0)
@@ -43,7 +43,7 @@ def main():
     session = load_session(args.session)
     method = {"status": "session.status", "snapshot": "ui.snapshot",
               "analyze": "hardware.analyze", "task": "hardware.task",
-              "mmio": "hardware.mmio.rows", "review-preview": "hardware.review.preview", "profile-select": "hardware.profile.select", "listing": "listing.snapshot",
+              "mmio": "hardware.mmio.rows", "review-preview": "hardware.review.preview", "profile-select": "hardware.profile.select", "function": "function.snapshot", "xrefs": "function.xrefs", "listing": "listing.snapshot",
               "goto": "listing.goto"}[args.action]
     if method == "listing.goto" and not args.address:
         parser.error("goto requires an address")
@@ -53,7 +53,7 @@ def main():
         params = ({"profile": args.address} if method == "hardware.profile.select" else
                   {"address": args.address} if args.address else
                   {"filter": args.filter, "offset": args.offset, "limit": args.limit}
-                  if method in ("hardware.mmio.rows", "hardware.review.preview") else {})
+                  if method in ("hardware.mmio.rows", "hardware.review.preview", "function.xrefs") else {})
         reply = rpc(session, method, params)
         print(json.dumps(reply, indent=2))
     except HTTPError as error:
