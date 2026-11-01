@@ -17,7 +17,7 @@ class LauncherContract(unittest.TestCase):
         code = LAUNCHER.read_text(encoding="utf-8")
         self.assertIn('support/GhidraGo/ghidraGo', code)
         self.assertIn('quote(args.program, safe="/")', code)
-        self.assertIn('observed.get("program") != Path(args.program).name', code)
+        self.assertIn('observed.get("program_writable") is not True', code)
         self.assertIn('session_file.unlink()', code)
         self.assertIn('GHIDRASSIST_AUTOMATION_TOKEN', code)
 
