@@ -22,7 +22,23 @@ public class GA18VerifySyntheticIndirectConstant extends GhidraScript {
             throw new IllegalStateException("Synthetic indirect constant CPU32 required");
         String jar=System.getProperty("ga18.test.jar","");
         if(jar.isBlank())throw new IllegalStateException("ga18.test.jar required");
-        try(URLClassLoader loader=new URLClassLoader(new URL[]{Path.of(jar).toUri().toURL()},getClass().getClassLoader())) {
+        // Load the production class and all its nested records from the SAME loader.
+        // Ghidra's GUI loader may already contain nested classes and must never
+        // be mixed with an outer class defined by a separate URLClassLoader.
+        try(URLClassLoader loader=new URLClassLoader(new URL[]{Path.of(jar).toUri().toURL()},
+                                                    getClass().getClassLoader()) {
+            @Override protected synchronized Class<?> loadClass(String name, boolean resolve)
+                    throws ClassNotFoundException {
+                if(name.equals("ghidrassist.automation.AutomationCallPaths") ||
+                   name.startsWith("ghidrassist.automation.AutomationCallPaths$")) {
+                    Class<?> klass=findLoadedClass(name);
+                    if(klass==null) klass=findClass(name);
+                    if(resolve) resolveClass(klass);
+                    return klass;
+                }
+                return super.loadClass(name,resolve);
+            }
+        }) {
             Method query=Class.forName("ghidrassist.automation.AutomationCallPaths",true,loader)
                  .getMethod("query",Program.class,String.class,String.class,int.class,int.class,int.class);
             var space=currentProgram.getAddressFactory().getDefaultAddressSpace();
