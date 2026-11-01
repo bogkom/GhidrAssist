@@ -48,9 +48,9 @@ def main():
     process = subprocess.Popen(command, stdin=subprocess.DEVNULL,
                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                                env=env, start_new_session=True)
+    # ghidraRun is a bootstrapper: it may exit while the GUI JVM continues.
+    # The server receipt, not bootstrapper liveness, establishes readiness.
     for _ in range(600):
-        if process.poll() is not None:
-            raise RuntimeError("Ghidra launcher exited before Automation became ready")
         if ready.exists():
             record = json.loads(ready.read_text())
             if record.get("schema") != 3:
@@ -64,7 +64,7 @@ def main():
                               "port":record["port"], "pid":record["pid"]}))
             return
         time.sleep(0.1)
-    raise TimeoutError("GhidrAssist Automation server did not start within 60 seconds")
+    raise TimeoutError("Automation API not ready after 60 seconds; check that the GhidrAssist plugin is enabled in the isolated Ghidra profile and the project has an open CodeBrowser")
 
 
 if __name__ == "__main__":
