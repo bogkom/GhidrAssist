@@ -77,6 +77,16 @@ jobs:
               --extension-sha256 "$(cut -d' ' -f1 "$RUNNER_TEMP/extension.sha256")" \
               --output "$RUNNER_TEMP/hardware-automation-evidence" --automation-probe --timeout 300
           grep -F 'PASS: external v2 Swing snapshots, Hardware Analyze, Listing navigation' "$RUNNER_TEMP/hardware-automation-evidence/automation-controller.log"
+      - name: GA-18 hardware automation failure diagnostics
+        if: failure()
+        shell: bash
+        run: |
+          for file in "$RUNNER_TEMP/hardware-automation-evidence/automation-controller.log" "$RUNNER_TEMP/hardware-automation-evidence/java.log" "$RUNNER_TEMP/hardware-automation-evidence/compile.log" "$RUNNER_TEMP/hardware-automation-evidence/result.json"; do
+            if test -f "$file"; then
+              echo "=== $(basename "$file") ==="
+              tail -n 100 "$file"
+            fi
+          done
       - name: GUI-06 external-process live X11 same-run handshake in isolated Xvfb
         shell: bash
         run: |
