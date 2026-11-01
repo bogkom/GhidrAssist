@@ -136,6 +136,59 @@ public final class AutomationServer implements AutoCloseable {
                     int offset=args.has("offset") ? args.get("offset").getAsInt() : 0;
                     int limit=args.has("limit") ? args.get("limit").getAsInt() : 4096;
                     result.add("decompiler",decompiler.status(offset,limit));
+                } else if ("analysis.bundle".equals(method)) {
+                    if(program==null) throw new IllegalStateException("No active program");
+                    var viewer=plugin.getTool().getService(ghidra.app.services.CodeViewerService.class);
+                    ProgramLocation location=viewer==null ? null : viewer.getCurrentLocation();
+                    var function=location==null || location.getAddress()==null ? null :
+                        program.getFunctionManager().getFunctionContaining(location.getAddress());
+                    if(function==null) throw new IllegalStateException("No function at Listing location");
+                    JsonObject bundle=new JsonObject();
+                    bundle.addProperty("entry",function.getEntryPoint().toString());
+                    bundle.addProperty("name",function.getName());
+                    bundle.addProperty("body_addresses",function.getBody().getNumAddresses());
+                    bundle.addProperty("revision",program.getModificationNumber());
+                    com.google.gson.JsonArray incoming=new com.google.gson.JsonArray();
+                    int incomingCount=0;
+                    for(var ref:program.getReferenceManager().getReferencesTo(function.getEntryPoint())) {
+                        if(incomingCount<100) {
+                            JsonObject row=new JsonObject();
+                            row.addProperty("from",ref.getFromAddress().toString());
+                            row.addProperty("type",ref.getReferenceType().toString());
+                            incoming.add(row);
+                        }
+                        incomingCount++;
+                    }
+                    bundle.add("incoming_entry_xrefs",incoming);
+                    bundle.addProperty("incoming_total",incomingCount);
+                    com.google.gson.JsonArray mmio=new com.google.gson.JsonArray();
+                    int scanned=0;
+                    int candidates=0;
+                    var instructions=program.getListing().getInstructions(function.getBody(),true);
+                    while(instructions.hasNext() && scanned<4096) {
+                        var instruction=instructions.next();
+                        scanned++;
+                        for(var ref:instruction.getReferencesFrom()) {
+                            long address=ref.getToAddress().getOffset();
+                            if(Long.compareUnsigned(address,0xFFF000L)<0 ||
+                               Long.compareUnsigned(address,0xFFFFFFL)>0) continue;
+                            candidates++;
+                            if(mmio.size()>=100)continue;
+                            JsonObject row=new JsonObject();
+                            row.addProperty("site",instruction.getAddress().toString());
+                            row.addProperty("target",ref.getToAddress().toString());
+                            row.addProperty("kind",ref.getReferenceType().toString());
+                            row.addProperty("write_candidate",ref.getReferenceType().isWrite());
+                            mmio.add(row);
+                        }
+                    }
+                    bundle.add("mmio_reference_candidates",mmio);
+                    bundle.addProperty("mmio_candidates_total_scanned",candidates);
+                    bundle.addProperty("instructions_scanned",scanned);
+                    bundle.addProperty("instruction_scan_truncated",instructions.hasNext());
+                    bundle.addProperty("evidence","Static Ghidra references only; no runtime access or physical mapping confirmed");
+                    bundle.add("decompiler",decompiler.start(program,function));
+                    result.add("analysis",bundle);
                 } else if ("function.snapshot".equals(method)) {
                     var viewer=plugin.getTool().getService(ghidra.app.services.CodeViewerService.class);
                     ProgramLocation activeLocation=viewer==null ? null : viewer.getCurrentLocation();
