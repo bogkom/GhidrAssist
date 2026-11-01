@@ -21,6 +21,15 @@ class LauncherContract(unittest.TestCase):
         self.assertIn('session_file.unlink()', code)
         self.assertIn('GHIDRASSIST_AUTOMATION_TOKEN', code)
 
+    def test_orphan_ready_is_archived_only_for_missing_pid(self):
+        code = LAUNCHER.read_text(encoding="utf-8")
+        self.assertIn("os.kill(pid, 0)", code)
+        self.assertIn("except ProcessLookupError:", code)
+        self.assertIn("ready.rename(target)", code)
+        self.assertIn("Readiness PID is still running", code)
+        self.assertIn("Readiness receipt invalid", code)
+        self.assertIn('archive.mkdir(mode=0o700', code)
+
     def test_wyse_wrapper_pins_synthetic_program(self):
         code = WRAPPER.read_text(encoding="utf-8")
         self.assertIn('--program synthetic-mmio.bin', code)
