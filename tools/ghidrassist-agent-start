@@ -64,9 +64,9 @@ def main():
     ]
     env["GHIDRASSIST_AUTOMATION_TOKEN"] = token
     env["JAVA_TOOL_OPTIONS"] = (env.get("JAVA_TOOL_OPTIONS", "") + " " + " ".join(options)).strip()
+    # Open the frontend once; GhidraGo alone resolves the requested project/program.
+    # Passing the .gpr here as well risks a second read-only project view.
     command = [str(binary)]
-    if args.project:
-        command.append(str(args.project.expanduser().resolve()))
     process = subprocess.Popen(command, stdin=subprocess.DEVNULL,
                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                                env=env, start_new_session=True)
