@@ -275,6 +275,54 @@ public final class CodeBrowserMmioMain {
                     p->p instanceof GhidrAssistPlugin).findFirst().orElseThrow();
             GhidrAssistUI ui=((GhidrAssistProvider)field(plugin,"provider")).getUI();
             HardwareAnalysisTab tab=(HardwareAnalysisTab)field(ui,"hardwareAnalysisTab");
+            // Test-only, file-transport pilot: a DIFFERENT Python process sends
+            // an action; this real Ghidra JVM executes it on the Swing EDT.
+            // Normal application and legacy regression behavior are unchanged.
+            if (conf.has("automation_probe") &&
+                    conf.get("automation_probe").getAsBoolean()) {
+                Path ready=out.resolve("automation-ready");
+                Path command=out.resolve("automation-command.json");
+                Path response=out.resolve("automation-response.json");
+                Files.writeString(ready,"hardware-ui-v1");
+                long deadline=System.nanoTime()+30_000_000_000L;
+                while (!Files.exists(command) && System.nanoTime()<deadline)
+                    Thread.sleep(50);
+                require(Files.isRegularFile(command),"External automation command missing");
+                JsonObject request=GSON.fromJson(Files.readString(command),JsonObject.class);
+                require("hardware.analyze".equals(request.get("action").getAsString()),
+                    "Unsupported automation command");
+                edt(()->{
+                    try {
+                        ((JTabbedPane)field(ui,"tabbedPane")).setSelectedComponent(tab);
+                        ((JComboBox<?>)field(tab,"selection")).setSelectedIndex(1);
+                        ((JButton)field(tab,"run")).doClick();
+                    } catch(Exception ex){throw new RuntimeException(ex);}
+                });
+                until(()->{
+                    try{return evalEdt(()->((JButton)fieldUnchecked(tab,"exploreMmio"))
+                        .isEnabled());}
+                    catch(Exception e){throw new RuntimeException(e);}
+                },35);
+                JsonObject snapshot=new JsonObject();
+                edt(()->{
+                    try {
+                        snapshot.addProperty("schema",1);
+                        snapshot.addProperty("action","hardware.analyze");
+                        snapshot.addProperty("selected_tab",
+                            ((JTabbedPane)field(ui,"tabbedPane")).getTitleAt(
+                                ((JTabbedPane)field(ui,"tabbedPane")).getSelectedIndex()));
+                        snapshot.addProperty("analyze_enabled",((JButton)field(tab,"run")).isEnabled());
+                        snapshot.addProperty("mmio_enabled",((JButton)field(tab,"exploreMmio")).isEnabled());
+                        snapshot.addProperty("review_enabled",((JButton)field(tab,"approve")).isEnabled());
+                        snapshot.addProperty("status",((JLabel)field(tab,"status")).getText());
+                        snapshot.addProperty("program",
+                            tool[0].getService(ProgramManager.class).getCurrentProgram().getName());
+                        snapshot.addProperty("edt",SwingUtilities.isEventDispatchThread());
+                    } catch(Exception ex){throw new RuntimeException(ex);}
+                });
+                Files.writeString(response,GSON.toJson(snapshot));
+                result.addProperty("external_automation_probe",true);
+            }
             // Actual tab selection through the production GhidrAssist JTabbedPane.
             edt(()->{
                 try {
