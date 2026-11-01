@@ -101,7 +101,8 @@ def main():
                 except (OSError, ValueError):
                     time.sleep(0.1)
                     continue
-                if observed.get("program") != Path(args.program).name:
+                if (observed.get("program") != Path(args.program).name or
+                        observed.get("program_writable") is not True):
                     time.sleep(0.1)
                     continue
             session = dict(record, token=token, mode=args.mode)
