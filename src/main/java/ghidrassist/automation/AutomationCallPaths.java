@@ -18,13 +18,14 @@ public final class AutomationCallPaths {
 
     private record Edge(Address callsite, Address target) {}
     private record Write(Address site, Address target, String kind) {}
-    private record Node(Function function, List<Edge> calls, List<Write> writes) {}
+    private record Node(Function function, List<Edge> calls, List<Write> writes, List<Address> indirectCalls) {}
     private record Hop(Address function, Address callsite) {}
     private record Hit(List<Hop> chain, Write write) {}
     private static final class State {
         final List<Hit> hits = new ArrayList<>();
         final Set<Address> reached = new HashSet<>();
         int steps, cycles, depthStops, unresolvedCalls;
+        final Set<Address> unresolvedSites = new TreeSet<>();
         boolean budgetExceeded, hitOverflow;
     }
     private static String hex(Address a) { return a.toString(); }
@@ -48,24 +49,31 @@ public final class AutomationCallPaths {
             Function f=it.next();
             List<Edge> calls=new ArrayList<>();
             List<Write> writes=new ArrayList<>();
+            List<Address> indirectCalls=new ArrayList<>();
             var instructions=program.getListing().getInstructions(f.getBody(),true);
             int scanned=0;
             while(instructions.hasNext()) {
                 if(++scanned>MAX_STEPS || ++totalInstructions>MAX_STEPS)
                     throw new IllegalStateException("Instruction index limit exceeded");
                 Instruction ins=instructions.next();
+                boolean resolvedCall=false;
                 for(Reference ref:ins.getReferencesFrom()) {
                     if(ref.getReferenceType().isCall()) {
                         Function target=program.getFunctionManager().getFunctionAt(ref.getToAddress());
-                        if(target!=null) calls.add(new Edge(ins.getAddress(),target.getEntryPoint()));
+                        if(target!=null) {
+                            calls.add(new Edge(ins.getAddress(),target.getEntryPoint()));
+                            resolvedCall=true;
+                        }
                     }
                     if(ref.getReferenceType().isWrite() && isPeripheral(ref.getToAddress()))
                         writes.add(new Write(ins.getAddress(),ref.getToAddress(),ref.getReferenceType().toString()));
                 }
+                if(ins.getFlowType().isCall() && !resolvedCall)
+                    indirectCalls.add(ins.getAddress());
             }
             calls.sort(Comparator.comparing(Edge::callsite).thenComparing(Edge::target));
             writes.sort(Comparator.comparing(Write::site).thenComparing(Write::target));
-            nodes.put(f.getEntryPoint(),new Node(f,calls,writes));
+            nodes.put(f.getEntryPoint(),new Node(f,calls,writes,indirectCalls));
         }
         return nodes;
     }
@@ -76,6 +84,10 @@ public final class AutomationCallPaths {
         state.reached.add(current);
         Node node=nodes.get(current);
         if(node==null) return;
+        for(Address site:node.indirectCalls) {
+            state.unresolvedCalls++;
+            state.unresolvedSites.add(site);
+        }
         for(Write write:node.writes) {
             if(state.hits.size()<MAX_STEPS) state.hits.add(new Hit(List.copyOf(chain),write));
             else { state.hitOverflow=true; state.budgetExceeded=true; return; }
@@ -130,6 +142,7 @@ public final class AutomationCallPaths {
         out.addProperty("cycles_cut",state.cycles);
         out.addProperty("depth_cut",state.depthStops);
         out.addProperty("unresolved_calls",state.unresolvedCalls);
+        out.add("unresolved_call_sites",addresses(state.unresolvedSites));
         out.addProperty("budget_exceeded",state.budgetExceeded);
         out.addProperty("complete",!state.budgetExceeded && state.depthStops==0 && state.unresolvedCalls==0);
         ArrayList<Address> reachable=new ArrayList<>(state.reached);
@@ -155,7 +168,7 @@ public final class AutomationCallPaths {
             rows.add(row);
         }
         out.add("paths",rows);
-        out.addProperty("evidence","Static direct CALL and WRITE references only; no executed path, MM state or physical mapping established");
+        out.addProperty("evidence","Static resolved CALL and WRITE references; unresolved indirect CALL sites reported but not followed; no executed path, MM state or physical mapping established");
         return out;
     }
 }
