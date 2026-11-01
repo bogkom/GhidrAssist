@@ -11,11 +11,11 @@ case "${1:-}" in
     test -f "$PROJECT" || { echo "Fixture project missing: $PROJECT" >&2; exit 1; }
     python3 "$ROOT/bin/ghidrassist-agent-start" --ghidra "$GHIDRA" --project "$PROJECT" --program synthetic-mmio.bin --session "$SESSION" --mode test
     ;;
-  status|snapshot|analyze|task|mmio|listing|goto)
+  status|snapshot|analyze|task|mmio|review-preview|listing|goto)
     python3 "$ROOT/bin/ghidrassist-agent" --session "$SESSION" "$@"
     ;;
   *)
-    echo "Usage: bash tools/ga18-wyse-test.sh {start|status|snapshot|analyze|task|mmio|listing|goto} [args]" >&2
+    echo "Usage: bash tools/ga18-wyse-test.sh {start|status|snapshot|analyze|task|mmio|review-preview|listing|goto} [args]" >&2
     exit 2
     ;;
 esac
