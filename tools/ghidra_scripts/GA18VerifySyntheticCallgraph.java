@@ -46,7 +46,7 @@ public class GA18VerifySyntheticCallgraph extends GhidraScript {
             int expected = TARGET[i];
             if (expected >= 0) {
                 Address dst = at(0x100L + 0x30L * expected);
-                check("JSR".equals(first.getMnemonicString()),
+                check("JSR".equalsIgnoreCase(first.getMnemonicString()),
                     "Expected JSR at " + entry + ", got " + first.getMnemonicString());
                 boolean flow = false;
                 for (Address target : first.getFlows()) if (dst.equals(target)) flow = true;
@@ -66,7 +66,7 @@ public class GA18VerifySyntheticCallgraph extends GhidraScript {
             Address site = at(0x100L + 0x30L * n + 6L);
             Address target = at(MMIO[k]);
             Instruction ins = currentProgram.getListing().getInstructionAt(site);
-            check(ins != null && "MOVE.W".equals(ins.getMnemonicString()),
+            check(ins != null && "MOVE.W".equalsIgnoreCase(ins.getMnemonicString()),
                 "Missing MOVE.W at " + site);
             boolean write = false;
             for (Reference r : ins.getReferencesFrom()) {
