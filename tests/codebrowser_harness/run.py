@@ -16,6 +16,7 @@ import tempfile
 import zipfile
 import uuid
 import stat
+import time
 
 from assertion_audit import validate_files, sha256 as byte_sha256
 from gui06_protocol import verify as verify_bridge, reserve_run, read_private_capture
@@ -212,6 +213,14 @@ def main():
                 str(SRC.parent/"CodeBrowserAssertionReceipt.java"),
                 str(SRC.parent/"CodeBrowserCuaHold.java")],
                 work,env,out/"compile.log",120)
+            if args.automation_probe:
+                # Exercise the production opt-in HTTP server in the same JVM
+                # as the existing real Swing/CodeBrowser fixture.
+                token=uuid.uuid4().hex+uuid.uuid4().hex
+                env["JAVA_TOOL_OPTIONS"] += (
+                    " -Dghidrassist.automation.enabled=true"
+                    " -Dghidrassist.automation.token="+token+
+                    " -Dghidrassist.automation.ready="+str(out/"api-ready.json"))
             cmd=[str(java/"bin/java"),
                  "-Djava.system.class.loader=ghidra.GhidraClassLoader",
                  "-Djava.awt.headless=false",
@@ -227,6 +236,30 @@ def main():
                 observer=None
                 try:
                     if args.automation_probe:
+                        # Wait for the actual production server before dispatching.
+                        deadline=time.monotonic()+45
+                        while not (out/"api-ready.json").is_file():
+                            if process.poll() is not None:
+                                raise RuntimeError("Ghidra exited before HTTP Automation ready")
+                            if time.monotonic()>deadline:
+                                raise RuntimeError("HTTP Automation readiness timed out")
+                            time.sleep(0.05)
+                        receipt=json.loads((out/"api-ready.json").read_text())
+                        if receipt.get("schema")!=3 or not receipt.get("port"):
+                            raise RuntimeError("Invalid HTTP Automation ready receipt")
+                        from urllib.request import Request,urlopen
+                        payload=json.dumps({"method":"ui.snapshot","params":{}}).encode()
+                        request=Request(
+                            "http://127.0.0.1:%d/rpc"%receipt["port"],data=payload,
+                            headers={"Authorization":"Bearer "+token,
+                                     "Content-Type":"application/json"},method="POST")
+                        with urlopen(request,timeout=20) as reply:
+                            snapshot=json.loads(reply.read())
+                        if (snapshot.get("schema")!=3 or
+                                snapshot.get("program")!="synthetic-mmio.bin" or
+                                "hardware" not in snapshot.get("ui",{})):
+                            raise RuntimeError("Production HTTP Swing snapshot invalid")
+                        (out/"api-snapshot.json").write_text(json.dumps(snapshot,indent=2))
                         with (out/"automation-controller.log").open("x") as controller_log:
                             observer=subprocess.Popen(
                                 [sys.executable,str(SRC.parent/"automation_controller.py"),
