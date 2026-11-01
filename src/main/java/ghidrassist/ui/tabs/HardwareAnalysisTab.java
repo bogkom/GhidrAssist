@@ -113,6 +113,57 @@ public final class HardwareAnalysisTab extends JPanel {
         run.doClick();
     }
 
+    /** A bounded, revision-checked snapshot of the same sites as MMIO Explorer. */
+    public com.google.gson.JsonObject automationMmioRows(String filter,int offset,int limit) {
+        if (!SwingUtilities.isEventDispatchThread()) throw new IllegalStateException("EDT required");
+        if (offset<0 || limit<1 || limit>200) throw new IllegalArgumentException("Invalid pagination");
+        if (!currentScan() || latestMarkdown==null)
+            throw new IllegalStateException("Hardware evidence is missing or stale; run Analyze");
+        List<ghidrassist.hardware.HardwareMmioExplorer.Observation> raw=new ArrayList<>();
+        for (HardwareInventoryService.Site site:latestSites)
+            raw.add(new ghidrassist.hardware.HardwareMmioExplorer.Observation(
+                site.pc.getOffset(),site.registerAddress,site.register,site.function,
+                site.asm,site.write,site.literal));
+        var rows=ghidrassist.hardware.HardwareMmioExplorer.rows(raw,latestConcrete);
+        com.google.gson.JsonArray entries=new com.google.gson.JsonArray();
+        int matching=0;
+        for (var row:rows) {
+            if (!row.matches(filter)) continue;
+            if (matching>=offset && matching-offset<limit) {
+                com.google.gson.JsonObject item=new com.google.gson.JsonObject();
+                item.addProperty("pc",row.pcHex());
+                item.addProperty("register",row.register());
+                item.addProperty("address",row.addressHex());
+                item.addProperty("access",row.access());
+                item.addProperty("value",row.value());
+                item.addProperty("evidence",row.evidence());
+                item.addProperty("function",row.function());
+                item.addProperty("instruction",row.instruction());
+                item.addProperty("scope",row.deviceScope());
+                entries.add(item);
+            }
+            matching++;
+        }
+        com.google.gson.JsonObject result=new com.google.gson.JsonObject();
+        result.addProperty("total",matching);
+        result.addProperty("offset",offset);
+        result.addProperty("limit",limit);
+        result.addProperty("revision",latestRevision.toString());
+        result.add("rows",entries);
+        return result;
+    }
+
+    public com.google.gson.JsonObject automationTask() {
+        if (!SwingUtilities.isEventDispatchThread()) throw new IllegalStateException("EDT required");
+        com.google.gson.JsonObject result=new com.google.gson.JsonObject();
+        result.addProperty("state",activeMonitor!=null ? "RUNNING" :
+            currentScan() && latestMarkdown!=null ? "COMPLETED" : "NOT_READY");
+        result.addProperty("status",status.getText());
+        result.addProperty("site_count",currentScan() && latestMarkdown!=null ?
+            latestSites.size() : 0);
+        return result;
+    }
+
     public com.google.gson.JsonObject automationSnapshot() {
         if (!javax.swing.SwingUtilities.isEventDispatchThread()) throw new IllegalStateException("EDT required");
         com.google.gson.JsonObject result = new com.google.gson.JsonObject();
