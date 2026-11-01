@@ -14,6 +14,8 @@ on:
       - 'tools/ga18-wyse-decompiler-smoke.py'
       - 'tools/generate-synthetic-callgraph.py'
       - 'tests/automation/test_synthetic_callgraph.py'
+      - 'tools/generate-synthetic-convergent.py'
+      - 'tests/automation/test_convergent_callgraph.py'
       - 'tests/automation/test_call_paths.py'
       - 'src/main/java/ghidrassist/automation/**'
       - '.github/workflows/ga18-agent-launcher.yml'
