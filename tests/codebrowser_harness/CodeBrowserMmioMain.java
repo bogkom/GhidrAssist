@@ -348,7 +348,8 @@ public final class CodeBrowserMmioMain {
                                 snapshot.add(key,state);
                             }
                             snapshot.addProperty("listing_address",
-                                viewer.getCurrentLocation()==null ? "" :
+                                viewer.getCurrentLocation()==null ||
+                                viewer.getCurrentLocation().getAddress()==null ? "" :
                                 viewer.getCurrentLocation().getAddress().toString());
                         }catch(Exception ex){throw new RuntimeException(ex);}
                     });
