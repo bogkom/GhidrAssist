@@ -93,7 +93,7 @@ public final class AutomationCallPaths {
         }
     }
     public static JsonObject query(Program program, String origin, String entryText,
-                                   int maxDepth, int offset, int limit) {
+                                   int maxDepth, int offset, int limit) throws ghidra.program.model.mem.MemoryAccessException {
         if(program==null) throw new IllegalStateException("No active program");
         if(maxDepth<0 || maxDepth>32 || offset<0 || offset>50000 || limit<1 || limit>100)
             throw new IllegalArgumentException("Invalid paths bounds");
