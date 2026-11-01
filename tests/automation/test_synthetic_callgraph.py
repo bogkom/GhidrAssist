@@ -13,11 +13,11 @@ spec.loader.exec_module(module)
 
 class Fixture(unittest.TestCase):
     def test_script_is_fixture_only(self):
-        code=(ROOT/"tools/ghidra_scripts/GA18BootstrapSyntheticCallgraph.py").read_text()
-        self.assertIn('p.getName() != "synthetic-callgraph.bin"',code)
+        code=(ROOT/"tools/ghidra_scripts/GA18BootstrapSyntheticCallgraph.java").read_text()
+        self.assertIn('"synthetic-callgraph.bin".equals(currentProgram.getName())',code)
         self.assertIn('68000:BE:32:CPU32',code)
-        self.assertIn('range(20)',code)
-        self.assertIn('endTransaction(tx, success)',code)
+        self.assertIn('i < 20',code)
+        self.assertIn('endTransaction(tx, commit)',code)
 
     def test_determinism_and_separation(self):
         first,sites=module.generate()
