@@ -141,6 +141,28 @@ jobs:
             }
           grep -q 'GA18 INDIRECT BOOTSTRAP PASS: functions=2' "$RUNNER_TEMP/ga18-indirect.log"
           grep -q 'GA18 INDIRECT PATHS PASS: assertions=13 unresolved=1 no_guessed_paths=1' "$RUNNER_TEMP/ga18-indirect.log"
+      - name: Real Ghidra 12.1.4 proven indirect constant CALL regression (synthetic only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/generate-synthetic-indirect-constant.py --output "$RUNNER_TEMP/synthetic-indirect-constant.bin"
+          package="$(find dist -maxdepth 1 -type f -name 'ghidra_12.1.4_PUBLIC_*_GhidrAssist.zip' -print -quit)"
+          test -n "$package"
+          unzip -p "$package" GhidrAssist/lib/GhidrAssist.jar > "$RUNNER_TEMP/ga18-indirect-constant-product.jar"
+          mkdir -p "$RUNNER_TEMP/ga18-indirect-constant-headless"
+          JAVA_TOOL_OPTIONS="-Dga18.test.jar=$RUNNER_TEMP/ga18-indirect-constant-product.jar" \
+            "$GHIDRA_INSTALL_DIR/support/analyzeHeadless" \
+            "$RUNNER_TEMP/ga18-indirect-constant-headless" GA18IndirectConstantCI \
+            -import "$RUNNER_TEMP/synthetic-indirect-constant.bin" \
+            -loader BinaryLoader -processor 68000:BE:32:CPU32 -cspec default \
+            -noanalysis -scriptPath "$GITHUB_WORKSPACE/tools/ghidra_scripts" \
+            -postScript GA18BootstrapSyntheticIndirectConstant.java \
+            -postScript GA18VerifySyntheticIndirectConstant.java \
+            > "$RUNNER_TEMP/ga18-indirect-constant.log" 2>&1 || {
+              tail -n 120 "$RUNNER_TEMP/ga18-indirect-constant.log"; exit 1;
+            }
+          grep -q 'GA18 INDIRECT CONSTANT BOOTSTRAP PASS: functions=2' "$RUNNER_TEMP/ga18-indirect-constant.log"
+          grep -q 'GA18 INDIRECT CONSTANT PASS: assertions=12 resolved_calls=1 paths=1' "$RUNNER_TEMP/ga18-indirect-constant.log"
       - name: Verify ZIP and record SHA-256
         shell: bash
         run: |
