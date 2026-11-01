@@ -124,6 +124,20 @@ public final class AutomationServer implements AutoCloseable {
                     GoToService go = plugin.getTool().getService(GoToService.class);
                     if (go == null || !go.goTo(target, program)) throw new IllegalStateException("Listing navigation unavailable");
                     result.addProperty("requested_address", target.toString());
+                } else if ("hardware.apply.prepare".equals(method) ||
+                           "hardware.apply.commit".equals(method) ||
+                           "hardware.apply.undo".equals(method)) {
+                    GhidrAssistProvider provider=plugin.getAutomationProvider();
+                    if(provider==null)throw new IllegalStateException("GhidrAssist UI unavailable");
+                    if("hardware.apply.prepare".equals(method)) {
+                        int index=args.get("index").getAsInt();
+                        result.add("approval",provider.getUI().automationApplyPrepare(index));
+                    } else if("hardware.apply.commit".equals(method)) {
+                        result.add("apply",provider.getUI().automationApplyCommit(
+                            args.get("token").getAsString(),args.get("name").getAsString()));
+                    } else {
+                        result.add("undo",provider.getUI().automationApplyUndo());
+                    }
                 } else if ("hardware.profile.select".equals(method)) {
                     GhidrAssistProvider provider = plugin.getAutomationProvider();
                     if (provider == null) throw new IllegalStateException("GhidrAssist UI unavailable");
