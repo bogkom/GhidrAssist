@@ -15,8 +15,8 @@ class LauncherContract(unittest.TestCase):
 
     def test_native_ghidra_go_dispatch(self):
         code = LAUNCHER.read_text(encoding="utf-8")
-        self.assertIn('support/GhidraGo/ghidraGo', code)
-        self.assertIn('quote(args.program, safe="/")', code)
+        self.assertIn('ghidrassist.automation.openProgram', code)
+        self.assertIn('AgentProjectOpenPlugin', code)
         self.assertIn('observed.get("program_writable") is not True', code)
         self.assertIn('session_file.unlink()', code)
         self.assertIn('GHIDRASSIST_AUTOMATION_TOKEN', code)
