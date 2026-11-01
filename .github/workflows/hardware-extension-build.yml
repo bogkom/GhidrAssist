@@ -120,36 +120,16 @@ jobs:
           shopt -s nullglob
           packages=(dist/ghidra_12.1.4_PUBLIC_*_GhidrAssist.zip)
           test "${#packages[@]}" -eq 1
+          inner="$(basename "${packages[0]}")"
           mkdir -p dist/bundle
           cp "${packages[0]}" dist/bundle/
-          ( cd dist/bundle && sha256sum "$(basename "${packages[0]}")" > SHA256SUMS.txt )
-          cat > dist/bundle/INSTALL.txt <<'EOF'
-          GhidrAssist for Ghidra 12.1.4 PUBLIC
-
-          This is a DISTRIBUTION bundle, not the Ghidra installer ZIP.
-          Extract this outer ZIP first.
-          Validate: sha256sum -c SHA256SUMS.txt
-          Install the INNER ghidra_12.1.4_PUBLIC_*_GhidrAssist.zip
-          using Ghidra File -> Install Extensions, then restart Ghidra.
-          Do not install the outer bundle ZIP into Ghidra.
-          EOF
+          ( cd dist/bundle && sha256sum "$inner" > SHA256SUMS.txt )
+          printf '%s\n' 'GhidrAssist 12.1.4 PUBLIC distribution.' 'Extract this outer ZIP.' 'Run sha256sum -c SHA256SUMS.txt.' 'Install the inner ghidra_12.1.4_PUBLIC_*_GhidrAssist.zip via Ghidra File > Install Extensions.' > dist/bundle/INSTALL.txt
           outer="dist/GhidrAssist-12.1.4-${GITHUB_RUN_ID}-distribution.zip"
-          ( cd dist/bundle && zip -q -X "../$(basename "$outer")" INSTALL.txt SHA256SUMS.txt "$(basename "${packages[0]}")" )
+          ( cd dist/bundle && zip -q -X "../$(basename "$outer")" INSTALL.txt SHA256SUMS.txt "$inner" )
           unzip -tq "$outer"
-          test "$(unzip -Z1 "$outer" | grep -Ec '^ghidra_12[.]1[.]4_PUBLIC_.*_GhidrAssist[.]zip" -eq 1
-          unzip -p "$outer" SHA256SUMS.txt | grep -Fq "$(basename "${packages[0]}")"
-          echo "Outer distribution bundle: $outer"
-
-      - name: Publish nested ZIP distribution (Actions artifact)
-        uses: actions/upload-artifact@v4
-        with:
-          name: GhidrAssist-Ghidra-12.1.4-${{ github.run_id }}
-          path: dist/GhidrAssist-12.1.4-${{ github.run_id }}-distribution.zip
-          if-no-files-found: error
-          retention-days: 30
-          compression-level: 0
-)" -eq 1
-          unzip -p "$outer" SHA256SUMS.txt | grep -Fq "$(basename "${packages[0]}")"
+          test "$(unzip -Z1 "$outer" | grep -Fc "$inner")" -eq 1
+          unzip -p "$outer" SHA256SUMS.txt | grep -Fq "$inner"
           echo "Outer distribution bundle: $outer"
 
       - name: Publish nested ZIP distribution (Actions artifact)
