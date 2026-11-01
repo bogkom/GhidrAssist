@@ -114,6 +114,10 @@ public class GhidrAssistUI extends JPanel {
         return answer;
     }
 
+    public com.google.gson.JsonObject automationReviewPreview(int offset,int limit) {
+        return hardwareAnalysisTab.automationReviewPreview(offset,limit);
+    }
+
     public com.google.gson.JsonObject automationMmioRows(String filter,int offset,int limit) {
         return hardwareAnalysisTab.automationMmioRows(filter,offset,limit);
     }
