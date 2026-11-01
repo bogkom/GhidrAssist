@@ -21,7 +21,8 @@ def main():
     parser.add_argument("--session", type=Path, default=Path.home() / ".local/state/ghidrassist-agent/session.json")
     parser.add_argument("--program", help="Imported program in project, for automatic CodeBrowser opening")
     parser.add_argument("--mode", choices=("test", "trusted"), default="test")
-    parser.add_argument("--synthetic-writes", action="store_true",\n                        help="Explicitly enable single-item Apply/Undo ONLY in the isolated synthetic fixture")\n    args = parser.parse_args()
+    parser.add_argument("--synthetic-writes", action="store_true",
+                        help="Explicitly enable single-item Apply/Undo ONLY in the isolated synthetic fixture")\n    args = parser.parse_args()
     binary = args.ghidra.expanduser().resolve() / "ghidraRun"
     if not binary.is_file():
         parser.error("ghidraRun not found")
