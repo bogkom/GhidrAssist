@@ -8,6 +8,8 @@ import secrets
 import subprocess
 import sys
 import time
+from urllib.parse import quote
+from urllib.request import Request, urlopen
 
 
 def main():
@@ -17,6 +19,7 @@ def main():
     parser.add_argument("--project", type=Path,
                         help="Optional Ghidra .gpr project; only an explicitly chosen project")
     parser.add_argument("--session", type=Path, default=Path.home() / ".local/state/ghidrassist-agent/session.json")
+    parser.add_argument("--program", help="Imported program in project, for automatic CodeBrowser opening")
     parser.add_argument("--mode", choices=("test", "trusted"), default="test")
     args = parser.parse_args()
     binary = args.ghidra.expanduser().resolve() / "ghidraRun"
@@ -24,6 +27,8 @@ def main():
         parser.error("ghidraRun not found")
     if "12.1.4_PUBLIC" not in str(binary.parent):
         parser.error("Ghidra 12.1.4 PUBLIC required")
+    if args.program and (not args.project or args.program.startswith("/") or ".." in Path(args.program).parts):
+        parser.error("--program requires --project and a relative program path")
     if args.project and not args.project.is_file():
         parser.error("Ghidra project not found")
     session_file = args.session.expanduser().absolute()
@@ -67,11 +72,38 @@ def main():
                                env=env, start_new_session=True)
     # ghidraRun is a bootstrapper: it may exit while the GUI JVM continues.
     # The server receipt, not bootstrapper liveness, establishes readiness.
-    for _ in range(600):
+    ghidra_go = args.ghidra.expanduser().resolve() / "support/GhidraGo/ghidraGo"
+    if args.program and not ghidra_go.is_file():
+        raise RuntimeError("GhidraGo executable not found")
+    sent = False
+    for attempt in range(600):
+        if args.program and not sent and attempt >= 50:
+            locator = str(args.project.expanduser().resolve().with_suffix(""))
+            url = "ghidra:" + quote(locator, safe="/:") + "?/" + quote(args.program, safe="/")
+            delivery = subprocess.run([str(ghidra_go), url], env=env,
+                stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL, timeout=20)
+            if delivery.returncode:
+                raise RuntimeError("GhidraGo failed (exit %d); enable GhidraGoPlugin in isolated Project Window" % delivery.returncode)
+            sent = True
         if ready.exists():
             record = json.loads(ready.read_text())
             if record.get("schema") != 3:
                 raise RuntimeError("Invalid GhidrAssist ready receipt")
+            if args.program:
+                request = Request("http://127.0.0.1:%d/rpc" % record["port"],
+                    data=b'{"method":"session.status"}',
+                    headers={"Authorization":"Bearer "+token,
+                             "Content-Type":"application/json"}, method="POST")
+                try:
+                    with urlopen(request, timeout=2) as reply:
+                        observed = json.loads(reply.read())
+                except (OSError, ValueError):
+                    time.sleep(0.1)
+                    continue
+                if observed.get("program") != Path(args.program).name:
+                    time.sleep(0.1)
+                    continue
             session = dict(record, token=token, mode=args.mode)
             fd = os.open(session_file, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
             with os.fdopen(fd, "w") as stream:
@@ -81,7 +113,7 @@ def main():
                               "port":record["port"], "pid":record["pid"]}))
             return
         time.sleep(0.1)
-    raise TimeoutError("Automation API not ready after 60 seconds; check that the GhidrAssist plugin is enabled in the isolated Ghidra profile and the project has an open CodeBrowser")
+    raise TimeoutError("CodeBrowser and requested program not ready; verify GhidraGoPlugin is enabled in isolated Project Window")
 
 
 if __name__ == "__main__":
