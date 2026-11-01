@@ -28,6 +28,12 @@ public class GA18BootstrapSyntheticRegisterFlow extends GhidraScript {
                         throw new IllegalStateException("Cannot create function "+addr);
                 }
             }
+            // Non-fallthrough BRA target: the bootstrap must explicitly decode
+            // the JSR at 0x19a; DisassembleCommand is run without follow-flow.
+            var branchCall=currentProgram.getAddressFactory().getDefaultAddressSpace().getAddress(0x19a);
+            if(currentProgram.getListing().getInstructionAt(branchCall)==null &&
+               !new DisassembleCommand(branchCall,null,false).applyTo(currentProgram,monitor))
+                throw new IllegalStateException("Branch target CALL not disassembled at "+branchCall);
             commit=true;
             println("GA18 REGISTER FLOW BOOTSTRAP PASS: functions=4");
         } finally {
