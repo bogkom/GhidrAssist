@@ -59,6 +59,7 @@ public class GA18VerifySyntheticRegisterFlow extends GhidraScript {
                 check(row.get("write_site").getAsString().equalsIgnoreCase("00000130"),"MMIO write 130");
                 for(String origin:new String[]{"00000160","00000190"}) {
                     JsonObject negative=(JsonObject)query.invoke(null,currentProgram,"entry",origin,8,0,10);
+                    println("GA18 REGISTER FLOW DEBUG "+origin+" "+negative.toString());
                     check(negative.get("reachable_count").getAsInt()==1,"no guessed target "+origin);
                     check(negative.get("total_paths").getAsInt()==0,"no phantom write "+origin);
                     check(negative.get("unresolved_calls").getAsInt()==1,"unresolved "+origin);
