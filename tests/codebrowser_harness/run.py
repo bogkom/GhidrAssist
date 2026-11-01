@@ -108,7 +108,7 @@ def main():
     ap.add_argument("--timeout",type=int,default=300)
     ap.add_argument("--bridge-mode",choices=("off","ci","host"),default="off")
     ap.add_argument("--bridge-timeout",type=int,default=60)
-    ap.add_argument("--automation-probe",action="store_true",
+    ap.add_argument("--automation-probe",action="store_true")
     ap.add_argument("--cua-live",action="store_true",
                     help="Bounded live synthetic window for separate future native CUA")
     ap.add_argument("--cua-timeout",type=int,default=30)
