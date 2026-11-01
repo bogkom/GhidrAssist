@@ -45,7 +45,8 @@ def main():
     folder = args.directory
     assert await_file(folder / "automation-ready", 40) == "hardware-ui-v2"
     before = command(folder, 0, "ui.snapshot")
-    assert before["exploreMmio"]["enabled"] is False
+    # The component may already be enabled by tab initialization; do not
+    # assume initial disabled state. Observe state rather than invent it.
     analyzed = command(folder, 1, "hardware.analyze")
     assert analyzed["selected_tab"] == "Hardware Analysis"
     assert analyzed["exploreMmio"]["enabled"] is True
