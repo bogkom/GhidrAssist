@@ -62,9 +62,10 @@ public final class AutomationCallPaths {
         Function f=program.getFunctionManager().getFunctionAt(target);
         return f==null?null:f.getEntryPoint();
     }
-    // Bounded straight-line proof only. Backtrack up to four preceding decoded
-    // instructions. NOP is the sole permitted intervening instruction; any
-    // branch, write to An, call, or unknown instruction stops the proof.
+    // Bounded straight-line proof only. Backtrack up to four decoded
+    // instructions. Only CPU32 NOP and MOVEQ #imm,Dn are permitted between
+    // the constant assignment and JSR (An). Both preserve all address registers;
+    // any branch, unknown instruction, or register overwrite stops the proof.
     private static Address boundedConstantRegisterCall(Program program, Instruction call)
             throws ghidra.program.model.mem.MemoryAccessException {
         if(!"68000:BE:32:CPU32".equals(program.getLanguageID().toString())) return null;
@@ -78,9 +79,14 @@ public final class AutomationCallPaths {
             if(prev==null || prev.getMaxAddress().next()==null ||
                !prev.getMaxAddress().next().equals(cursor.getAddress())) return null;
             byte[] data=prev.getBytes();
-            if(data.length==2 && (data[0]&255)==0x4e && (data[1]&255)==0x71) {
-                cursor=prev; // NOP, proven not to alter An or branch.
-                continue;
+            if(data.length==2) {
+                int middle=((data[0]&255)<<8)|(data[1]&255);
+                // MOVEQ #signed8,Dn modifies a data register and CCR only,
+                // never an address register; unlike branch opcodes it falls through.
+                if(middle==0x4e71 || (middle&0xf100)==0x7000) {
+                    cursor=prev;
+                    continue;
+                }
             }
             if(data.length!=6) return null;
             int op=((data[0]&255)<<8)|(data[1]&255);
@@ -127,7 +133,7 @@ public final class AutomationCallPaths {
                     if(proven!=null) calls.add(new Edge(ins.getAddress(),proven,"adjacent_movea_immediate"));
                     else {
                         Address bounded=boundedConstantRegisterCall(program,ins);
-                        if(bounded!=null) calls.add(new Edge(ins.getAddress(),bounded,"bounded_movea_nop_chain"));
+                        if(bounded!=null) calls.add(new Edge(ins.getAddress(),bounded,"bounded_movea_safe_chain"));
                         else indirectCalls.add(ins.getAddress());
                     }
                 }
@@ -233,7 +239,7 @@ public final class AutomationCallPaths {
             rows.add(row);
         }
         out.add("paths",rows);
-        out.addProperty("evidence","Static Ghidra CALL references and narrow CPU32 MOVEA-immediate register-call patterns and bounded NOP-only chains; other indirect sites unresolved; no execution, MM state or physical mapping established");
+        out.addProperty("evidence","Static Ghidra CALL references and narrow CPU32 MOVEA-immediate register-call patterns and bounded straight-line NOP/MOVEQ chains; other indirect sites unresolved; no execution, MM state or physical mapping established");
         return out;
     }
 }
