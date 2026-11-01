@@ -72,6 +72,30 @@ jobs:
           set -euo pipefail
           "$GHIDRA_INSTALL_DIR/support/gradle/gradlew" \
             --no-daemon --stacktrace buildExtension
+      - name: Verify production interprocedural traversal in real Ghidra 12.1.4 (synthetic only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/generate-synthetic-callgraph.py --output "$RUNNER_TEMP/synthetic-callgraph.bin"
+          package="$(find dist -maxdepth 1 -type f -name 'ghidra_12.1.4_PUBLIC_*_GhidrAssist.zip' -print -quit)"
+          test -n "$package"
+          unzip -p "$package" GhidrAssist/lib/GhidrAssist.jar > "$RUNNER_TEMP/ga18-product.jar"
+          mkdir -p "$RUNNER_TEMP/ga18-headless"
+          JAVA_TOOL_OPTIONS="-Dga18.test.jar=$RUNNER_TEMP/ga18-product.jar" \
+            "$GHIDRA_INSTALL_DIR/support/analyzeHeadless" \
+            "$RUNNER_TEMP/ga18-headless" GA18GraphCI \
+            -import "$RUNNER_TEMP/synthetic-callgraph.bin" \
+            -loader BinaryLoader -processor 68000:BE:32:CPU32 -cspec default \
+            -noanalysis -scriptPath "$GITHUB_WORKSPACE/tools/ghidra_scripts" \
+            -postScript GA18BootstrapSyntheticCallgraph.java \
+            -postScript GA18VerifySyntheticCallgraph.java \
+            -postScript GA18VerifyAutomationPaths.java \
+            > "$RUNNER_TEMP/ga18-paths.log" 2>&1 || {
+              tail -n 100 "$RUNNER_TEMP/ga18-paths.log"; exit 1;
+            }
+          grep -q 'GA18 CALLGRAPH PASS: functions=20 edges=19 mmio_static_writes=4 reset_reachable=6 assertions=110' "$RUNNER_TEMP/ga18-paths.log"
+          grep -q 'GA18 PRODUCTION PATHS PASS: assertions=19' "$RUNNER_TEMP/ga18-paths.log"
+          echo 'Real Ghidra native synthetic graph and production traversal assertions passed'
       - name: Verify ZIP and record SHA-256
         shell: bash
         run: |
