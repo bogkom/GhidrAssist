@@ -30,7 +30,24 @@ def main():
     session_file.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     os.chmod(session_file.parent, 0o700)
     if session_file.exists():
-        parser.error("Session already exists; stop the existing instance before starting another")
+        try:
+            old = json.loads(session_file.read_text(encoding="utf-8"))
+            pid = old.get("pid")
+            if not isinstance(pid, int) or pid <= 0 or old.get("schema") != 3:
+                parser.error("Existing session is malformed; inspect before removal")
+            try:
+                os.kill(pid, 0)
+            except ProcessLookupError:
+                # Only auto-remove a known expired session after the pinned PID
+                # is gone; never terminate or take over a live GUI.
+                session_file.unlink()
+                print("Removed expired test session receipt", file=sys.stderr)
+            except PermissionError:
+                parser.error("Existing session PID cannot be inspected; refusing takeover")
+            else:
+                parser.error("Session process is still running; close its Ghidra instance first")
+        except (OSError, ValueError, KeyError) as exc:
+            parser.error("Cannot validate existing session: " + str(exc))
     ready = session_file.with_suffix(".ready")
     if ready.exists():
         parser.error("Stale readiness file exists; remove only after confirming no live process")
