@@ -13,7 +13,7 @@ class ReviewPreviewContracts(unittest.TestCase):
     def test_no_mutating_apply_path(self):
         code = TAB.read_text(encoding="utf-8")
         snippet = code.split("public com.google.gson.JsonObject automationReviewPreview(", 1)[1].split(
-            "/** A bounded, revision-checked snapshot", 1)[0]
+            "// One-use, exact-revision approval.", 1)[0]
         self.assertIn("!currentScan()", snippet)
         self.assertIn("!latestConcrete", snippet)
         self.assertIn("HardwareApplyService.preflight", snippet)
