@@ -352,7 +352,9 @@ public final class CodeBrowserMmioMain {
                                 viewer.getCurrentLocation().getAddress().toString());
                         }catch(Exception ex){throw new RuntimeException(ex);}
                     });
-                    Files.writeString(response,GSON.toJson(snapshot));
+                    Path pending=out.resolve("automation-"+seq+"-pending.json");
+                    Files.writeString(pending,GSON.toJson(snapshot));
+                    Files.move(pending,response,StandardCopyOption.ATOMIC_MOVE);
                 }
                 result.addProperty("external_automation_probe",true);
                 result.addProperty("automation_protocol_schema",2);
