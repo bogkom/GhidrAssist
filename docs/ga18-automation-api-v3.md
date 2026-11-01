@@ -215,3 +215,27 @@ disconnected components. Unit golden checks are in
 end-to-end RPC traversal acceptance test must still be demonstrated before
 calling this new endpoint functionally PASS; previous Wyse 110 assertions
 validate the imported fixture, not this endpoint.
+
+## Convergent CALL regression fixture
+
+Generate a **separate** CPU32 synthetic program (do not overwrite the existing
+20-function test fixture) with:
+`python3 tools/generate-synthetic-convergent.py --output /isolated/path/synthetic-convergent.bin`.
+The adjacent `synthetic-convergent.json` contains the file SHA-256, direct
+CALL sites, four function entries, and expected ordered paths.
+
+Its reset at 0x100 makes two calls: 0x100→0x130→0x190 and
+0x106→0x160→0x190. The shared function writes the static MMIO candidate
+at 0x190 to 0x00FFFA00. Both paths must be returned separately, each
+with its distinct intermediate function and source CALL instruction.
+No path deduplication by the terminal function or WRITE site is allowed.
+
+Use native Ghidra Java scripts `GA18BootstrapSyntheticConvergent.java`
+(fixture-only transaction) and `GA18VerifySyntheticConvergent.java`
+(read-only verification against **production** `AutomationCallPaths`).
+CI imports this separate raw binary in an isolated Ghidra 12.1.4
+headless project, invokes the scripts and gates on their PASS markers;
+the original synthetic-callgraph 110-assertion regression remains intact.
+This is *static* reachability evidence, not hardware execution or
+physical MMIO mapping. Do not import into ECU411 or use the synthetic
+bootstrap on any nonmatching program.
