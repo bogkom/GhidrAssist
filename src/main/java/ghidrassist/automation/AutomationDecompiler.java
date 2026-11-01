@@ -41,7 +41,8 @@ public final class AutomationDecompiler implements AutoCloseable {
         worker.execute(()->{
             String text="";
             String failure="";
-            try(DecompInterface decompiler=new DecompInterface()) {
+            DecompInterface decompiler=new DecompInterface();
+            try {
                 if(!decompiler.openProgram(program))
                     throw new IllegalStateException("Cannot open program in Decompiler");
                 DecompileResults result=decompiler.decompileFunction(function,30,TaskMonitor.DUMMY);
@@ -53,7 +54,7 @@ public final class AutomationDecompiler implements AutoCloseable {
                 if(text.length()>262144) text=text.substring(0,262144);
             }catch(Exception ex){
                 failure=ex.getClass().getSimpleName()+": "+ex.getMessage();
-            }
+            } finally { decompiler.dispose(); }
             synchronized(this){
                 if(!taskId.equals(id) || closed)return;
                 if(program.getModificationNumber()!=expected){
