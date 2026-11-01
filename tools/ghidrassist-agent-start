@@ -62,7 +62,31 @@ def main():
             parser.error("Cannot validate existing session: " + str(exc))
     ready = session_file.with_suffix(".ready")
     if ready.exists():
-        parser.error("Stale readiness file exists; remove only after confirming no live process")
+        try:
+            receipt = json.loads(ready.read_text(encoding="utf-8"))
+            pid = receipt.get("pid")
+            if receipt.get("schema") != 3 or type(pid) is not int or pid <= 0 or (
+                    type(receipt.get("port")) is not int or
+                    not 0 < receipt["port"] < 65536):
+                parser.error("Readiness receipt invalid; inspect it before restarting")
+            try:
+                os.kill(pid, 0)
+            except ProcessLookupError:
+                # Preserve the failed-start evidence; never overwrite history.
+                archive = session_file.parent / "reports" / "diagnostics"
+                archive.mkdir(mode=0o700, parents=True, exist_ok=True)
+                os.chmod(archive, 0o700)
+                target = archive / ("session-ready-stale-" +
+                                    str(time.time_ns()) + ".json")
+                ready.rename(target)
+                print("Archived expired readiness receipt: " + str(target),
+                      file=sys.stderr)
+            except PermissionError:
+                parser.error("Readiness PID cannot be inspected; refusing takeover")
+            else:
+                parser.error("Readiness PID is still running; close test Ghidra first")
+        except (OSError, ValueError, KeyError) as exc:
+            parser.error("Cannot validate readiness receipt: " + str(exc))
     token = secrets.token_hex(32)
     env = os.environ.copy()
     options = [
