@@ -176,6 +176,8 @@ public final class HardwareAnalysisTab extends JPanel {
     public com.google.gson.JsonObject automationApplyPrepare(int index) {
         if (!SwingUtilities.isEventDispatchThread()) throw new IllegalStateException("EDT required");
         automationApprovalToken=null;
+        if (automationUndoProgram!=null)
+            throw new IllegalStateException("Prior synthetic Apply must be undone or inspected before another");
         if (!Boolean.getBoolean("ghidrassist.automation.syntheticWrites"))
             throw new IllegalStateException("Synthetic write tests not enabled");
         Program program=plugin.getCurrentProgram();
