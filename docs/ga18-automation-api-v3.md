@@ -43,3 +43,25 @@ agent automation API nor proof of functioning launcher on an interactive
 workstation. Verify compilation, CI/real GUI, and exact commit before
 claiming PASS. Do not conflate synthetic CI assertions with manual GUI
 or formal Codex Supervisor acknowledgements.
+
+## Wyse automated CodeBrowser opening (GhidraGo)
+
+Use the explicit `--program synthetic-mmio.bin` argument with the Ghidra project.
+The launcher now sends a local GhidraGo project/program URL using the
+`<ghidra>/support/GhidraGo/ghidraGo` executable and waits until the actual
+Automation API reports `program=synthetic-mmio.bin` before reporting READY.
+No screen-coordinate clicking or Supervisor is involved.
+
+**One-time prerequisite for the isolated test profile:** open Ghidra's **Project
+Window** → File → Configure → plug-in selector, enable **GhidraGoPlugin**,
+then close only the test GUI and rerun the launcher. This is a built-in Ghidra
+feature, not something installed into the user's ordinary Ghidra profile.
+If GhidraGo is disabled or the project program is absent, startup must fail
+rather than claim a false READY. Initial dispatch happens after a bounded
+bootstrap interval; launcher must not invent a `READY` from frontend only.
+
+Fixed-path test script: `tools/ga18-wyse-test.sh start`. The requested
+program is the imported synthetic fixture, never an ECU411 program.
+
+The GhidraGo launcher path is native to Ghidra 12.1.4; this host path must
+be validated on Wyse before marking the autonomous GUI startup PASS.
