@@ -219,8 +219,9 @@ def main():
                 token=uuid.uuid4().hex+uuid.uuid4().hex
                 env["JAVA_TOOL_OPTIONS"] += (
                     " -Dghidrassist.automation.enabled=true"
-                    " -Dghidrassist.automation.token="+token+
                     " -Dghidrassist.automation.ready="+str(out/"api-ready.json"))
+            if args.automation_probe:
+                env["GHIDRASSIST_AUTOMATION_TOKEN"]=token
             cmd=[str(java/"bin/java"),
                  "-Djava.system.class.loader=ghidra.GhidraClassLoader",
                  "-Djava.awt.headless=false",
