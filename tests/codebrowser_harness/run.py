@@ -261,6 +261,46 @@ def main():
                                 "hardware" not in snapshot.get("ui",{})):
                             raise RuntimeError("Production HTTP Swing snapshot invalid")
                         (out/"api-snapshot.json").write_text(json.dumps(snapshot,indent=2))
+                        def http_call(method,params=None):
+                            message=json.dumps({"method":method,"params":params or {}}).encode()
+                            call=Request(
+                                "http://127.0.0.1:%d/rpc"%receipt["port"],
+                                data=message,
+                                headers={"Authorization":"Bearer "+token,
+                                         "Content-Type":"application/json"},
+                                method="POST")
+                            with urlopen(call,timeout=30) as reply:
+                                return json.loads(reply.read())
+                        started=http_call("hardware.analyze")
+                        if started.get("schema")!=3:
+                            raise RuntimeError("HTTP Analyze failed")
+                        deadline=time.monotonic()+45
+                        while True:
+                            state=http_call("hardware.task").get("task",{})
+                            if state.get("state")=="COMPLETED":
+                                break
+                            if state.get("state")!="RUNNING" or time.monotonic()>deadline:
+                                raise RuntimeError("HTTP hardware task did not complete: "+str(state))
+                            time.sleep(0.08)
+                        rows=http_call("hardware.mmio.rows",
+                                       {"filter":"SIMCR","offset":0,"limit":10})
+                        table=rows.get("table",{})
+                        if table.get("total")!=1 or len(table.get("rows",[]))!=1:
+                            raise RuntimeError("Expected one source-only SIMCR MMIO site: "+str(table))
+                        site=table["rows"][0]
+                        if site.get("register")!="SIMCR":
+                            raise RuntimeError("Wrong MMIO register in HTTP table")
+                        pc=site["pc"]
+                        navigated=http_call("listing.goto",{"address":pc})
+                        if navigated.get("requested_address","").lower()!=pc.lower().removeprefix("0x"):
+                            raise RuntimeError("HTTP Listing navigation mismatch: "+str(navigated))
+                        listing=http_call("listing.snapshot")
+                        if int(listing.get("address","0"),16)!=int(pc,16):
+                            raise RuntimeError("HTTP Listing did not reach SIMCR reference")
+                        (out/"api-hardware-e2e.json").write_text(json.dumps(
+                            {"schema":3,"task":state,"mmio":table,
+                             "navigation":navigated,"listing":listing},indent=2))
+
                         with (out/"automation-controller.log").open("x") as controller_log:
                             observer=subprocess.Popen(
                                 [sys.executable,str(SRC.parent/"automation_controller.py"),
