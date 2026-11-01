@@ -6,7 +6,7 @@ This branch depends on PR #114 and Ghidra **12.1.4 PUBLIC**. It is not integrate
 
 The GhidrAssist plugin starts a local loopback HTTP server only when explicitly
 launched with JVM properties `ghidrassist.automation.enabled=true`,
-`ghidrassist.automation.token=<64-char-random-token>` and optionally
+environment variable `GHIDRASSIST_AUTOMATION_TOKEN=<64-char-random-token>` and optionally
 `ghidrassist.automation.ready=<writable-new-file>`. The server reports its
 ephemeral port in the session receipt. The token and session JSON are local-only;
 never publish them as Actions artifacts or GitHub issue comments.
