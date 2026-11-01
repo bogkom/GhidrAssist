@@ -95,3 +95,24 @@ retest those eight prior operations unnecessarily. This new feature
 is **not a writable Apply or Undo endpoint**. Future implementation
 requires a revision-bound, user-approved selection receipt and a
 Ghidra transaction/Undo regression with unchanged firmware.
+
+## Synthetic-only Apply / Undo pilot (not production access)
+
+New RPC methods `hardware.apply.prepare`, `hardware.apply.commit`,
+and `hardware.apply.undo` are **disabled by default**. They require the
+separate JVM property `-Dghidrassist.automation.syntheticWrites=true`,
+an active writable `synthetic-mmio.bin`, an explicit MC68332 selection,
+and fresh completed analysis. Prepare accepts one exact proposal index
+and returns a single-use unpredictable approval token with its name and
+location. Commit requires that exact token and name, no intervening
+revision change, and a fresh READY/default-safe preflight check. Only
+non-speculative module MEMORY rows are eligible (no registers, candidate
+memory, CS windows, annotations, or VBR). The existing
+`HardwareApplyService.apply` runs one Ghidra transaction. Undo is limited
+to the same program, the just-committed modification number, and a
+single use; it refuses to undo intervening user changes.
+
+The opt-in property must **never** be enabled for a normal Ghidra
+profile, real firmware, or ECU411. The default API remains read-only.
+Initial code and CodeBrowser/Xvfb regression are a test-only pilot,
+not blanket authorization for automated edits to arbitrary projects.
