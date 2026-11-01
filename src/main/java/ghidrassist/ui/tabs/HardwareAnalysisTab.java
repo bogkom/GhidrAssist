@@ -109,6 +109,16 @@ public final class HardwareAnalysisTab extends JPanel {
     public HardwareAnalysisTab(GhidrAssistPlugin plugin){
         super(new BorderLayout(5,5));
         this.plugin=plugin;
+        // Stable automation IDs; independent of button captions and layout.
+        selection.setName("hardware.profile");
+        run.setName("hardware.analyze");
+        cancelScan.setName("hardware.cancel");
+        approve.setName("hardware.review");
+        exploreMmio.setName("hardware.mmio");
+        reportSearch.setName("hardware.search");
+        status.setName("hardware.status");
+        overview.setName("hardware.overview");
+        report.setName("hardware.evidence");
         // Two compact rows remain usable in narrow docked Ghidra windows.
         JPanel controls=new JPanel(new BorderLayout(0,2));
         JPanel profileRow=new JPanel(new FlowLayout(FlowLayout.LEFT,5,1));
