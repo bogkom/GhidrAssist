@@ -25,7 +25,7 @@ import java.util.List;
     description = "Opt-in synthetic/agent fixture opening in active project"
 )
 public final class AgentProjectOpenPlugin extends Plugin {
-    private final Timer poller;
+    private Timer poller;
     private int attempts;
 
     public AgentProjectOpenPlugin(PluginTool tool) {
