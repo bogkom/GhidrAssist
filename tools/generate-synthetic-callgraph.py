@@ -13,9 +13,9 @@ MMIO=[0x00FFFA00,0x00FFFA4C,0x00FFFC00,0x00FFFD00]
 # Each node has precisely one JSR; common targets, a cycle, and dead nodes.
 EDGES={0:1,1:2,2:3,3:4,4:5,5:2,6:7,7:8,8:9,9:10,
        10:11,11:12,12:13,13:14,14:15,15:16,16:17,17:18,18:19}
-# Main path includes conditional branch around a call at node 1.
+# One reachable cycle (2..5), disconnected test branches and MMIO sites.
 def generate():
-    blob=bytearray(b"\\x4e\\x71"*(SIZE//2))
+    blob=bytearray(b"\x4e\x71"*(SIZE//2))
     blob[0:8]=struct.pack(">II",0x00FFF7FC,BASE)
     sites={}
     for n in range(COUNT):
@@ -48,7 +48,7 @@ def main():
                         "to":f"{BASE+j*0x30:08x}"} for i,j in sorted(EDGES.items())],
               "mmio":sites,"sha256":hashlib.sha256(binary).hexdigest(),
               "note":"Synthetic static reference model; no runtime/MM/CS claims"}
-    a.output.with_suffix(".json").write_text(json.dumps(manifest,indent=2)+"\\n")
+    a.output.with_suffix(".json").write_text(json.dumps(manifest,indent=2)+"\n")
     print(manifest["sha256"])
 if __name__=="__main__":
     main()
