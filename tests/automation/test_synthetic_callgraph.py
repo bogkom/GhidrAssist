@@ -12,6 +12,13 @@ module=importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 
 class Fixture(unittest.TestCase):
+    def test_script_is_fixture_only(self):
+        code=(ROOT/"tools/ghidra_scripts/GA18BootstrapSyntheticCallgraph.py").read_text()
+        self.assertIn('p.getName() != "synthetic-callgraph.bin"',code)
+        self.assertIn('68000:BE:32:CPU32',code)
+        self.assertIn('range(20)',code)
+        self.assertIn('endTransaction(tx, success)',code)
+
     def test_determinism_and_separation(self):
         first,sites=module.generate()
         second,again=module.generate()
