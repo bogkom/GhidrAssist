@@ -37,7 +37,7 @@ public final class AutomationServer implements AutoCloseable {
 
     public static AutomationServer start(GhidrAssistPlugin plugin) throws IOException {
         if (!Boolean.getBoolean("ghidrassist.automation.enabled")) return null;
-        String token = System.getProperty("ghidrassist.automation.token", "");
+        String token = System.getenv().getOrDefault("GHIDRASSIST_AUTOMATION_TOKEN", "");
         if (token.length() < 32) throw new IOException("Automation requires a session token of at least 32 characters");
         int port = Integer.getInteger("ghidrassist.automation.port", 0);
         if (port < 0 || port > 65535) throw new IOException("Invalid Automation port");
@@ -72,7 +72,7 @@ public final class AutomationServer implements AutoCloseable {
         try {
             if (!"POST".equals(exchange.getRequestMethod())) throw new IllegalArgumentException("POST required");
             String authorization = exchange.getRequestHeaders().getFirst("Authorization");
-            String token = System.getProperty("ghidrassist.automation.token", "");
+            String token = System.getenv().getOrDefault("GHIDRASSIST_AUTOMATION_TOKEN", "");
             if (!("Bearer " + token).equals(authorization)) {
                 code = 401;
                 throw new IllegalArgumentException("Unauthorized");
