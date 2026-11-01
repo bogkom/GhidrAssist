@@ -19,6 +19,15 @@ class Fixture(unittest.TestCase):
         self.assertIn('i < 20',code)
         self.assertIn('endTransaction(tx, commit)',code)
 
+    def test_java_verifier_is_read_only_and_bounded(self):
+        code=(ROOT/"tools/ghidra_scripts/GA18VerifySyntheticCallgraph.java").read_text()
+        self.assertIn('synthetic-callgraph.bin',code)
+        self.assertIn('68000:BE:32:CPU32',code)
+        self.assertIn('getReferencesTo(dst)',code)
+        self.assertIn('getReferencesFrom()',code)
+        self.assertIn('GA18 CALLGRAPH PASS',code)
+        self.assertNotIn('startTransaction(',code)
+
     def test_determinism_and_separation(self):
         first,sites=module.generate()
         second,again=module.generate()
