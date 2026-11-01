@@ -9,7 +9,7 @@ export JAVA_TOOL_OPTIONS="-Dapplication.settingsdir=$ROOT/settings -Dapplication
 case "${1:-}" in
   start)
     test -f "$PROJECT" || { echo "Fixture project missing: $PROJECT" >&2; exit 1; }
-    python3 "$ROOT/bin/ghidrassist-agent-start" --ghidra "$GHIDRA" --project "$PROJECT" --session "$SESSION" --mode test
+    python3 "$ROOT/bin/ghidrassist-agent-start" --ghidra "$GHIDRA" --project "$PROJECT" --program synthetic-mmio.bin --session "$SESSION" --mode test
     ;;
   status|snapshot|analyze|task|mmio|listing|goto)
     python3 "$ROOT/bin/ghidrassist-agent" --session "$SESSION" "$@"
