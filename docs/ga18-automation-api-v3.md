@@ -132,3 +132,21 @@ interprocedural flow graph. `tools/ga18-wyse-function-xrefs-smoke.py`
 provides a separate one-shot host regression on `synthetic-mmio.bin`,
 writing a private local JSON report under `reports/`. Existing host
 24/24 PASS is unaffected and need not be repeated.
+
+## Asynchronous read-only Decompiler pilot
+
+`decompiler.start` captures the current CodeBrowser function and source
+program revision and queues a background Ghidra `DecompInterface` job.
+`decompiler.status` returns `task_id`, `state` (IDLE, RUNNING,
+COMPLETED, FAILED, STALE), `entry`, `total_characters`, and a bounded
+substring `text`. Request `offset` >= 0 and `limit` in 0..8192;
+the server retains at most 262144 characters. No LLM or filesystem
+output is necessary. The program revision is checked for staleness.
+Only one job runs at a time for this server. No program database edits
+are performed by the API.
+
+The host-only, isolated regression is
+`tools/ga18-wyse-decompiler-smoke.py`. It requires the existing
+synthetic function `FUN_00000020`; the script does not create functions
+or change the test project. It writes a private report to `reports/`.
+Do not treat absence of a synthetic function as a product regression.
