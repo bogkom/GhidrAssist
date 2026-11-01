@@ -359,6 +359,12 @@ def main():
                         created=http_call("listing.goto",{"address":region_start})
                         if not created.get("requested_address"):
                             raise RuntimeError("Applied region is not mapped")
+                        try:
+                            http_call("hardware.apply.prepare",{"index":chosen["index"]})
+                        except HTTPError as error:
+                            if error.code!=400: raise
+                        else:
+                            raise RuntimeError("Stacked Apply was not blocked")
                         undid=http_call("hardware.apply.undo")["undo"]
                         if undid.get("undone") is not True:
                             raise RuntimeError("Synthetic Ghidra Undo unsuccessful")
