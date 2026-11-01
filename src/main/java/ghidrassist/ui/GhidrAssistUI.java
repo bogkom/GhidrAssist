@@ -114,6 +114,14 @@ public class GhidrAssistUI extends JPanel {
         return answer;
     }
 
+    public com.google.gson.JsonObject automationMmioRows(String filter,int offset,int limit) {
+        return hardwareAnalysisTab.automationMmioRows(filter,offset,limit);
+    }
+
+    public com.google.gson.JsonObject automationTask() {
+        return hardwareAnalysisTab.automationTask();
+    }
+
     public void automationAnalyze() {
         if (!SwingUtilities.isEventDispatchThread()) throw new IllegalStateException("EDT required");
         tabbedPane.setSelectedComponent(hardwareAnalysisTab);
