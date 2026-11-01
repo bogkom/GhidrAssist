@@ -116,3 +116,19 @@ The opt-in property must **never** be enabled for a normal Ghidra
 profile, real firmware, or ECU411. The default API remains read-only.
 Initial code and CodeBrowser/Xvfb regression are a test-only pilot,
 not blanket authorization for automated edits to arbitrary projects.
+
+## Read-only active function and entry XREFs
+
+`function.snapshot` returns the current Ghidra Function containing the
+active CodeBrowser location, including name, entry and body address count.
+`function.xrefs` returns only references **to that function entry**,
+with bounded `offset`/`limit` (1..200), type and source/destination
+addresses. Neither endpoint mutates the database or consults an LLM.
+They return an error when CodeBrowser has no active function.
+
+This is intentionally narrower than all body-level XREFs and call-graph
+analysis; distinguish incoming entry references from a complete
+interprocedural flow graph. `tools/ga18-wyse-function-xrefs-smoke.py`
+provides a separate one-shot host regression on `synthetic-mmio.bin`,
+writing a private local JSON report under `reports/`. Existing host
+24/24 PASS is unaffected and need not be repeated.
