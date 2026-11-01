@@ -44,24 +44,30 @@ workstation. Verify compilation, CI/real GUI, and exact commit before
 claiming PASS. Do not conflate synthetic CI assertions with manual GUI
 or formal Codex Supervisor acknowledgements.
 
-## Wyse automated CodeBrowser opening (GhidraGo)
 
-Use the explicit `--program synthetic-mmio.bin` argument with the Ghidra project.
-The launcher now sends a local GhidraGo project/program URL using the
-`<ghidra>/support/GhidraGo/ghidraGo` executable and waits until the actual
-Automation API reports `program=synthetic-mmio.bin` before reporting READY.
-No screen-coordinate clicking or Supervisor is involved.
+## Writable CodeBrowser startup on Wyse
 
-**One-time prerequisite for the isolated test profile:** open Ghidra's **Project
-Window** → File → Configure → plug-in selector, enable **GhidraGoPlugin**,
-then close only the test GUI and rerun the launcher. This is a built-in Ghidra
-feature, not something installed into the user's ordinary Ghidra profile.
-If GhidraGo is disabled or the project program is absent, startup must fail
-rather than claim a false READY. Initial dispatch happens after a bounded
-bootstrap interval; launcher must not invent a `READY` from frontend only.
+The prior GhidraGo local `ghidra:` URL opened a **read-only project view**.
+Do not use that URL to claim writable active-project acceptance.
 
-Fixed-path test script: `tools/ga18-wyse-test.sh start`. The requested
-program is the imported synthetic fixture, never an ECU411 program.
+The new opt-in `AgentProjectOpenPlugin` loads in the *Ghidra Project Window*.
+It matches the explicitly requested local `.gpr` path against the **active**
+project, requires `DomainFile.canSave()` and `!DomainFile.isReadOnly()`,
+then invokes native `Project.getToolServices().launchDefaultTool(List.of(file))`.
+The GUI session launcher now starts the project **once** through `ghidraRun`
+and passes the requested program to this project plugin via JVM properties.
 
-The GhidraGo launcher path is native to Ghidra 12.1.4; this host path must
-be validated on Wyse before marking the autonomous GUI startup PASS.
+One-time setup for the isolated test profile: in the **Project Window** open
+File → Configure and enable **GhidrAssist Automation Project Opener**
+(`AgentProjectOpenPlugin`). This plugin is inert unless
+`ghidrassist.automation.project` and
+`ghidrassist.automation.openProgram` are passed by the launcher.
+
+`tools/ga18-wyse-test.sh start` uses only the synthetic
+`AutomationFixture.gpr` and `synthetic-mmio.bin`. The launcher accepts READY
+only after the HTTP API confirms the expected program and
+`program_writable=true`. Never delete Ghidra project lock files.
+
+This front-end integration needs both a successful exact-commit Ghidra 12.1.4
+build and independent Wyse GUI acceptance. A syntax/contract test alone is
+insufficient.
