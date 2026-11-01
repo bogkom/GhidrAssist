@@ -105,6 +105,21 @@ public class GhidrAssistUI extends JPanel {
         controller.refreshRAGDocuments();
     }
 
+    /** Minimal stable interface exercised on real Swing EDT; no reflection. */
+    public com.google.gson.JsonObject automationSnapshot() {
+        if (!SwingUtilities.isEventDispatchThread()) throw new IllegalStateException("EDT required");
+        com.google.gson.JsonObject answer = new com.google.gson.JsonObject();
+        answer.addProperty("selected_tab", tabbedPane.getTitleAt(tabbedPane.getSelectedIndex()));
+        answer.add("hardware", hardwareAnalysisTab.automationSnapshot());
+        return answer;
+    }
+
+    public void automationAnalyze() {
+        if (!SwingUtilities.isEventDispatchThread()) throw new IllegalStateException("EDT required");
+        tabbedPane.setSelectedComponent(hardwareAnalysisTab);
+        hardwareAnalysisTab.automationAnalyze();
+    }
+
     public JComponent getComponent() {
         return this;
     }
