@@ -62,6 +62,37 @@ public final class AutomationCallPaths {
         Function f=program.getFunctionManager().getFunctionAt(target);
         return f==null?null:f.getEntryPoint();
     }
+    // Bounded straight-line proof only. Backtrack up to four preceding decoded
+    // instructions. NOP is the sole permitted intervening instruction; any
+    // branch, write to An, call, or unknown instruction stops the proof.
+    private static Address boundedConstantRegisterCall(Program program, Instruction call)
+            throws ghidra.program.model.mem.MemoryAccessException {
+        if(!"68000:BE:32:CPU32".equals(program.getLanguageID().toString())) return null;
+        byte[] callBytes=call.getBytes();
+        if(callBytes.length!=2) return null;
+        int callOp=((callBytes[0]&255)<<8)|(callBytes[1]&255);
+        if((callOp&0xfff8)!=0x4e90) return null;
+        Instruction cursor=call;
+        for(int distance=0;distance<4;distance++) {
+            Instruction prev=program.getListing().getInstructionBefore(cursor.getAddress());
+            if(prev==null || prev.getMaxAddress().next()==null ||
+               !prev.getMaxAddress().next().equals(cursor.getAddress())) return null;
+            byte[] data=prev.getBytes();
+            if(data.length==2 && (data[0]&255)==0x4e && (data[1]&255)==0x71) {
+                cursor=prev; // NOP, proven not to alter An or branch.
+                continue;
+            }
+            if(data.length!=6) return null;
+            int op=((data[0]&255)<<8)|(data[1]&255);
+            if(op!=(0x207c|((callOp&7)<<9))) return null;
+            long address=((long)(data[2]&255)<<24)|((long)(data[3]&255)<<16)|
+                         ((long)(data[4]&255)<<8)|(data[5]&255);
+            Address target=program.getAddressFactory().getDefaultAddressSpace().getAddress(address);
+            Function f=program.getFunctionManager().getFunctionAt(target);
+            return f==null?null:f.getEntryPoint();
+        }
+        return null;
+    }
     private static Map<Address,Node> index(Program program)
             throws ghidra.program.model.mem.MemoryAccessException {
         Map<Address,Node> nodes=new TreeMap<>();
@@ -94,7 +125,11 @@ public final class AutomationCallPaths {
                 if(ins.getFlowType().isCall() && !resolvedCall) {
                     Address proven=adjacentConstantRegisterCall(program,ins);
                     if(proven!=null) calls.add(new Edge(ins.getAddress(),proven,"adjacent_movea_immediate"));
-                    else indirectCalls.add(ins.getAddress());
+                    else {
+                        Address bounded=boundedConstantRegisterCall(program,ins);
+                        if(bounded!=null) calls.add(new Edge(ins.getAddress(),bounded,"bounded_movea_nop_chain"));
+                        else indirectCalls.add(ins.getAddress());
+                    }
                 }
             }
             calls.sort(Comparator.comparing(Edge::callsite).thenComparing(Edge::target));
@@ -198,7 +233,7 @@ public final class AutomationCallPaths {
             rows.add(row);
         }
         out.add("paths",rows);
-        out.addProperty("evidence","Static Ghidra CALL references and narrow adjacent CPU32 MOVEA-immediate register-call patterns; other indirect sites unresolved; no execution, MM state or physical mapping established");
+        out.addProperty("evidence","Static Ghidra CALL references and narrow CPU32 MOVEA-immediate register-call patterns and bounded NOP-only chains; other indirect sites unresolved; no execution, MM state or physical mapping established");
         return out;
     }
 }
