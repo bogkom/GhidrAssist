@@ -106,6 +106,27 @@ public final class HardwareAnalysisTab extends JPanel {
     private volatile List<HardwareInventoryService.Site> latestSites=List.of();
     private volatile ghidrassist.hardware.HardwareCsbarUnifiedReview.Review latestCsbarReview;
 
+    /** Invokes the same action as the visible button; never bypasses UI validation. */
+    public void automationAnalyze() {
+        if (!javax.swing.SwingUtilities.isEventDispatchThread()) throw new IllegalStateException("EDT required");
+        if (!run.isEnabled()) throw new IllegalStateException("Analyze disabled");
+        run.doClick();
+    }
+
+    public com.google.gson.JsonObject automationSnapshot() {
+        if (!javax.swing.SwingUtilities.isEventDispatchThread()) throw new IllegalStateException("EDT required");
+        com.google.gson.JsonObject result = new com.google.gson.JsonObject();
+        result.addProperty("status", status.getText());
+        result.addProperty("profile", String.valueOf(selection.getSelectedItem()));
+        for (JButton button : new JButton[]{run,cancelScan,approve,exploreMmio}) {
+            com.google.gson.JsonObject state = new com.google.gson.JsonObject();
+            state.addProperty("enabled",button.isEnabled());
+            state.addProperty("visible",button.isVisible());
+            result.add(button.getName(),state);
+        }
+        return result;
+    }
+
     public HardwareAnalysisTab(GhidrAssistPlugin plugin){
         super(new BorderLayout(5,5));
         this.plugin=plugin;
