@@ -110,6 +110,7 @@ def main():
     ap.add_argument("--bridge-mode",choices=("off","ci","host"),default="off")
     ap.add_argument("--bridge-timeout",type=int,default=60)
     ap.add_argument("--automation-probe",action="store_true")
+    ap.add_argument("--review-copy-probe",action="store_true",help="Separate isolated project-copy Review/Apply/Undo HTTP test")
     ap.add_argument("--cua-live",action="store_true",
                     help="Bounded live synthetic window for separate future native CUA")
     ap.add_argument("--cua-timeout",type=int,default=30)
@@ -117,6 +118,8 @@ def main():
                                                  "window-changed"),default="none",
                     help="CI-only synthetic host response; never a native CUA proof")
     args=ap.parse_args()
+    if args.review_copy_probe and (not args.automation_probe or args.bridge_mode!="off" or args.cua_live):
+        ap.error("--review-copy-probe requires --automation-probe, with bridge and CUA disabled")
     if args.timeout<90 or args.timeout>900:
         ap.error("timeout must be 90..900 seconds")
     if not 5<=args.bridge_timeout<=180:
@@ -219,7 +222,17 @@ def main():
                 token=uuid.uuid4().hex+uuid.uuid4().hex
                 env["JAVA_TOOL_OPTIONS"] += (
                     " -Dghidrassist.automation.enabled=true"
-                    " -Dghidrassist.automation.ready="+str(out/"api-ready.json")+ " -Dghidrassist.automation.syntheticWrites=true -Dghidrassist.automation.allowProgramSwitch=true")
+                    " -Dghidrassist.automation.ready="+str(out/"api-ready.json")+
+                    " -Dghidrassist.automation.allowProgramSwitch=true")
+                if args.review_copy_probe:
+                    env["JAVA_TOOL_OPTIONS"] += (
+                        " -Dghidrassist.automation.writeMode=AUTO_SAFE"
+                        " -Dghidrassist.automation.reviewCopy=true"
+                        " -Dghidrassist.automation.reviewCopyProject="+str(project)
+                        " -Dghidrassist.automation.reviewCopyProgram=/synthetic-mmio.bin"
+                        " -Dghidrassist.automation.reviewCopySha256="+sha256(work/"synthetic-mmio.bin"))
+                else:
+                    env["JAVA_TOOL_OPTIONS"] += " -Dghidrassist.automation.syntheticWrites=true"
             if args.automation_probe:
                 env["GHIDRASSIST_AUTOMATION_TOKEN"]=token
             cmd=[str(java/"bin/java"),
@@ -288,7 +301,8 @@ def main():
                         policy=http_call("session.status")
                         if (policy.get("write_mode")!="AUTO_SAFE" or
                                 policy.get("production_writes_enabled") is not False or
-                                policy.get("synthetic_write_pilot_enabled") is not True):
+                                policy.get("synthetic_write_pilot_enabled") is not (not args.review_copy_probe) or
+                                policy.get("review_copy_enabled") is not args.review_copy_probe):
                             raise RuntimeError("Synthetic write policy not correctly scoped: "+str(policy))
                         started=http_call("hardware.analyze")
                         if started.get("schema")!=3:
@@ -419,22 +433,31 @@ def main():
                         if not candidates:
                             raise RuntimeError("No safe synthetic memory item for Apply")
                         chosen=candidates[0]
-                        prepared=http_call("hardware.apply.prepare",{"index":chosen["index"]})["approval"]
+                        prepare_method=("hardware.review.prepare" if args.review_copy_probe else "hardware.apply.prepare")
+                        apply_method=("hardware.review.apply" if args.review_copy_probe else "hardware.apply.commit")
+                        undo_method=("hardware.review.undo" if args.review_copy_probe else "hardware.apply.undo")
+                        prepared=http_call(prepare_method,{"index":chosen["index"]})["approval"]
+                        if args.review_copy_probe:
+                            if (prepared.get("project_program_path")!="/synthetic-mmio.bin" or
+                                    prepared.get("source_sha256","").lower()!=sha256(work/"synthetic-mmio.bin") or
+                                    "WORKING COPY" not in prepared.get("scope","")):
+                                raise RuntimeError("Review-copy approval was not tied to exact source/program")
+
                         try:
-                            http_call("hardware.apply.commit",{"token":"invalid","name":prepared["name"]})
+                            http_call(apply_method,{"token":"invalid","name":prepared["name"]})
                         except HTTPError as error:
                             if error.code!=400: raise
                         else:
                             raise RuntimeError("Wrong approval token accepted")
                         try:
-                            http_call("hardware.apply.commit",
+                            http_call(apply_method,
                                       {"token":prepared["token"],"name":prepared["name"]})
                         except HTTPError as error:
                             if error.code!=400: raise
                         else:
                             raise RuntimeError("Consumed approval token accepted")
-                        prepared=http_call("hardware.apply.prepare",{"index":chosen["index"]})["approval"]
-                        applied=http_call("hardware.apply.commit",
+                        prepared=http_call(prepare_method,{"index":chosen["index"]})["approval"]
+                        applied=http_call(apply_method,
                                           {"token":prepared["token"],"name":prepared["name"]})["apply"]
                         if applied.get("changed")!=1 or applied.get("skipped")!=0:
                             raise RuntimeError("Synthetic Apply outcome mismatch")
@@ -445,12 +468,12 @@ def main():
                         if not created.get("requested_address"):
                             raise RuntimeError("Applied region is not mapped")
                         try:
-                            http_call("hardware.apply.prepare",{"index":chosen["index"]})
+                            http_call(prepare_method,{"index":chosen["index"]})
                         except HTTPError as error:
                             if error.code!=400: raise
                         else:
                             raise RuntimeError("Stacked Apply was not blocked")
-                        undid=http_call("hardware.apply.undo")["undo"]
+                        undid=http_call(undo_method)["undo"]
                         if undid.get("undone") is not True:
                             raise RuntimeError("Synthetic Ghidra Undo unsuccessful")
                         try:
@@ -460,7 +483,7 @@ def main():
                         else:
                             raise RuntimeError("Undo left synthetic module memory mapped")
                         try:
-                            http_call("hardware.apply.undo")
+                            http_call(undo_method)
                         except HTTPError as error:
                             if error.code!=400: raise
                         else:
