@@ -265,6 +265,27 @@ public final class CodeBrowserMmioMain {
                 tool[0].setVisible(true);
                 tool[0].getToolFrame().setSize(1300,950);
             }catch(Exception e){throw new RuntimeException(e);}});
+            // Regression: the optional project opener must NEVER launch from
+            // an actual CodeBrowser tool, even if launcher properties persist.
+            // Before the fix, its Timer recursively launched more CodeBrowsers.
+            System.setProperty("ghidrassist.automation.project",
+                project.getProjectLocator().getLocation()+"/"+
+                project.getProjectLocator().getName()+".gpr");
+            System.setProperty("ghidrassist.automation.openProgram",PROGRAM_A);
+            try {
+                edt(()->{
+                    ghidrassist.automation.AgentProjectOpenPlugin opener=
+                        new ghidrassist.automation.AgentProjectOpenPlugin(tool[0]);
+                    try {
+                        require(field(opener,"poller")==null,
+                            "Recursive CodeBrowser opener armed inside CodeBrowser");
+                    } catch(Exception ex) {throw new RuntimeException(ex);}
+                });
+                result.addProperty("agent_opener_codebrowser_recursion_blocked",true);
+            } finally {
+                System.clearProperty("ghidrassist.automation.project");
+                System.clearProperty("ghidrassist.automation.openProgram");
+            }
             require(tool[0].getService(GoToService.class)!=null,
                 "Real GoToService absent");
             CodeViewerService viewer=tool[0].getService(CodeViewerService.class);
