@@ -462,7 +462,11 @@ def main():
                         if args.review_copy_probe:
                             if (prepared.get("project_program_path")!="/synthetic-mmio.bin" or
                                     prepared.get("source_sha256","").lower()!=sha256(work/"synthetic-mmio.bin") or
-                                    "WORKING COPY" not in prepared.get("scope","")):
+                                    "WORKING COPY" not in prepared.get("scope","") or
+                                    prepared.get("preflight_state")!="READY" or
+                                    prepared.get("planned_changes")!=1 or
+                                    prepared.get("applied") is not False or
+                                    not prepared.get("preflight_description")):
                                 raise RuntimeError("Review-copy approval was not tied to exact source/program")
 
                         try:
@@ -483,6 +487,12 @@ def main():
                                           {"token":prepared["token"],"name":prepared["name"]})["apply"]
                         if applied.get("changed")!=1 or applied.get("skipped")!=0:
                             raise RuntimeError("Synthetic Apply outcome mismatch")
+                        if args.review_copy_probe and (
+                                applied.get("revision_before")!=prepared.get("revision") or
+                                applied.get("revision_after")==applied.get("revision_before") or
+                                applied.get("source_sha256","").lower()!=sha256(work/"synthetic-mmio.bin") or
+                                "WORKING COPY" not in applied.get("scope","")):
+                            raise RuntimeError("Review-copy Apply transaction receipt invalid: "+str(applied))
                         # Ensure the transaction actually mapped memory, and
                         # Undo actually removed that new block (not just a flag).
                         region_start=chosen["location"].split("..",1)[0]
@@ -498,6 +508,11 @@ def main():
                         undid=http_call(undo_method)["undo"]
                         if undid.get("undone") is not True:
                             raise RuntimeError("Synthetic Ghidra Undo unsuccessful")
+                        if args.review_copy_probe and (
+                                undid.get("revision_before")!=applied.get("revision_after") or
+                                undid.get("revision_after")==undid.get("revision_before") or
+                                undid.get("project_program_path")!="/synthetic-mmio.bin"):
+                            raise RuntimeError("Review-copy Undo receipt invalid: "+str(undid))
                         try:
                             http_call("listing.goto",{"address":region_start})
                         except HTTPError as error:
