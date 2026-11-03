@@ -10,14 +10,14 @@ class ApiCompletion(unittest.TestCase):
         path=ROOT/"tools/ghidrassist-agent"
         ast.parse(path.read_text())
         content=path.read_text()
-        for cmd in ("tab-select","table-select","cancel","report","export"):
+        for cmd in ("tab-select","table-select","program-open","cancel","report","export"):
             self.assertIn('"'+cmd+'"',content)
 
     def test_rpc_dispatch_and_edts(self):
         server=(ROOT/"src/main/java/ghidrassist/automation/AutomationServer.java").read_text()
         ui=(ROOT/"src/main/java/ghidrassist/ui/GhidrAssistUI.java").read_text()
         hw=(ROOT/"src/main/java/ghidrassist/ui/tabs/HardwareAnalysisTab.java").read_text()
-        for name in ("ui.tab.select","ui.table.select","hardware.cancel","analysis.report","analysis.export"):
+        for name in ("ui.tab.select","ui.table.select","project.program.open","hardware.cancel","analysis.report","analysis.export"):
             self.assertIn('"'+name+'"',server)
         self.assertIn("automationSelectTab",ui)
         self.assertIn("automationSelectTableRow",ui)
@@ -28,6 +28,8 @@ class ApiCompletion(unittest.TestCase):
         self.assertIn("limit>8192",hw)
         self.assertIn("content.substring(start,end)",hw)
         self.assertIn("No cancellable Analyze task",hw)
+        self.assertIn("ghidrassist.automation.allowProgramSwitch",server)
+        self.assertIn("Save or revert existing program edits before switching",server)
         # READY receipt write is deliberate; export RPC must not write files.
         export_branch=server.split('"analysis.report".equals(method)')[1].split('"hardware.profile.select".equals(method)')[0]
         self.assertNotIn("Files.writeString",export_branch)
