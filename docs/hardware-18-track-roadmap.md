@@ -1,6 +1,74 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
-Status: **IN PROGRESS**. Scope source: user-approved 2026-10-28 requirements (A–H, additional features 13.1–13.7, PDF/RAG, testing and Codex Supervisor integration).
+Status: **IN PROGRESS — reconciled 2026-11-03**. Scope source: user-approved 2026-10-28 requirements (A–H, additional features 13.1–13.7, PDF/RAG, testing and Codex Supervisor integration).
+
+## Stan bieżący — 2026-11-03, po integracji do `master`
+
+**Punkt odniesienia:** `master` na commicie
+[`2596a5a00e272720a091bc92209b00fb2edffefd`](https://github.com/bogkom/GhidrAssist/commit/2596a5a00e272720a091bc92209b00fb2edffefd).
+To **aktualna ocena implementacji i dowodów**, nie zastąpienie historycznej
+tabeli „Audited baseline 2026-10-28” ani zmiana statusu wcześniejszych testów.
+Roadmapa ma 18 *obszarów*, a nie 18 jednorazowych testów.
+
+**Słownik:** `BAZA_WDROŻONA` = główna, ograniczona funkcjonalność jest już
+w `master` i ma regresje; **nie** oznacza pełnej realizacji wszystkich
+kryteriów. `CZĘŚCIOWO` = istnieje kod i/lub testy, ale pozostają wymienione
+wymagania. `ODŁOŻONE` = zakres celowo poza bieżącym priorytetem.
+`TOR_ZMIENIONY` = historyczny workflow został zastąpiony, a nowa
+operacyjna automatyzacja nie ma jeszcze pełnej akceptacji. **Żaden z
+18 obszarów nie jest tu formalnie oznaczony jako zamknięty w całości.**
+
+| Obszar | Aktualny stan | Potwierdzony zakres w `master` | Co pozostało / kryterium domknięcia |
+|---|---|---|---|
+| **GA-01** RESET i inicjalizacja | **CZĘŚCIOWO** | Wektor RESET, ograniczony graf wywołań i źródłowe hipotezy osiągalności | Bardziej kompletna analiza międzyfunkcyjna, niepewne skoki/wyjątki; nie nazywać osiągalności wykonaniem |
+| **GA-02** SIMCR/MM i epoki rejestrów | **CZĘŚCIOWO** | Źródłowe STORE, możliwe lokalne pierwsze zapisy, warunkowe SIMCR/TRAMBAR/CS/VBR | Spójne stany ścieżek między funkcjami, nieznane efekty i ograniczenia MM write-once; bez twierdzeń o zatrzaśniętym MM |
+| **GA-03** pośrednie MMIO / P-code | **CZĘŚCIOWO** | Bounded CFG/P-code, lokalne rejestry adresowe, aliasy i konserwatywne nieznane STORE | Pełniejsze indeksowanie/aliasy i bardziej zaawansowane przepływy międzyblokowe/międzyfunkcyjne; brak fizycznej mapy |
+| **GA-04** CSBOOT i CS0–CS10 | **BAZA_WDROŻONA** | Warunkowa, 12-wierszowa tabela okien i bezpieczne dekodowanie CS | Weryfikacja nietrywialnych warunków CSOR/CSPAR, źródeł i konfliktów na dodatkowych przykładach; nie twierdzić, że okna są aktywne |
+| **GA-05** Review/Apply/Undo | **BAZA_WDROŻONA** | Jawne zatwierdzenie, preflight, izolowane transakcje/Undo, blokady niepewnych CS | Dalsza akceptacja zaawansowanych scenariuszy na kopiach; polityka zapisu API w produkcji pozostaje wyłączona |
+| **GA-06** profile MCU | **CZĘŚCIOWO** | Audyt źródeł MC68332, preview TSV, kontrola PDF SHA i porównanie *deklaracji* profili | Zweryfikowany import kolejnych MCU z wydaniem/manualem/bitfieldami; preview nie rejestruje urządzenia |
+| **GA-07** Analyze/raport/RAG | **BAZA_WDROŻONA** | Trzyczęściowe Overview, Full Evidence i wersjonowany eksport | Sprawdzać spójność nowych analiz, skróty i kompletne dowody, bez podwójnego liczenia |
+| **GA-08** propozycje nazw | **CZĘŚCIOWO** | Preview, bezkolizyjne zatwierdzane nazwy *funkcji* w jednej odwracalnej transakcji; źródłowe podpowiedzi A-register | Zmienne lokalne, argumenty i wskaźniki oraz ich niezależny Review/Undo; nie nadpisywać nazw ręcznych |
+| **GA-09** MMIO Explorer | **BAZA_WDROŻONA** | Filtracja MMIO/Go To Listing, read-only z ochroną przed zmianą programu | Poszerzenie klasyfikacji i doświadczenia użytkownika na kolejnych wariantach danych |
+| **GA-10** bitfieldy | **CZĘŚCIOWO** | Udokumentowane wybrane pola SIMCR z literalnych pełnych słów MC68332 | Pozostałe rejestry/pola, wydania i zerowe/nieznane reset values; bez dopisywania bitów bez źródeł |
+| **GA-11** IRQ/VBR | **CZĘŚCIOWO** | Statyczny spis kandydatów wektorów i odróżnienie exact-entry od wnętrza funkcji | Analiza VBR/przemieszczenia tablic i zależności ISR; bez dowodzenia aktywnego IRQ |
+| **GA-12** analiza przyrostowa | **CZĘŚCIOWO** | Identyfikacja rewizji Program, anulowanie, cache gotowego etapu CFG w bieżącym procesie | Trwałe checkpointy i wznowienie po restarcie, częściowe per-funkcja resume; kontrola unieważnienia |
+| **GA-13** pochodzenie zmian | **CZĘŚCIOWO** | Aktualny Ghidra SourceType, preflight, lokalne CSV i ochrona eksportu | Rzeczywista trwała historia autorstwa zmiana→decyzja→Undo; SourceType nie identyfikuje człowieka/AI |
+| **GA-14** porównywanie firmware | **ODŁOŻONE** | Brak porównywania dwóch firmware; istniejące porównanie *manifestów MCU* to GA-06 | Najpierw schemat raportu i Ghidra Version Tracking; potem bezpieczne różnice CS/VBR/peryferiów |
+| **GA-15** Agentic | **CZĘŚCIOWO** | Istniejące Query/Agentic, ograniczanie kontekstu, polityki i wyniki źródłowe | Domknięcie długich przebiegów, cache/paginacji/przekazań oraz ocena regresji bez dublowania narzędzi |
+| **GA-16** PDF/RAG | **CZĘŚCIOWO** | Strony fizyczne, niejednoznaczne folio, ostrożny odczyt kandydatów tabel, ograniczenia rozmiaru | Wiarygodne ekstrakcje tabel pól/offsetów z wersją źródła; odrębna walidacja strony drukowanej |
+| **GA-17** testy / CI | **CZĘŚCIOWO** | 12.1.4 PUBLIC + Java, syntetyczne Ghidra/CodeBrowser/Xvfb, rollback i pakiety SHA | Niezależne testy zgodności starych przeniesionych profili, wybrane kopie ECU411 i dowody specyficzne dla nowych funkcji |
+| **GA-18** Supervisor / automatyzacja | **TOR_ZMIENIONY** | Integracja opt-in Automation API v3, CLI, agent launcher; 10/10 wybranych testów Dell Precision, bez nowej pracy Supervisora | Zaprojektować API-first automatyczne wykonanie i raportowanie; historyczne GUI/headless Supervisora pozostają zatrzymane decyzją właściciela |
+
+**Weryfikacja integracji:** PR
+[#114](https://github.com/bogkom/GhidrAssist/pull/114),
+[#115](https://github.com/bogkom/GhidrAssist/pull/115) i
+[#116](https://github.com/bogkom/GhidrAssist/pull/116) są scalone;
+końcowe `master` przeszło **11/11 workflow push SUCCESS**, w tym
+[Ghidra 12.1.4 full build](https://github.com/bogkom/GhidrAssist/actions/runs/41694253605).
+Wcześniejsze **10/10 wybranych hostowych testów Precision** dotyczyło
+wyłącznie syntetycznego programu i określonego API — nie jest zaliczeniem
+18 obszarów. Exact-head PR #114/#115/#116 miały odpowiednio
+12/12, 13/13 i 14/14 CI SUCCESS; ich wyników nie należy przepisywać na
+inne commity. `Issue #106` jest pustą otwartą skrzynką problemów,
+a [Issue #98](https://github.com/bogkom/GhidrAssist/issues/98) zachowuje
+osobną lukę testu migracji *starego profilu* użytkownika.
+
+**Decyzja testowa 2026-10-31:** natywne GUI/CUA i headless timery
+Codex Supervisora na Wyse zostały decyzją właściciela zatrzymane;
+nie wolno zakładać ich ponownej aktywacji. Rozwój ma preferować
+deterministyczne testy rzeczywistej Ghidry przez GitHub Actions/Xvfb
+i nowe opt-in Automation API, z odrębnymi kategoriami dowodu
+`CI`, `host-synthetic`, `manual-GUI`, `Supervisor-PASS`
+i `INCONCLUSIVE/BLOCKED`.
+
+**Priorytety dalszej realizacji:** (1) GA-01/02/03/11 — dokładniejsze,
+ale nadal *statyczne* przepływy MCU; (2) GA-06/10/16 — weryfikowalna
+wiedza o rejestrach; (3) GA-08/12/13 — bezpieczna edycja i trwałość;
+(4) GA-14 — dopiero po zamknięciu schematów dowodów i akceptacji.
+GA-17/18 to **metoda testowania wszystkich tych zadań**, a nie
+osobna obietnica, że samo API automatycznie je zaimplementuje.
+
+---
 
 ## Immutable engineering rules
 
