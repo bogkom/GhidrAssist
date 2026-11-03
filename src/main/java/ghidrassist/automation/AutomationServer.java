@@ -113,6 +113,11 @@ public final class AutomationServer implements AutoCloseable {
                     program.getDomainFile() == null || program.getDomainFile().isReadOnly());
                 if ("session.status".equals(method)) {
                     result.addProperty("status", "READY");
+                    result.addProperty("write_mode",AutomationWritePolicy.mode().name());
+                    result.addProperty("production_writes_enabled",false);
+                    result.addProperty("synthetic_write_pilot_enabled",
+                        AutomationWritePolicy.mode()!=AutomationWritePolicy.Mode.READ_ONLY &&
+                        Boolean.getBoolean("ghidrassist.automation.syntheticWrites"));
                 } else if ("listing.snapshot".equals(method)) {
                     ProgramLocation loc = plugin.getTool().getService(ghidra.app.services.CodeViewerService.class) == null
                         ? null : plugin.getTool().getService(ghidra.app.services.CodeViewerService.class).getCurrentLocation();
