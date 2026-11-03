@@ -117,6 +117,47 @@ public final class HardwareAnalysisTab extends JPanel {
     }
 
     /** Invokes the same action as the visible button; never bypasses UI validation. */
+    /** Request cancellation through the exact visible button action. */
+    public com.google.gson.JsonObject automationCancel() {
+        if (!SwingUtilities.isEventDispatchThread()) throw new IllegalStateException("EDT required");
+        if (activeMonitor==null || !cancelScan.isEnabled())
+            throw new IllegalStateException("No cancellable Analyze task");
+        cancelScan.doClick();
+        com.google.gson.JsonObject result=new com.google.gson.JsonObject();
+        result.addProperty("requested",true);
+        result.addProperty("state","CANCELLATION_REQUESTED");
+        return result;
+    }
+
+    /** Return a revision-bound, size-limited page; no file-system side effects. */
+    public com.google.gson.JsonObject automationReport(String format,int offset,int limit) {
+        if (!SwingUtilities.isEventDispatchThread()) throw new IllegalStateException("EDT required");
+        if (offset<0 || limit<1 || limit>8192)
+            throw new IllegalArgumentException("Invalid report pagination");
+        if (!currentScan() || latestMarkdown==null)
+            throw new IllegalStateException("Hardware evidence missing or stale; rerun Analyze");
+        String content=switch(format) {
+            case "markdown" -> latestMarkdown;
+            case "config_csv" -> latestConfigCsv;
+            case "names_csv" -> latestNameCsv;
+            default -> throw new IllegalArgumentException("Unknown report format");
+        };
+        if (content==null) throw new IllegalStateException("Requested report unavailable");
+        int start=Math.min(offset,content.length());
+        int end=(int)Math.min((long)content.length(),(long)start+limit);
+        com.google.gson.JsonObject answer=new com.google.gson.JsonObject();
+        answer.addProperty("format",format);
+        answer.addProperty("revision",latestRevision.toString());
+        answer.addProperty("total_characters",content.length());
+        answer.addProperty("offset",offset);
+        answer.addProperty("limit",limit);
+        answer.addProperty("text",content.substring(start,end));
+        answer.addProperty("more",end<content.length());
+        answer.addProperty("scope","STATIC EVIDENCE ONLY; NO EXECUTION OR PHYSICAL MAPPING");
+        if (!currentScan()) throw new IllegalStateException("Program changed while reading report");
+        return answer;
+    }
+
     public void automationAnalyze() {
         if (!javax.swing.SwingUtilities.isEventDispatchThread()) throw new IllegalStateException("EDT required");
         if (!run.isEnabled()) throw new IllegalStateException("Analyze disabled");
