@@ -248,12 +248,8 @@ public final class HardwareAnalysisTab extends JPanel {
         automationApprovalToken=null;
         if (automationUndoProgram!=null)
             throw new IllegalStateException("Prior synthetic Apply must be undone or inspected before another");
-        if (!Boolean.getBoolean("ghidrassist.automation.syntheticWrites"))
-            throw new IllegalStateException("Synthetic write tests not enabled");
         Program program=plugin.getCurrentProgram();
-        if(program==null || !program.getName().equals("synthetic-mmio.bin") ||
-                program.getDomainFile()==null || !program.getDomainFile().canSave())
-            throw new IllegalStateException("Only the writable synthetic-mmio.bin fixture is permitted");
+        ghidrassist.automation.AutomationWritePolicy.requireSyntheticSafe(program);
         if (!currentScan() || latestMarkdown==null || !latestConcrete)
             throw new IllegalStateException("Fresh explicit MC68332 analysis required");
         List<HardwareApplyPlan.Item> items=
@@ -290,11 +286,9 @@ public final class HardwareAnalysisTab extends JPanel {
                 !expectedName.equals(automationApprovalItem.name))
             throw new IllegalStateException("Missing, consumed or mismatched approval token");
         Program program=plugin.getCurrentProgram();
-        if(!Boolean.getBoolean("ghidrassist.automation.syntheticWrites") ||
-                program!=automationApprovalProgram || !currentScan() ||
-                program.getModificationNumber()!=automationApprovalRevision ||
-                !program.getName().equals("synthetic-mmio.bin") ||
-                program.getDomainFile()==null || !program.getDomainFile().canSave())
+        ghidrassist.automation.AutomationWritePolicy.requireSyntheticSafe(program);
+        if(program!=automationApprovalProgram || !currentScan() ||
+                program.getModificationNumber()!=automationApprovalRevision)
             throw new IllegalStateException("Program or analysis changed after approval");
         List<HardwareApplyPlan.Item> current=
             HardwareApplyPlan.mc68332Mm1Candidates(0,csbarEvidence());
@@ -322,9 +316,8 @@ public final class HardwareAnalysisTab extends JPanel {
     public com.google.gson.JsonObject automationApplyUndo() throws Exception {
         if (!SwingUtilities.isEventDispatchThread()) throw new IllegalStateException("EDT required");
         Program program=plugin.getCurrentProgram();
-        if(!Boolean.getBoolean("ghidrassist.automation.syntheticWrites") ||
-                program==null || program!=automationUndoProgram ||
-                !program.getName().equals("synthetic-mmio.bin") ||
+        ghidrassist.automation.AutomationWritePolicy.requireSyntheticSafe(program);
+        if(program!=automationUndoProgram ||
                 program.getModificationNumber()!=automationUndoRevision ||
                 !program.canUndo())
             throw new IllegalStateException("Our Apply is not the most recent undoable edit");
