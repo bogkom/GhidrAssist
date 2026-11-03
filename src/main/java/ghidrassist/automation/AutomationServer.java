@@ -257,6 +257,29 @@ public final class AutomationServer implements AutoCloseable {
                     if(provider==null) throw new IllegalStateException("GhidrAssist UI unavailable");
                     if(!args.has("tab")) throw new IllegalArgumentException("Tab required");
                     result.add("ui",provider.getUI().automationSelectTab(args.get("tab").getAsString()));
+                } else if ("project.program.open".equals(method)) {
+                    if(!Boolean.getBoolean("ghidrassist.automation.allowProgramSwitch"))
+                        throw new IllegalStateException("Program switching not enabled for this session");
+                    if(!args.has("path")) throw new IllegalArgumentException("Project program path required");
+                    String path=args.get("path").getAsString();
+                    if(!path.startsWith("/") || path.length()<2 ||
+                            path.contains("..") || path.contains("\\\\") ||
+                            path.contains(":") || path.contains("//"))
+                        throw new IllegalArgumentException("Invalid project-relative program path");
+                    var project=plugin.getTool().getProject();
+                    if(project==null) throw new IllegalStateException("No active local Ghidra project");
+                    var file=project.getProjectData().getFile(path);
+                    if(file==null || !file.canSave() || file.isReadOnly())
+                        throw new IllegalStateException("Requested writable project program not available");
+                    var manager=plugin.getTool().getService(ghidra.app.services.ProgramManager.class);
+                    if(manager==null) throw new IllegalStateException("Ghidra Program Manager unavailable");
+                    if(program!=null && program.isChanged())
+                        throw new IllegalStateException("Save or revert existing program edits before switching");
+                    var opened=manager.openProgram(file);
+                    if(opened==null) throw new IllegalStateException("Project program could not be opened");
+                    result.addProperty("opened_program",opened.getName());
+                    result.addProperty("project_path",path);
+                    result.addProperty("active",manager.getCurrentProgram()==opened);
                 } else if ("ui.table.select".equals(method)) {
                     GhidrAssistProvider provider=plugin.getAutomationProvider();
                     if(provider==null) throw new IllegalStateException("GhidrAssist UI unavailable");
