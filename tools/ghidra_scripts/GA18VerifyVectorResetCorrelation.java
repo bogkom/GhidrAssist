@@ -23,15 +23,34 @@ public class GA18VerifyVectorResetCorrelation extends GhidraScript {
             "CPU32 language");
         String jar=System.getProperty("ga18.test.jar","");
         if(jar.isBlank())throw new IllegalStateException("Missing tested extension jar");
-        // GhidraScript uses a script classloader that may not expose
-        // checked-exception types to an extension-jar URLClassLoader.
-        // Delegate that single type to the *actual* Ghidra exception class.
-        // All other classes continue to use the existing script loader.
+        // An artifact-jar URLClassLoader is not Ghidra's extension loader.
+        // The dynamic script host exposes different Ghidra module classes
+        // through different owning loaders. Delegate to those actual defining
+        // loaders, rather than packaging duplicate Ghidra classes into the jar.
+        final ClassLoader[] ghidraLoaders={
+            ghidra.program.model.pcode.PcodeOp.class.getClassLoader(),
+            ghidra.program.model.listing.Program.class.getClassLoader(),
+            ghidra.program.model.lang.Register.class.getClassLoader(),
+            ghidra.program.model.mem.MemoryAccessException.class.getClassLoader(),
+            ghidra.program.model.address.Address.class.getClassLoader(),
+            ghidra.program.model.scalar.Scalar.class.getClassLoader(),
+            ghidra.program.model.symbol.Reference.class.getClassLoader(),
+            ghidra.util.exception.CancelledException.class.getClassLoader(),
+            ghidra.util.task.TaskMonitor.class.getClassLoader(),
+            ghidra.app.script.GhidraScript.class.getClassLoader()
+        };
         ClassLoader bridge=new ClassLoader(getClass().getClassLoader()) {
             @Override protected Class<?> loadClass(String name, boolean resolve)
                     throws ClassNotFoundException {
-                if("ghidra.util.exception.CancelledException".equals(name))
-                    return ghidra.util.exception.CancelledException.class;
+                if(name.startsWith("ghidra.")) {
+                    for(ClassLoader source:ghidraLoaders) {
+                        if(source==null)continue;
+                        try{return source.loadClass(name);}
+                        catch(ClassNotFoundException notInModule) {
+                            // Try the next actual Ghidra module loader.
+                        }
+                    }
+                }
                 return super.loadClass(name,resolve);
             }
         };
