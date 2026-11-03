@@ -110,6 +110,8 @@ def main():
     ap.add_argument("--bridge-mode",choices=("off","ci","host"),default="off")
     ap.add_argument("--bridge-timeout",type=int,default=60)
     ap.add_argument("--automation-probe",action="store_true")
+    ap.add_argument("--review-copy-probe",action="store_true",help="Separate isolated project-copy Review/Apply/Undo HTTP test")
+    ap.add_argument("--review-copy-bad-sha",action="store_true",help="Verify invalid copy identity prevents Review before any edit")
     ap.add_argument("--cua-live",action="store_true",
                     help="Bounded live synthetic window for separate future native CUA")
     ap.add_argument("--cua-timeout",type=int,default=30)
@@ -117,6 +119,10 @@ def main():
                                                  "window-changed"),default="none",
                     help="CI-only synthetic host response; never a native CUA proof")
     args=ap.parse_args()
+    if args.review_copy_bad_sha and not args.review_copy_probe:
+        ap.error("--review-copy-bad-sha requires --review-copy-probe")
+    if args.review_copy_probe and (not args.automation_probe or args.bridge_mode!="off" or args.cua_live):
+        ap.error("--review-copy-probe requires --automation-probe, with bridge and CUA disabled")
     if args.timeout<90 or args.timeout>900:
         ap.error("timeout must be 90..900 seconds")
     if not 5<=args.bridge_timeout<=180:
@@ -219,7 +225,18 @@ def main():
                 token=uuid.uuid4().hex+uuid.uuid4().hex
                 env["JAVA_TOOL_OPTIONS"] += (
                     " -Dghidrassist.automation.enabled=true"
-                    " -Dghidrassist.automation.ready="+str(out/"api-ready.json"))
+                    " -Dghidrassist.automation.ready="+str(out/"api-ready.json")+
+                    " -Dghidrassist.automation.allowProgramSwitch=true")
+                if args.review_copy_probe:
+                    env["JAVA_TOOL_OPTIONS"] += (
+                        " -Dghidrassist.automation.writeMode=AUTO_SAFE"
+                        " -Dghidrassist.automation.reviewCopy=true"
+                        " -Dghidrassist.automation.reviewCopyProject="+str(project)+
+                        " -Dghidrassist.automation.reviewCopyProgram=/synthetic-mmio.bin"
+                        " -Dghidrassist.automation.reviewCopySha256="+
+                        ("0"*64 if args.review_copy_bad_sha else sha256(work/"synthetic-mmio.bin")))
+                else:
+                    env["JAVA_TOOL_OPTIONS"] += " -Dghidrassist.automation.syntheticWrites=true"
             if args.automation_probe:
                 env["GHIDRASSIST_AUTOMATION_TOKEN"]=token
             cmd=[str(java/"bin/java"),
@@ -261,6 +278,366 @@ def main():
                                 "hardware" not in snapshot.get("ui",{})):
                             raise RuntimeError("Production HTTP Swing snapshot invalid")
                         (out/"api-snapshot.json").write_text(json.dumps(snapshot,indent=2))
+                        def http_call(method,params=None):
+                            message=json.dumps({"method":method,"params":params or {}}).encode()
+                            call=Request(
+                                "http://127.0.0.1:%d/rpc"%receipt["port"],
+                                data=message,
+                                headers={"Authorization":"Bearer "+token,
+                                         "Content-Type":"application/json"},
+                                method="POST")
+                            with urlopen(call,timeout=30) as reply:
+                                return json.loads(reply.read())
+                        # Idempotent same-project open, with no reload/DB edit.
+                        current_open=http_call("project.program.open",
+                            {"path":"/synthetic-mmio.bin"})
+                        if (current_open.get("opened_program")!="synthetic-mmio.bin" or
+                                current_open.get("active") is not True):
+                            raise RuntimeError("Project program-open did not preserve active fixture")
+                        from urllib.error import HTTPError
+                        for unsafe_path in ("/../guard-other.bin","/missing.bin"):
+                            try:
+                                http_call("project.program.open",{"path":unsafe_path})
+                            except HTTPError as error:
+                                if error.code!=400: raise
+                            else:
+                                raise RuntimeError("Unsafe/missing project program path accepted")
+                        policy=http_call("session.status")
+                        if (policy.get("write_mode")!="AUTO_SAFE" or
+                                policy.get("production_writes_enabled") is not False or
+                                policy.get("synthetic_write_pilot_enabled") is not (not args.review_copy_probe) or
+                                policy.get("review_copy_enabled") is not args.review_copy_probe or
+                                policy.get("review_copy_authorized") is not
+                                (args.review_copy_probe and not args.review_copy_bad_sha)):
+                            raise RuntimeError("Synthetic write policy not correctly scoped: "+str(policy))
+                        started=http_call("hardware.analyze")
+                        if started.get("schema")!=3:
+                            raise RuntimeError("HTTP Analyze failed")
+                        deadline=time.monotonic()+45
+                        while True:
+                            state=http_call("hardware.task").get("task",{})
+                            if state.get("state")=="COMPLETED":
+                                break
+                            if state.get("state")!="RUNNING" or time.monotonic()>deadline:
+                                raise RuntimeError("HTTP hardware task did not complete: "+str(state))
+                            time.sleep(0.08)
+                        rows=http_call("hardware.mmio.rows",
+                                       {"filter":"SIMCR","offset":0,"limit":10})
+                        table=rows.get("table",{})
+                        if table.get("total")!=1 or len(table.get("rows",[]))!=1:
+                            raise RuntimeError("Expected one source-only SIMCR MMIO site: "+str(table))
+                        site=table["rows"][0]
+                        if site.get("register")!="SIMCR":
+                            raise RuntimeError("Wrong MMIO register in HTTP table")
+                        pc=site["pc"]
+                        navigated=http_call("listing.goto",{"address":pc})
+                        if navigated.get("requested_address","").lower()!=pc.lower().removeprefix("0x"):
+                            raise RuntimeError("HTTP Listing navigation mismatch: "+str(navigated))
+                        listing=http_call("listing.snapshot")
+                        if int(listing.get("address","0"),16)!=int(pc,16):
+                            raise RuntimeError("HTTP Listing did not reach SIMCR reference")
+                        # GA-18 new read-only Listing pages through the live
+                        # production HTTP server, not a reflective helper call.
+                        page=http_call("listing.range",
+                            {"address":pc,"offset":0,"limit":1}).get("listing_range",{})
+                        instruction=page.get("rows",[])
+                        if (page.get("returned")!=1 or len(instruction)!=1 or
+                                int(instruction[0].get("instruction_address","0"),16)!=int(pc,16) or
+                                not instruction[0].get("decoded") or
+                                not instruction[0].get("bytes_hex") or
+                                page.get("offset_unit")!="decoded_instructions"):
+                            raise RuntimeError("HTTP Listing range invalid: "+str(page))
+                        revision=page["revision"]
+                        next_page=http_call("listing.range",
+                            {"address":pc,"offset":1,"limit":1,
+                             "expected_revision":revision}).get("listing_range",{})
+                        if next_page.get("offset")!=1 or next_page.get("revision")!=revision:
+                            raise RuntimeError("HTTP Listing page cursor/revision mismatch")
+                        from urllib.error import HTTPError
+                        for invalid in (
+                            {"address":pc,"offset":0,"limit":65},
+                            {"address":pc,"offset":0,"limit":1,
+                             "expected_revision":revision+1}):
+                            try:
+                                http_call("listing.range",invalid)
+                            except HTTPError as error:
+                                if error.code!=400: raise
+                            else:
+                                raise RuntimeError("Invalid Listing range request was accepted")
+
+                        active=http_call("function.snapshot").get("function",{})
+                        entry=active.get("entry")
+                        if not entry:
+                            raise RuntimeError("No real Ghidra function at current Listing site")
+                        refs=http_call("function.xrefs.body",
+                            {"direction":"outgoing","offset":0,"limit":100,
+                             "expected_revision":revision,
+                             "expected_entry":entry}).get("body_xrefs",{})
+                        if (refs.get("entry")!=entry or refs.get("revision")!=revision or
+                                refs.get("direction")!="outgoing"):
+                            raise RuntimeError("HTTP whole-function XREF identity mismatch")
+                        if not any(
+                                row.get("direction")=="outgoing" and
+                                row.get("source_in_body") is True and
+                                int(row.get("to","0"),16)==0xFFFA00
+                                for row in refs.get("rows",[])):
+                            raise RuntimeError("HTTP body XREF missing real static SIMCR write")
+                        for invalid in (
+                            {"direction":"outgoing","offset":0,"limit":101},
+                            {"direction":"outgoing","offset":0,"limit":1,
+                             "expected_entry":"not-the-current-entry"},
+                            {"direction":"outgoing","offset":0,"limit":1,
+                             "expected_revision":revision+1}):
+                            try:
+                                http_call("function.xrefs.body",invalid)
+                            except HTTPError as error:
+                                if error.code!=400: raise
+                            else:
+                                raise RuntimeError("Invalid body XREF request was accepted")
+                        print("PASS: production HTTP Listing range + function body XREF guards")
+                        # Production HTTP traversal, same actual CodeBrowser Program.
+                        paths_reply=http_call("analysis.paths",
+                            {"origin":"reset","max_depth":4,"offset":0,"limit":10})
+                        graph=paths_reply.get("paths",{})
+                        if (graph.get("root","").lower().removeprefix("0x")!="00000020" or
+                                graph.get("reachable_count")!=1 or
+                                graph.get("total_paths")!=1 or
+                                len(graph.get("paths",[]))!=1):
+                            raise RuntimeError("HTTP direct-call traversal invalid: "+str(graph))
+                        evidence=graph["paths"][0]
+                        if (int(evidence.get("write_site","0"),16)!=0x20 or
+                                int(evidence.get("mmio_target","0"),16)!=0xFFFA00 or
+                                evidence.get("call_sites")!=[]):
+                            raise RuntimeError("HTTP MMIO write evidence invalid: "+str(evidence))
+                        second_page=http_call("analysis.paths",
+                            {"origin":"entry","entry":"00000020",
+                             "max_depth":4,"offset":1,"limit":1}).get("paths",{})
+                        if second_page.get("total_paths")!=1 or second_page.get("paths")!=[]:
+                            raise RuntimeError("HTTP paths pagination invalid")
+                        # Read-only Review gates: generic CPU32 must not
+                        # inherit MC68332 proposals; explicit selection does
+                        # not edit the Ghidra database.
+                        from urllib.error import HTTPError
+                        try:
+                            http_call("hardware.review.preview",{"offset":0,"limit":10})
+                        except HTTPError as error:
+                            if error.code != 400:
+                                raise
+                        else:
+                            raise RuntimeError("Generic CPU32 received concrete Review proposals")
+                        selected=http_call("hardware.profile.select",
+                                           {"profile":"MC68332_USER_SELECTED"})
+                        if "MC68332" not in selected.get("ui",{}).get("hardware",{}).get("profile",""):
+                            raise RuntimeError("Explicit hardware profile not selected")
+                        http_call("hardware.analyze")
+                        deadline=time.monotonic()+45
+                        while True:
+                            review_task=http_call("hardware.task").get("task",{})
+                            if review_task.get("state")=="COMPLETED":
+                                break
+                            if review_task.get("state")!="RUNNING" or time.monotonic()>deadline:
+                                raise RuntimeError("MC68332 Review prerequisite analysis incomplete")
+                            time.sleep(0.08)
+                        # Real CodeBrowser / HTTP API: safe control and evidence
+                        # endpoints (never mutate the Ghidra database).
+                        changed=http_call("ui.tab.select",{"tab":"Hardware Analysis"})
+                        if changed.get("ui",{}).get("selected_tab")!="Hardware Analysis":
+                            raise RuntimeError("Tab selection did not reach Swing UI")
+                        try:
+                            http_call("ui.tab.select",{"tab":"nonexistent"})
+                        except HTTPError as error:
+                            if error.code!=400: raise
+                        else:
+                            raise RuntimeError("Unknown UI tab was accepted")
+                        for method in ("analysis.report","analysis.export"):
+                            page=http_call(method,{"format":"markdown","offset":0,"limit":128}).get("report",{})
+                            if (page.get("format")!="markdown" or
+                                    not 0<len(page.get("text",""))<=128 or
+                                    page.get("total_characters",0)<len(page["text"]) or
+                                    not page.get("revision")):
+                                raise RuntimeError("Hardware evidence page invalid: "+str(page))
+                            end=http_call(method,{"format":"markdown",
+                                "offset":page["total_characters"],"limit":128}).get("report",{})
+                            if end.get("text")!="" or end.get("more") is not False:
+                                raise RuntimeError("End-of-report page invalid")
+                        try:
+                            http_call("analysis.report",{"format":"markdown","offset":0,"limit":8193})
+                        except HTTPError as error:
+                            if error.code!=400: raise
+                        else:
+                            raise RuntimeError("Unbounded report page was accepted")
+                        try:
+                            http_call("hardware.cancel")
+                        except HTTPError as error:
+                            if error.code!=400: raise
+                        else:
+                            raise RuntimeError("Cancellation incorrectly accepted without a task")
+                        reviewed=http_call("hardware.review.preview",{"offset":0,"limit":10})
+                        proposals=reviewed.get("review",{})
+                        if (not proposals.get("total") or not proposals.get("rows") or
+                                "PREVIEW ONLY" not in proposals.get("scope","")):
+                            raise RuntimeError("Concrete read-only Review failed: "+str(proposals))
+                        selected_row=http_call("ui.table.select",
+                            {"table":"hardware.mmio","row":0}).get("selection",{})
+                        if (selected_row.get("table")!="hardware.mmio" or
+                                selected_row.get("row")!=0 or
+                                selected_row.get("selected") is not True or
+                                not selected_row.get("pc")):
+                            raise RuntimeError("MMIO JTable selection failed: "+str(selected_row))
+                        try:
+                            http_call("ui.table.select",{"table":"hardware.mmio","row":999999})
+                        except HTTPError as error:
+                            if error.code!=400: raise
+                        else:
+                            raise RuntimeError("Out-of-range JTable selection accepted")
+                        candidates=[row for row in proposals["rows"]
+                                    if row.get("kind")=="MEMORY" and row.get("state")=="READY"
+                                    and row.get("selected_by_default") and
+                                    not row.get("name","").startswith("CS") and
+                                    "CANDIDATE" not in row.get("name","")]
+                        if not candidates:
+                            raise RuntimeError("No safe synthetic memory item for Apply")
+                        chosen=candidates[0]
+                        if args.review_copy_bad_sha:
+                            from urllib.error import HTTPError
+                            try:
+                                http_call("hardware.review.prepare",{"index":chosen["index"]})
+                            except HTTPError as error:
+                                response=error.read().decode("utf-8",errors="replace")
+                                if error.code!=400 or "copy receipt" not in response:
+                                    raise RuntimeError("Incorrect denial for source SHA mismatch: "+response)
+                            else:
+                                raise RuntimeError("Untrusted project copy SHA was accepted")
+                            if http_call("session.status").get("review_copy_authorized") is not False:
+                                raise RuntimeError("Mismatched copy remains authorized")
+                            result.update(status="EXPECTED_REVIEW_COPY_SHA_DENIAL",
+                                          synthetic_only=True,database_edits=False,
+                                          source_identity_denied=True)
+                            return 0
+                        prepare_method=("hardware.review.prepare" if args.review_copy_probe else "hardware.apply.prepare")
+                        apply_method=("hardware.review.apply" if args.review_copy_probe else "hardware.apply.commit")
+                        undo_method=("hardware.review.undo" if args.review_copy_probe else "hardware.apply.undo")
+                        prepared=http_call(prepare_method,{"index":chosen["index"]})["approval"]
+                        if args.review_copy_probe:
+                            if (prepared.get("project_program_path")!="/synthetic-mmio.bin" or
+                                    prepared.get("source_sha256","").lower()!=sha256(work/"synthetic-mmio.bin") or
+                                    "WORKING COPY" not in prepared.get("scope","") or
+                                    prepared.get("preflight_state")!="READY" or
+                                    prepared.get("planned_changes")!=1 or
+                                    prepared.get("applied") is not False or
+                                    not prepared.get("preflight_description")):
+                                raise RuntimeError("Review-copy approval was not tied to exact source/program")
+
+                        try:
+                            http_call(apply_method,{"token":"invalid","name":prepared["name"]})
+                        except HTTPError as error:
+                            if error.code!=400: raise
+                        else:
+                            raise RuntimeError("Wrong approval token accepted")
+                        try:
+                            http_call(apply_method,
+                                      {"token":prepared["token"],"name":prepared["name"]})
+                        except HTTPError as error:
+                            if error.code!=400: raise
+                        else:
+                            raise RuntimeError("Consumed approval token accepted")
+                        prepared=http_call(prepare_method,{"index":chosen["index"]})["approval"]
+                        applied=http_call(apply_method,
+                                          {"token":prepared["token"],"name":prepared["name"]})["apply"]
+                        if applied.get("changed")!=1 or applied.get("skipped")!=0:
+                            raise RuntimeError("Synthetic Apply outcome mismatch")
+                        if args.review_copy_probe and (
+                                applied.get("revision_before")!=prepared.get("revision") or
+                                applied.get("revision_after")==applied.get("revision_before") or
+                                applied.get("source_sha256","").lower()!=sha256(work/"synthetic-mmio.bin") or
+                                "WORKING COPY" not in applied.get("scope","")):
+                            raise RuntimeError("Review-copy Apply transaction receipt invalid: "+str(applied))
+                        # Ensure the transaction actually mapped memory, and
+                        # Undo actually removed that new block (not just a flag).
+                        region_start=chosen["location"].split("..",1)[0]
+                        created=http_call("listing.goto",{"address":region_start})
+                        if not created.get("requested_address"):
+                            raise RuntimeError("Applied region is not mapped")
+                        try:
+                            http_call(prepare_method,{"index":chosen["index"]})
+                        except HTTPError as error:
+                            if error.code!=400: raise
+                        else:
+                            raise RuntimeError("Stacked Apply was not blocked")
+                        undid=http_call(undo_method)["undo"]
+                        if undid.get("undone") is not True:
+                            raise RuntimeError("Synthetic Ghidra Undo unsuccessful")
+                        if args.review_copy_probe and (
+                                undid.get("revision_before")!=applied.get("revision_after") or
+                                undid.get("revision_after")==undid.get("revision_before") or
+                                undid.get("project_program_path")!="/synthetic-mmio.bin"):
+                            raise RuntimeError("Review-copy Undo receipt invalid: "+str(undid))
+                        try:
+                            http_call("listing.goto",{"address":region_start})
+                        except HTTPError as error:
+                            if error.code!=400: raise
+                        else:
+                            raise RuntimeError("Undo left synthetic module memory mapped")
+                        try:
+                            http_call(undo_method)
+                        except HTTPError as error:
+                            if error.code!=400: raise
+                        else:
+                            raise RuntimeError("Second Undo incorrectly succeeded")
+                        (out/"api-apply-undo.json").write_text(json.dumps(
+                            {"schema":3,"approval_name":prepared["name"],"apply":applied,
+                             "undo":undid,"wrong_token_rejected":True,
+                             "consumed_token_rejected":True,"second_undo_rejected":True},indent=2))
+                        http_call("hardware.profile.select",{"profile":"CPU32_SURVEY"})
+                        (out/"api-review-preview.json").write_text(json.dumps(
+                            {"schema":3,"concrete_preview":proposals,
+                             "generic_blocked":True,"database_edits":False},indent=2))
+
+                        active=http_call("function.snapshot").get("function",{})
+                        if (active.get("entry") not in ("00000020","0x00000020") or
+                                active.get("name")!="FUN_00000020" or
+                                active.get("body_addresses",0)<1):
+                            raise RuntimeError("Active CodeBrowser function mismatch: "+str(active))
+                        links=http_call("function.xrefs",{"offset":0,"limit":10}).get("xrefs",{})
+                        if (links.get("entry") not in ("00000020","0x00000020") or
+                                links.get("rows") is None or links.get("limit")!=10):
+                            raise RuntimeError("Active function XREF snapshot invalid: "+str(links))
+                        (out/"api-function-xrefs.json").write_text(json.dumps(
+                            {"schema":3,"function":active,"xrefs":links},indent=2))
+                        requested=http_call("decompiler.start").get("decompiler",{})
+                        if requested.get("state")!="RUNNING" or not requested.get("task_id"):
+                            raise RuntimeError("Decompiler task did not start")
+                        decomp={}
+                        for _ in range(40):
+                            decomp=http_call("decompiler.status",{"offset":0,"limit":128}).get("decompiler",{})
+                            if decomp.get("state")!="RUNNING":
+                                break
+                            time.sleep(0.25)
+                        if decomp.get("state")!="COMPLETED":
+                            raise RuntimeError("Decompiler task not complete: "+str(decomp))
+                        if "FUN_00000020" not in decomp.get("text","") and not decomp.get("total_characters",0)>0:
+                            raise RuntimeError("Decompiler empty function result")
+                        if len(decomp.get("text",""))>128:
+                            raise RuntimeError("Decompiler pagination limit exceeded")
+                        tail=http_call("decompiler.status",
+                                       {"offset":decomp["total_characters"],"limit":128}).get("decompiler",{})
+                        if tail.get("text")!="":
+                            raise RuntimeError("Decompiler end page not empty")
+                        (out/"api-decompiler.json").write_text(json.dumps(
+                            {"schema":3,"task":requested,"first_page":decomp,"end_page":tail},indent=2))
+                        merged=http_call("analysis.bundle").get("analysis",{})
+                        if (merged.get("entry") not in ("00000020","0x00000020") or
+                                merged.get("name")!="FUN_00000020" or
+                                not isinstance(merged.get("incoming_entry_xrefs"),list) or
+                                not isinstance(merged.get("mmio_reference_candidates"),list) or
+                                merged.get("decompiler",{}).get("state")!="RUNNING"):
+                            raise RuntimeError("Unified analysis bundle invalid: "+str(merged))
+                        (out/"api-analysis-bundle.json").write_text(json.dumps(
+                            {"schema":3,"bundle":merged},indent=2))
+                        (out/"api-hardware-e2e.json").write_text(json.dumps(
+                            {"schema":3,"task":state,"mmio":table,
+                             "navigation":navigated,"listing":listing},indent=2))
+
                         with (out/"automation-controller.log").open("x") as controller_log:
                             observer=subprocess.Popen(
                                 [sys.executable,str(SRC.parent/"automation_controller.py"),
@@ -458,7 +835,9 @@ def main():
                       "stale_double_click_rejected",
                       "listing_remained_second_program",
                       "read_only_analyze",
-                      "synthetic_apply_undo_verified",
+                      "agent_opener_codebrowser_recursion_blocked",
+                       "agent_opener_restored_program_reused",
+                       "synthetic_apply_undo_verified",
                       "review_gui_cancel_no_change",
                       "review_gui_consent_and_undo_verified",
                       "cs_review_never_auto_selected",

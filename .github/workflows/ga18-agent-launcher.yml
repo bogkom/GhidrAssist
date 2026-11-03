@@ -1,0 +1,35 @@
+name: GA-18 local agent launcher contract
+
+on:
+  pull_request:
+    paths:
+      - 'tools/ghidrassist-agent-start'
+      - 'tools/ga18-wyse-test.sh'
+      - 'tests/automation/test_launcher.py'
+      - 'tests/automation/test_review_preview.py'
+      - 'tools/ga18-wyse-api-smoke.py'
+      - 'tools/ga18-wyse-review-smoke.py'
+      - 'tools/ga18-wyse-apply-undo-smoke.py'
+      - 'tools/ga18-wyse-function-xrefs-smoke.py'
+      - 'tools/ga18-wyse-decompiler-smoke.py'
+      - 'tools/generate-synthetic-callgraph.py'
+      - 'tests/automation/test_synthetic_callgraph.py'
+      - 'tools/generate-synthetic-convergent.py'
+      - 'tests/automation/test_convergent_callgraph.py'
+      - 'tests/automation/test_call_paths.py'
+      - 'src/main/java/ghidrassist/automation/**'
+      - '.github/workflows/ga18-agent-launcher.yml'
+  workflow_dispatch:
+
+jobs:
+  launcher-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Parse and validate GhidraGo launcher
+        run: |
+          python3 -m py_compile tools/ghidrassist-agent-start tools/ghidrassist-agent tools/ga18-wyse-api-smoke.py tools/ga18-wyse-review-smoke.py tools/ga18-wyse-apply-undo-smoke.py tools/ga18-wyse-function-xrefs-smoke.py tools/ga18-wyse-decompiler-smoke.py
+          python3 -m unittest discover -s tests/automation -p 'test_*.py' -v

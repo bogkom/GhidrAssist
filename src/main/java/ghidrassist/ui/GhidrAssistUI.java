@@ -114,6 +114,67 @@ public class GhidrAssistUI extends JPanel {
         return answer;
     }
 
+    /** Select only an existing, visible top-level tab by its stable title. */
+    public com.google.gson.JsonObject automationSelectTab(String title) {
+        if (!SwingUtilities.isEventDispatchThread()) throw new IllegalStateException("EDT required");
+        if (title==null || title.isBlank()) throw new IllegalArgumentException("Tab required");
+        for (int i=0;i<tabbedPane.getTabCount();i++) {
+            if (title.equals(tabbedPane.getTitleAt(i)) && tabbedPane.isEnabledAt(i)) {
+                tabbedPane.setSelectedIndex(i);
+                return automationSnapshot();
+            }
+        }
+        throw new IllegalArgumentException("Unknown or disabled tab");
+    }
+
+    public com.google.gson.JsonObject automationSelectTableRow(String tableId,int index) {
+        return hardwareAnalysisTab.automationSelectTableRow(tableId,index);
+    }
+
+    public com.google.gson.JsonObject automationCancel() {
+        return hardwareAnalysisTab.automationCancel();
+    }
+
+    public com.google.gson.JsonObject automationReport(String format,int offset,int limit) {
+        return hardwareAnalysisTab.automationReport(format,offset,limit);
+    }
+
+    public void automationSelectProfile(String profile) {
+        hardwareAnalysisTab.automationSelectProfile(profile);
+    }
+
+    public com.google.gson.JsonObject automationReviewPrepare(int index) {
+        return hardwareAnalysisTab.automationReviewPrepare(index);
+    }
+    public com.google.gson.JsonObject automationReviewCommit(String token,String name) throws Exception {
+        return hardwareAnalysisTab.automationReviewCommit(token,name);
+    }
+    public com.google.gson.JsonObject automationReviewUndo() throws Exception {
+        return hardwareAnalysisTab.automationReviewUndo();
+    }
+
+    public com.google.gson.JsonObject automationApplyPrepare(int index) {
+        return hardwareAnalysisTab.automationApplyPrepare(index);
+    }
+    public com.google.gson.JsonObject automationApplyCommit(String token,String name) throws Exception {
+        return hardwareAnalysisTab.automationApplyCommit(token,name);
+    }
+    public com.google.gson.JsonObject automationApplyUndo() throws Exception {
+        return hardwareAnalysisTab.automationApplyUndo();
+    }
+
+    public com.google.gson.JsonObject automationReviewPreview(int offset,int limit) {
+        return hardwareAnalysisTab.automationReviewPreview(offset,limit);
+    }
+
+    public com.google.gson.JsonObject automationMmioRows(String filter,int offset,int limit) {
+        return hardwareAnalysisTab.automationMmioRows(filter,offset,limit);
+    }
+
+    public com.google.gson.JsonObject automationTask() {
+        return hardwareAnalysisTab.automationTask();
+    }
+
     public void automationAnalyze() {
         if (!SwingUtilities.isEventDispatchThread()) throw new IllegalStateException("EDT required");
         tabbedPane.setSelectedComponent(hardwareAnalysisTab);

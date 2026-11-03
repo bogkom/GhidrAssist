@@ -10,6 +10,7 @@ on:
       - codex/agentic-policy-and-evidence-fixes
     paths:
       - 'src/main/java/ghidrassist/hardware/**'
+      - 'src/main/java/ghidrassist/automation/**'
       - 'src/main/java/ghidrassist/agent/**'
       - 'src/main/java/ghidrassist/tools/**'
       - 'src/main/java/ghidrassist/ui/**'
@@ -26,6 +27,7 @@ on:
   pull_request:
     paths:
       - 'src/main/java/ghidrassist/hardware/**'
+      - 'src/main/java/ghidrassist/automation/**'
       - 'src/main/java/ghidrassist/agent/**'
       - 'src/main/java/ghidrassist/tools/**'
       - 'src/main/java/ghidrassist/ui/**'
@@ -70,6 +72,149 @@ jobs:
           set -euo pipefail
           "$GHIDRA_INSTALL_DIR/support/gradle/gradlew" \
             --no-daemon --stacktrace buildExtension
+      - name: Verify production interprocedural traversal in real Ghidra 12.1.4 (synthetic only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/generate-synthetic-callgraph.py --output "$RUNNER_TEMP/synthetic-callgraph.bin"
+          package="$(find dist -maxdepth 1 -type f -name 'ghidra_12.1.4_PUBLIC_*_GhidrAssist.zip' -print -quit)"
+          test -n "$package"
+          unzip -p "$package" GhidrAssist/lib/GhidrAssist.jar > "$RUNNER_TEMP/ga18-product.jar"
+          mkdir -p "$RUNNER_TEMP/ga18-headless"
+          JAVA_TOOL_OPTIONS="-Dga18.test.jar=$RUNNER_TEMP/ga18-product.jar" \
+            "$GHIDRA_INSTALL_DIR/support/analyzeHeadless" \
+            "$RUNNER_TEMP/ga18-headless" GA18GraphCI \
+            -import "$RUNNER_TEMP/synthetic-callgraph.bin" \
+            -loader BinaryLoader -processor 68000:BE:32:CPU32 -cspec default \
+            -noanalysis -scriptPath "$GITHUB_WORKSPACE/tools/ghidra_scripts" \
+            -postScript GA18BootstrapSyntheticCallgraph.java \
+            -postScript GA18VerifySyntheticCallgraph.java \
+            -postScript GA18VerifyAutomationPaths.java \
+            -postScript GA18VerifyDecompilerTaskBinding.java \
+            -postScript GA18VerifyListingSnapshot.java \
+            -postScript GA18VerifyListingRangeAndBodyXrefs.java \
+            > "$RUNNER_TEMP/ga18-paths.log" 2>&1 || {
+              tail -n 100 "$RUNNER_TEMP/ga18-paths.log"; exit 1;
+            }
+          grep -q 'GA18 CALLGRAPH PASS: functions=20 edges=19 mmio_static_writes=4 reset_reachable=6 assertions=110' "$RUNNER_TEMP/ga18-paths.log"
+          grep -q 'GA18 PRODUCTION PATHS PASS: assertions=22' "$RUNNER_TEMP/ga18-paths.log"
+          grep -q 'GA18 DECOMPILER TASK BINDING PASS: assertions=7' "$RUNNER_TEMP/ga18-paths.log"
+          grep -q 'GA18 LISTING SNAPSHOT PASS: assertions=9' "$RUNNER_TEMP/ga18-paths.log"
+          grep -q 'GA18 LISTING RANGE BODY XREF PASS:' "$RUNNER_TEMP/ga18-paths.log"
+          echo 'Real Ghidra native synthetic graph and production traversal assertions passed'
+      - name: Real Ghidra 12.1.4 convergent CALL path regression (synthetic only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/generate-synthetic-convergent.py --output "$RUNNER_TEMP/synthetic-convergent.bin"
+          test -s "$RUNNER_TEMP/synthetic-convergent.json"
+          package="$(find dist -maxdepth 1 -name 'ghidra_12.1.4_PUBLIC_*_GhidrAssist.zip' -type f -print -quit)"
+          test -n "$package"
+          unzip -p "$package" GhidrAssist/lib/GhidrAssist.jar > "$RUNNER_TEMP/ga18-convergent-product.jar"
+          mkdir -p "$RUNNER_TEMP/ga18-convergent-headless"
+          JAVA_TOOL_OPTIONS="-Dga18.test.jar=$RUNNER_TEMP/ga18-convergent-product.jar" \
+            "$GHIDRA_INSTALL_DIR/support/analyzeHeadless" \
+            "$RUNNER_TEMP/ga18-convergent-headless" GA18ConvergentCI \
+            -import "$RUNNER_TEMP/synthetic-convergent.bin" \
+            -loader BinaryLoader -processor 68000:BE:32:CPU32 -cspec default \
+            -noanalysis -scriptPath "$GITHUB_WORKSPACE/tools/ghidra_scripts" \
+            -postScript GA18BootstrapSyntheticConvergent.java \
+            -postScript GA18VerifySyntheticConvergent.java \
+            > "$RUNNER_TEMP/ga18-convergent.log" 2>&1 || {
+              tail -n 120 "$RUNNER_TEMP/ga18-convergent.log"; exit 1;
+            }
+          grep -q 'GA18 CONVERGENT BOOTSTRAP PASS: functions=4' "$RUNNER_TEMP/ga18-convergent.log"
+          grep -q 'GA18 CONVERGENT PATHS PASS: assertions=31 paths=2 shared_mmio_writes=1' "$RUNNER_TEMP/ga18-convergent.log"
+      - name: Real Ghidra 12.1.4 unknown indirect CALL regression (synthetic only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/generate-synthetic-indirect.py --output "$RUNNER_TEMP/synthetic-indirect.bin"
+          package="$(find dist -maxdepth 1 -type f -name 'ghidra_12.1.4_PUBLIC_*_GhidrAssist.zip' -print -quit)"
+          test -n "$package"
+          unzip -p "$package" GhidrAssist/lib/GhidrAssist.jar > "$RUNNER_TEMP/ga18-indirect-product.jar"
+          mkdir -p "$RUNNER_TEMP/ga18-indirect-headless"
+          JAVA_TOOL_OPTIONS="-Dga18.test.jar=$RUNNER_TEMP/ga18-indirect-product.jar" \
+            "$GHIDRA_INSTALL_DIR/support/analyzeHeadless" \
+            "$RUNNER_TEMP/ga18-indirect-headless" GA18IndirectCI \
+            -import "$RUNNER_TEMP/synthetic-indirect.bin" \
+            -loader BinaryLoader -processor 68000:BE:32:CPU32 -cspec default \
+            -noanalysis -scriptPath "$GITHUB_WORKSPACE/tools/ghidra_scripts" \
+            -postScript GA18BootstrapSyntheticIndirect.java \
+            -postScript GA18VerifySyntheticIndirect.java \
+            > "$RUNNER_TEMP/ga18-indirect.log" 2>&1 || {
+              tail -n 120 "$RUNNER_TEMP/ga18-indirect.log"; exit 1;
+            }
+          grep -q 'GA18 INDIRECT BOOTSTRAP PASS: functions=2' "$RUNNER_TEMP/ga18-indirect.log"
+          grep -q 'GA18 INDIRECT PATHS PASS: assertions=13 unresolved=1 no_guessed_paths=1' "$RUNNER_TEMP/ga18-indirect.log"
+      - name: Real Ghidra 12.1.4 proven indirect constant CALL regression (synthetic only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/generate-synthetic-indirect-constant.py --output "$RUNNER_TEMP/synthetic-indirect-constant.bin"
+          package="$(find dist -maxdepth 1 -type f -name 'ghidra_12.1.4_PUBLIC_*_GhidrAssist.zip' -print -quit)"
+          test -n "$package"
+          unzip -p "$package" GhidrAssist/lib/GhidrAssist.jar > "$RUNNER_TEMP/ga18-indirect-constant-product.jar"
+          mkdir -p "$RUNNER_TEMP/ga18-indirect-constant-headless"
+          JAVA_TOOL_OPTIONS="-Dga18.test.jar=$RUNNER_TEMP/ga18-indirect-constant-product.jar" \
+            "$GHIDRA_INSTALL_DIR/support/analyzeHeadless" \
+            "$RUNNER_TEMP/ga18-indirect-constant-headless" GA18IndirectConstantCI \
+            -import "$RUNNER_TEMP/synthetic-indirect-constant.bin" \
+            -loader BinaryLoader -processor 68000:BE:32:CPU32 -cspec default \
+            -noanalysis -scriptPath "$GITHUB_WORKSPACE/tools/ghidra_scripts" \
+            -postScript GA18BootstrapSyntheticIndirectConstant.java \
+            -postScript GA18VerifySyntheticIndirectConstant.java \
+            > "$RUNNER_TEMP/ga18-indirect-constant.log" 2>&1 || {
+              tail -n 120 "$RUNNER_TEMP/ga18-indirect-constant.log"; exit 1;
+            }
+          grep -q 'GA18 INDIRECT CONSTANT BOOTSTRAP PASS: functions=2' "$RUNNER_TEMP/ga18-indirect-constant.log"
+          grep -q 'GA18 INDIRECT CONSTANT PROVENANCE PASS: assertions=16 fallback=1 ghidra_reference=1 rollback=1' "$RUNNER_TEMP/ga18-indirect-constant.log"
+      - name: Real Ghidra 12.1.4 bounded CPU32 register-flow regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/generate-synthetic-register-flow.py --output "$RUNNER_TEMP/synthetic-register-flow.bin"
+          package="$(find dist -maxdepth 1 -type f -name 'ghidra_12.1.4_PUBLIC_*_GhidrAssist.zip' -print -quit)"
+          test -n "$package"
+          unzip -p "$package" GhidrAssist/lib/GhidrAssist.jar > "$RUNNER_TEMP/ga18-register-flow.jar"
+          mkdir -p "$RUNNER_TEMP/ga18-register-flow-headless"
+          JAVA_TOOL_OPTIONS="-Dga18.test.jar=$RUNNER_TEMP/ga18-register-flow.jar" \
+            "$GHIDRA_INSTALL_DIR/support/analyzeHeadless" \
+            "$RUNNER_TEMP/ga18-register-flow-headless" GA18RegisterFlowCI \
+            -import "$RUNNER_TEMP/synthetic-register-flow.bin" \
+            -loader BinaryLoader -processor 68000:BE:32:CPU32 -cspec default \
+            -noanalysis -scriptPath "$GITHUB_WORKSPACE/tools/ghidra_scripts" \
+            -postScript GA18BootstrapSyntheticRegisterFlow.java \
+            -postScript GA18VerifySyntheticRegisterFlow.java \
+            > "$RUNNER_TEMP/ga18-register-flow.log" 2>&1 || {
+              tail -n 130 "$RUNNER_TEMP/ga18-register-flow.log"; exit 1;
+            }
+          tail -n 100 "$RUNNER_TEMP/ga18-register-flow.log"
+          grep -q 'GA18 REGISTER FLOW BOOTSTRAP PASS: functions=4' "$RUNNER_TEMP/ga18-register-flow.log"
+          grep -q 'GA18 REGISTER FLOW PASS: assertions=20 nop=1 clobber=1 branch=1 rollback=1' "$RUNNER_TEMP/ga18-register-flow.log"
+      - name: Real Ghidra 12.1.4 MOVEQ-safe register-flow and conditional branch barriers
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/generate-synthetic-moveq-flow.py --output "$RUNNER_TEMP/synthetic-moveq-flow.bin"
+          package="$(find dist -maxdepth 1 -type f -name 'ghidra_12.1.4_PUBLIC_*_GhidrAssist.zip' -print -quit)"
+          test -n "$package"
+          unzip -p "$package" GhidrAssist/lib/GhidrAssist.jar > "$RUNNER_TEMP/ga18-moveq-flow.jar"
+          mkdir -p "$RUNNER_TEMP/ga18-moveq-flow-headless"
+          JAVA_TOOL_OPTIONS="-Dga18.test.jar=$RUNNER_TEMP/ga18-moveq-flow.jar" \
+            "$GHIDRA_INSTALL_DIR/support/analyzeHeadless" \
+            "$RUNNER_TEMP/ga18-moveq-flow-headless" GA18MoveqCI \
+            -import "$RUNNER_TEMP/synthetic-moveq-flow.bin" \
+            -loader BinaryLoader -processor 68000:BE:32:CPU32 -cspec default \
+            -noanalysis -scriptPath "$GITHUB_WORKSPACE/tools/ghidra_scripts" \
+            -postScript GA18BootstrapSyntheticMoveqFlow.java \
+            -postScript GA18VerifySyntheticMoveqFlow.java \
+            > "$RUNNER_TEMP/ga18-moveq-flow.log" 2>&1 || {
+              tail -n 120 "$RUNNER_TEMP/ga18-moveq-flow.log"; exit 1;
+            }
+          tail -n 45 "$RUNNER_TEMP/ga18-moveq-flow.log"
+          grep -q 'GA18 MOVEQ FLOW BOOTSTRAP PASS: functions=4' "$RUNNER_TEMP/ga18-moveq-flow.log"
+          grep -q 'GA18 MOVEQ FLOW PASS: assertions=20 moveq=1 clobber=1 conditional_branch=1 rollback=1' "$RUNNER_TEMP/ga18-moveq-flow.log"
       - name: Verify ZIP and record SHA-256
         shell: bash
         run: |
@@ -113,7 +258,9 @@ jobs:
             fi
           done < <(unzip -Z1 "$package")
           test "$found" -eq 1
-      - name: Publish GhidrAssist extension ZIP (Actions artifact)
+      # upload-artifact already wraps these files in the downloaded artifact ZIP.
+      # Do not create a second distribution ZIP: the inner ZIP is installed by Ghidra.
+      - name: Publish installable extension ZIP (Actions artifact)
         uses: actions/upload-artifact@v4
         with:
           name: GhidrAssist-Ghidra-12.1.4-${{ github.run_id }}

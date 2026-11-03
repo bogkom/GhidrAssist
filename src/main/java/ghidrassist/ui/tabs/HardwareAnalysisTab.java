@@ -77,6 +77,10 @@ public final class HardwareAnalysisTab extends JPanel {
     });
     private final JButton run=new JButton("Analyze");
     private final JButton cancelScan=new JButton("Cancel Analyze");
+    private JDialog automationMmioDialog;
+    private JTable automationMmioTable;
+    private List<ghidrassist.hardware.HardwareMmioExplorer.Row> automationMmioVisible;
+
     private final JButton export=new JButton("Export MD");
     private final JButton namePreview=new JButton("Export CSV");
     private final JButton exportConfigCsv=new JButton("Evidence CSV...");
@@ -106,11 +110,319 @@ public final class HardwareAnalysisTab extends JPanel {
     private volatile List<HardwareInventoryService.Site> latestSites=List.of();
     private volatile ghidrassist.hardware.HardwareCsbarUnifiedReview.Review latestCsbarReview;
 
+    /** Explicit device selection; invokes the existing Swing selection listeners. */
+    public void automationSelectProfile(String profile) {
+        if (!SwingUtilities.isEventDispatchThread()) throw new IllegalStateException("EDT required");
+        int index;
+        if ("CPU32_SURVEY".equals(profile)) index=0;
+        else if ("MC68332_USER_SELECTED".equals(profile)) index=1;
+        else throw new IllegalArgumentException("Unknown or non-explicit hardware profile");
+        if (selection.getSelectedIndex()!=index) selection.setSelectedIndex(index);
+    }
+
     /** Invokes the same action as the visible button; never bypasses UI validation. */
+    /** Request cancellation through the exact visible button action. */
+    /** Select a visible row of the existing MMIO explorer (zero-based), no DB edits. */
+    public com.google.gson.JsonObject automationSelectTableRow(String tableId,int rowIndex) {
+        if (!SwingUtilities.isEventDispatchThread()) throw new IllegalStateException("EDT required");
+        if (!"hardware.mmio".equals(tableId))
+            throw new IllegalArgumentException("Unknown table");
+        if (!currentScan() || latestMarkdown==null)
+            throw new IllegalStateException("Hardware evidence missing or stale; rerun Analyze");
+        if (automationMmioDialog==null || !automationMmioDialog.isDisplayable())
+            showMmioExplorer();
+        if (automationMmioTable==null || automationMmioVisible==null ||
+                rowIndex<0 || rowIndex>=automationMmioVisible.size())
+            throw new IllegalArgumentException("Invalid visible MMIO row");
+        automationMmioTable.setRowSelectionInterval(rowIndex,rowIndex);
+        automationMmioTable.scrollRectToVisible(automationMmioTable.getCellRect(rowIndex,0,true));
+        var selected=automationMmioVisible.get(rowIndex);
+        com.google.gson.JsonObject answer=new com.google.gson.JsonObject();
+        answer.addProperty("table","hardware.mmio");
+        answer.addProperty("row",rowIndex);
+        answer.addProperty("total_visible",automationMmioVisible.size());
+        answer.addProperty("pc",selected.pcHex());
+        answer.addProperty("revision",latestRevision.toString());
+        answer.addProperty("selected",automationMmioTable.getSelectedRow()==rowIndex);
+        return answer;
+    }
+
+    public com.google.gson.JsonObject automationCancel() {
+        if (!SwingUtilities.isEventDispatchThread()) throw new IllegalStateException("EDT required");
+        if (activeMonitor==null || !cancelScan.isEnabled())
+            throw new IllegalStateException("No cancellable Analyze task");
+        cancelScan.doClick();
+        com.google.gson.JsonObject result=new com.google.gson.JsonObject();
+        result.addProperty("requested",true);
+        result.addProperty("state","CANCELLATION_REQUESTED");
+        return result;
+    }
+
+    /** Return a revision-bound, size-limited page; no file-system side effects. */
+    public com.google.gson.JsonObject automationReport(String format,int offset,int limit) {
+        if (!SwingUtilities.isEventDispatchThread()) throw new IllegalStateException("EDT required");
+        if (offset<0 || limit<1 || limit>8192)
+            throw new IllegalArgumentException("Invalid report pagination");
+        if (!currentScan() || latestMarkdown==null)
+            throw new IllegalStateException("Hardware evidence missing or stale; rerun Analyze");
+        String content=switch(format) {
+            case "markdown" -> latestMarkdown;
+            case "config_csv" -> latestConfigCsv;
+            case "names_csv" -> latestNameCsv;
+            default -> throw new IllegalArgumentException("Unknown report format");
+        };
+        if (content==null) throw new IllegalStateException("Requested report unavailable");
+        int start=Math.min(offset,content.length());
+        int end=(int)Math.min((long)content.length(),(long)start+limit);
+        com.google.gson.JsonObject answer=new com.google.gson.JsonObject();
+        answer.addProperty("format",format);
+        answer.addProperty("revision",latestRevision.toString());
+        answer.addProperty("total_characters",content.length());
+        answer.addProperty("offset",offset);
+        answer.addProperty("limit",limit);
+        answer.addProperty("text",content.substring(start,end));
+        answer.addProperty("more",end<content.length());
+        answer.addProperty("scope","STATIC EVIDENCE ONLY; NO EXECUTION OR PHYSICAL MAPPING");
+        if (!currentScan()) throw new IllegalStateException("Program changed while reading report");
+        return answer;
+    }
+
     public void automationAnalyze() {
         if (!javax.swing.SwingUtilities.isEventDispatchThread()) throw new IllegalStateException("EDT required");
         if (!run.isEnabled()) throw new IllegalStateException("Analyze disabled");
         run.doClick();
+    }
+
+    /**
+     * Read-only proposal review. Never calls Apply or opens a modal confirmation.
+     * Concrete MCU profile and matching program revision are mandatory.
+     */
+    public com.google.gson.JsonObject automationReviewPreview(int offset,int limit) {
+        if (!SwingUtilities.isEventDispatchThread()) throw new IllegalStateException("EDT required");
+        if (offset<0 || limit<1 || limit>100) throw new IllegalArgumentException("Invalid pagination");
+        Program program=plugin.getCurrentProgram();
+        if (program==null || !currentScan() || latestMarkdown==null)
+            throw new IllegalStateException("Hardware review is stale; rerun Analyze");
+        if (!latestConcrete)
+            throw new IllegalStateException("Explicit MC68332 profile required for Review");
+        List<HardwareApplyPlan.Item> candidates=
+            new ArrayList<>(HardwareApplyPlan.mc68332Mm1Candidates(0,csbarEvidence()));
+        com.google.gson.JsonArray rows=new com.google.gson.JsonArray();
+        for (int i=offset;i<candidates.size() && i-offset<limit;i++) {
+            HardwareApplyPlan.Item item=candidates.get(i);
+            HardwareApplyService.Decision decision=
+                HardwareApplyService.preflight(program,item,candidates);
+            com.google.gson.JsonObject row=new com.google.gson.JsonObject();
+            row.addProperty("index",i);
+            row.addProperty("kind",item.kind.name());
+            row.addProperty("name",item.name);
+            row.addProperty("location",item.location());
+            row.addProperty("state",decision.state.name());
+            row.addProperty("allowed",decision.allowed());
+            row.addProperty("selected_by_default",decision.selectedByDefault);
+            row.addProperty("description",decision.description);
+            rows.add(row);
+        }
+        if (!currentScan())
+            throw new IllegalStateException("Program revision changed during Review preview");
+        com.google.gson.JsonObject answer=new com.google.gson.JsonObject();
+        answer.addProperty("scope","MC68332 EXPLICIT PROFILE; PREVIEW ONLY; NO DB EDITS");
+        answer.addProperty("total",candidates.size());
+        answer.addProperty("offset",offset);
+        answer.addProperty("limit",limit);
+        answer.add("rows",rows);
+        return answer;
+    }
+
+    // One-use, exact-revision approval. Never persist an approval across a scan.
+    private String automationApprovalToken;
+    private Program automationApprovalProgram;
+    private long automationApprovalRevision;
+    private HardwareApplyPlan.Item automationApprovalItem;
+    private boolean automationApprovalCopy;
+    private Program automationUndoProgram;
+    private long automationUndoRevision = -1;
+    private boolean automationUndoCopy;
+
+    /** Prepare ONE non-speculative memory row, without a database edit. */
+    public com.google.gson.JsonObject automationApplyPrepare(int index) {
+        return automationPrepare(index,false);
+    }
+    public com.google.gson.JsonObject automationReviewPrepare(int index) {
+        return automationPrepare(index,true);
+    }
+    private com.google.gson.JsonObject automationPrepare(int index,boolean copy) {
+        if (!SwingUtilities.isEventDispatchThread()) throw new IllegalStateException("EDT required");
+        automationApprovalToken=null;
+        if (automationUndoProgram!=null)
+            throw new IllegalStateException("Prior synthetic Apply must be undone or inspected before another");
+        Program program=plugin.getCurrentProgram();
+        if(copy) ghidrassist.automation.AutomationWritePolicy.requireReviewCopy(program,plugin.getTool().getProject());
+        else ghidrassist.automation.AutomationWritePolicy.requireSyntheticSafe(program);
+        if (!currentScan() || latestMarkdown==null || !latestConcrete)
+            throw new IllegalStateException("Fresh explicit MC68332 analysis required");
+        List<HardwareApplyPlan.Item> items=
+            HardwareApplyPlan.mc68332Mm1Candidates(0,csbarEvidence());
+        if(index<0 || index>=items.size())throw new IllegalArgumentException("Invalid proposal index");
+        HardwareApplyPlan.Item item=items.get(index);
+        HardwareApplyService.Decision decision=HardwareApplyService.preflight(program,item,items);
+        if(item.kind!=HardwareApplyPlan.Kind.MEMORY ||
+                decision.state!=HardwareApplyService.State.READY ||
+                !decision.selectedByDefault || item.name.startsWith("CS") ||
+                item.name.contains("CANDIDATE"))
+            throw new IllegalStateException("Only default-safe mapped module memory proposals are permitted");
+        automationApprovalCopy=copy;
+        automationApprovalProgram=program;
+        automationApprovalRevision=program.getModificationNumber();
+        automationApprovalItem=item;
+        automationApprovalToken=java.util.UUID.randomUUID().toString();
+        com.google.gson.JsonObject response=new com.google.gson.JsonObject();
+        response.addProperty("token",automationApprovalToken);
+        response.addProperty("index",index);
+        response.addProperty("name",item.name);
+        response.addProperty("location",item.location());
+        response.addProperty("kind",item.kind.name());
+        response.addProperty("preflight_state",decision.state.name());
+        response.addProperty("preflight_description",decision.description);
+        response.addProperty("proposal_details",item.details);
+        response.addProperty("planned_changes",1);
+        response.addProperty("applied",false);
+        response.addProperty("scope",copy ? "EXPLICIT WORKING COPY; SINGLE SAFE MEMORY ITEM; ONE USE" :
+            "SYNTHETIC FIXTURE; SINGLE SAFE MEMORY ITEM; ONE USE");
+        response.addProperty("revision",automationApprovalRevision);
+        response.addProperty("project_program_path",program.getDomainFile().getPathname());
+        response.addProperty("source_sha256",program.getExecutableSHA256());
+        return response;
+    }
+
+    /** Commit a prepared single item and make exactly that transaction undoable. */
+    public com.google.gson.JsonObject automationApplyCommit(String token,String expectedName) throws Exception {
+        return automationCommit(token,expectedName,false);
+    }
+    public com.google.gson.JsonObject automationReviewCommit(String token,String expectedName) throws Exception {
+        return automationCommit(token,expectedName,true);
+    }
+    private com.google.gson.JsonObject automationCommit(String token,String expectedName,boolean copy) throws Exception {
+        if (!SwingUtilities.isEventDispatchThread()) throw new IllegalStateException("EDT required");
+        String issued=automationApprovalToken;
+        automationApprovalToken=null; // consume even for failed/mismatched attempts
+        if(issued==null || automationApprovalCopy!=copy || token==null || !issued.equals(token) ||
+                expectedName==null || automationApprovalItem==null ||
+                !expectedName.equals(automationApprovalItem.name))
+            throw new IllegalStateException("Missing, consumed or mismatched approval token");
+        Program program=plugin.getCurrentProgram();
+        if(copy) ghidrassist.automation.AutomationWritePolicy.requireReviewCopy(program,plugin.getTool().getProject());
+        else ghidrassist.automation.AutomationWritePolicy.requireSyntheticSafe(program);
+        if(program!=automationApprovalProgram || !currentScan() ||
+                program.getModificationNumber()!=automationApprovalRevision)
+            throw new IllegalStateException("Program or analysis changed after approval");
+        List<HardwareApplyPlan.Item> current=
+            HardwareApplyPlan.mc68332Mm1Candidates(0,csbarEvidence());
+        HardwareApplyPlan.Item item=automationApprovalItem;
+        HardwareApplyService.Decision recheck=HardwareApplyService.preflight(program,item,current);
+        if(item.kind!=HardwareApplyPlan.Kind.MEMORY ||
+                recheck.state!=HardwareApplyService.State.READY ||
+                !recheck.selectedByDefault || item.name.startsWith("CS") ||
+                item.name.contains("CANDIDATE"))
+            throw new IllegalStateException("Prepared item no longer preflight-safe");
+        HardwareApplyService.Outcome outcome=HardwareApplyService.apply(program,List.of(item));
+        if(outcome.changed!=1 || outcome.skipped!=0)
+            throw new IllegalStateException("Unexpected Apply outcome; inspect Ghidra Undo before retry");
+        automationUndoCopy=copy;
+        automationUndoProgram=program;
+        automationUndoRevision=program.getModificationNumber();
+        com.google.gson.JsonObject result=new com.google.gson.JsonObject();
+        result.addProperty("changed",outcome.changed);
+        result.addProperty("skipped",outcome.skipped);
+        result.addProperty("name",item.name);
+        result.addProperty("location",item.location());
+        result.addProperty("source_sha256",program.getExecutableSHA256());
+        result.addProperty("revision_before",automationApprovalRevision);
+        result.addProperty("revision_after",automationUndoRevision);
+        result.addProperty("preflight_description",recheck.description);
+        result.addProperty("scope",copy ? "EXPLICIT WORKING COPY" : "SYNTHETIC FIXTURE");
+        result.addProperty("undo_available",program.canUndo());
+        return result;
+    }
+
+    /** Undo only our last Apply, and never if another edit intervened. */
+    public com.google.gson.JsonObject automationApplyUndo() throws Exception {
+        return automationUndo(false);
+    }
+    public com.google.gson.JsonObject automationReviewUndo() throws Exception {
+        return automationUndo(true);
+    }
+    private com.google.gson.JsonObject automationUndo(boolean copy) throws Exception {
+        if (!SwingUtilities.isEventDispatchThread()) throw new IllegalStateException("EDT required");
+        Program program=plugin.getCurrentProgram();
+        if(copy) ghidrassist.automation.AutomationWritePolicy.requireReviewCopy(program,plugin.getTool().getProject());
+        else ghidrassist.automation.AutomationWritePolicy.requireSyntheticSafe(program);
+        if(automationUndoCopy!=copy || program!=automationUndoProgram ||
+                program.getModificationNumber()!=automationUndoRevision ||
+                !program.canUndo())
+            throw new IllegalStateException("Our Apply is not the most recent undoable edit");
+        long priorRevision=automationUndoRevision;
+        automationUndoProgram=null;automationUndoRevision=-1;automationUndoCopy=false; // one-shot
+        program.undo();
+        com.google.gson.JsonObject result=new com.google.gson.JsonObject();
+        result.addProperty("undone",true);
+        result.addProperty("program",program.getName());
+        result.addProperty("project_program_path",program.getDomainFile().getPathname());
+        result.addProperty("source_sha256",program.getExecutableSHA256());
+        result.addProperty("revision_before",priorRevision);
+        result.addProperty("revision_after",program.getModificationNumber());
+        return result;
+    }
+
+    /** A bounded, revision-checked snapshot of the same sites as MMIO Explorer. */
+    public com.google.gson.JsonObject automationMmioRows(String filter,int offset,int limit) {
+        if (!SwingUtilities.isEventDispatchThread()) throw new IllegalStateException("EDT required");
+        if (offset<0 || limit<1 || limit>200) throw new IllegalArgumentException("Invalid pagination");
+        if (!currentScan() || latestMarkdown==null)
+            throw new IllegalStateException("Hardware evidence is missing or stale; run Analyze");
+        List<ghidrassist.hardware.HardwareMmioExplorer.Observation> raw=new ArrayList<>();
+        for (HardwareInventoryService.Site site:latestSites)
+            raw.add(new ghidrassist.hardware.HardwareMmioExplorer.Observation(
+                site.pc.getOffset(),site.registerAddress,site.register,site.function,
+                site.asm,site.write,site.literal));
+        var rows=ghidrassist.hardware.HardwareMmioExplorer.rows(raw,latestConcrete);
+        com.google.gson.JsonArray entries=new com.google.gson.JsonArray();
+        int matching=0;
+        for (var row:rows) {
+            if (!row.matches(filter)) continue;
+            if (matching>=offset && matching-offset<limit) {
+                com.google.gson.JsonObject item=new com.google.gson.JsonObject();
+                item.addProperty("pc",row.pcHex());
+                item.addProperty("register",row.register());
+                item.addProperty("address",row.addressHex());
+                item.addProperty("access",row.access());
+                item.addProperty("value",row.value());
+                item.addProperty("evidence",row.evidence());
+                item.addProperty("function",row.function());
+                item.addProperty("instruction",row.instruction());
+                item.addProperty("scope",row.deviceScope());
+                entries.add(item);
+            }
+            matching++;
+        }
+        com.google.gson.JsonObject result=new com.google.gson.JsonObject();
+        result.addProperty("total",matching);
+        result.addProperty("offset",offset);
+        result.addProperty("limit",limit);
+        result.addProperty("revision",latestRevision.toString());
+        result.add("rows",entries);
+        return result;
+    }
+
+    public com.google.gson.JsonObject automationTask() {
+        if (!SwingUtilities.isEventDispatchThread()) throw new IllegalStateException("EDT required");
+        com.google.gson.JsonObject result=new com.google.gson.JsonObject();
+        result.addProperty("state",activeMonitor!=null ? "RUNNING" :
+            currentScan() && latestMarkdown!=null ? "COMPLETED" : "NOT_READY");
+        result.addProperty("status",status.getText());
+        result.addProperty("site_count",currentScan() && latestMarkdown!=null ?
+            latestSites.size() : 0);
+        return result;
     }
 
     public com.google.gson.JsonObject automationSnapshot() {
@@ -572,6 +884,18 @@ public final class HardwareAnalysisTab extends JPanel {
             Math.min(780,screen.height-90));
         dialog.setLocationRelativeTo(this);
         dialog.setResizable(true);
+        automationMmioDialog=dialog;
+        automationMmioTable=table;
+        automationMmioVisible=visible;
+        dialog.addWindowListener(new java.awt.event.WindowAdapter(){
+            @Override public void windowClosed(java.awt.event.WindowEvent e){
+                if (automationMmioDialog==dialog) {
+                    automationMmioDialog=null;
+                    automationMmioTable=null;
+                    automationMmioVisible=null;
+                }
+            }
+        });
         dialog.setVisible(true);
     }
 

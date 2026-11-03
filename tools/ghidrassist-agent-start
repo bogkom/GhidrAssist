@@ -6,8 +6,40 @@ import os
 from pathlib import Path
 import secrets
 import subprocess
+import shlex
+import zipfile
 import sys
 import time
+from urllib.parse import quote
+from urllib.request import Request, urlopen
+
+
+
+def verify_patched_project_opener(env):
+    """Fail closed before spawning GUI if the installed extension can recurse."""
+    options=shlex.split(env.get("JAVA_TOOL_OPTIONS",""))
+    settings=next((v.split("=",1)[1] for v in options
+                   if v.startswith("-Dapplication.settingsdir=")),None)
+    if not settings:
+        raise ValueError("Automatic CodeBrowser opening requires an isolated application.settingsdir")
+    root=Path(settings).expanduser().resolve()
+    if not root.is_dir():
+        raise ValueError("Isolated Ghidra settings directory not found")
+    jars=list(root.rglob("GhidrAssist/lib/GhidrAssist.jar"))
+    if len(jars)!=1:
+        raise ValueError("Expected exactly one installed GhidrAssist.jar in isolated settings; found %d" % len(jars))
+    if jars[0].is_symlink():
+        raise ValueError("Extension library must not be a symlink for automatic CodeBrowser opening")
+    try:
+        with zipfile.ZipFile(jars[0]) as archive:
+            clazz=archive.read("ghidrassist/automation/AgentProjectOpenPlugin.class")
+    except (KeyError,OSError,zipfile.BadZipFile) as exc:
+        raise ValueError("Installed GhidrAssist project opener is not verifiable") from exc
+    if (b"ApplicationLevelOnlyPlugin" not in clazz or
+            b"OPEN_REQUEST_CONSUMED" not in clazz or
+            b"FrontEndTool" not in clazz):
+        raise ValueError("UNSAFE installed GhidrAssist: old recursive CodeBrowser opener; update extension before automatic launch")
+    return jars[0]
 
 
 def main():
@@ -17,44 +49,164 @@ def main():
     parser.add_argument("--project", type=Path,
                         help="Optional Ghidra .gpr project; only an explicitly chosen project")
     parser.add_argument("--session", type=Path, default=Path.home() / ".local/state/ghidrassist-agent/session.json")
+    parser.add_argument("--program", help="Imported program in project, for automatic CodeBrowser opening")
     parser.add_argument("--mode", choices=("test", "trusted"), default="test")
+    parser.add_argument("--allow-program-switch", action="store_true",
+                        help="Opt in to opening another program in the same active Ghidra project")
+    parser.add_argument("--review-copy", action="store_true",
+                        help="Operator attests --project is an isolated COPY, not the original project")
+    parser.add_argument("--expected-sha256", default="",
+                        help="Exact source executable SHA-256 for selected copy program")
+    parser.add_argument("--write-mode", choices=("read-only","auto-safe","full-control"),
+                        default="read-only", help="Agent write policy; production writes remain disabled")
+    parser.add_argument("--synthetic-writes", action="store_true",
+                        help="Explicitly enable single-item Apply/Undo ONLY in the isolated synthetic fixture")
     args = parser.parse_args()
     binary = args.ghidra.expanduser().resolve() / "ghidraRun"
     if not binary.is_file():
         parser.error("ghidraRun not found")
     if "12.1.4_PUBLIC" not in str(binary.parent):
         parser.error("Ghidra 12.1.4 PUBLIC required")
+    if args.program and (not args.project or args.program.startswith("/") or ".." in Path(args.program).parts):
+        parser.error("--program requires --project and a relative program path")
     if args.project and not args.project.is_file():
         parser.error("Ghidra project not found")
+    if args.allow_program_switch and (not args.project or not args.program):
+        parser.error("--allow-program-switch requires --project and --program")
+    if args.write_mode == "full-control":
+        parser.error("FULL_CONTROL API writes are not implemented; use Ghidra GUI for reviewed edits")
+    if args.review_copy:
+        # A symlinked .gpr or .rep directory could silently point to the
+        # original user's database, despite the selected "copy" pathname.
+        proposed=args.project.expanduser().absolute() if args.project else None
+        if (proposed is None or proposed.suffix.lower()!=".gpr" or
+                proposed.is_symlink() or
+                proposed.with_suffix(".rep").is_symlink() or
+                not proposed.with_suffix(".rep").is_dir()):
+            parser.error("Review-copy requires a regular .gpr and a real, non-symlink .rep directory")
+        import re
+        if (args.mode != "test" or args.write_mode != "auto-safe" or
+                args.synthetic_writes or not args.project or not args.program or
+                not re.fullmatch(r"[0-9a-fA-F]{64}", args.expected_sha256)):
+            parser.error("Review-copy requires --mode test --write-mode auto-safe --project --program --expected-sha256 and no --synthetic-writes")
+    if args.write_mode == "auto-safe" and not (args.synthetic_writes or args.review_copy):
+        parser.error("AUTO_SAFE currently requires --synthetic-writes in isolated test mode")
+    if args.synthetic_writes and args.write_mode == "read-only":
+        parser.error("--synthetic-writes requires --write-mode auto-safe")
+    if args.synthetic_writes:
+        fixture = (Path.home() / "Projekty/Codex/ga-automation-test/project/AutomationFixture.gpr").resolve()
+        if (args.mode != "test" or args.program != "synthetic-mmio.bin" or
+                args.project is None or args.project.expanduser().resolve() != fixture):
+            parser.error("Synthetic writes require the exact isolated AutomationFixture project in test mode")
     session_file = args.session.expanduser().absolute()
     session_file.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     os.chmod(session_file.parent, 0o700)
     if session_file.exists():
-        parser.error("Session already exists; stop the existing instance before starting another")
+        try:
+            old = json.loads(session_file.read_text(encoding="utf-8"))
+            pid = old.get("pid")
+            if not isinstance(pid, int) or pid <= 0 or old.get("schema") != 3:
+                parser.error("Existing session is malformed; inspect before removal")
+            try:
+                os.kill(pid, 0)
+            except ProcessLookupError:
+                # Only auto-remove a known expired session after the pinned PID
+                # is gone; never terminate or take over a live GUI.
+                session_file.unlink()
+                print("Removed expired test session receipt", file=sys.stderr)
+            except PermissionError:
+                parser.error("Existing session PID cannot be inspected; refusing takeover")
+            else:
+                parser.error("Session process is still running; close its Ghidra instance first")
+        except (OSError, ValueError, KeyError) as exc:
+            parser.error("Cannot validate existing session: " + str(exc))
     ready = session_file.with_suffix(".ready")
     if ready.exists():
-        parser.error("Stale readiness file exists; remove only after confirming no live process")
+        try:
+            receipt = json.loads(ready.read_text(encoding="utf-8"))
+            pid = receipt.get("pid")
+            if receipt.get("schema") != 3 or type(pid) is not int or pid <= 0 or (
+                    type(receipt.get("port")) is not int or
+                    not 0 < receipt["port"] < 65536):
+                parser.error("Readiness receipt invalid; inspect it before restarting")
+            try:
+                os.kill(pid, 0)
+            except ProcessLookupError:
+                # Preserve the failed-start evidence; never overwrite history.
+                archive = session_file.parent / "reports" / "diagnostics"
+                archive.mkdir(mode=0o700, parents=True, exist_ok=True)
+                os.chmod(archive, 0o700)
+                target = archive / ("session-ready-stale-" +
+                                    str(time.time_ns()) + ".json")
+                ready.rename(target)
+                print("Archived expired readiness receipt: " + str(target),
+                      file=sys.stderr)
+            except PermissionError:
+                parser.error("Readiness PID cannot be inspected; refusing takeover")
+            else:
+                parser.error("Readiness PID is still running; close test Ghidra first")
+        except (OSError, ValueError, KeyError) as exc:
+            parser.error("Cannot validate readiness receipt: " + str(exc))
+    if args.program:
+        verify_patched_project_opener(os.environ)
     token = secrets.token_hex(32)
     env = os.environ.copy()
     options = [
         "-Dghidrassist.automation.enabled=true",
         "-Dghidrassist.automation.ready=" + str(ready),
+        "-Dghidrassist.automation.writeMode=" + args.write_mode.upper().replace("-","_"),
     ]
+    if args.synthetic_writes:
+        options.append("-Dghidrassist.automation.syntheticWrites=true")
+    if args.review_copy:
+        options.extend([
+            "-Dghidrassist.automation.reviewCopy=true",
+            "-Dghidrassist.automation.reviewCopyProject=" + str(args.project.expanduser().resolve()),
+            "-Dghidrassist.automation.reviewCopyProgram=/" + args.program,
+            "-Dghidrassist.automation.reviewCopySha256=" + args.expected_sha256.lower(),
+        ])
+    if args.allow_program_switch:
+        options.append("-Dghidrassist.automation.allowProgramSwitch=true")
     env["GHIDRASSIST_AUTOMATION_TOKEN"] = token
     env["JAVA_TOOL_OPTIONS"] = (env.get("JAVA_TOOL_OPTIONS", "") + " " + " ".join(options)).strip()
+    # Project Window opens the requested .gpr once; the opt-in frontend plugin
+    # launches CodeBrowser in the active project without a read-only URL.
     command = [str(binary)]
     if args.project:
         command.append(str(args.project.expanduser().resolve()))
+        if args.program:
+            options.extend([
+                "-Dghidrassist.automation.project=" + str(args.project.expanduser().resolve()),
+                "-Dghidrassist.automation.openProgram=" + args.program,
+            ])
+            env["JAVA_TOOL_OPTIONS"] = (
+                os.environ.get("JAVA_TOOL_OPTIONS", "") + " " + " ".join(options)
+            ).strip()
     process = subprocess.Popen(command, stdin=subprocess.DEVNULL,
                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                                env=env, start_new_session=True)
-    for _ in range(600):
-        if process.poll() is not None:
-            raise RuntimeError("Ghidra launcher exited before Automation became ready")
+    # ghidraRun is a bootstrapper: it may exit while the GUI JVM continues.
+    # The server receipt, not bootstrapper liveness, establishes readiness.
+    for attempt in range(600):
         if ready.exists():
             record = json.loads(ready.read_text())
             if record.get("schema") != 3:
                 raise RuntimeError("Invalid GhidrAssist ready receipt")
+            if args.program:
+                request = Request("http://127.0.0.1:%d/rpc" % record["port"],
+                    data=b'{"method":"session.status"}',
+                    headers={"Authorization":"Bearer "+token,
+                             "Content-Type":"application/json"}, method="POST")
+                try:
+                    with urlopen(request, timeout=2) as reply:
+                        observed = json.loads(reply.read())
+                except (OSError, ValueError):
+                    time.sleep(0.1)
+                    continue
+                if (observed.get("program") != Path(args.program).name or
+                        observed.get("program_writable") is not True):
+                    time.sleep(0.1)
+                    continue
             session = dict(record, token=token, mode=args.mode)
             fd = os.open(session_file, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
             with os.fdopen(fd, "w") as stream:
@@ -64,7 +216,7 @@ def main():
                               "port":record["port"], "pid":record["pid"]}))
             return
         time.sleep(0.1)
-    raise TimeoutError("GhidrAssist Automation server did not start within 60 seconds")
+    raise TimeoutError("Writable CodeBrowser did not become ready. Verify the Project Window automation opener is enabled in the isolated test profile; inspect frontend diagnostics. Do not remove project locks.")
 
 
 if __name__ == "__main__":
