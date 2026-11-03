@@ -15,6 +15,10 @@ class ProjectOpenerRecursion(unittest.TestCase):
         self.assertIn("tool instanceof FrontEndTool",source)
         self.assertIn("AtomicBoolean OPEN_REQUEST_CONSUMED",source)
         self.assertIn("OPEN_REQUEST_CONSUMED.compareAndSet(false,true)",source)
+        self.assertIn("getRunningTools()",source)
+        self.assertIn("reuseExistingProgramTool",source)
+        self.assertIn("getAllOpenPrograms()",source)
+        self.assertIn("RESTORE_SETTLE_TICKS",source)
         self.assertIn("poller.stop();",source)
 
     def test_launcher_rejects_old_installed_jar_without_spawning(self):

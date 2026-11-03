@@ -836,6 +836,7 @@ def main():
                       "listing_remained_second_program",
                       "read_only_analyze",
                       "agent_opener_codebrowser_recursion_blocked",
+                       "agent_opener_restored_program_reused",
                        "synthetic_apply_undo_verified",
                       "review_gui_cancel_no_change",
                       "review_gui_consent_and_undo_verified",

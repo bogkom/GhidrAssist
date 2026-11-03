@@ -265,6 +265,23 @@ public final class CodeBrowserMmioMain {
                 tool[0].setVisible(true);
                 tool[0].getToolFrame().setSize(1300,950);
             }catch(Exception e){throw new RuntimeException(e);}});
+            // Reusing a restored CodeBrowser with an already opened program
+            // must not create a second tool or reopen the same program.
+            var restoreProgramManager=tool[0].getService(ProgramManager.class);
+            restoreProgramManager.setCurrentProgram(second);
+            var reuseMethod=ghidrassist.automation.AgentProjectOpenPlugin.class
+                .getDeclaredMethod("reuseExistingProgramTool",
+                    ghidra.framework.model.DomainFile.class,
+                    ghidra.framework.plugintool.PluginTool[].class);
+            reuseMethod.setAccessible(true);
+            boolean reused=(Boolean)reuseMethod.invoke(null,
+                project.getProjectData().getFile("/"+PROGRAM_A),
+                new ghidra.framework.plugintool.PluginTool[]{tool[0]});
+            require(reused && restoreProgramManager.getCurrentProgram()==first,
+                "Restored CodeBrowser did not reuse already open target");
+            require(restoreProgramManager.getAllOpenPrograms().length==2,
+                "Reused CodeBrowser unexpectedly duplicated an open program");
+            result.addProperty("agent_opener_restored_program_reused",true);
             // Regression: the optional project opener must NEVER launch from
             // an actual CodeBrowser tool, even if launcher properties persist.
             // Before the fix, its Timer recursively launched more CodeBrowsers.
