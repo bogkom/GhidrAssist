@@ -415,3 +415,54 @@ Stage 2 requires a per-project allowlist/consent receipt, review of exact
 proposals and full preflight after consent, and isolated-copy tests of the
 actual transaction and Undo semantics. Until these checks are implemented
 and verified, do not use `FULL_CONTROL` with real firmware.
+
+
+## Copy-scoped AUTO_SAFE Review/Apply/Undo (second tranche)
+
+Three distinct JSON-RPC methods `hardware.review.prepare`,
+`hardware.review.apply`, and `hardware.review.undo` reuse the existing
+single-item, conservative memory-region preflight and transaction. They are
+**separate** from the older `hardware.apply.*` synthetic-only pilot.
+
+Activation requires the operator to create and verify an **isolated copy of
+the Ghidra project**, then explicitly launch:
+
+```sh
+ghidrassist-agent-start --mode test --write-mode auto-safe \
+  --review-copy --ghidra /path/to/ghidra_12.1.4_PUBLIC \
+  --project /absolute/path/to/ISOLATED_COPY.gpr \
+  --program program-inside-project.bin \
+  --expected-sha256 64_hex_digits
+```
+
+`--review-copy` is the operator's **attestation** that the project path is
+a disposable working copy. It does not magically detect whether the user
+provided an original project: inspect the path before enabling. The runtime
+compares the active Ghidra Project locator to the exact selected `.gpr`,
+the active DomainFile's full project-relative path, and the program's
+original-import SHA-256 to that launch receipt **before every prepare,
+commit and Undo**. Copy authorization is restricted to `AUTO_SAFE` and
+cannot coexist with the older `syntheticWrites` privilege.
+
+`hardware.review.prepare` takes `{"index":N}`, returns a one-use token,
+name, location, project-relative program path, source SHA-256 and revision,
+and does not modify the database. The caller must inspect this result
+before `hardware.review.apply` with exactly the token and name.
+Apply allows only a single default-safe, non-CS/non-candidate module MEMORY
+proposal from a fresh user-selected MC68332 analysis. It rechecks
+the source Program, revision and preflight after token consumption.
+`hardware.review.undo` is one-shot and refuses if the active program,
+source identity, modification count, or Ghidra Undo state changed. It
+does not rewind intervening manual changes intentionally.
+
+CLI commands: `ghidrassist-agent review-prepare --row N`,
+`ghidrassist-agent review-apply --token TOKEN --name NAME`, and
+`ghidrassist-agent review-undo`.
+
+This does **not** authorize writing to the original ECU411 project,
+physical firmware file, arbitrary register labels, Chip Select guesses,
+function names or unbounded batches. `FULL_CONTROL` is still disabled.
+The new separate `ga18-review-copy.yml` CI workflow executes this
+path on a generated isolated fixture in real Ghidra CodeBrowser/Xvfb,
+including failed approval and successful exact-transaction Undo. A PASS
+on that synthetic copy is not a real-firmware acceptance.
