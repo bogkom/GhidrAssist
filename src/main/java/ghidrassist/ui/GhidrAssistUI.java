@@ -114,6 +114,27 @@ public class GhidrAssistUI extends JPanel {
         return answer;
     }
 
+    /** Select only an existing, visible top-level tab by its stable title. */
+    public com.google.gson.JsonObject automationSelectTab(String title) {
+        if (!SwingUtilities.isEventDispatchThread()) throw new IllegalStateException("EDT required");
+        if (title==null || title.isBlank()) throw new IllegalArgumentException("Tab required");
+        for (int i=0;i<tabbedPane.getTabCount();i++) {
+            if (title.equals(tabbedPane.getTitleAt(i)) && tabbedPane.isEnabledAt(i)) {
+                tabbedPane.setSelectedIndex(i);
+                return automationSnapshot();
+            }
+        }
+        throw new IllegalArgumentException("Unknown or disabled tab");
+    }
+
+    public com.google.gson.JsonObject automationCancel() {
+        return hardwareAnalysisTab.automationCancel();
+    }
+
+    public com.google.gson.JsonObject automationReport(String format,int offset,int limit) {
+        return hardwareAnalysisTab.automationReport(format,offset,limit);
+    }
+
     public void automationSelectProfile(String profile) {
         hardwareAnalysisTab.automationSelectProfile(profile);
     }
