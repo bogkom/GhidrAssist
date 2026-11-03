@@ -239,17 +239,26 @@ public final class HardwareAnalysisTab extends JPanel {
     private Program automationApprovalProgram;
     private long automationApprovalRevision;
     private HardwareApplyPlan.Item automationApprovalItem;
+    private boolean automationApprovalCopy;
     private Program automationUndoProgram;
     private long automationUndoRevision = -1;
+    private boolean automationUndoCopy;
 
     /** Prepare ONE non-speculative memory row, without a database edit. */
     public com.google.gson.JsonObject automationApplyPrepare(int index) {
+        return automationPrepare(index,false);
+    }
+    public com.google.gson.JsonObject automationReviewPrepare(int index) {
+        return automationPrepare(index,true);
+    }
+    private com.google.gson.JsonObject automationPrepare(int index,boolean copy) {
         if (!SwingUtilities.isEventDispatchThread()) throw new IllegalStateException("EDT required");
         automationApprovalToken=null;
         if (automationUndoProgram!=null)
             throw new IllegalStateException("Prior synthetic Apply must be undone or inspected before another");
         Program program=plugin.getCurrentProgram();
-        ghidrassist.automation.AutomationWritePolicy.requireSyntheticSafe(program);
+        if(copy) ghidrassist.automation.AutomationWritePolicy.requireReviewCopy(program,plugin.getTool().getProject());
+        else ghidrassist.automation.AutomationWritePolicy.requireSyntheticSafe(program);
         if (!currentScan() || latestMarkdown==null || !latestConcrete)
             throw new IllegalStateException("Fresh explicit MC68332 analysis required");
         List<HardwareApplyPlan.Item> items=
@@ -262,6 +271,7 @@ public final class HardwareAnalysisTab extends JPanel {
                 !decision.selectedByDefault || item.name.startsWith("CS") ||
                 item.name.contains("CANDIDATE"))
             throw new IllegalStateException("Only default-safe mapped module memory proposals are permitted");
+        automationApprovalCopy=copy;
         automationApprovalProgram=program;
         automationApprovalRevision=program.getModificationNumber();
         automationApprovalItem=item;
@@ -272,21 +282,32 @@ public final class HardwareAnalysisTab extends JPanel {
         response.addProperty("name",item.name);
         response.addProperty("location",item.location());
         response.addProperty("kind",item.kind.name());
-        response.addProperty("scope","SYNTHETIC FIXTURE; SINGLE SAFE MEMORY ITEM; ONE USE");
+        response.addProperty("scope",copy ? "EXPLICIT WORKING COPY; SINGLE SAFE MEMORY ITEM; ONE USE" :
+            "SYNTHETIC FIXTURE; SINGLE SAFE MEMORY ITEM; ONE USE");
+        response.addProperty("revision",automationApprovalRevision);
+        response.addProperty("project_program_path",program.getDomainFile().getPathname());
+        response.addProperty("source_sha256",program.getExecutableSHA256());
         return response;
     }
 
     /** Commit a prepared single item and make exactly that transaction undoable. */
     public com.google.gson.JsonObject automationApplyCommit(String token,String expectedName) throws Exception {
+        return automationCommit(token,expectedName,false);
+    }
+    public com.google.gson.JsonObject automationReviewCommit(String token,String expectedName) throws Exception {
+        return automationCommit(token,expectedName,true);
+    }
+    private com.google.gson.JsonObject automationCommit(String token,String expectedName,boolean copy) throws Exception {
         if (!SwingUtilities.isEventDispatchThread()) throw new IllegalStateException("EDT required");
         String issued=automationApprovalToken;
         automationApprovalToken=null; // consume even for failed/mismatched attempts
-        if(issued==null || token==null || !issued.equals(token) ||
+        if(issued==null || automationApprovalCopy!=copy || token==null || !issued.equals(token) ||
                 expectedName==null || automationApprovalItem==null ||
                 !expectedName.equals(automationApprovalItem.name))
             throw new IllegalStateException("Missing, consumed or mismatched approval token");
         Program program=plugin.getCurrentProgram();
-        ghidrassist.automation.AutomationWritePolicy.requireSyntheticSafe(program);
+        if(copy) ghidrassist.automation.AutomationWritePolicy.requireReviewCopy(program,plugin.getTool().getProject());
+        else ghidrassist.automation.AutomationWritePolicy.requireSyntheticSafe(program);
         if(program!=automationApprovalProgram || !currentScan() ||
                 program.getModificationNumber()!=automationApprovalRevision)
             throw new IllegalStateException("Program or analysis changed after approval");
@@ -302,26 +323,35 @@ public final class HardwareAnalysisTab extends JPanel {
         HardwareApplyService.Outcome outcome=HardwareApplyService.apply(program,List.of(item));
         if(outcome.changed!=1 || outcome.skipped!=0)
             throw new IllegalStateException("Unexpected Apply outcome; inspect Ghidra Undo before retry");
+        automationUndoCopy=copy;
         automationUndoProgram=program;
         automationUndoRevision=program.getModificationNumber();
         com.google.gson.JsonObject result=new com.google.gson.JsonObject();
         result.addProperty("changed",outcome.changed);
         result.addProperty("skipped",outcome.skipped);
         result.addProperty("name",item.name);
+        result.addProperty("scope",copy ? "EXPLICIT WORKING COPY" : "SYNTHETIC FIXTURE");
         result.addProperty("undo_available",program.canUndo());
         return result;
     }
 
     /** Undo only our last Apply, and never if another edit intervened. */
     public com.google.gson.JsonObject automationApplyUndo() throws Exception {
+        return automationUndo(false);
+    }
+    public com.google.gson.JsonObject automationReviewUndo() throws Exception {
+        return automationUndo(true);
+    }
+    private com.google.gson.JsonObject automationUndo(boolean copy) throws Exception {
         if (!SwingUtilities.isEventDispatchThread()) throw new IllegalStateException("EDT required");
         Program program=plugin.getCurrentProgram();
-        ghidrassist.automation.AutomationWritePolicy.requireSyntheticSafe(program);
-        if(program!=automationUndoProgram ||
+        if(copy) ghidrassist.automation.AutomationWritePolicy.requireReviewCopy(program,plugin.getTool().getProject());
+        else ghidrassist.automation.AutomationWritePolicy.requireSyntheticSafe(program);
+        if(automationUndoCopy!=copy || program!=automationUndoProgram ||
                 program.getModificationNumber()!=automationUndoRevision ||
                 !program.canUndo())
             throw new IllegalStateException("Our Apply is not the most recent undoable edit");
-        automationUndoProgram=null;automationUndoRevision=-1; // one-shot
+        automationUndoProgram=null;automationUndoRevision=-1;automationUndoCopy=false; // one-shot
         program.undo();
         com.google.gson.JsonObject result=new com.google.gson.JsonObject();
         result.addProperty("undone",true);
