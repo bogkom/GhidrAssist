@@ -23,6 +23,10 @@ def main():
     parser.add_argument("--mode", choices=("test", "trusted"), default="test")
     parser.add_argument("--allow-program-switch", action="store_true",
                         help="Opt in to opening another program in the same active Ghidra project")
+    parser.add_argument("--review-copy", action="store_true",
+                        help="Operator attests --project is an isolated COPY, not the original project")
+    parser.add_argument("--expected-sha256", default="",
+                        help="Exact source executable SHA-256 for selected copy program")
     parser.add_argument("--write-mode", choices=("read-only","auto-safe","full-control"),
                         default="read-only", help="Agent write policy; production writes remain disabled")
     parser.add_argument("--synthetic-writes", action="store_true",
@@ -41,7 +45,13 @@ def main():
         parser.error("--allow-program-switch requires --project and --program")
     if args.write_mode == "full-control":
         parser.error("FULL_CONTROL API writes are not implemented; use Ghidra GUI for reviewed edits")
-    if args.write_mode == "auto-safe" and not args.synthetic_writes:
+    if args.review_copy:
+        import re
+        if (args.mode != "test" or args.write_mode != "auto-safe" or
+                args.synthetic_writes or not args.project or not args.program or
+                not re.fullmatch(r"[0-9a-fA-F]{64}", args.expected_sha256)):
+            parser.error("Review-copy requires --mode test --write-mode auto-safe --project --program --expected-sha256 and no --synthetic-writes")
+    if args.write_mode == "auto-safe" and not (args.synthetic_writes or args.review_copy):
         parser.error("AUTO_SAFE currently requires --synthetic-writes in isolated test mode")
     if args.synthetic_writes and args.write_mode == "read-only":
         parser.error("--synthetic-writes requires --write-mode auto-safe")
@@ -108,6 +118,13 @@ def main():
     ]
     if args.synthetic_writes:
         options.append("-Dghidrassist.automation.syntheticWrites=true")
+    if args.review_copy:
+        options.extend([
+            "-Dghidrassist.automation.reviewCopy=true",
+            "-Dghidrassist.automation.reviewCopyProject=" + str(args.project.expanduser().resolve()),
+            "-Dghidrassist.automation.reviewCopyProgram=/" + args.program,
+            "-Dghidrassist.automation.reviewCopySha256=" + args.expected_sha256.lower(),
+        ])
     if args.allow_program_switch:
         options.append("-Dghidrassist.automation.allowProgramSwitch=true")
     env["GHIDRASSIST_AUTOMATION_TOKEN"] = token
