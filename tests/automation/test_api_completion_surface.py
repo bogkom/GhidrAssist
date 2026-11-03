@@ -26,6 +26,18 @@ class ApiCompletion(unittest.TestCase):
         self.assertIn('"task_id": args.task_id',cli)
         self.assertIn('parser.add_argument("--task-id"',cli)
 
+    def test_listing_instruction_evidence_is_read_only_and_bounded(self):
+        listing=(ROOT/"src/main/java/ghidrassist/automation/AutomationListing.java").read_text()
+        server=(ROOT/"src/main/java/ghidrassist/automation/AutomationServer.java").read_text()
+        self.assertIn("AutomationListing.snapshot(program,loc)",server)
+        self.assertIn('result.add("listing",listing)',server)
+        self.assertIn('result.addProperty("address",listing.get("address").getAsString())',server)
+        self.assertIn("getInstructionContaining",listing)
+        self.assertIn("getReferencesFrom()",listing)
+        self.assertIn("MAX_REFERENCES = 16",listing)
+        self.assertIn("MAX_BYTES = 32",listing)
+        self.assertIn("location.getProgram()!=program",listing)
+
     def test_rpc_dispatch_and_edts(self):
         server=(ROOT/"src/main/java/ghidrassist/automation/AutomationServer.java").read_text()
         ui=(ROOT/"src/main/java/ghidrassist/ui/GhidrAssistUI.java").read_text()

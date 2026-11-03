@@ -129,9 +129,12 @@ public final class AutomationServer implements AutoCloseable {
                         AutomationWritePolicy.mode()!=AutomationWritePolicy.Mode.READ_ONLY &&
                         Boolean.getBoolean("ghidrassist.automation.syntheticWrites"));
                 } else if ("listing.snapshot".equals(method)) {
-                    ProgramLocation loc = plugin.getTool().getService(ghidra.app.services.CodeViewerService.class) == null
-                        ? null : plugin.getTool().getService(ghidra.app.services.CodeViewerService.class).getCurrentLocation();
-                    result.addProperty("address", loc == null || loc.getAddress() == null ? "" : loc.getAddress().toString());
+                    var viewer=plugin.getTool().getService(ghidra.app.services.CodeViewerService.class);
+                    ProgramLocation loc=viewer==null ? null : viewer.getCurrentLocation();
+                    JsonObject listing=AutomationListing.snapshot(program,loc);
+                    // Preserve the original top-level "address" field for API v3 clients.
+                    result.addProperty("address",listing.get("address").getAsString());
+                    result.add("listing",listing);
                 } else if ("listing.goto".equals(method)) {
                     if (program == null) throw new IllegalStateException("No active program");
                     String address = args.get("address").getAsString();

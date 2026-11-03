@@ -533,3 +533,23 @@ without `task_id` remain supported but are also program-guarded.
 CLI: `ghidrassist-agent decompile-status --task-id <id> --offset 0 --limit 4096`.
 A native isolated Ghidra 12.1.4 synthetic CPU32 regression checks
 task identity and a simulated changed active program; no project writes.
+
+## Decoded Listing evidence in `listing.snapshot` (GA-18)
+
+The preexisting top-level `address` remains unchanged. The read-only
+response now also contains a nested `listing` object with `address`,
+`revision`, `decoded`, and (only where a decoded Ghidra instruction is
+present) `instruction_address`, `text`, `mnemonic`, `flow_type`,
+`length`, up to 32 bytes in `bytes_hex`, `bytes_truncated`,
+`function_entry` if known, `reference_total` and at most 16 outgoing
+`references` with their source, destination and Ghidra reference kind.
+The nested object is intentionally limited to **one** instruction at the
+active CodeBrowser cursor; it is not a bulk disassembly export. It rejects
+a stale Listing location from a different active Program and makes
+undecoded address locations explicit (`decoded:false`).
+
+All evidence reflects **static Ghidra Listing** and reference metadata.
+Decoded instructions or reference types do not prove execution, live MMIO,
+MC68332 device register identity or physical memory mapping. The
+real-Ghidra 12.1.4 synthetic-callgraph CI verifies the production
+snapshot logic without opening a second GUI or modifying a project.
