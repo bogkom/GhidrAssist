@@ -8,6 +8,7 @@ import ghidra.framework.model.Project;
 import ghidra.framework.plugintool.Plugin;
 import ghidra.framework.plugintool.PluginInfo;
 import ghidra.framework.plugintool.PluginTool;
+import ghidra.app.services.ProgramManager;
 import ghidra.framework.plugintool.util.PluginStatus;
 import ghidra.util.Msg;
 import javax.swing.Timer;
@@ -32,6 +33,34 @@ public final class AgentProjectOpenPlugin extends Plugin implements ApplicationL
     private static final AtomicBoolean OPEN_REQUEST_CONSUMED=new AtomicBoolean(false);
     private Timer poller;
     private int attempts;
+    // Restored project tools can appear after the Project Window is ready.
+    private static final int RESTORE_SETTLE_TICKS=40; // 10s at 250ms
+
+    /** Reuse any existing CodeBrowser-like ProgramManager before launching. */
+    static boolean reuseExistingProgramTool(DomainFile requested, PluginTool[] running) {
+        if(running==null)return false;
+        ProgramManager available=null;
+        for(PluginTool existing:running) {
+            if(existing==null || existing instanceof FrontEndTool)continue;
+            ProgramManager pm=existing.getService(ProgramManager.class);
+            if(pm==null)continue;
+            for(var opened:pm.getAllOpenPrograms()) {
+                if(opened!=null && opened.getDomainFile()!=null &&
+                        requested.getPathname().equals(opened.getDomainFile().getPathname())) {
+                    pm.setCurrentProgram(opened);
+                    return true;
+                }
+            }
+            if(available==null)available=pm;
+        }
+        if(available==null)return false;
+        if(available.openProgram(requested)==null)
+            Msg.error(AgentProjectOpenPlugin.class,
+                "Existing CodeBrowser could not open requested automation program");
+        // Never create an additional tool when a program-capable tool exists.
+        return true;
+    }
+
 
     public AgentProjectOpenPlugin(PluginTool tool) {
         super(tool);
@@ -59,8 +88,12 @@ public final class AgentProjectOpenPlugin extends Plugin implements ApplicationL
                 poller.stop();
                 return;
             }
+            // Wait for the previously saved project workspace to restore.
+            if(attempts<RESTORE_SETTLE_TICKS)return;
             poller.stop();
             if (!OPEN_REQUEST_CONSUMED.compareAndSet(false,true)) return;
+            if(reuseExistingProgramTool(file,project.getToolServices().getRunningTools()))
+                return;
             if (project.getToolServices().launchDefaultTool(List.of(file)) == null)
                 Msg.error(this,"Unable to launch CodeBrowser from active writable project");
         });
