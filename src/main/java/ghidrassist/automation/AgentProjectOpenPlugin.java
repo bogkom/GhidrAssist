@@ -1,7 +1,8 @@
 package ghidrassist.automation;
 
 import ghidra.app.plugin.PluginCategoryNames;
-import ghidra.framework.main.ApplicationLevelPlugin;
+import ghidra.framework.main.ApplicationLevelOnlyPlugin;
+import ghidra.framework.main.FrontEndTool;
 import ghidra.framework.model.DomainFile;
 import ghidra.framework.model.Project;
 import ghidra.framework.plugintool.Plugin;
@@ -12,6 +13,7 @@ import ghidra.util.Msg;
 import javax.swing.Timer;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Optional Project Window plugin for explicitly requested agent sessions only.
@@ -25,7 +27,9 @@ import java.util.List;
     shortDescription = "GhidrAssist Automation Project Opener",
     description = "Opt-in synthetic/agent fixture opening in active project"
 )
-public final class AgentProjectOpenPlugin extends Plugin implements ApplicationLevelPlugin {
+public final class AgentProjectOpenPlugin extends Plugin implements ApplicationLevelOnlyPlugin {
+    // Exactly one Project Window opener for this JVM. Never launch from CodeBrowser.
+    private static final AtomicBoolean OPEN_REQUEST_CONSUMED=new AtomicBoolean(false);
     private Timer poller;
     private int attempts;
 
@@ -33,7 +37,7 @@ public final class AgentProjectOpenPlugin extends Plugin implements ApplicationL
         super(tool);
         String path = System.getProperty("ghidrassist.automation.openProgram", "");
         String expected = System.getProperty("ghidrassist.automation.project", "");
-        if (path.isBlank() || expected.isBlank()) {
+        if (!(tool instanceof FrontEndTool) || path.isBlank() || expected.isBlank()) {
             poller = null;
             return;
         }
@@ -56,6 +60,7 @@ public final class AgentProjectOpenPlugin extends Plugin implements ApplicationL
                 return;
             }
             poller.stop();
+            if (!OPEN_REQUEST_CONSUMED.compareAndSet(false,true)) return;
             if (project.getToolServices().launchDefaultTool(List.of(file)) == null)
                 Msg.error(this,"Unable to launch CodeBrowser from active writable project");
         });
