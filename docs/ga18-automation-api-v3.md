@@ -386,3 +386,32 @@ already active Program is idempotent, including when it has unsaved edits.
 CLI: `ghidrassist-agent program-open /synthetic-mmio.bin`.
 The operation is disabled by default and restricted to the active
 Ghidra project; opening arbitrary host paths is not supported.
+
+
+## Write capability policy — stage 1 (no production writes)
+
+The agent has a fail-closed write-mode vocabulary:
+
+- `READ_ONLY`: default for normal launcher sessions, no API writes.
+- `AUTO_SAFE`: currently authorizes **only the preexisting** isolated
+  `synthetic-mmio.bin` Apply/Undo pilot when the separate
+  `syntheticWrites=true` property is present. Its original preflight,
+  exact Program/revision/token/transaction/Undo protections remain enforced.
+- `FULL_CONTROL`: **declared but not enabled**. The launcher refuses
+  this mode and API writes to actual firmware projects remain disabled.
+  This name is not authorization to overwrite user names, memory blocks or
+  other Ghidra changes.
+
+Use `ghidrassist-agent-start --write-mode read-only` for ordinary work.
+For the isolated test fixture only, use `--mode test --write-mode auto-safe
+--synthetic-writes` with the exact known project and program. Query
+`session.status` to see `write_mode`,
+`production_writes_enabled: false`, and whether the synthetic pilot is
+enabled. The synthetic pilot also accepts legacy direct JVM activation,
+where `syntheticWrites=true` without an explicit mode maps to `AUTO_SAFE`
+for existing CI compatibility.
+
+Stage 2 requires a per-project allowlist/consent receipt, review of exact
+proposals and full preflight after consent, and isolated-copy tests of the
+actual transaction and Undo semantics. Until these checks are implemented
+and verified, do not use `FULL_CONTROL` with real firmware.
