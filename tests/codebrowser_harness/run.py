@@ -340,6 +340,40 @@ def main():
                             if review_task.get("state")!="RUNNING" or time.monotonic()>deadline:
                                 raise RuntimeError("MC68332 Review prerequisite analysis incomplete")
                             time.sleep(0.08)
+                        # Real CodeBrowser / HTTP API: safe control and evidence
+                        # endpoints (never mutate the Ghidra database).
+                        changed=http_call("ui.tab.select",{"tab":"Hardware Analysis"})
+                        if changed.get("ui",{}).get("selected_tab")!="Hardware Analysis":
+                            raise RuntimeError("Tab selection did not reach Swing UI")
+                        try:
+                            http_call("ui.tab.select",{"tab":"nonexistent"})
+                        except HTTPError as error:
+                            if error.code!=400: raise
+                        else:
+                            raise RuntimeError("Unknown UI tab was accepted")
+                        for method in ("analysis.report","analysis.export"):
+                            page=http_call(method,{"format":"markdown","offset":0,"limit":128}).get("report",{})
+                            if (page.get("format")!="markdown" or
+                                    not 0<len(page.get("text",""))<=128 or
+                                    page.get("total_characters",0)<len(page["text"]) or
+                                    not page.get("revision")):
+                                raise RuntimeError("Hardware evidence page invalid: "+str(page))
+                            end=http_call(method,{"format":"markdown",
+                                "offset":page["total_characters"],"limit":128}).get("report",{})
+                            if end.get("text")!="" or end.get("more") is not False:
+                                raise RuntimeError("End-of-report page invalid")
+                        try:
+                            http_call("analysis.report",{"format":"markdown","offset":0,"limit":8193})
+                        except HTTPError as error:
+                            if error.code!=400: raise
+                        else:
+                            raise RuntimeError("Unbounded report page was accepted")
+                        try:
+                            http_call("hardware.cancel")
+                        except HTTPError as error:
+                            if error.code!=400: raise
+                        else:
+                            raise RuntimeError("Cancellation incorrectly accepted without a task")
                         reviewed=http_call("hardware.review.preview",{"offset":0,"limit":10})
                         proposals=reviewed.get("review",{})
                         if (not proposals.get("total") or not proposals.get("rows") or
