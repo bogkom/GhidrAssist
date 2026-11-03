@@ -23,6 +23,8 @@ def main():
     parser.add_argument("--mode", choices=("test", "trusted"), default="test")
     parser.add_argument("--allow-program-switch", action="store_true",
                         help="Opt in to opening another program in the same active Ghidra project")
+    parser.add_argument("--write-mode", choices=("read-only","auto-safe","full-control"),
+                        default="read-only", help="Agent write policy; production writes remain disabled")
     parser.add_argument("--synthetic-writes", action="store_true",
                         help="Explicitly enable single-item Apply/Undo ONLY in the isolated synthetic fixture")
     args = parser.parse_args()
@@ -37,6 +39,12 @@ def main():
         parser.error("Ghidra project not found")
     if args.allow_program_switch and (not args.project or not args.program):
         parser.error("--allow-program-switch requires --project and --program")
+    if args.write_mode == "full-control":
+        parser.error("FULL_CONTROL API writes are not implemented; use Ghidra GUI for reviewed edits")
+    if args.write_mode == "auto-safe" and not args.synthetic_writes:
+        parser.error("AUTO_SAFE currently requires --synthetic-writes in isolated test mode")
+    if args.synthetic_writes and args.write_mode == "read-only":
+        parser.error("--synthetic-writes requires --write-mode auto-safe")
     if args.synthetic_writes:
         fixture = (Path.home() / "Projekty/Codex/ga-automation-test/project/AutomationFixture.gpr").resolve()
         if (args.mode != "test" or args.program != "synthetic-mmio.bin" or
@@ -96,6 +104,7 @@ def main():
     options = [
         "-Dghidrassist.automation.enabled=true",
         "-Dghidrassist.automation.ready=" + str(ready),
+        "-Dghidrassist.automation.writeMode=" + args.write_mode.upper().replace("-","_"),
     ]
     if args.synthetic_writes:
         options.append("-Dghidrassist.automation.syntheticWrites=true")
