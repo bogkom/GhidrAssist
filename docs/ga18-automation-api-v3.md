@@ -356,3 +356,17 @@ The current tranche does **not** enable production Apply/Undo, automatic
 program switch, or write-oriented GUI automation. Existing synthetic-only
 Apply/Undo permissions and protections remain unchanged. These operations
 require separate safety design and real-Ghidra verification.
+
+
+### MMIO Explorer row selection (fifth completion method)
+
+`ui.table.select` accepts `{"table":"hardware.mmio","row":0}`, where
+`row` is a **zero-based index in the current visible, filtered MMIO
+Explorer JTable**. If that modeless dialog is not open, the command opens
+the existing read-only MMIO Explorer on the EDT. Requires a fresh completed
+Analyze revision; unknown table IDs and out-of-range rows fail closed.
+It returns selected row, PC and revision without navigating Listing or
+changing the Ghidra database. The existing dialog's filter state is
+preserved. CLI: `ghidrassist-agent table-select hardware.mmio --row 0`.
+The current API intentionally does not expose arbitrary Swing tree/table
+reflection or blanket UI control.
