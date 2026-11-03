@@ -273,9 +273,13 @@ public final class AutomationServer implements AutoCloseable {
                         throw new IllegalStateException("Requested writable project program not available");
                     var manager=plugin.getTool().getService(ghidra.app.services.ProgramManager.class);
                     if(manager==null) throw new IllegalStateException("Ghidra Program Manager unavailable");
-                    if(program!=null && program.isChanged())
+                    // Idempotent open of the current program does not switch tools or
+                    // discard unsaved changes. Other targets require a clean source.
+                    boolean alreadyCurrent=program!=null && program.getDomainFile()!=null &&
+                        path.equals(program.getDomainFile().getPathname());
+                    if(!alreadyCurrent && program!=null && program.isChanged())
                         throw new IllegalStateException("Save or revert existing program edits before switching");
-                    var opened=manager.openProgram(file);
+                    Program opened=alreadyCurrent ? program : manager.openProgram(file);
                     if(opened==null) throw new IllegalStateException("Project program could not be opened");
                     result.addProperty("opened_program",opened.getName());
                     result.addProperty("project_path",path);
