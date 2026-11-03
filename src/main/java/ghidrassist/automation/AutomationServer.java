@@ -115,6 +115,8 @@ public final class AutomationServer implements AutoCloseable {
                     result.addProperty("status", "READY");
                     result.addProperty("write_mode",AutomationWritePolicy.mode().name());
                     result.addProperty("production_writes_enabled",false);
+                    result.addProperty("review_copy_enabled",Boolean.getBoolean("ghidrassist.automation.reviewCopy") &&
+                        AutomationWritePolicy.mode()==AutomationWritePolicy.Mode.AUTO_SAFE);
                     result.addProperty("synthetic_write_pilot_enabled",
                         AutomationWritePolicy.mode()!=AutomationWritePolicy.Mode.READ_ONLY &&
                         Boolean.getBoolean("ghidrassist.automation.syntheticWrites"));
@@ -243,6 +245,20 @@ public final class AutomationServer implements AutoCloseable {
                     xrefs.addProperty("limit",limit);
                     xrefs.add("rows",refs);
                     result.add("xrefs",xrefs);
+                } else if ("hardware.review.prepare".equals(method) ||
+                           "hardware.review.apply".equals(method) ||
+                           "hardware.review.undo".equals(method)) {
+                    GhidrAssistProvider provider=plugin.getAutomationProvider();
+                    if(provider==null)throw new IllegalStateException("GhidrAssist UI unavailable");
+                    if("hardware.review.prepare".equals(method)) {
+                        result.add("approval",provider.getUI().automationReviewPrepare(
+                            args.get("index").getAsInt()));
+                    } else if("hardware.review.apply".equals(method)) {
+                        result.add("apply",provider.getUI().automationReviewCommit(
+                            args.get("token").getAsString(),args.get("name").getAsString()));
+                    } else {
+                        result.add("undo",provider.getUI().automationReviewUndo());
+                    }
                 } else if ("hardware.apply.prepare".equals(method) ||
                            "hardware.apply.commit".equals(method) ||
                            "hardware.apply.undo".equals(method)) {
