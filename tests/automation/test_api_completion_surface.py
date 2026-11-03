@@ -26,6 +26,6 @@ class ApiCompletion(unittest.TestCase):
         self.assertIn("limit>8192",hw)
         self.assertIn("content.substring(start,end)",hw)
         self.assertIn("No cancellable Analyze task",hw)
-        self.assertNotIn("Files.writeString",server)
+        # The preexisting startup READY receipt intentionally uses Files.writeString.\n        # Only the export dispatch must remain free of file I/O.\n        export_branch=server.split('"analysis.report".equals(method)')[1].split('"hardware.profile.select".equals(method)')[0]\n        self.assertNotIn("Files.writeString",export_branch)
 
 if __name__=="__main__":unittest.main()
