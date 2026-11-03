@@ -336,6 +336,65 @@ def main():
                         listing=http_call("listing.snapshot")
                         if int(listing.get("address","0"),16)!=int(pc,16):
                             raise RuntimeError("HTTP Listing did not reach SIMCR reference")
+                        # GA-18 new read-only Listing pages through the live
+                        # production HTTP server, not a reflective helper call.
+                        page=http_call("listing.range",
+                            {"address":pc,"offset":0,"limit":1}).get("listing_range",{})
+                        instruction=page.get("rows",[])
+                        if (page.get("returned")!=1 or len(instruction)!=1 or
+                                int(instruction[0].get("instruction_address","0"),16)!=int(pc,16) or
+                                not instruction[0].get("decoded") or
+                                not instruction[0].get("bytes_hex") or
+                                page.get("offset_unit")!="decoded_instructions"):
+                            raise RuntimeError("HTTP Listing range invalid: "+str(page))
+                        revision=page["revision"]
+                        next_page=http_call("listing.range",
+                            {"address":pc,"offset":1,"limit":1,
+                             "expected_revision":revision}).get("listing_range",{})
+                        if next_page.get("offset")!=1 or next_page.get("revision")!=revision:
+                            raise RuntimeError("HTTP Listing page cursor/revision mismatch")
+                        from urllib.error import HTTPError
+                        for invalid in (
+                            {"address":pc,"offset":0,"limit":65},
+                            {"address":pc,"offset":0,"limit":1,
+                             "expected_revision":revision+1}):
+                            try:
+                                http_call("listing.range",invalid)
+                            except HTTPError as error:
+                                if error.code!=400: raise
+                            else:
+                                raise RuntimeError("Invalid Listing range request was accepted")
+
+                        active=http_call("function.snapshot").get("function",{})
+                        entry=active.get("entry")
+                        if not entry:
+                            raise RuntimeError("No real Ghidra function at current Listing site")
+                        refs=http_call("function.xrefs.body",
+                            {"direction":"outgoing","offset":0,"limit":100,
+                             "expected_revision":revision,
+                             "expected_entry":entry}).get("body_xrefs",{})
+                        if (refs.get("entry")!=entry or refs.get("revision")!=revision or
+                                refs.get("direction")!="outgoing"):
+                            raise RuntimeError("HTTP whole-function XREF identity mismatch")
+                        if not any(
+                                row.get("direction")=="outgoing" and
+                                row.get("source_in_body") is True and
+                                int(row.get("to","0"),16)==0xFFFA00
+                                for row in refs.get("rows",[])):
+                            raise RuntimeError("HTTP body XREF missing real static SIMCR write")
+                        for invalid in (
+                            {"direction":"outgoing","offset":0,"limit":101},
+                            {"direction":"outgoing","offset":0,"limit":1,
+                             "expected_entry":"not-the-current-entry"},
+                            {"direction":"outgoing","offset":0,"limit":1,
+                             "expected_revision":revision+1}):
+                            try:
+                                http_call("function.xrefs.body",invalid)
+                            except HTTPError as error:
+                                if error.code!=400: raise
+                            else:
+                                raise RuntimeError("Invalid body XREF request was accepted")
+                        print("PASS: production HTTP Listing range + function body XREF guards")
                         # Production HTTP traversal, same actual CodeBrowser Program.
                         paths_reply=http_call("analysis.paths",
                             {"origin":"reset","max_depth":4,"offset":0,"limit":10})
