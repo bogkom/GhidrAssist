@@ -379,6 +379,19 @@ def main():
                         if (not proposals.get("total") or not proposals.get("rows") or
                                 "PREVIEW ONLY" not in proposals.get("scope","")):
                             raise RuntimeError("Concrete read-only Review failed: "+str(proposals))
+                        selected_row=http_call("ui.table.select",
+                            {"table":"hardware.mmio","row":0}).get("selection",{})
+                        if (selected_row.get("table")!="hardware.mmio" or
+                                selected_row.get("row")!=0 or
+                                selected_row.get("selected") is not True or
+                                not selected_row.get("pc")):
+                            raise RuntimeError("MMIO JTable selection failed: "+str(selected_row))
+                        try:
+                            http_call("ui.table.select",{"table":"hardware.mmio","row":999999})
+                        except HTTPError as error:
+                            if error.code!=400: raise
+                        else:
+                            raise RuntimeError("Out-of-range JTable selection accepted")
                         candidates=[row for row in proposals["rows"]
                                     if row.get("kind")=="MEMORY" and row.get("state")=="READY"
                                     and row.get("selected_by_default") and
