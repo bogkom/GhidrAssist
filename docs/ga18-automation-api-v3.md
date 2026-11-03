@@ -466,3 +466,24 @@ The new separate `ga18-review-copy.yml` CI workflow executes this
 path on a generated isolated fixture in real Ghidra CodeBrowser/Xvfb,
 including failed approval and successful exact-transaction Undo. A PASS
 on that synthetic copy is not a real-firmware acceptance.
+
+
+### Audit receipts and fail-closed source mismatch
+
+A working-copy `hardware.review.prepare` response now explicitly returns
+the proposed single item, location, `preflight_state`,
+`preflight_description`, `proposal_details`, `planned_changes=1`,
+`applied=false`, source identity, revision and the consumed-on-use approval
+token. Successful Apply returns the actual changed/skipped counts and the
+before/after Ghidra modification numbers plus rechecked preflight rationale.
+Undo returns the original transaction's modification number and its
+post-Undo revision. These are **in-session** receipts, not an actor
+attribution or a persistent Ghidra audit database.
+
+`session.status.review_copy_enabled` indicates the feature flag was
+requested. `review_copy_authorized` instead requires the **currently
+active** project, program and SHA-256 to match the startup receipt.
+The separate real-Ghidra copy regression also supplies an intentionally
+incorrect SHA-256 and must obtain a 400 denial at Review Prepare, with no
+transaction started. This validates the guard rather than just its presence
+in the Java source.
