@@ -111,6 +111,7 @@ def main():
     ap.add_argument("--bridge-timeout",type=int,default=60)
     ap.add_argument("--automation-probe",action="store_true")
     ap.add_argument("--review-copy-probe",action="store_true",help="Separate isolated project-copy Review/Apply/Undo HTTP test")
+    ap.add_argument("--review-copy-bad-sha",action="store_true",help="Verify invalid copy identity prevents Review before any edit")
     ap.add_argument("--cua-live",action="store_true",
                     help="Bounded live synthetic window for separate future native CUA")
     ap.add_argument("--cua-timeout",type=int,default=30)
@@ -118,6 +119,8 @@ def main():
                                                  "window-changed"),default="none",
                     help="CI-only synthetic host response; never a native CUA proof")
     args=ap.parse_args()
+    if args.review_copy_bad_sha and not args.review_copy_probe:
+        ap.error("--review-copy-bad-sha requires --review-copy-probe")
     if args.review_copy_probe and (not args.automation_probe or args.bridge_mode!="off" or args.cua_live):
         ap.error("--review-copy-probe requires --automation-probe, with bridge and CUA disabled")
     if args.timeout<90 or args.timeout>900:
@@ -230,7 +233,8 @@ def main():
                         " -Dghidrassist.automation.reviewCopy=true"
                         " -Dghidrassist.automation.reviewCopyProject="+str(project)+
                         " -Dghidrassist.automation.reviewCopyProgram=/synthetic-mmio.bin"
-                        " -Dghidrassist.automation.reviewCopySha256="+sha256(work/"synthetic-mmio.bin"))
+                        " -Dghidrassist.automation.reviewCopySha256="+
+                        ("0"*64 if args.review_copy_bad_sha else sha256(work/"synthetic-mmio.bin")))
                 else:
                     env["JAVA_TOOL_OPTIONS"] += " -Dghidrassist.automation.syntheticWrites=true"
             if args.automation_probe:
@@ -302,7 +306,9 @@ def main():
                         if (policy.get("write_mode")!="AUTO_SAFE" or
                                 policy.get("production_writes_enabled") is not False or
                                 policy.get("synthetic_write_pilot_enabled") is not (not args.review_copy_probe) or
-                                policy.get("review_copy_enabled") is not args.review_copy_probe):
+                                policy.get("review_copy_enabled") is not args.review_copy_probe or
+                                policy.get("review_copy_authorized") is not
+                                (args.review_copy_probe and not args.review_copy_bad_sha)):
                             raise RuntimeError("Synthetic write policy not correctly scoped: "+str(policy))
                         started=http_call("hardware.analyze")
                         if started.get("schema")!=3:
@@ -433,6 +439,22 @@ def main():
                         if not candidates:
                             raise RuntimeError("No safe synthetic memory item for Apply")
                         chosen=candidates[0]
+                        if args.review_copy_bad_sha:
+                            from urllib.error import HTTPError
+                            try:
+                                http_call("hardware.review.prepare",{"index":chosen["index"]})
+                            except HTTPError as error:
+                                response=error.read().decode("utf-8",errors="replace")
+                                if error.code!=400 or "copy receipt" not in response:
+                                    raise RuntimeError("Incorrect denial for source SHA mismatch: "+response)
+                            else:
+                                raise RuntimeError("Untrusted project copy SHA was accepted")
+                            if http_call("session.status").get("review_copy_authorized") is not False:
+                                raise RuntimeError("Mismatched copy remains authorized")
+                            result.update(status="EXPECTED_REVIEW_COPY_SHA_DENIAL",
+                                          synthetic_only=True,database_edits=False,
+                                          source_identity_denied=True)
+                            return 0
                         prepare_method=("hardware.review.prepare" if args.review_copy_probe else "hardware.apply.prepare")
                         apply_method=("hardware.review.apply" if args.review_copy_probe else "hardware.apply.commit")
                         undo_method=("hardware.review.undo" if args.review_copy_probe else "hardware.apply.undo")
