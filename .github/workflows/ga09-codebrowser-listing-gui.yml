@@ -66,6 +66,27 @@ jobs:
               --extension-zip "$EXTENSION" \
               --extension-sha256 "$(cut -d' ' -f1 "$RUNNER_TEMP/extension.sha256")" \
               --output "$RUNNER_TEMP/codebrowser-evidence" --timeout 300
+      - name: GA-18 external hardware UI automation pilot (real Xvfb/Swing)
+        shell: bash
+        run: |
+          set -euo pipefail
+          xvfb-run -a -s '-screen 0 1400x1050x24' \
+            bash -c 'openbox --sm-disable >/dev/null 2>&1 & wm=$!; trap "kill $wm 2>/dev/null || true" EXIT; sleep 1; python3 tests/codebrowser_harness/run.py "$@"' automation \
+              --ghidra "$GHIDRA_INSTALL_DIR" --java-home "$JAVA_HOME" \
+              --extension-zip "$EXTENSION" \
+              --extension-sha256 "$(cut -d' ' -f1 "$RUNNER_TEMP/extension.sha256")" \
+              --output "$RUNNER_TEMP/hardware-automation-evidence" --automation-probe --timeout 300
+          grep -F 'PASS: external v2 Swing snapshots, Hardware Analyze, Listing navigation' "$RUNNER_TEMP/hardware-automation-evidence/automation-controller.log"
+      - name: GA-18 hardware automation failure diagnostics
+        if: failure()
+        shell: bash
+        run: |
+          for file in "$RUNNER_TEMP/hardware-automation-evidence/automation-controller.log" "$RUNNER_TEMP/hardware-automation-evidence/java.log" "$RUNNER_TEMP/hardware-automation-evidence/compile.log" "$RUNNER_TEMP/hardware-automation-evidence/result.json"; do
+            if test -f "$file"; then
+              echo "=== $(basename "$file") ==="
+              tail -n 100 "$file"
+            fi
+          done
       - name: GUI-06 external-process live X11 same-run handshake in isolated Xvfb
         shell: bash
         run: |
@@ -200,6 +221,7 @@ jobs:
           name: GhidrAssist-CodeBrowser-12.1.4-${{ github.run_id }}
           path: |
             ${{ runner.temp }}/codebrowser-evidence/
+            ${{ runner.temp }}/hardware-automation-evidence/
             ${{ runner.temp }}/ga18-gui/evidence/
             ${{ runner.temp }}/ga18-timeout/evidence/
             ${{ runner.temp }}/ga18-cua-live/evidence/

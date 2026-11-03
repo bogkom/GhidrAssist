@@ -108,6 +108,7 @@ def main():
     ap.add_argument("--timeout",type=int,default=300)
     ap.add_argument("--bridge-mode",choices=("off","ci","host"),default="off")
     ap.add_argument("--bridge-timeout",type=int,default=60)
+    ap.add_argument("--automation-probe",action="store_true")
     ap.add_argument("--cua-live",action="store_true",
                     help="Bounded live synthetic window for separate future native CUA")
     ap.add_argument("--cua-timeout",type=int,default=30)
@@ -200,7 +201,8 @@ def main():
             conf={"ghidra":str(ghidra),"project_dir":str(work/"project"),
                   "index":str(work/"index"),"run_id":run_id,"case_id":case_id,
                   "bridge_timeout":args.bridge_timeout if args.bridge_mode!="off" else 0,
-                  "cua_hold_seconds":args.cua_timeout if args.cua_live else 0}
+                  "cua_hold_seconds":args.cua_timeout if args.cua_live else 0,
+                  "automation_probe":args.automation_probe}
             conf_path=work/"config.json"
             conf_path.write_text(json.dumps(conf),encoding="utf-8")
             jars=sorted(set(ghidra.rglob("*.jar")) | set(ext.rglob("*.jar")))
@@ -224,7 +226,15 @@ def main():
                     start_new_session=True)
                 observer=None
                 try:
-                    if args.cua_live and args.cua_ci_response!="none":
+                    if args.automation_probe:
+                        with (out/"automation-controller.log").open("x") as controller_log:
+                            observer=subprocess.Popen(
+                                [sys.executable,str(SRC.parent/"automation_controller.py"),
+                                 "--directory",str(out)],cwd=work,env=env,
+                                stdout=controller_log,stderr=subprocess.STDOUT,
+                                start_new_session=True)
+                        code=process.wait(timeout=args.timeout)
+                    elif args.cua_live and args.cua_ci_response!="none":
                         with (out/"cua-observer.log").open("x") as observer_log:
                             observer=subprocess.Popen(
                                 [sys.executable,str(SRC.parent/"ci_cua_observer.py"),
@@ -261,6 +271,25 @@ def main():
                         os.killpg(process.pid,signal.SIGTERM)
                     with contextlib.suppress(ProcessLookupError):
                         os.killpg(process.pid,signal.SIGKILL)
+            if args.automation_probe:
+                observed=json.loads((out/"automation-java-result.json").read_text())
+                final=json.loads((out/"automation-4-response.json").read_text())
+                if (observed.get("external_automation_probe") is not True or
+                        observed.get("automation_protocol_schema")!=2 or
+                        final.get("schema")!=2 or final.get("sequence")!=4 or
+                        final.get("action")!="listing.snapshot" or
+                        int(final.get("listing_address","0"),16)!=0x20):
+                    raise RuntimeError("External v2 automation contract incomplete")
+                result.update(status="PASSED_HARDWARE_AUTOMATION_V2",
+                              ghidra_version=VERSION,synthetic_only=True,
+                              automation_protocol_schema=2,
+                              assertions=["ui.snapshot","hardware.analyze",
+                                          "listing.goto","listing.snapshot"],
+                              supervisor_ack=False,formal_gui_pass=False)
+                (out/"result.json").write_text(json.dumps(result,indent=2)+"\\n",
+                                              encoding="utf-8")
+                print(json.dumps(result,indent=2))
+                return 0
             if not (out/"tool-template.xml").is_file():
                 raise RuntimeError("Persisted GhidraTool template XML missing")
             # A completely new JVM/application initialization must read the
@@ -302,6 +331,14 @@ def main():
                     f"Assertion receipt invalid: {error}; X11={observed.get('window_id')!r}, "
                     f"WM_CLASS={observed.get('window_class')!r}, "
                     f"full_title={observed.get('window_title')!r}") from error
+            if args.automation_probe:
+                snapshot=json.loads((out/"automation-response.json").read_text())
+                if not (snapshot.get("selected_tab")=="Hardware Analysis" and
+                        snapshot.get("program")=="synthetic-mmio.bin" and
+                        snapshot.get("mmio_enabled") is True and
+                        snapshot.get("edt") is True):
+                    raise RuntimeError("External hardware automation snapshot failed")
+                result["hardware_automation_pilot"]="PASS"
             if args.cua_live:
                 hold=json.loads((out/"cua-live-result.json").read_text())
                 captured=json.loads((out/"codebrowser-assertions.json").read_text())
