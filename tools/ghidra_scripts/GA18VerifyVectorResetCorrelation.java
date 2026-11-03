@@ -23,8 +23,20 @@ public class GA18VerifyVectorResetCorrelation extends GhidraScript {
             "CPU32 language");
         String jar=System.getProperty("ga18.test.jar","");
         if(jar.isBlank())throw new IllegalStateException("Missing tested extension jar");
+        // GhidraScript uses a script classloader that may not expose
+        // checked-exception types to an extension-jar URLClassLoader.
+        // Delegate that single type to the *actual* Ghidra exception class.
+        // All other classes continue to use the existing script loader.
+        ClassLoader bridge=new ClassLoader(getClass().getClassLoader()) {
+            @Override protected Class<?> loadClass(String name, boolean resolve)
+                    throws ClassNotFoundException {
+                if("ghidra.util.exception.CancelledException".equals(name))
+                    return ghidra.util.exception.CancelledException.class;
+                return super.loadClass(name,resolve);
+            }
+        };
         try(URLClassLoader loader=new URLClassLoader(
-                new URL[]{Path.of(jar).toUri().toURL()},getClass().getClassLoader())) {
+                new URL[]{Path.of(jar).toUri().toURL()},bridge)) {
             Class<?> service=Class.forName(
                 "ghidrassist.hardware.GhidraHardwareFlowService",true,loader);
             Object instance=service.getConstructor().newInstance();
