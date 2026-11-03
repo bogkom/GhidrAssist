@@ -35,8 +35,10 @@ class ReviewPreviewContracts(unittest.TestCase):
     def test_fixture_only_write_api_guards(self):
         tab = TAB.read_text(encoding="utf-8")
         server = SERVER.read_text(encoding="utf-8")
-        self.assertIn("ghidrassist.automation.syntheticWrites", tab)
-        self.assertIn("synthetic-mmio.bin", tab)
+        policy = (ROOT / "src/main/java/ghidrassist/automation/AutomationWritePolicy.java").read_text(encoding="utf-8")
+        self.assertIn("ghidrassist.automation.syntheticWrites", policy)
+        self.assertIn("synthetic-mmio.bin", policy)
+        self.assertEqual(tab.count("AutomationWritePolicy.requireSyntheticSafe(program)"), 3)
         self.assertIn("automationApprovalRevision", tab)
         self.assertIn("program.getModificationNumber()!=automationUndoRevision", tab)
         self.assertIn("automationApprovalToken=null", tab)
