@@ -50,14 +50,21 @@ public final class HardwareFunctionRenameService {
     public record Outcome(int renamed,List<String> names) {}
 
     public static Outcome apply(Program program,
-            List<HardwareFunctionNamingReview.Proposal> accepted) throws Exception {
+            List<HardwareFunctionNamingReview.Proposal> accepted,
+            HardwareAnalysisRevision reviewedRevision) throws Exception {
         if(program==null || accepted==null || accepted.isEmpty())
             throw new IllegalArgumentException("No approved function proposals");
+        // A valid name alone cannot prove the analysis evidence is still
+        // current after edits, Undo, Redo, or a different active Program.
+        HardwareFunctionRenameRevisionGate.requireCurrent(reviewedRevision,
+            program,program.getModificationNumber(),
+            program.getLanguageID().toString(),program.getExecutableSHA256(),true);
         // Reject duplicate addresses or target labels in one approval batch.
         Set<Long> addresses=new HashSet<>();
         Set<String> names=new HashSet<>();
         for(var p:accepted) {
-            if(p==null || !addresses.add(p.functionAddress) ||
+            if(p==null || p.proposedName==null ||
+                    !addresses.add(p.functionAddress) ||
                     !names.add(p.proposedName.toUpperCase(java.util.Locale.ROOT)))
                 throw new IllegalArgumentException("Duplicate/invalid function proposal");
         }
@@ -65,6 +72,11 @@ public final class HardwareFunctionRenameService {
         boolean commit=false;
         List<String> applied=new ArrayList<>();
         try {
+            // Revalidate the exact reviewed snapshot inside the transaction,
+            // before making any changes. Later revisions are our own edits.
+            HardwareFunctionRenameRevisionGate.requireCurrent(reviewedRevision,
+                program,program.getModificationNumber(),
+                program.getLanguageID().toString(),program.getExecutableSHA256(),true);
             // Re-read current names and full symbol table INSIDE transaction.
             // If any selected candidate is stale, abort and roll back all rows.
             List<String> reserved=allSymbols(program);
