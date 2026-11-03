@@ -6,10 +6,40 @@ import os
 from pathlib import Path
 import secrets
 import subprocess
+import shlex
+import zipfile
 import sys
 import time
 from urllib.parse import quote
 from urllib.request import Request, urlopen
+
+
+
+def verify_patched_project_opener(env):
+    """Fail closed before spawning GUI if the installed extension can recurse."""
+    options=shlex.split(env.get("JAVA_TOOL_OPTIONS",""))
+    settings=next((v.split("=",1)[1] for v in options
+                   if v.startswith("-Dapplication.settingsdir=")),None)
+    if not settings:
+        raise ValueError("Automatic CodeBrowser opening requires an isolated application.settingsdir")
+    root=Path(settings).expanduser().resolve()
+    if not root.is_dir():
+        raise ValueError("Isolated Ghidra settings directory not found")
+    jars=list(root.rglob("GhidrAssist/lib/GhidrAssist.jar"))
+    if len(jars)!=1:
+        raise ValueError("Expected exactly one installed GhidrAssist.jar in isolated settings; found %d" % len(jars))
+    if jars[0].is_symlink():
+        raise ValueError("Extension library must not be a symlink for automatic CodeBrowser opening")
+    try:
+        with zipfile.ZipFile(jars[0]) as archive:
+            clazz=archive.read("ghidrassist/automation/AgentProjectOpenPlugin.class")
+    except (KeyError,OSError,zipfile.BadZipFile) as exc:
+        raise ValueError("Installed GhidrAssist project opener is not verifiable") from exc
+    if (b"ApplicationLevelOnlyPlugin" not in clazz or
+            b"OPEN_REQUEST_CONSUMED" not in clazz or
+            b"FrontEndTool" not in clazz):
+        raise ValueError("UNSAFE installed GhidrAssist: old recursive CodeBrowser opener; update extension before automatic launch")
+    return jars[0]
 
 
 def main():
@@ -117,6 +147,8 @@ def main():
                 parser.error("Readiness PID is still running; close test Ghidra first")
         except (OSError, ValueError, KeyError) as exc:
             parser.error("Cannot validate readiness receipt: " + str(exc))
+    if args.program:
+        verify_patched_project_opener(os.environ)
     token = secrets.token_hex(32)
     env = os.environ.copy()
     options = [
