@@ -36,7 +36,7 @@ class ApiCompletion(unittest.TestCase):
         self.assertIn("getReferencesFrom()",listing)
         self.assertIn("MAX_REFERENCES = 16",listing)
         self.assertIn("MAX_BYTES = 32",listing)
-        self.assertIn("location.getProgram()!=program",listing)
+        self.assertIn("location.getProgram() != program",listing)
 
     def test_rpc_dispatch_and_edts(self):
         server=(ROOT/"src/main/java/ghidrassist/automation/AutomationServer.java").read_text()
