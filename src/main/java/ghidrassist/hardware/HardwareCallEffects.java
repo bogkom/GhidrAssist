@@ -39,28 +39,15 @@ public final class HardwareCallEffects {
         boolean memory,vbr,unknown,cycle,cap;
         int visits;
     }
-    private static void explore(long id,int depth,int limitDepth,int limitNodes,
-            Map<Long,FunctionNode> graph,Set<Long> visiting,Set<Long> completed,
-            Acc out){
-        if(visiting.contains(id)){out.cycle=true;out.unknown=true;return;}
-        if(completed.contains(id))return;
-        if(depth>limitDepth || out.visits>=limitNodes){
-            out.cap=true;out.unknown=true;return;
-        }
-        FunctionNode n=graph.get(id);
-        if(n==null){out.unknown=true;return;}
-        out.visits++;
-        out.memory|=n.memoryStore();
-        out.vbr|=n.vbrWrite();
-        out.unknown|=n.unresolvedFlow();
-        visiting.add(id);
-        for(long callee:n.directCallees())
-            explore(callee,depth+1,limitDepth,limitNodes,
-                graph,visiting,completed,out);
-        visiting.remove(id);
-        completed.add(id);
-    }
+    private record Layer(long entry,int depth) {}
 
+    /**
+     * Explore by SHORTEST observed direct-call distance. A depth-first
+     * completed-set cache can hide a side effect: the same function may first
+     * be visited on a long path at the depth cap and then skipped from a
+     * shorter path that would have exposed its callees. Breadth-first search
+     * avoids that source-evidence loss. It remains bounded and static only.
+     */
     public static Summary summarize(long root,Collection<FunctionNode> nodes,
             int maxDepth,int maxFunctions) {
         if(nodes==null || maxDepth<0 || maxFunctions<1)
@@ -70,8 +57,73 @@ public final class HardwareCallEffects {
             if(n==null || graph.putIfAbsent(n.entry(),n)!=null)
                 throw new IllegalArgumentException("Duplicate/bad function entry");
         Acc out=new Acc();
-        explore(root,0,maxDepth,maxFunctions,graph,new HashSet<>(),
-            new HashSet<>(),out);
+        java.util.ArrayDeque<Layer> queue=new java.util.ArrayDeque<>();
+        Set<Long> discovered=new HashSet<>();
+        Set<Long> inspected=new HashSet<>();
+        queue.addLast(new Layer(root,0));
+        discovered.add(root);
+        while(!queue.isEmpty()) {
+            if(out.visits>=maxFunctions) {
+                out.cap=true;out.unknown=true;
+                break;
+            }
+            Layer current=queue.removeFirst();
+            FunctionNode node=graph.get(current.entry());
+            if(node==null) {
+                out.unknown=true;
+                continue;
+            }
+            inspected.add(current.entry());
+            out.visits++;
+            out.memory|=node.memoryStore();
+            out.vbr|=node.vbrWrite();
+            out.unknown|=node.unresolvedFlow();
+            for(long callee:node.directCallees()) {
+                if(!graph.containsKey(callee)) {
+                    out.unknown=true;
+                    continue;
+                }
+                if(current.depth()>=maxDepth) {
+                    if(!discovered.contains(callee)) {
+                        out.cap=true;out.unknown=true;
+                    }
+                    continue;
+                }
+                if(discovered.add(callee))
+                    queue.addLast(new Layer(callee,current.depth()+1));
+            }
+        }
+        if(!queue.isEmpty()) {
+            out.cap=true;out.unknown=true;
+        }
+
+        // A deterministic bounded graph can contain loops even when the BFS
+        // shortest-path tree does not. Kahn's cycle check avoids recursion
+        // and does not mistake an ordinary diamond join for a cycle.
+        Map<Long,Integer> inDegree=new HashMap<>();
+        for(long id:inspected)inDegree.put(id,0);
+        for(long id:inspected) {
+            for(long child:graph.get(id).directCallees()) {
+                if(inspected.contains(child))
+                    inDegree.put(child,inDegree.get(child)+1);
+            }
+        }
+        java.util.ArrayDeque<Long> roots=new java.util.ArrayDeque<>();
+        for(var e:inDegree.entrySet())if(e.getValue()==0)roots.addLast(e.getKey());
+        int removed=0;
+        while(!roots.isEmpty()) {
+            long id=roots.removeFirst();
+            removed++;
+            for(long child:graph.get(id).directCallees()) {
+                if(!inDegree.containsKey(child))continue;
+                int next=inDegree.get(child)-1;
+                inDegree.put(child,next);
+                if(next==0)roots.addLast(child);
+            }
+        }
+        if(removed<inspected.size()) {
+            out.cycle=true;out.unknown=true;
+        }
         return new Summary(out.memory,out.vbr,out.unknown,
             out.cycle,out.cap,out.visits);
     }

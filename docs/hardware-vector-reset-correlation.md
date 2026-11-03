@@ -38,3 +38,16 @@ is changed.
 - Full extension compilation (Java 25) and existing Xvfb/CodeBrowser
   regressions remain mandatory. No additional Wyse or Dell Precision test
   requested for this source-only increment.
+
+## GA-02/03 bounded call-effect ordering regression
+
+`HardwareCallEffects.summarize` now walks the recognized direct-call
+subgraph in **breadth-first order** so a first encounter by a longer
+path at the depth limit cannot suppress a possible STORE or MOVEC VBR
+in a second, shorter path. A separate cycle check over the bounded
+observed graph still distinguishes genuine loops from convergent
+diamond joins. Missing targets, unknown flow and depth/node limits
+remain explicit. The worklist prevents stack overflow on deep call
+chains. No state is propagated between functions: this is only
+possible-source-effect collection, never runtime order or physical
+MCU behavior.
