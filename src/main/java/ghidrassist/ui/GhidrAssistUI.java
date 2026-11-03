@@ -127,6 +127,10 @@ public class GhidrAssistUI extends JPanel {
         throw new IllegalArgumentException("Unknown or disabled tab");
     }
 
+    public com.google.gson.JsonObject automationSelectTableRow(String tableId,int index) {
+        return hardwareAnalysisTab.automationSelectTableRow(tableId,index);
+    }
+
     public com.google.gson.JsonObject automationCancel() {
         return hardwareAnalysisTab.automationCancel();
     }
