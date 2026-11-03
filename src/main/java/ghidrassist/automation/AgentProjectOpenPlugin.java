@@ -33,6 +33,7 @@ public final class AgentProjectOpenPlugin extends Plugin implements ApplicationL
     private static final AtomicBoolean OPEN_REQUEST_CONSUMED=new AtomicBoolean(false);
     private Timer poller;
     private int attempts;
+    private int projectReadyTicks;
     // Restored project tools can appear after the Project Window is ready.
     private static final int RESTORE_SETTLE_TICKS=40; // 10s at 250ms
 
@@ -89,7 +90,7 @@ public final class AgentProjectOpenPlugin extends Plugin implements ApplicationL
                 return;
             }
             // Wait for the previously saved project workspace to restore.
-            if(attempts<RESTORE_SETTLE_TICKS)return;
+            if(++projectReadyTicks<RESTORE_SETTLE_TICKS)return;
             poller.stop();
             if (!OPEN_REQUEST_CONSUMED.compareAndSet(false,true)) return;
             if(reuseExistingProgramTool(file,project.getToolServices().getRunningTools()))
