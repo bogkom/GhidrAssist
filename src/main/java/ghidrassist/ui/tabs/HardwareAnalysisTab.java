@@ -282,6 +282,11 @@ public final class HardwareAnalysisTab extends JPanel {
         response.addProperty("name",item.name);
         response.addProperty("location",item.location());
         response.addProperty("kind",item.kind.name());
+        response.addProperty("preflight_state",decision.state.name());
+        response.addProperty("preflight_description",decision.description);
+        response.addProperty("proposal_details",item.details);
+        response.addProperty("planned_changes",1);
+        response.addProperty("applied",false);
         response.addProperty("scope",copy ? "EXPLICIT WORKING COPY; SINGLE SAFE MEMORY ITEM; ONE USE" :
             "SYNTHETIC FIXTURE; SINGLE SAFE MEMORY ITEM; ONE USE");
         response.addProperty("revision",automationApprovalRevision);
@@ -330,6 +335,11 @@ public final class HardwareAnalysisTab extends JPanel {
         result.addProperty("changed",outcome.changed);
         result.addProperty("skipped",outcome.skipped);
         result.addProperty("name",item.name);
+        result.addProperty("location",item.location());
+        result.addProperty("source_sha256",program.getExecutableSHA256());
+        result.addProperty("revision_before",automationApprovalRevision);
+        result.addProperty("revision_after",automationUndoRevision);
+        result.addProperty("preflight_description",recheck.description);
         result.addProperty("scope",copy ? "EXPLICIT WORKING COPY" : "SYNTHETIC FIXTURE");
         result.addProperty("undo_available",program.canUndo());
         return result;
@@ -351,11 +361,16 @@ public final class HardwareAnalysisTab extends JPanel {
                 program.getModificationNumber()!=automationUndoRevision ||
                 !program.canUndo())
             throw new IllegalStateException("Our Apply is not the most recent undoable edit");
+        long priorRevision=automationUndoRevision;
         automationUndoProgram=null;automationUndoRevision=-1;automationUndoCopy=false; // one-shot
         program.undo();
         com.google.gson.JsonObject result=new com.google.gson.JsonObject();
         result.addProperty("undone",true);
         result.addProperty("program",program.getName());
+        result.addProperty("project_program_path",program.getDomainFile().getPathname());
+        result.addProperty("source_sha256",program.getExecutableSHA256());
+        result.addProperty("revision_before",priorRevision);
+        result.addProperty("revision_after",program.getModificationNumber());
         return result;
     }
 
