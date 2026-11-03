@@ -12,9 +12,10 @@ class WriteModes(unittest.TestCase):
         self.assertIn('default="read-only"',launcher)
         self.assertIn('choices=("read-only","auto-safe","full-control")',launcher)
         self.assertIn('args.write_mode == "full-control"',launcher)
-        self.assertIn('args.write_mode == "auto-safe" and not args.synthetic_writes',launcher)
+        self.assertIn('args.write_mode == "auto-safe" and not (args.synthetic_writes or args.review_copy)',launcher)
         self.assertIn('args.synthetic_writes and args.write_mode == "read-only"',launcher)
         self.assertIn("ghidrassist.automation.writeMode=",launcher)
+        self.assertIn("ghidrassist.automation.reviewCopySha256=",launcher)
 
     def test_write_calls_share_policy_and_remain_synthetic(self):
         policy=(ROOT/"src/main/java/ghidrassist/automation/AutomationWritePolicy.java").read_text()
