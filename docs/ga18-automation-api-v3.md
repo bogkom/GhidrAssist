@@ -493,3 +493,28 @@ The launcher also requires an actual `.gpr` file and a matching, real
 Do not copy just the `.gpr`; close the source project and copy the
 complete, independent project first. This is an extra guard, not a
 cryptographic demonstration that a copy is independent.
+
+
+## Critical startup regression — recursive CodeBrowser window launches
+
+A Dell Precision test of the earlier build at `6bb2733950e35fb0cf56b2be5f2833f3b21719bb`
+caused CodeBrowser windows to open repeatedly until the user logged out.
+`AgentProjectOpenPlugin` had implemented `ApplicationLevelPlugin`, which
+permits it in CodeBrowser and other child tools. Its constructor then
+launched another CodeBrowser from every such instance.
+
+**Do not use the original artifact/launcher for program auto-open.**
+The fix marks the opener `ApplicationLevelOnlyPlugin`, explicitly checks
+for `FrontEndTool`, and atomically consumes the process-wide open request
+before launching a child. The real CodeBrowser harness constructs an opener
+under the formerly triggering JVM properties and verifies it does not arm a
+Timer. The launcher also fail-closes **before starting Ghidra** if the
+isolated settings directory contains an old `GhidrAssist.jar` without all
+three verified class markers. A normal manual Ghidra session with the
+automation launcher properties cleared is not affected by this feature.
+
+The guard is intended to prevent recursive spawning; end-to-end automatic
+Project Window -> CodeBrowser acceptance on a clean, isolated project is a
+separate test and should not be claimed based solely on the negative
+CodeBrowser guard. Existing CPU32 CI and synthetic Apply/Undo evidence for
+earlier SHAs remains valid only for those narrower assertions.
