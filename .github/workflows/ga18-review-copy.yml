@@ -1,0 +1,82 @@
+name: GA-18 isolated review-copy Automation API regression
+
+on:
+  pull_request:
+    paths:
+      - 'src/main/java/ghidrassist/automation/**'
+      - 'src/main/java/ghidrassist/ui/**'
+      - 'tools/ghidrassist-agent*'
+      - 'tests/codebrowser_harness/**'
+      - 'tests/automation/**'
+      - '.github/workflows/ga18-review-copy.yml'
+  workflow_dispatch:
+
+jobs:
+  review-copy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Install isolated X11
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq xvfb xauth openbox
+      - name: Download SHA-256 pinned Ghidra 12.1.4 PUBLIC
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fLsS --retry 3 --connect-timeout 20 \
+            -o "$RUNNER_TEMP/ghidra.zip" \
+            "https://github.com/NationalSecurityAgency/ghidra/releases/download/Ghidra_12.1.4_build/ghidra_12.1.4_PUBLIC_20260921.zip"
+          echo "ddac49f903da9d5bac833e5cc79395098b9c33cfd3279be5f31bd00387d2d4db  $RUNNER_TEMP/ghidra.zip" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/ghidra"
+          unzip -q "$RUNNER_TEMP/ghidra.zip" -d "$RUNNER_TEMP/ghidra"
+          GHIDRA_DIR=$(find "$RUNNER_TEMP/ghidra" -mindepth 1 -maxdepth 1 -type d -name 'ghidra_*' -print -quit)
+          test -n "$GHIDRA_DIR"
+          echo "GHIDRA_INSTALL_DIR=$GHIDRA_DIR" >> "$GITHUB_ENV"
+      - name: Build exact GhidrAssist extension
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$GHIDRA_INSTALL_DIR/support/gradle/gradlew" --no-daemon buildExtension
+          EXTENSION="$(find dist -maxdepth 1 -name 'ghidra_12.1.4_PUBLIC_*_GhidrAssist.zip' -type f -print -quit)"
+          test -s "$EXTENSION"
+          echo "EXTENSION=$EXTENSION" >> "$GITHUB_ENV"
+      - name: Real Ghidra CodeBrowser isolated review-copy prepare/apply/undo
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile tests/codebrowser_harness/run.py tools/ghidrassist-agent tools/ghidrassist-agent-start
+          xvfb-run -a -s '-screen 0 1400x1050x24' \
+            bash -c 'openbox --sm-disable >/dev/null 2>&1 & wm=$!; trap "kill $wm 2>/dev/null || true" EXIT; sleep 1; python3 tests/codebrowser_harness/run.py "$@"' review-copy \
+              --ghidra "$GHIDRA_INSTALL_DIR" --java-home "$JAVA_HOME" \
+              --extension-zip "$EXTENSION" \
+              --output "$RUNNER_TEMP/review-copy-evidence" \
+              --automation-probe --review-copy-probe --timeout 300
+          python3 - <<'PY'
+          import json,os
+          from pathlib import Path
+          root=Path(os.environ["RUNNER_TEMP"])/"review-copy-evidence"
+          result=json.loads((root/"result.json").read_text())
+          apply=json.loads((root/"api-apply-undo.json").read_text())
+          assert result["status"]=="PASSED_HARDWARE_AUTOMATION_V2",result
+          assert apply["apply"]["changed"]==1,apply
+          assert apply["undo"]["undone"] is True,apply
+          assert apply["wrong_token_rejected"] is True,apply
+          assert apply["second_undo_rejected"] is True,apply
+          print("GA18 REVIEW COPY NATIVE PASS: single-item apply=1 undo=1 invalid_token_rejected=1")
+          PY
+      - name: Publish isolated regression evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ga18-review-copy-${{ github.run_id }}
+          path: ${{ runner.temp }}/review-copy-evidence/
+          if-no-files-found: ignore
+          retention-days: 14
