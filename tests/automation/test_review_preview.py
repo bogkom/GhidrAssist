@@ -53,7 +53,10 @@ class ReviewPreviewContracts(unittest.TestCase):
         self.assertIn('"hardware.review.preview".equals(method)', server)
         self.assertIn('automationReviewPreview(offset,limit)', server)
         self.assertIn('"review-preview": "hardware.review.preview"', cli)
-        self.assertNotIn('"hardware.review.apply".equals(method)', server)
+        self.assertIn('"hardware.review.apply".equals(method)', server)
+        self.assertIn('automationReviewCommit(', server)
+        policy = (ROOT / "src/main/java/ghidrassist/automation/AutomationWritePolicy.java").read_text()
+        self.assertIn("requireReviewCopy", policy)
 
 
 if __name__ == "__main__":
