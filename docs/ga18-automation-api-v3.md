@@ -553,3 +553,45 @@ Decoded instructions or reference types do not prove execution, live MMIO,
 MC68332 device register identity or physical memory mapping. The
 real-Ghidra 12.1.4 synthetic-callgraph CI verifies the production
 snapshot logic without opening a second GUI or modifying a project.
+
+## Bounded Listing pages and whole-function XREFs (GA-18)
+
+New read-only RPC `listing.range` accepts optional `address` (otherwise the
+active Listing location), `offset` in decoded instructions (0..4096),
+`limit` (1..64, default 32), and optional `expected_revision` from the
+first page. The result `listing_range` includes `start`, `revision`,
+`offset`, `limit`, `returned`, `next_offset`, `has_more`,
+`offset_unit`, and `rows` (each row uses the existing single-instruction
+`listing.snapshot` schema, retaining bytes/ref caps). Use the **same
+explicit start** with a new offset and the original revision on later pages.
+Instructions are in Ghidra address order; they may be separated by gaps or
+cross functions. This is not an execution trace or raw byte disassembly.
+Bad bounds/start, changed program revision or mismatched active ProgramLocation
+are rejected. The original `listing.snapshot` response is unchanged.
+
+New read-only `function.xrefs.body` uses the current CodeBrowser function,
+`direction` (`incoming`, `outgoing`, or `both`, default `both`),
+`offset` (0..4096), `limit` (1..100, default 50), optional
+`expected_revision` and `expected_entry`. Incoming uses all Ghidra
+reference destinations in the body's AddressSet, including offcut targets;
+outgoing uses reference sources in that set. `both` orders incoming then
+outgoing; internal body references may appear twice with distinct direction.
+Rows have `from`, `to`, `type`, `direction`, `source_in_body`,
+`target_in_body`. The result reports `next_offset`, `has_more`,
+`total_known` and `scan_truncated`; iteration never exceeds the bounded
+8192-reference scan budget. This does not infer unresolved indirect calls.
+The original `function.xrefs` remains incoming-entry-only and unchanged.
+
+CLI examples (matching updated client required):
+
+```sh
+ghidrassist-agent listing-range 00000100 --offset 0 --limit 16
+ghidrassist-agent listing-range 00000100 --offset 16 --limit 16 --expected-revision 7
+ghidrassist-agent function-xrefs-body --direction both --offset 0 --limit 50
+ghidrassist-agent function-xrefs-body --direction outgoing --expected-entry 00000100 --expected-revision 7
+```
+
+The RPC operations do not write Ghidra database content, enable
+`FULL_CONTROL`, or establish physical MMIO/IRQ mapping. Native Ghidra
+12.1.4 CI verifies packaged production classes on synthetic CPU32
+functions, pagination and stale-guard failures.

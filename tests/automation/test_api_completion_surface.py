@@ -38,6 +38,26 @@ class ApiCompletion(unittest.TestCase):
         self.assertIn("MAX_BYTES = 32",listing)
         self.assertIn("location.getProgram() != program",listing)
 
+    def test_listing_range_and_body_xref_contract(self):
+        listing=(ROOT/"src/main/java/ghidrassist/automation/AutomationListing.java").read_text()
+        body=(ROOT/"src/main/java/ghidrassist/automation/AutomationFunctionXrefs.java").read_text()
+        server=(ROOT/"src/main/java/ghidrassist/automation/AutomationServer.java").read_text()
+        cli=(ROOT/"tools/ghidrassist-agent").read_text()
+        ast.parse(cli)
+        self.assertIn("JsonObject range(Program program",listing)
+        self.assertIn("limit>64",listing)
+        self.assertIn("Listing revision mismatch",listing)
+        self.assertIn("new ProgramLocation(program,instruction.getAddress())",listing)
+        self.assertIn("getReferenceDestinationIterator(function.getBody(),true)",body)
+        self.assertIn("getReferenceSourceIterator(function.getBody(),true)",body)
+        self.assertIn("Body XREF revision mismatch",body)
+        self.assertIn("Active function changed during body XREF pagination",body)
+        self.assertIn('"listing.range".equals(method)',server)
+        self.assertIn('"function.xrefs.body".equals(method)',server)
+        self.assertIn('"listing-range"',cli)
+        self.assertIn('"function-xrefs-body"',cli)
+        self.assertIn('parser.add_argument("--expected-revision"',cli)
+
     def test_rpc_dispatch_and_edts(self):
         server=(ROOT/"src/main/java/ghidrassist/automation/AutomationServer.java").read_text()
         ui=(ROOT/"src/main/java/ghidrassist/ui/GhidrAssistUI.java").read_text()

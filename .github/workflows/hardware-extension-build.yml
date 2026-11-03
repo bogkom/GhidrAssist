@@ -92,6 +92,7 @@ jobs:
             -postScript GA18VerifyAutomationPaths.java \
             -postScript GA18VerifyDecompilerTaskBinding.java \
             -postScript GA18VerifyListingSnapshot.java \
+            -postScript GA18VerifyListingRangeAndBodyXrefs.java \
             > "$RUNNER_TEMP/ga18-paths.log" 2>&1 || {
               tail -n 100 "$RUNNER_TEMP/ga18-paths.log"; exit 1;
             }
@@ -99,6 +100,7 @@ jobs:
           grep -q 'GA18 PRODUCTION PATHS PASS: assertions=22' "$RUNNER_TEMP/ga18-paths.log"
           grep -q 'GA18 DECOMPILER TASK BINDING PASS: assertions=7' "$RUNNER_TEMP/ga18-paths.log"
           grep -q 'GA18 LISTING SNAPSHOT PASS: assertions=9' "$RUNNER_TEMP/ga18-paths.log"
+          grep -q 'GA18 LISTING RANGE BODY XREF PASS:' "$RUNNER_TEMP/ga18-paths.log"
           echo 'Real Ghidra native synthetic graph and production traversal assertions passed'
       - name: Real Ghidra 12.1.4 convergent CALL path regression (synthetic only)
         shell: bash
