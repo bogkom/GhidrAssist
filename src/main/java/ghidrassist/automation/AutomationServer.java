@@ -135,6 +135,16 @@ public final class AutomationServer implements AutoCloseable {
                     // Preserve the original top-level "address" field for API v3 clients.
                     result.addProperty("address",listing.get("address").getAsString());
                     result.add("listing",listing);
+                } else if ("listing.range".equals(method)) {
+                    var viewer=plugin.getTool().getService(ghidra.app.services.CodeViewerService.class);
+                    ProgramLocation location=viewer==null ? null : viewer.getCurrentLocation();
+                    int offset=args.has("offset") ? args.get("offset").getAsInt() : 0;
+                    int limit=args.has("limit") ? args.get("limit").getAsInt() : 32;
+                    Long expectedRevision=args.has("expected_revision") ?
+                        args.get("expected_revision").getAsLong() : null;
+                    String start=args.has("address") ? args.get("address").getAsString() : "";
+                    result.add("listing_range",AutomationListing.range(
+                        program,location,start,offset,limit,expectedRevision));
                 } else if ("listing.goto".equals(method)) {
                     if (program == null) throw new IllegalStateException("No active program");
                     String address = args.get("address").getAsString();
@@ -227,6 +237,22 @@ public final class AutomationServer implements AutoCloseable {
                     info.addProperty("entry",function.getEntryPoint().toString());
                     info.addProperty("body_addresses",function.getBody().getNumAddresses());
                     result.add("function",info);
+                } else if ("function.xrefs.body".equals(method)) {
+                    if(program==null) throw new IllegalStateException("No active program");
+                    var viewer=plugin.getTool().getService(ghidra.app.services.CodeViewerService.class);
+                    ProgramLocation location=viewer==null ? null : viewer.getCurrentLocation();
+                    if(location!=null && location.getProgram()!=program)
+                        throw new IllegalStateException("Stale function location belongs to another program");
+                    var function=location==null || location.getAddress()==null ? null :
+                        program.getFunctionManager().getFunctionContaining(location.getAddress());
+                    int offset=args.has("offset") ? args.get("offset").getAsInt() : 0;
+                    int limit=args.has("limit") ? args.get("limit").getAsInt() : 50;
+                    String direction=args.has("direction") ? args.get("direction").getAsString() : "both";
+                    String entry=args.has("expected_entry") ? args.get("expected_entry").getAsString() : "";
+                    Long revision=args.has("expected_revision") ?
+                        args.get("expected_revision").getAsLong() : null;
+                    result.add("body_xrefs",AutomationFunctionXrefs.body(
+                        program,function,direction,offset,limit,revision,entry));
                 } else if ("function.xrefs".equals(method)) {
                     var viewer=plugin.getTool().getService(ghidra.app.services.CodeViewerService.class);
                     ProgramLocation activeLocation=viewer==null ? null : viewer.getCurrentLocation();

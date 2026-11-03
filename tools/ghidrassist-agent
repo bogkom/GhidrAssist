@@ -34,12 +34,15 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--session", default=os.environ.get(
         "GHIDRASSIST_AGENT_SESSION", str(Path.home() / ".local/state/ghidrassist-agent/session.json")))
-    parser.add_argument("action", choices=("status", "snapshot", "analyze", "task", "mmio", "review-preview", "profile-select", "function", "xrefs", "decompile", "decompile-status", "bundle", "paths", "listing", "goto", "tab-select", "table-select", "program-open", "review-prepare", "review-apply", "review-undo", "cancel", "report", "export"))
+    parser.add_argument("action", choices=("status", "snapshot", "analyze", "task", "mmio", "review-preview", "profile-select", "function", "xrefs", "function-xrefs-body", "decompile", "decompile-status", "bundle", "paths", "listing", "listing-range", "goto", "tab-select", "table-select", "program-open", "review-prepare", "review-apply", "review-undo", "cancel", "report", "export"))
     parser.add_argument("address", nargs="?")
     parser.add_argument("--filter", default="")
     parser.add_argument("--row", type=int, default=None)
     parser.add_argument("--token", default="")
     parser.add_argument("--task-id", default="")
+    parser.add_argument("--expected-revision", type=int, default=None)
+    parser.add_argument("--expected-entry", default="")
+    parser.add_argument("--direction", choices=("incoming", "outgoing", "both"), default="both")
     parser.add_argument("--name", default="")
     parser.add_argument("--format", choices=("markdown", "config_csv", "names_csv"), default="markdown")
     parser.add_argument("--origin", choices=("reset", "entry"), default="reset")
@@ -50,7 +53,7 @@ def main():
     session = load_session(args.session)
     method = {"status": "session.status", "snapshot": "ui.snapshot",
               "analyze": "hardware.analyze", "task": "hardware.task",
-              "mmio": "hardware.mmio.rows", "review-preview": "hardware.review.preview", "profile-select": "hardware.profile.select", "function": "function.snapshot", "xrefs": "function.xrefs", "decompile": "decompiler.start", "decompile-status": "decompiler.status", "bundle": "analysis.bundle", "paths": "analysis.paths", "listing": "listing.snapshot",
+              "mmio": "hardware.mmio.rows", "review-preview": "hardware.review.preview", "profile-select": "hardware.profile.select", "function": "function.snapshot", "xrefs": "function.xrefs", "function-xrefs-body": "function.xrefs.body", "decompile": "decompiler.start", "decompile-status": "decompiler.status", "bundle": "analysis.bundle", "paths": "analysis.paths", "listing": "listing.snapshot", "listing-range": "listing.range",
               "goto": "listing.goto", "tab-select": "ui.tab.select", "table-select": "ui.table.select", "program-open": "project.program.open", "review-prepare": "hardware.review.prepare", "review-apply": "hardware.review.apply", "review-undo": "hardware.review.undo", "cancel": "hardware.cancel", "report": "analysis.report", "export": "analysis.export"}[args.action]
     if method == "analysis.paths" and args.origin == "entry" and not args.address:
         parser.error("paths --origin entry requires an address")
@@ -62,6 +65,10 @@ def main():
         parser.error("program-open requires project-relative /path")
     if method == "hardware.review.prepare" and (args.row is None or args.row<0):
         parser.error("review-prepare requires --row nonnegative-index")
+    if args.expected_revision is not None and method not in ("listing.range", "function.xrefs.body"):
+        parser.error("--expected-revision is only valid with listing-range or function-xrefs-body")
+    if args.expected_entry and method != "function.xrefs.body":
+        parser.error("--expected-entry is only valid with function-xrefs-body")
     if args.task_id and method != "decompiler.status":
         parser.error("--task-id is only valid with decompile-status")
     if method == "hardware.review.apply" and (not args.token or not args.name):
@@ -76,6 +83,13 @@ def main():
                   {"path":args.address} if method=="project.program.open" else
                   {"index":args.row} if method=="hardware.review.prepare" else
                   {"token":args.token,"name":args.name} if method=="hardware.review.apply" else
+                  {"address":args.address or "", "offset":args.offset, "limit":args.limit,
+                   **({"expected_revision":args.expected_revision} if args.expected_revision is not None else {})}
+                  if method=="listing.range" else
+                  {"offset":args.offset, "limit":args.limit, "direction":args.direction,
+                   "expected_entry":args.expected_entry,
+                   **({"expected_revision":args.expected_revision} if args.expected_revision is not None else {})}
+                  if method=="function.xrefs.body" else
                   {"format":args.format, "offset":args.offset, "limit":args.limit} if method in ("analysis.report","analysis.export") else
                   {"origin": args.origin, "entry": args.address or "", "max_depth": args.max_depth, "offset": args.offset, "limit": args.limit} if method == "analysis.paths" else
                   {"profile": args.address} if method == "hardware.profile.select" else

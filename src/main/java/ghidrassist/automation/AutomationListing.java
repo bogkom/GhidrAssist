@@ -3,6 +3,7 @@ package ghidrassist.automation;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import ghidra.program.model.listing.Program;
+import ghidra.program.model.address.Address;
 import ghidra.program.util.ProgramLocation;
 import ghidra.program.model.mem.MemoryAccessException;
 import java.util.HexFormat;
@@ -13,6 +14,51 @@ public final class AutomationListing {
     private static final int MAX_BYTES = 32;
 
     private AutomationListing() {}
+
+    /** Read-only decoded instruction pages, with optional exact revision guard. */
+    public static JsonObject range(Program program, ProgramLocation location,
+            String startText, int offset, int limit, Long expectedRevision)
+            throws MemoryAccessException {
+        if(program==null)throw new IllegalStateException("No active program");
+        if(location!=null && location.getProgram()!=program)
+            throw new IllegalStateException("Stale Listing location belongs to a different program");
+        if(offset<0 || offset>4096 || limit<1 || limit>64)
+            throw new IllegalArgumentException("Invalid Listing range pagination");
+        long revision=program.getModificationNumber();
+        if(expectedRevision!=null && revision!=expectedRevision.longValue())
+            throw new IllegalStateException("Listing revision mismatch");
+        Address start=startText==null || startText.isBlank()
+            ? (location==null ? null : location.getAddress())
+            : program.getAddressFactory().getAddress(startText);
+        if(start==null || !program.getMemory().contains(start))
+            throw new IllegalArgumentException("Invalid Listing range start address");
+
+        JsonArray rows=new JsonArray();
+        var iterator=program.getListing().getInstructions(start,true);
+        int scanned=0;
+        while(iterator.hasNext() && scanned<offset+limit) {
+            var instruction=iterator.next();
+            if(scanned>=offset) {
+                JsonObject evidence=snapshot(program,
+                    new ProgramLocation(program,instruction.getAddress()));
+                rows.add(evidence);
+            }
+            scanned++;
+        }
+        JsonObject result=new JsonObject();
+        result.addProperty("start",start.toString());
+        result.addProperty("revision",revision);
+        result.addProperty("offset",offset);
+        result.addProperty("limit",limit);
+        result.addProperty("returned",rows.size());
+        result.addProperty("next_offset",offset+rows.size());
+        result.addProperty("has_more",iterator.hasNext());
+        result.addProperty("offset_unit","decoded_instructions");
+        result.add("rows",rows);
+        result.addProperty("evidence",
+            "Static decoded Ghidra Listing in address order; gaps possible, no runtime execution verified");
+        return result;
+    }
 
     public static JsonObject snapshot(Program program, ProgramLocation location)
             throws MemoryAccessException {
