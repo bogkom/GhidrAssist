@@ -69,16 +69,26 @@ public final class AutomationDecompiler implements AutoCloseable {
                 }
             }
         });
-        return status(0,0);
+        return status(program,id,0,0);
     }
 
-    public synchronized JsonObject status(int offset,int limit) {
+    public synchronized JsonObject status(Program activeProgram, String expectedTaskId,
+                                          int offset, int limit) {
         if(offset<0 || limit<0 || limit>8192)
             throw new IllegalArgumentException("Invalid pseudocode page");
+        if(expectedTaskId!=null && !expectedTaskId.isBlank() && !taskId.equals(expectedTaskId))
+            throw new IllegalArgumentException("Decompiler task_id mismatch");
         JsonObject result=new JsonObject();
         result.addProperty("task_id",taskId);
         result.addProperty("state",state);
         result.addProperty("entry",functionEntry);
+        // Switching the active program must never expose old pseudocode,
+        // even when the two programs share the same modification number.
+        if(source!=null && activeProgram!=source) {
+            result.addProperty("state","STALE");
+            result.addProperty("error","Active program differs from decompiler task source");
+            return result;
+        }
         if(source!=null && source.getModificationNumber()!=revision) {
             result.addProperty("state","STALE");
             result.addProperty("error","Program revision changed");

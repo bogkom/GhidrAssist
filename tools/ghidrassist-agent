@@ -39,6 +39,7 @@ def main():
     parser.add_argument("--filter", default="")
     parser.add_argument("--row", type=int, default=None)
     parser.add_argument("--token", default="")
+    parser.add_argument("--task-id", default="")
     parser.add_argument("--name", default="")
     parser.add_argument("--format", choices=("markdown", "config_csv", "names_csv"), default="markdown")
     parser.add_argument("--origin", choices=("reset", "entry"), default="reset")
@@ -61,6 +62,8 @@ def main():
         parser.error("program-open requires project-relative /path")
     if method == "hardware.review.prepare" and (args.row is None or args.row<0):
         parser.error("review-prepare requires --row nonnegative-index")
+    if args.task_id and method != "decompiler.status":
+        parser.error("--task-id is only valid with decompile-status")
     if method == "hardware.review.apply" and (not args.token or not args.name):
         parser.error("review-apply requires --token and --name from an exact prepare receipt")
     if method == "listing.goto" and not args.address:
@@ -77,8 +80,10 @@ def main():
                   {"origin": args.origin, "entry": args.address or "", "max_depth": args.max_depth, "offset": args.offset, "limit": args.limit} if method == "analysis.paths" else
                   {"profile": args.address} if method == "hardware.profile.select" else
                   {"address": args.address} if args.address else
+                  {"offset": args.offset, "limit": args.limit, "task_id": args.task_id}
+                  if method == "decompiler.status" else
                   {"filter": args.filter, "offset": args.offset, "limit": args.limit}
-                  if method in ("hardware.mmio.rows", "hardware.review.preview", "function.xrefs", "decompiler.status") else {})
+                  if method in ("hardware.mmio.rows", "hardware.review.preview", "function.xrefs") else {})
         reply = rpc(session, method, params)
         print(json.dumps(reply, indent=2))
     except HTTPError as error:

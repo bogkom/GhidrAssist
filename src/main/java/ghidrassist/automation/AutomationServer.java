@@ -150,7 +150,8 @@ public final class AutomationServer implements AutoCloseable {
                 } else if ("decompiler.status".equals(method)) {
                     int offset=args.has("offset") ? args.get("offset").getAsInt() : 0;
                     int limit=args.has("limit") ? args.get("limit").getAsInt() : 4096;
-                    result.add("decompiler",decompiler.status(offset,limit));
+                    String taskId=args.has("task_id") ? args.get("task_id").getAsString() : "";
+                    result.add("decompiler",decompiler.status(program,taskId,offset,limit));
                 } else if ("analysis.paths".equals(method)) {
                     if (program == null) throw new IllegalStateException("No active program");
                     String origin = args.has("origin") ? args.get("origin").getAsString() : "reset";

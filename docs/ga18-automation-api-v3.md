@@ -518,3 +518,18 @@ Project Window -> CodeBrowser acceptance on a clean, isolated project is a
 separate test and should not be claimed based solely on the negative
 CodeBrowser guard. Existing CPU32 CI and synthetic Apply/Undo evidence for
 earlier SHAs remains valid only for those narrower assertions.
+
+## Decompiler task and active-program isolation (GA-18)
+
+`decompiler.status` remains read-only and accepts the optional
+`{"task_id":"<id-from-decompiler.start>","offset":0,"limit":4096}`.
+A wrong nonempty task ID is rejected, preventing an old polling loop from
+reading pages of a newer task. The server also checks active Ghidra
+**Program object identity**, not only its revision: if CodeBrowser changes
+program, the prior task reports `STALE` with an error and **no pseudocode**.
+Revision changes retain the previous `STALE` rule. Existing clients
+without `task_id` remain supported but are also program-guarded.
+
+CLI: `ghidrassist-agent decompile-status --task-id <id> --offset 0 --limit 4096`.
+A native isolated Ghidra 12.1.4 synthetic CPU32 regression checks
+task identity and a simulated changed active program; no project writes.

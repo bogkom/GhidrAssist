@@ -13,6 +13,19 @@ class ApiCompletion(unittest.TestCase):
         for cmd in ("tab-select","table-select","program-open","cancel","report","export"):
             self.assertIn('"'+cmd+'"',content)
 
+    def test_decompiler_status_binds_active_program_and_task(self):
+        source=(ROOT/"src/main/java/ghidrassist/automation/AutomationDecompiler.java").read_text()
+        server=(ROOT/"src/main/java/ghidrassist/automation/AutomationServer.java").read_text()
+        cli=(ROOT/"tools/ghidrassist-agent").read_text()
+        ast.parse(cli)
+        self.assertIn("status(Program activeProgram, String expectedTaskId,",source)
+        self.assertIn("activeProgram!=source",source)
+        self.assertIn("Decompiler task_id mismatch",source)
+        self.assertIn('result.addProperty("state","STALE")',source)
+        self.assertIn("decompiler.status(program,taskId,offset,limit)",server)
+        self.assertIn('"task_id": args.task_id',cli)
+        self.assertIn('parser.add_argument("--task-id"',cli)
+
     def test_rpc_dispatch_and_edts(self):
         server=(ROOT/"src/main/java/ghidrassist/automation/AutomationServer.java").read_text()
         ui=(ROOT/"src/main/java/ghidrassist/ui/GhidrAssistUI.java").read_text()
