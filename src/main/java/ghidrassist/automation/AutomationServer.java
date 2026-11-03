@@ -263,7 +263,7 @@ public final class AutomationServer implements AutoCloseable {
                     if(!args.has("path")) throw new IllegalArgumentException("Project program path required");
                     String path=args.get("path").getAsString();
                     if(!path.startsWith("/") || path.length()<2 ||
-                            path.contains("..") || path.contains("\\\\") ||
+                            path.contains("..") || path.contains("\\") ||
                             path.contains(":") || path.contains("//"))
                         throw new IllegalArgumentException("Invalid project-relative program path");
                     var project=plugin.getTool().getProject();
