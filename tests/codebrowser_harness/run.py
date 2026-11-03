@@ -285,6 +285,11 @@ def main():
                                 if error.code!=400: raise
                             else:
                                 raise RuntimeError("Unsafe/missing project program path accepted")
+                        policy=http_call("session.status")
+                        if (policy.get("write_mode")!="AUTO_SAFE" or
+                                policy.get("production_writes_enabled") is not False or
+                                policy.get("synthetic_write_pilot_enabled") is not True):
+                            raise RuntimeError("Synthetic write policy not correctly scoped: "+str(policy))
                         started=http_call("hardware.analyze")
                         if started.get("schema")!=3:
                             raise RuntimeError("HTTP Analyze failed")
