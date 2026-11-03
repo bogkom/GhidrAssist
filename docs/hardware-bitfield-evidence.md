@@ -35,3 +35,15 @@ must not gain synthetic bitfield values. In generic CPU32 survey mode
 no MC68332 bitfield interpretation may be displayed. Ensure no write to
 the project and compare with the existing CSBOOT table and RESET report.
 No Supervisor plan is approved or submitted by this code change.
+
+## 2026-11-03 — strict shared PDF page-claim validation
+
+The GA-10 decoder and GA-06 external profile preview now use the same
+`ManualPdfPageClaim` **syntax-only** validator. A label such as
+`PDF pages 219-220` must contain exactly one bounded ascending
+numeric claim, with no malformed range tail, contradictory second claim
+or explicit UNKNOWN/UNVERIFIED/AMBIGUOUS qualifier. A descending range
+or excessive page number never licenses decoding a bit as source-backed;
+it remains `NO_SOURCED_FIELDS` or an unverified profile page instead.
+This parser does **not** verify actual PDF bytes or an edition. Tests
+are standalone Java and extension CI only, no host or firmware files.

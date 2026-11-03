@@ -64,6 +64,13 @@ public final class HardwareBitfieldDecoderSelfTest {
             check(!HardwareBitfieldDecoder.hasConcretePdfPageClaim(unsourced),
                 "reject unsupported/ambiguous field page citation: "+unsourced);
         }
+        for(String malformed:new String[]{
+                "PDF pages 220-219","PDF page 220-0",
+                "PDF page 999999","PDF page 220-abc",
+                "PDF page 220; PDF page 220"}) {
+            check(!HardwareBitfieldDecoder.hasConcretePdfPageClaim(malformed),
+                "malformed/duplicate physical page claim rejected: "+malformed);
+        }
         check(known.summary().contains("source-page-claimed MC68332") &&
             known.summary().contains("PDF edition/page claim UNVERIFIED"),
             "literal field decode cannot claim physical PDF identity proof");

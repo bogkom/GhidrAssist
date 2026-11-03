@@ -87,14 +87,10 @@ public final class HardwareProfileManifestPreview {
             throw fail(line,"invalid source-page label");
         return s;
     }
-    private static boolean paginated(String page){
-        // Page labels remain unverified external claims; do not count a
-        // bare or ambiguous "PDF page" string as a concrete numbered claim.
-        String p=page.toUpperCase(Locale.ROOT);
-        if(p.contains("UNKNOWN") || p.contains("UNVERIFIED") ||
-                p.contains("AMBIGUOUS") || p.contains("TO BE VERIFIED") ||
-                p.contains("TO BE CHECKED"))return false;
-        return p.matches(".*\\bPDF PAGES? [1-9][0-9]*(?:-[1-9][0-9]*)?\\b.*");
+    private static boolean paginated(String page) {
+        // External source-page labels are unverified claims, never an
+        // authenticated copy of the referenced PDF or a verified edition.
+        return ManualPdfPageClaim.hasSingleConsistentClaim(page);
     }
     private static IllegalArgumentException fail(int line,String why){
         return new IllegalArgumentException("Manifest line "+line+": "+why);
