@@ -60,6 +60,26 @@ public final class FindingsCacheBudgetSelfTest {
                 f.getEvidence().length()<=FindingsCache.MAX_EVIDENCE_CHARS),
             "huge transcript not copied as evidence into each finding");
 
+        // A tiny 1-item cache can prune the truncation warning because
+        // an earlier top-score finding wins a stable relevance tie. The
+        // independent truncation receipt MUST remain visible in every
+        // synthesis/prompt interface regardless of finding eviction.
+        var pinned=new FindingsCache(1);
+        pinned.addFinding("vulnerability high priority", "local","mcp",10);
+        pinned.extractFromToolOutput("mcp",
+            ("buffer overflow long source line\n").repeat(10000));
+        yes(pinned.isSourceIncomplete() &&
+            pinned.formatForPrompt().startsWith("SOURCE INCOMPLETE:") &&
+            pinned.formatDetailed(1,false).startsWith("SOURCE INCOMPLETE:") &&
+            pinned.summarize().startsWith("SOURCE INCOMPLETE:") &&
+            pinned.toCompactString().contains("SOURCE INCOMPLETE"),
+            "evidence incompleteness survives relevance tie and tiny budgets");
+        yes(pinned.getCount()==1,"finding-count bound remains intact");
+        pinned.clear();
+        yes(!pinned.isSourceIncomplete() &&
+            !pinned.formatForPrompt().startsWith("SOURCE INCOMPLETE:"),
+            "new analysis starts with clean source-completeness state");
+
         var summary=new FindingsCache();
         for(int i=1;i<=120;i++)
             summary.addIterationSummary("summary iteration "+i+"\n"+
