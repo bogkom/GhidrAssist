@@ -219,7 +219,7 @@ def main():
                 token=uuid.uuid4().hex+uuid.uuid4().hex
                 env["JAVA_TOOL_OPTIONS"] += (
                     " -Dghidrassist.automation.enabled=true"
-                    " -Dghidrassist.automation.ready="+str(out/"api-ready.json")+ " -Dghidrassist.automation.syntheticWrites=true")
+                    " -Dghidrassist.automation.ready="+str(out/"api-ready.json")+ " -Dghidrassist.automation.syntheticWrites=true -Dghidrassist.automation.allowProgramSwitch=true")
             if args.automation_probe:
                 env["GHIDRASSIST_AUTOMATION_TOKEN"]=token
             cmd=[str(java/"bin/java"),
@@ -271,6 +271,20 @@ def main():
                                 method="POST")
                             with urlopen(call,timeout=30) as reply:
                                 return json.loads(reply.read())
+                        # Idempotent same-project open, with no reload/DB edit.
+                        current_open=http_call("project.program.open",
+                            {"path":"/synthetic-mmio.bin"})
+                        if (current_open.get("opened_program")!="synthetic-mmio.bin" or
+                                current_open.get("active") is not True):
+                            raise RuntimeError("Project program-open did not preserve active fixture")
+                        from urllib.error import HTTPError
+                        for unsafe_path in ("/../guard-other.bin","/missing.bin"):
+                            try:
+                                http_call("project.program.open",{"path":unsafe_path})
+                            except HTTPError as error:
+                                if error.code!=400: raise
+                            else:
+                                raise RuntimeError("Unsafe/missing project program path accepted")
                         started=http_call("hardware.analyze")
                         if started.get("schema")!=3:
                             raise RuntimeError("HTTP Analyze failed")
