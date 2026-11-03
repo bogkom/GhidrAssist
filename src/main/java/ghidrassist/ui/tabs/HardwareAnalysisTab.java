@@ -77,6 +77,10 @@ public final class HardwareAnalysisTab extends JPanel {
     });
     private final JButton run=new JButton("Analyze");
     private final JButton cancelScan=new JButton("Cancel Analyze");
+    private JDialog automationMmioDialog;
+    private JTable automationMmioTable;
+    private List<ghidrassist.hardware.HardwareMmioExplorer.Row> automationMmioVisible;
+
     private final JButton export=new JButton("Export MD");
     private final JButton namePreview=new JButton("Export CSV");
     private final JButton exportConfigCsv=new JButton("Evidence CSV...");
@@ -118,6 +122,31 @@ public final class HardwareAnalysisTab extends JPanel {
 
     /** Invokes the same action as the visible button; never bypasses UI validation. */
     /** Request cancellation through the exact visible button action. */
+    /** Select a visible row of the existing MMIO explorer (zero-based), no DB edits. */
+    public com.google.gson.JsonObject automationSelectTableRow(String tableId,int rowIndex) {
+        if (!SwingUtilities.isEventDispatchThread()) throw new IllegalStateException("EDT required");
+        if (!"hardware.mmio".equals(tableId))
+            throw new IllegalArgumentException("Unknown table");
+        if (!currentScan() || latestMarkdown==null)
+            throw new IllegalStateException("Hardware evidence missing or stale; rerun Analyze");
+        if (automationMmioDialog==null || !automationMmioDialog.isDisplayable())
+            showMmioExplorer();
+        if (automationMmioTable==null || automationMmioVisible==null ||
+                rowIndex<0 || rowIndex>=automationMmioVisible.size())
+            throw new IllegalArgumentException("Invalid visible MMIO row");
+        automationMmioTable.setRowSelectionInterval(rowIndex,rowIndex);
+        automationMmioTable.scrollRectToVisible(automationMmioTable.getCellRect(rowIndex,0,true));
+        var selected=automationMmioVisible.get(rowIndex);
+        com.google.gson.JsonObject answer=new com.google.gson.JsonObject();
+        answer.addProperty("table","hardware.mmio");
+        answer.addProperty("row",rowIndex);
+        answer.addProperty("total_visible",automationMmioVisible.size());
+        answer.addProperty("pc",selected.pcHex());
+        answer.addProperty("revision",latestRevision.toString());
+        answer.addProperty("selected",automationMmioTable.getSelectedRow()==rowIndex);
+        return answer;
+    }
+
     public com.google.gson.JsonObject automationCancel() {
         if (!SwingUtilities.isEventDispatchThread()) throw new IllegalStateException("EDT required");
         if (activeMonitor==null || !cancelScan.isEnabled())
@@ -817,6 +846,18 @@ public final class HardwareAnalysisTab extends JPanel {
             Math.min(780,screen.height-90));
         dialog.setLocationRelativeTo(this);
         dialog.setResizable(true);
+        automationMmioDialog=dialog;
+        automationMmioTable=table;
+        automationMmioVisible=visible;
+        dialog.addWindowListener(new java.awt.event.WindowAdapter(){
+            @Override public void windowClosed(java.awt.event.WindowEvent e){
+                if (automationMmioDialog==dialog) {
+                    automationMmioDialog=null;
+                    automationMmioTable=null;
+                    automationMmioVisible=null;
+                }
+            }
+        });
         dialog.setVisible(true);
     }
 
