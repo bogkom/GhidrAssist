@@ -72,11 +72,34 @@ jobs:
           assert apply["second_undo_rejected"] is True,apply
           print("GA18 REVIEW COPY NATIVE PASS: single-item apply=1 undo=1 invalid_token_rejected=1")
           PY
+      - name: Reject mismatched source SHA-256 before any copy write
+        shell: bash
+        run: |
+          set -euo pipefail
+          xvfb-run -a -s '-screen 0 1400x1050x24' \
+            bash -c 'openbox --sm-disable >/dev/null 2>&1 & wm=$!; trap "kill $wm 2>/dev/null || true" EXIT; sleep 1; python3 tests/codebrowser_harness/run.py "$@"' review-copy-negative \
+              --ghidra "$GHIDRA_INSTALL_DIR" --java-home "$JAVA_HOME" \
+              --extension-zip "$EXTENSION" \
+              --output "$RUNNER_TEMP/review-copy-negative" \
+              --automation-probe --review-copy-probe --review-copy-bad-sha --timeout 300
+          python3 - <<'PY'
+          import json,os
+          from pathlib import Path
+          root=Path(os.environ["RUNNER_TEMP"])/"review-copy-negative"
+          result=json.loads((root/"result.json").read_text())
+          assert result["status"]=="EXPECTED_REVIEW_COPY_SHA_DENIAL",result
+          assert result["source_identity_denied"] is True,result
+          assert result["database_edits"] is False,result
+          assert not (root/"api-apply-undo.json").exists()
+          print("GA18 REVIEW COPY SHA MISMATCH DENIED: no edits")
+          PY
       - name: Publish isolated regression evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: ga18-review-copy-${{ github.run_id }}
-          path: ${{ runner.temp }}/review-copy-evidence/
+          path: |
+            ${{ runner.temp }}/review-copy-evidence/
+            ${{ runner.temp }}/review-copy-negative/
           if-no-files-found: ignore
           retention-days: 14
