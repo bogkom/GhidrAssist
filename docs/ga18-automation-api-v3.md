@@ -326,3 +326,33 @@ a following `MOVEA.L D0,A0` clobber. The verifier removes existing Ghidra
 CALL references only in a temporary transaction rolled back at completion.
 The native CI tests exercise the actual product implementation, not a
 simulated interpreter. Results are static evidence only.
+
+
+## API completion tranche — safe controls and evidence retrieval
+
+Added four authenticated JSON-RPC methods in the existing CodeBrowser extension:
+
+- `ui.tab.select`: `{"tab":"Hardware Analysis"}`. Selects one existing,
+  enabled top-level GhidrAssist tab by exact title; returns an updated UI snapshot.
+- `hardware.cancel`: requests cancellation through the original Swing Cancel
+  Analyze button. Rejects requests unless a cancellable scan is active. Task
+  state is read separately with `hardware.task`; cancellation acknowledgment
+  is not proof that a background worker has already stopped.
+- `analysis.report`: `{"format":"markdown","offset":0,"limit":4096}`.
+  Returns revision-checked, bounded (maximum 8192 UTF-16 Java characters)
+  evidence page with `text`, `total_characters`, `more`, and `revision`.
+- `analysis.export`: uses the same bounded, revision-checked transfer. Formats
+  are `markdown`, `config_csv`, `names_csv`. It **does not write a file on
+  the server**: the authenticated caller may save the received pages itself
+  after validating revision and completeness. This avoids arbitrary file-path
+  execution or overwriting on the user's machine.
+
+CLI: `ghidrassist-agent tab-select "Hardware Analysis"`,
+`ghidrassist-agent cancel`, `ghidrassist-agent report --format markdown
+--offset 0 --limit 4096`, and `ghidrassist-agent export --format config_csv
+--offset 0 --limit 4096`.
+
+The current tranche does **not** enable production Apply/Undo, automatic
+program switch, or write-oriented GUI automation. Existing synthetic-only
+Apply/Undo permissions and protections remain unchanged. These operations
+require separate safety design and real-Ghidra verification.
