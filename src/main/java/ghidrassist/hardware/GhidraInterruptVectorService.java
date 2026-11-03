@@ -10,6 +10,7 @@ import ghidra.util.task.TaskMonitor;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 /**
  * Read-only image-zero vector candidate scan for 68000 big-endian programs.
@@ -20,6 +21,17 @@ public final class GhidraInterruptVectorService {
 
     public static String analyze(Program program, TaskMonitor monitor)
             throws CancelledException {
+        return analyze(program,monitor,false,true,Set.of(),List.of());
+    }
+
+    /** Join already-computed bounded RESET candidate evidence, never runtime IRQ. */
+    public static String analyze(Program program,TaskMonitor monitor,
+            boolean resetRootRecognized,boolean resetGraphIncomplete,
+            Set<Long> resetVisited,
+            List<HardwareCallEffects.FunctionNode> callGraph)
+            throws CancelledException {
+        if(resetVisited==null || callGraph==null)
+            throw new IllegalArgumentException("Missing reset-call evidence");
         String language=program.getLanguageID().toString().toUpperCase(Locale.ROOT);
         if(!language.startsWith("68000:BE:"))
             return "## Exception/interrupt vectors\n\nNot evaluated: no "+
@@ -27,6 +39,7 @@ public final class GhidraInterruptVectorService {
 
         if(monitor==null)monitor=TaskMonitor.DUMMY;
         List<HardwareInterruptVectors.Observation> observations=new ArrayList<>();
+        List<HardwareVectorResetCorrelation.Target> resolved=new ArrayList<>();
         for(int vector=2;vector<256;vector++){
             monitor.checkCancelled();
             Long raw=null;
@@ -55,6 +68,9 @@ public final class GhidraInterruptVectorService {
                                     if(f!=null){
                                         function=f.getName()+" @ "+f.getEntryPoint();
                                         exactFunctionEntry=f.getEntryPoint().equals(dest);
+                                        resolved.add(new HardwareVectorResetCorrelation.Target(
+                                            vector,word,f.getEntryPoint().getOffset(),
+                                            exactFunctionEntry));
                                     }
                                 }
                             }catch(RuntimeException invalidTarget){
@@ -69,6 +85,9 @@ public final class GhidraInterruptVectorService {
             observations.add(new HardwareInterruptVectors.Observation(
                 vector,raw,mapped,function,exactFunctionEntry));
         }
-        return HardwareInterruptVectors.inspect(0,observations,32).markdown();
+        return HardwareInterruptVectors.inspect(0,observations,32).markdown()
+            + HardwareVectorResetCorrelation.inspect(
+                resetRootRecognized,resetGraphIncomplete,resetVisited,
+                resolved,callGraph,32).markdown();
     }
 }

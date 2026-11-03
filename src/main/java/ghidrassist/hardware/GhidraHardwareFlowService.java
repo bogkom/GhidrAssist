@@ -767,7 +767,8 @@ public final class GhidraHardwareFlowService {
            .append("- Unresolved register-based stores: ").append(unresolved).append("\n")
            .append("- Propagation cap reached: ").append(limited).append("\n\n")
            .append(reset.markdown())
-           .append(GhidraInterruptVectorService.analyze(program,monitor))
+           .append(GhidraInterruptVectorService.analyze(program,monitor,
+               reset.recognized(),reset.incomplete(),reset.visited(),staticCalls))
            .append(detail).append(effects);
         if(shown>=350)out.append("\n[Detailed report bounded at 350 sites.]\n");
         boolean cfgSourcesComplete=cfgMmioSites.safeAsComplete(!limited);
