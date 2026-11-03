@@ -46,6 +46,14 @@ def main():
     if args.write_mode == "full-control":
         parser.error("FULL_CONTROL API writes are not implemented; use Ghidra GUI for reviewed edits")
     if args.review_copy:
+        # A symlinked .gpr or .rep directory could silently point to the
+        # original user's database, despite the selected "copy" pathname.
+        proposed=args.project.expanduser().absolute() if args.project else None
+        if (proposed is None or proposed.suffix.lower()!=".gpr" or
+                proposed.is_symlink() or
+                proposed.with_suffix(".rep").is_symlink() or
+                not proposed.with_suffix(".rep").is_dir()):
+            parser.error("Review-copy requires a regular .gpr and a real, non-symlink .rep directory")
         import re
         if (args.mode != "test" or args.write_mode != "auto-safe" or
                 args.synthetic_writes or not args.project or not args.program or
