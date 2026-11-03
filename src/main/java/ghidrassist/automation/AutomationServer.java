@@ -257,6 +257,13 @@ public final class AutomationServer implements AutoCloseable {
                     if(provider==null) throw new IllegalStateException("GhidrAssist UI unavailable");
                     if(!args.has("tab")) throw new IllegalArgumentException("Tab required");
                     result.add("ui",provider.getUI().automationSelectTab(args.get("tab").getAsString()));
+                } else if ("ui.table.select".equals(method)) {
+                    GhidrAssistProvider provider=plugin.getAutomationProvider();
+                    if(provider==null) throw new IllegalStateException("GhidrAssist UI unavailable");
+                    if(!args.has("table") || !args.has("row"))
+                        throw new IllegalArgumentException("Table and row required");
+                    result.add("selection",provider.getUI().automationSelectTableRow(
+                        args.get("table").getAsString(),args.get("row").getAsInt()));
                 } else if ("hardware.cancel".equals(method)) {
                     GhidrAssistProvider provider=plugin.getAutomationProvider();
                     if(provider==null) throw new IllegalStateException("GhidrAssist UI unavailable");
