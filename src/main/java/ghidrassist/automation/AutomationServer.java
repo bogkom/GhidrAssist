@@ -252,6 +252,24 @@ public final class AutomationServer implements AutoCloseable {
                     } else {
                         result.add("undo",provider.getUI().automationApplyUndo());
                     }
+                } else if ("ui.tab.select".equals(method)) {
+                    GhidrAssistProvider provider=plugin.getAutomationProvider();
+                    if(provider==null) throw new IllegalStateException("GhidrAssist UI unavailable");
+                    if(!args.has("tab")) throw new IllegalArgumentException("Tab required");
+                    result.add("ui",provider.getUI().automationSelectTab(args.get("tab").getAsString()));
+                } else if ("hardware.cancel".equals(method)) {
+                    GhidrAssistProvider provider=plugin.getAutomationProvider();
+                    if(provider==null) throw new IllegalStateException("GhidrAssist UI unavailable");
+                    result.add("cancel",provider.getUI().automationCancel());
+                } else if ("analysis.report".equals(method) || "analysis.export".equals(method)) {
+                    GhidrAssistProvider provider=plugin.getAutomationProvider();
+                    if(provider==null) throw new IllegalStateException("GhidrAssist UI unavailable");
+                    String format=args.has("format") ? args.get("format").getAsString() : "markdown";
+                    int offset=args.has("offset") ? args.get("offset").getAsInt() : 0;
+                    int limit=args.has("limit") ? args.get("limit").getAsInt() : 4096;
+                    // Export is a paginated transfer to the authenticated client,
+                    // never arbitrary server-side writes to files or the project.
+                    result.add("report",provider.getUI().automationReport(format,offset,limit));
                 } else if ("hardware.profile.select".equals(method)) {
                     GhidrAssistProvider provider = plugin.getAutomationProvider();
                     if (provider == null) throw new IllegalStateException("GhidrAssist UI unavailable");
