@@ -117,6 +117,14 @@ public final class AutomationServer implements AutoCloseable {
                     result.addProperty("production_writes_enabled",false);
                     result.addProperty("review_copy_enabled",Boolean.getBoolean("ghidrassist.automation.reviewCopy") &&
                         AutomationWritePolicy.mode()==AutomationWritePolicy.Mode.AUTO_SAFE);
+                    boolean copyAuthorized=false;
+                    try {
+                        AutomationWritePolicy.requireReviewCopy(program,plugin.getTool().getProject());
+                        copyAuthorized=true;
+                    } catch(IllegalStateException denied) {
+                        // Session status is observational: do not elevate or leak token.
+                    }
+                    result.addProperty("review_copy_authorized",copyAuthorized);
                     result.addProperty("synthetic_write_pilot_enabled",
                         AutomationWritePolicy.mode()!=AutomationWritePolicy.Mode.READ_ONLY &&
                         Boolean.getBoolean("ghidrassist.automation.syntheticWrites"));
