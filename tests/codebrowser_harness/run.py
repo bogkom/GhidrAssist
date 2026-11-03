@@ -228,7 +228,7 @@ def main():
                     env["JAVA_TOOL_OPTIONS"] += (
                         " -Dghidrassist.automation.writeMode=AUTO_SAFE"
                         " -Dghidrassist.automation.reviewCopy=true"
-                        " -Dghidrassist.automation.reviewCopyProject="+str(project)
+                        " -Dghidrassist.automation.reviewCopyProject="+str(project)+
                         " -Dghidrassist.automation.reviewCopyProgram=/synthetic-mmio.bin"
                         " -Dghidrassist.automation.reviewCopySha256="+sha256(work/"synthetic-mmio.bin"))
                 else:
