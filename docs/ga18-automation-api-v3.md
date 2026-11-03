@@ -370,3 +370,19 @@ changing the Ghidra database. The existing dialog's filter state is
 preserved. CLI: `ghidrassist-agent table-select hardware.mmio --row 0`.
 The current API intentionally does not expose arbitrary Swing tree/table
 reflection or blanket UI control.
+
+
+### Opt-in same-project program opening (sixth completion method)
+
+`project.program.open` accepts `{"path":"/synthetic-mmio.bin"}` or an
+exact existing Ghidra ProjectData domain-file path. It requires the JVM
+`-Dghidrassist.automation.allowProgramSwitch=true`, normally supplied only
+with launcher `--allow-program-switch --project ... --program ...`.
+The server rejects URLs, host file paths, parent traversal, missing files,
+read-only domain files and switching away from an unsaved active Program.
+It never closes an existing Program, changes bytes, saves or imports a
+file; it uses Ghidra `ProgramManager.openProgram(DomainFile)`. Opening the
+already active Program is idempotent, including when it has unsaved edits.
+CLI: `ghidrassist-agent program-open /synthetic-mmio.bin`.
+The operation is disabled by default and restricted to the active
+Ghidra project; opening arbitrary host paths is not supported.
