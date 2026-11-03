@@ -90,6 +90,7 @@ jobs:
             -postScript GA18BootstrapSyntheticCallgraph.java \
             -postScript GA18VerifySyntheticCallgraph.java \
             -postScript GA18VerifyAutomationPaths.java \
+            -postScript GA18VerifyVectorResetCorrelation.java \
             -postScript GA18VerifyDecompilerTaskBinding.java \
             -postScript GA18VerifyListingSnapshot.java \
             -postScript GA18VerifyListingRangeAndBodyXrefs.java \
@@ -98,6 +99,7 @@ jobs:
             }
           grep -q 'GA18 CALLGRAPH PASS: functions=20 edges=19 mmio_static_writes=4 reset_reachable=6 assertions=110' "$RUNNER_TEMP/ga18-paths.log"
           grep -q 'GA18 PRODUCTION PATHS PASS: assertions=22' "$RUNNER_TEMP/ga18-paths.log"
+          grep -q 'GA18 VECTOR RESET CORRELATION PASS: assertions=8' "$RUNNER_TEMP/ga18-paths.log"
           grep -q 'GA18 DECOMPILER TASK BINDING PASS: assertions=7' "$RUNNER_TEMP/ga18-paths.log"
           grep -q 'GA18 LISTING SNAPSHOT PASS: assertions=9' "$RUNNER_TEMP/ga18-paths.log"
           grep -q 'GA18 LISTING RANGE BODY XREF PASS:' "$RUNNER_TEMP/ga18-paths.log"
