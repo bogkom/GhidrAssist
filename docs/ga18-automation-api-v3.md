@@ -487,3 +487,9 @@ The separate real-Ghidra copy regression also supplies an intentionally
 incorrect SHA-256 and must obtain a 400 denial at Review Prepare, with no
 transaction started. This validates the guard rather than just its presence
 in the Java source.
+
+The launcher also requires an actual `.gpr` file and a matching, real
+`.rep` data directory and rejects symlinks at either top-level path.
+Do not copy just the `.gpr`; close the source project and copy the
+complete, independent project first. This is an extra guard, not a
+cryptographic demonstration that a copy is independent.
