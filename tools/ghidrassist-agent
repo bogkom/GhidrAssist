@@ -34,9 +34,10 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--session", default=os.environ.get(
         "GHIDRASSIST_AGENT_SESSION", str(Path.home() / ".local/state/ghidrassist-agent/session.json")))
-    parser.add_argument("action", choices=("status", "snapshot", "analyze", "task", "mmio", "review-preview", "profile-select", "function", "xrefs", "decompile", "decompile-status", "bundle", "paths", "listing", "goto"))
+    parser.add_argument("action", choices=("status", "snapshot", "analyze", "task", "mmio", "review-preview", "profile-select", "function", "xrefs", "decompile", "decompile-status", "bundle", "paths", "listing", "goto", "tab-select", "cancel", "report", "export"))
     parser.add_argument("address", nargs="?")
     parser.add_argument("--filter", default="")
+    parser.add_argument("--format", choices=("markdown", "config_csv", "names_csv"), default="markdown")
     parser.add_argument("--origin", choices=("reset", "entry"), default="reset")
     parser.add_argument("--max-depth", type=int, default=8)
     parser.add_argument("--offset", type=int, default=0)
@@ -46,15 +47,19 @@ def main():
     method = {"status": "session.status", "snapshot": "ui.snapshot",
               "analyze": "hardware.analyze", "task": "hardware.task",
               "mmio": "hardware.mmio.rows", "review-preview": "hardware.review.preview", "profile-select": "hardware.profile.select", "function": "function.snapshot", "xrefs": "function.xrefs", "decompile": "decompiler.start", "decompile-status": "decompiler.status", "bundle": "analysis.bundle", "paths": "analysis.paths", "listing": "listing.snapshot",
-              "goto": "listing.goto"}[args.action]
+              "goto": "listing.goto", "tab-select": "ui.tab.select", "cancel": "hardware.cancel", "report": "analysis.report", "export": "analysis.export"}[args.action]
     if method == "analysis.paths" and args.origin == "entry" and not args.address:
         parser.error("paths --origin entry requires an address")
+    if method == "ui.tab.select" and not args.address:
+        parser.error("tab-select requires exact tab title")
     if method == "listing.goto" and not args.address:
         parser.error("goto requires an address")
     if method == "hardware.profile.select" and args.address not in ("CPU32_SURVEY", "MC68332_USER_SELECTED"):
         parser.error("profile-select requires CPU32_SURVEY or MC68332_USER_SELECTED")
     try:
-        params = ({"origin": args.origin, "entry": args.address or "", "max_depth": args.max_depth, "offset": args.offset, "limit": args.limit} if method == "analysis.paths" else
+        params = ({"tab":args.address} if method=="ui.tab.select" else
+                  {"format":args.format, "offset":args.offset, "limit":args.limit} if method in ("analysis.report","analysis.export") else
+                  {"origin": args.origin, "entry": args.address or "", "max_depth": args.max_depth, "offset": args.offset, "limit": args.limit} if method == "analysis.paths" else
                   {"profile": args.address} if method == "hardware.profile.select" else
                   {"address": args.address} if args.address else
                   {"filter": args.filter, "offset": args.offset, "limit": args.limit}
