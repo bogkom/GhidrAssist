@@ -94,7 +94,7 @@ def main():
                         "generic-profile","trambar-source","csbar-mm0-reject",
                         "mmio-read-reference","csbar-csor-conditional",
                         "simcr-mm0-literal","trambar-unknown","csor-alternatives",
-                        "branch-simcr","call-barrier","leaf-return","cancel-incomplete",
+                        "branch-simcr","call-barrier","leaf-return","branch-leaf","cancel-incomplete",
                         "function-rename","apply-preserve",
                         "provenance-csv","movec-vbr"),
                         default="none",help="Run GA-07/12 or GA-02/03 genuine headless source-evidence checks")
@@ -260,6 +260,12 @@ def main():
                     "call-barrier":(
                         "call_real_jsr_barrier","call_clobbered_pointer_not_reused",
                         "call_alias_blocks_review","call_read_only"),
+                    "branch-leaf":(
+                        "branch_leaf_real_convergent_proven",
+                        "branch_leaf_disagreeing_address_unknown",
+                        "branch_leaf_call_history_uncertain",
+                        "branch_leaf_generic_cpu32_conservative",
+                        "branch_leaf_program_read_only"),
                     "leaf-return":(
                         "leaf_real_direct_return_constants",
                         "leaf_real_call_barrier_history_unknown",
