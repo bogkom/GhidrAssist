@@ -45,6 +45,8 @@ public final class HardwareDataflow {
         public final List<Long> successors;
         public final String mnemonic;
         public final Set<String> sideEffectRegisters;
+        /** Verified input-independent register constants assigned on leaf return. */
+        public final Map<String,Long> verifiedCallReturns;
         public Step(long address,Kind kind,String register,long operand,long displacement,
                     Integer literalWord,int writeBits,Collection<Long> successors,String mnemonic){
             this.address=address;this.kind=Objects.requireNonNull(kind);
@@ -54,6 +56,7 @@ public final class HardwareDataflow {
             this.literalWord=literalWord;this.writeBits=writeBits;
             this.successors=List.copyOf(successors);this.mnemonic=mnemonic==null?"":mnemonic;
             this.sideEffectRegisters=Set.of();
+            this.verifiedCallReturns=Map.of();
         }
         public Step(long address,Kind kind,String register,String sourceRegister,long operand,
                     long displacement,Integer literalWord,int writeBits,
@@ -65,6 +68,7 @@ public final class HardwareDataflow {
             this.literalWord=literalWord;this.writeBits=writeBits;
             this.successors=List.copyOf(successors);this.mnemonic=mnemonic==null?"":mnemonic;
             this.sideEffectRegisters=Set.of();
+            this.verifiedCallReturns=Map.of();
         }
         /** Indexed STORE: base + displacement + signed .W/.L index * scale. */
         public Step(long address, String baseRegister, String sourceRegister,
@@ -86,6 +90,7 @@ public final class HardwareDataflow {
             this.successors=List.copyOf(successors);
             this.mnemonic=mnemonic==null?"":mnemonic;
             this.sideEffectRegisters=Set.of();
+            this.verifiedCallReturns=Map.of();
         }
         private Step(Step original,Collection<String> sideEffects) {
             this.address=original.address;this.kind=original.kind;
@@ -99,10 +104,34 @@ public final class HardwareDataflow {
                 if(reg==null || !reg.matches("[AD][0-7]"))
                     throw new IllegalArgumentException("Invalid register side effect");
             this.sideEffectRegisters=Set.copyOf(sideEffects);
+            this.verifiedCallReturns=original.verifiedCallReturns;
+        }
+        private Step(Step original,Map<String,Long> provedReturns){
+            if(original.kind!=Kind.CALL_BARRIER)
+                throw new IllegalArgumentException("Call returns require CALL_BARRIER");
+            if(provedReturns==null || provedReturns.size()>14)
+                throw new IllegalArgumentException("Invalid leaf return registers");
+            for(var e:provedReturns.entrySet())
+                if(e.getKey()==null || !e.getKey().matches("[AD][0-6]|D7") ||
+                        e.getValue()==null)
+                    throw new IllegalArgumentException("Unsafe leaf register");
+            this.address=original.address;this.kind=original.kind;
+            this.register=original.register;this.sourceRegister=original.sourceRegister;
+            this.indexRegister=original.indexRegister;
+            this.indexBits=original.indexBits;this.indexScale=original.indexScale;
+            this.operand=original.operand;this.displacement=original.displacement;
+            this.literalWord=original.literalWord;this.writeBits=original.writeBits;
+            this.successors=original.successors;this.mnemonic=original.mnemonic;
+            this.sideEffectRegisters=original.sideEffectRegisters;
+            this.verifiedCallReturns=Map.copyOf(provedReturns);
         }
         public Step withSideEffects(Collection<String> updatedRegisters) {
             if(updatedRegisters==null || updatedRegisters.isEmpty())return this;
             return new Step(this,updatedRegisters);
+        }
+        public Step withVerifiedCallReturns(Map<String,Long> provedReturns){
+            if(provedReturns==null || provedReturns.isEmpty())return this;
+            return new Step(this,provedReturns);
         }
     }
     public static final class Snapshot {
@@ -132,6 +161,34 @@ public final class HardwareDataflow {
             priorUnknownCall=before.crossedUnknownCall;
             priorUnknownStore=before.crossedUnknownStore;
         }
+        // Typed, bounded decoder only. There is no Java object deserialization.
+        static Snapshot restore(long instruction,Kind kind,Long address,
+                Integer writtenWord,int bits,String pointer,Long vbr,
+                Map<Long,Integer> peripheral,boolean indirect,
+                int min,int max,boolean unknownCall,boolean unknownStore) {
+            if(instruction<0 || kind==null || !(
+                    kind==Kind.STORE_DIRECT || kind==Kind.STORE_INDIRECT ||
+                    kind==Kind.VBR_FROM_REGISTER || kind==Kind.VBR_CONSTANT) ||
+                    min<0 || max<min || max>2 || peripheral==null ||
+                    peripheral.size()>4096 ||
+                    (pointer!=null && !pointer.matches("[AD][0-7]")) ||
+                    (bits!=0 && bits!=8 && bits!=16 && bits!=32))
+                throw new IllegalArgumentException("Invalid decoded CFG snapshot");
+            return new Snapshot(instruction,kind,address,writtenWord,bits,
+                pointer,vbr,peripheral,indirect,min,max,unknownCall,unknownStore);
+        }
+        private Snapshot(long instruction,Kind kind,Long effectiveAddress,
+                Integer writtenWord,int bits,String pointer,Long vbr,
+                Map<Long,Integer> peripheral,boolean indirect,int min,int max,
+                boolean unknownCall,boolean unknownStore) {
+            this.instruction=instruction;this.kind=kind;
+            this.effectiveAddress=effectiveAddress;this.writtenWord=writtenWord;
+            this.writeBits=bits;this.pointerRegister=pointer;this.vbr=vbr;
+            this.knownPeripheralWords=Map.copyOf(peripheral);
+            this.indirect=indirect;this.priorMmCandidateMin=min;
+            this.priorMmCandidateMax=max;this.priorUnknownCall=unknownCall;
+            this.priorUnknownStore=unknownStore;
+        }
     }
     public static final class Result {
         public final List<Snapshot> snapshots;
@@ -143,6 +200,32 @@ public final class HardwareDataflow {
             this.snapshots=List.copyOf(snapshots);this.reachedNodes=reachedNodes;
             this.iterations=iterations;this.truncated=truncated;
             this.knownPointersAtEntry=Collections.unmodifiableMap(pointers);
+        }
+        static Result restore(List<Snapshot> snapshots,int reachedNodes,int iterations,
+                Map<Long,Map<String,Long>> pointers) {
+            if(snapshots==null || pointers==null || reachedNodes<0 ||
+                    reachedNodes>3000 ||
+                    iterations<0 || iterations>30000 ||
+                    snapshots.size()>512 ||
+                    pointers.size()>3000)
+                throw new IllegalArgumentException("Invalid fixed point bounds");
+            Map<Long,Map<String,Long>> deep=new LinkedHashMap<>();
+            long registers=0;
+            for(var entry:pointers.entrySet()){
+                if(entry.getKey()==null || entry.getKey()<0 ||
+                        entry.getValue()==null)
+                    throw new IllegalArgumentException("Null pointer state");
+                registers+=entry.getValue().size();
+                if(registers>4096)
+                    throw new IllegalArgumentException("Too many register cells");
+                for(String reg:entry.getValue().keySet())
+                    if(reg==null || !reg.matches("[AD][0-7]") ||
+                            entry.getValue().get(reg)==null)
+                        throw new IllegalArgumentException("Invalid register snapshot");
+                deep.put(entry.getKey(),Map.copyOf(entry.getValue()));
+            }
+            return new Result(snapshots,reachedNodes,iterations,false,
+                Collections.unmodifiableMap(deep));
         }
     }
     private static final class State {
@@ -179,9 +262,100 @@ public final class HardwareDataflow {
                     crossedUnknownStore!=b.crossedUnknownStore;
         }
     }
+    /** Checkpointed state at a CFG instruction entry, never a finished result. */
+    public record EntryState(Map<String,Long> pointers,
+            Map<Long,Integer> peripherals,Long vbr,int mmMin,int mmMax,
+            boolean unknownCall,boolean unknownStore) {
+        public EntryState {
+            if(pointers==null || peripherals==null || mmMin<0 ||
+                    mmMax<mmMin || mmMax>2 || pointers.size()>16 ||
+                    peripherals.size()>256 || (vbr!=null &&
+                    (vbr<0 || vbr>MASK24)))
+                throw new IllegalArgumentException("Invalid CFG work state");
+            for(var p:pointers.entrySet())
+                if(p.getKey()==null || !p.getKey().matches("[AD][0-7]") ||
+                        p.getValue()==null || p.getValue()<0 ||
+                        p.getValue()>MASK24)
+                    throw new IllegalArgumentException("Bad register state");
+            for(var p:peripherals.entrySet())
+                if(p.getKey()==null || p.getKey()<0 ||
+                        p.getKey()>MASK24 || p.getValue()==null ||
+                        p.getValue()<0 || p.getValue()>65535)
+                    throw new IllegalArgumentException("Bad MMIO state");
+            pointers=Map.copyOf(pointers);
+            peripherals=Map.copyOf(peripherals);
+        }
+    }
+    public static final int MAX_PROGRESS_NODES=256;
+    public static final int MAX_PROGRESS_CELLS=4096;
+    /** An in-progress, unpublishable fixed-point worklist snapshot. */
+    public record Progress(long entry,int maxIterations,int iterations,
+            Map<Long,EntryState> atEntry,List<Long> pending) {
+        public Progress {
+            if(entry<0 || maxIterations<1 || maxIterations>30000 ||
+                    iterations<0 || iterations>=maxIterations ||
+                    atEntry==null || pending==null || atEntry.isEmpty() ||
+                    atEntry.size()>MAX_PROGRESS_NODES ||
+                    pending.isEmpty() || pending.size()>MAX_PROGRESS_NODES)
+                throw new IllegalArgumentException("Invalid CFG progress bounds");
+            int cells=0;
+            for(var e:atEntry.entrySet()) {
+                if(e.getKey()==null || e.getKey()<0 || e.getValue()==null)
+                    throw new IllegalArgumentException("Invalid progress node");
+                cells+=e.getValue().pointers().size()+
+                    e.getValue().peripherals().size();
+                if(cells>MAX_PROGRESS_CELLS)
+                    throw new IllegalArgumentException("Oversized progress cells");
+            }
+            if(!atEntry.containsKey(entry) ||
+                    pending.stream().distinct().count()!=pending.size() ||
+                    !atEntry.keySet().containsAll(pending))
+                throw new IllegalArgumentException("Invalid pending queue");
+            atEntry=Map.copyOf(atEntry);
+            pending=List.copyOf(pending);
+        }
+    }
+    /** Exactly one of complete/progress is populated, or both null if too large. */
+    public record Slice(Result complete,Progress progress) {
+        public Slice {
+            if(complete!=null && progress!=null)
+                throw new IllegalArgumentException("Completed and pending");
+        }
+    }
+    private static EntryState capture(State s) {
+        return new EntryState(s.pointers,s.peripherals,s.vbr,
+            s.mmCandidateMin,s.mmCandidateMax,s.crossedUnknownCall,
+            s.crossedUnknownStore);
+    }
+    private static State restore(EntryState e) {
+        State s=new State();
+        s.pointers.putAll(e.pointers());s.peripherals.putAll(e.peripherals());
+        s.vbr=e.vbr();s.mmCandidateMin=e.mmMin();s.mmCandidateMax=e.mmMax();
+        s.crossedUnknownCall=e.unknownCall();s.crossedUnknownStore=e.unknownStore();
+        return s;
+    }
+
     public static Long pcodeInputValue(boolean constant,long literal,Long propagated){
         if(constant)return Long.valueOf(literal);
         return propagated;
+    }
+
+    /**
+     * 68000 ADDQ/SUBQ to An adjusts the full address register regardless of
+     * the instruction .W spelling. To Dn, .B/.W update only the low byte/word
+     * and must NOT carry into untouched high bits. Zero means unknown size;
+     * callers must clobber Dn rather than invent a full-register result.
+     */
+    static int registerAdjustWidth(String destination,String mnemonic) {
+        if(destination==null || mnemonic==null ||
+                !destination.matches("[AD][0-7]"))
+            return 0;
+        if(destination.startsWith("A"))return 32;
+        String spelling=mnemonic.toUpperCase(java.util.Locale.ROOT);
+        if(spelling.endsWith(".B"))return 8;
+        if(spelling.endsWith(".W"))return 16;
+        if(spelling.endsWith(".L"))return 32;
+        return 0;
     }
     private static Long resolve(Step step,State s) {
         if(step.kind==Kind.STORE_DIRECT) return step.operand&MASK24;
@@ -211,13 +385,40 @@ public final class HardwareDataflow {
      * profile. A static site is not evidence that MM is mapped there, that
      * the code executes, or that the MM write-once latch is still available.
      */
+    private static int storeBytes(int bits) {
+        return switch(bits) {
+            case 8 -> 1;
+            case 16 -> 2;
+            case 32 -> 4;
+            default -> 0;
+        };
+    }
+
+    // CPU32 source-level external addresses are modeled modulo 24 bits.
+    // A long write at 0xFFFFFE can also touch a tracked word at 0x000000.
+    private static boolean overlapsBytes(long start,int size,
+                                         long target,int targetSize) {
+        for(int i=0;i<size;i++)
+            for(int j=0;j<targetSize;j++)
+                if(((start+i)&MASK24)==((target+j)&MASK24))
+                    return true;
+        return false;
+    }
+
+    /**
+     * Candidate touch of the MC68332 MM bit's LOW BYTE under either MM
+     * mapping. A partial/spanning STORE is UNKNOWN first-site evidence, not
+     * a known 16-bit SIMCR value or proof of hardware latch execution.
+     */
+    static boolean mayTouchSimcrMmLowByte(Long address,int bits) {
+        int bytes=storeBytes(bits);
+        return address!=null && bytes>0 &&
+            (overlapsBytes(address,bytes,0x7ffa01L,1) ||
+             overlapsBytes(address,bytes,0xfffa01L,1));
+    }
+
     private static boolean candidateSimcrStore(Step step, Long address) {
-        if (address==null) return false;
-        boolean word=step.writeBits==16 &&
-            (address==0x7ffa00L || address==0xfffa00L);
-        boolean lowByte=step.writeBits==8 &&
-            (address==0x7ffa01L || address==0xfffa01L);
-        return word || lowByte;
+        return mayTouchSimcrMmLowByte(address,step.writeBits);
     }
 
     private static State transfer(Step step,State in,Set<Long> targets){
@@ -236,8 +437,21 @@ public final class HardwareDataflow {
             case ADJUST_POINTER -> {
                 if(step.register!=null){
                     Long v=s.pointers.get(step.register);
-                    if(v==null)s.pointers.remove(step.register);
-                    else s.pointers.put(step.register,(v+step.operand)&MASK24);
+                    // Dn size is required. A partial Dn arithmetic update
+                    // must NOT carry into the preserved high byte/word.
+                    if(v==null || step.register.startsWith("D") &&
+                            step.writeBits!=8 && step.writeBits!=16 &&
+                            step.writeBits!=32) {
+                        s.pointers.remove(step.register);
+                    }else {
+                        long mask=step.register.startsWith("D") &&
+                            step.writeBits==8?0xffL:
+                            step.register.startsWith("D") &&
+                            step.writeBits==16?0xffffL:MASK24;
+                        long changed=(v & ~mask) |
+                            ((v+step.operand)&mask);
+                        s.pointers.put(step.register,changed&MASK24);
+                    }
                 }
             }
             case CLOBBER_POINTER -> {
@@ -261,19 +475,15 @@ public final class HardwareDataflow {
                     // invalidates the full register value. Reintroduce a
                     // constant only for an aligned, complete 16-bit write
                     // with a fully known source.
-                    int bytes = switch(step.writeBits) {
-                        case 8 -> 1;
-                        case 16 -> 2;
-                        case 32 -> 4;
-                        default -> 0;
-                    };
+                    int bytes = storeBytes(step.writeBits);
                     if(bytes==0) {
                         s.peripherals.clear();
                         s.crossedUnknownStore=true;
                     } else {
-                        long last=address+bytes-1;
+                        // Source/word windows can cross 0xFFFFFF:
+                        // invalidate high and wrapped low bytes alike.
                         s.peripherals.keySet().removeIf(reg ->
-                            address<=reg+1 && reg<=last);
+                            overlapsBytes(address,bytes,reg,2));
                         if(step.writeBits==16 && targets.contains(address) &&
                                 (address&1)==0) {
                             Long known=knownStoreValue(step,in);
@@ -290,6 +500,10 @@ public final class HardwareDataflow {
                 // means constants cannot cross this boundary.
                 s.pointers.clear();s.peripherals.clear();s.vbr=null;
                 s.crossedUnknownCall=true;
+                // Register evidence is reintroduced only after the generic
+                // CALL barrier, and only from a strictly verified leaf.
+                for(var proved:step.verifiedCallReturns.entrySet())
+                    s.pointers.put(proved.getKey(),proved.getValue()&MASK24);
             }
             default -> {}
         }
@@ -297,7 +511,13 @@ public final class HardwareDataflow {
         // instruction's effective address (post-increment uses old A register).
         // The pre-decrement form is unresolved unless modeled separately, but
         // in either case a stale pointer must not survive to a later STORE.
-        for(String reg:step.sideEffectRegisters)s.pointers.remove(reg);
+        for(String reg:step.sideEffectRegisters)
+            // ABI P-code clobbers are effects during the call. An
+            // unconditional leaf proof establishes the result AFTER RTS,
+            // and therefore takes precedence over that generic clobber.
+            if(step.kind!=Kind.CALL_BARRIER ||
+                    !step.verifiedCallReturns.containsKey(reg))
+                s.pointers.remove(reg);
         return s;
     }
     /**
@@ -307,39 +527,89 @@ public final class HardwareDataflow {
      */
     public static Result analyze(long entry,Collection<Step> steps,
                                  Collection<Long> peripherals,int maxIterations){
-        if(maxIterations<1)throw new IllegalArgumentException("Iteration limit must be positive");
+        // The legacy non-checkpointed API retains its exact bounded behavior.
+        Slice one=analyzeSlice(entry,steps,peripherals,maxIterations,null,
+            maxIterations);
+        if(one.complete()==null)
+            throw new IllegalStateException("Unbounded CFG input unexpectedly");
+        return one.complete();
+    }
+
+    /**
+     * Execute at most sliceIterations fixed-point transfers, retaining the
+     * original deterministic worklist ordering. Progress is NEVER analysis
+     * evidence: only a completed Result can be published to a caller.
+     *
+     * A progress snapshot is eligible only when every live state fits strict
+     * resource caps. For oversized functions return (null,null): the caller
+     * must run ordinary analyze() without persistence.
+     */
+    public static Slice analyzeSlice(long entry,Collection<Step> steps,
+            Collection<Long> peripherals,int maxIterations,Progress previous,
+            int sliceIterations){
+        if(maxIterations<1 || sliceIterations<1 ||
+                steps==null || peripherals==null)
+            throw new IllegalArgumentException("Invalid CFG work budget");
         Map<Long,Step> graph=new LinkedHashMap<>();
         for(Step s:steps)
-            if(graph.putIfAbsent(s.address,s)!=null)
-                throw new IllegalArgumentException("Duplicate instruction address "+s.address);
+            if(s==null || graph.putIfAbsent(s.address,s)!=null)
+                throw new IllegalArgumentException("Null or duplicate CFG PC");
         Set<Long> targets=new LinkedHashSet<>(peripherals);
         Map<Long,State> input=new HashMap<>();
         ArrayDeque<Long> queue=new ArrayDeque<>();
         Set<Long> queued=new LinkedHashSet<>();
-        if(graph.containsKey(entry)){
-            input.put(entry,new State());queue.add(entry);queued.add(entry);
-        }
         int iterations=0;
-        while(!queue.isEmpty() && iterations<maxIterations){
+        if(previous==null) {
+            if(graph.containsKey(entry)){
+                input.put(entry,new State());queue.add(entry);queued.add(entry);
+            }
+        } else {
+            if(previous.entry()!=entry ||
+                    previous.maxIterations()!=maxIterations ||
+                    !graph.keySet().containsAll(previous.atEntry().keySet()))
+                throw new IllegalArgumentException("Stale CFG progress");
+            for(var e:previous.atEntry().entrySet())
+                input.put(e.getKey(),restore(e.getValue()));
+            for(Long pc:previous.pending()) {
+                if(!graph.containsKey(pc) || !queued.add(pc))
+                    throw new IllegalArgumentException("Invalid worklist PC");
+                queue.addLast(pc);
+            }
+            iterations=previous.iterations();
+        }
+        int inSlice=0;
+        while(!queue.isEmpty() && iterations<maxIterations &&
+                inSlice<sliceIterations){
             long pc=queue.removeFirst();queued.remove(pc);
             Step step=graph.get(pc);
             if(step==null)continue;
-            State s=transfer(step,input.get(pc),targets);
-            iterations++;
+            State out=transfer(step,input.get(pc),targets);
+            iterations++;inSlice++;
             for(Long successor:step.successors){
                 if(!graph.containsKey(successor))continue;
                 State prior=input.get(successor);
                 boolean changed=false;
-                if(prior==null){input.put(successor,s.copy());changed=true;}
-                else changed=prior.join(s);
+                if(prior==null){input.put(successor,out.copy());changed=true;}
+                else changed=prior.join(out);
                 if(changed && queued.add(successor))queue.addLast(successor);
             }
         }
-        boolean truncated=!queue.isEmpty();
-        // An unfinished fixed point may still have branch-dependent constants
-        // from predecessors not yet visited. Publishing them as evidence would
-        // be unsound. Return only the truncation marker, never inferred values.
-        if(truncated)return new Result(List.of(),input.size(),iterations,true,Map.of());
+        if(!queue.isEmpty()){
+            if(iterations>=maxIterations)
+                return new Slice(new Result(List.of(),input.size(),
+                    iterations,true,Map.of()),null);
+            if(maxIterations>30000 || input.size()>MAX_PROGRESS_NODES ||
+                    queue.size()>MAX_PROGRESS_NODES)
+                return new Slice(null,null);
+            Map<Long,EntryState> states=new HashMap<>();
+            try{
+                for(var e:input.entrySet())states.put(e.getKey(),capture(e.getValue()));
+                return new Slice(null,new Progress(entry,maxIterations,
+                    iterations,states,List.copyOf(queue)));
+            }catch(IllegalArgumentException tooLarge){
+                return new Slice(null,null);
+            }
+        }
         List<Snapshot> found=new ArrayList<>();
         Map<Long,Map<String,Long>> pointers=new LinkedHashMap<>();
         for(Step step:graph.values()){
@@ -357,6 +627,6 @@ public final class HardwareDataflow {
                     before,after));
             }
         }
-        return new Result(found,input.size(),iterations,truncated,pointers);
+        return new Slice(new Result(found,input.size(),iterations,false,pointers),null);
     }
 }

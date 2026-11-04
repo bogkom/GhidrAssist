@@ -1,0 +1,78 @@
+name: GA-12 real Ghidra interrupted function disk restore across JVMs
+on:
+  pull_request:
+    paths:
+      - 'src/main/java/ghidrassist/hardware/HardwareDurableStageStore.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareDurableCfgReport.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareGhidraInputFingerprint.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareFlowStageCache.java'
+      - 'src/main/java/ghidrassist/hardware/GhidraHardwareFlowService.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareDataflow.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareFunctionStageCache.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareVerifiedLeafReturn.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareVerifiedBranchReturn.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareRegisterOperand.java'
+      - 'tests/ga12_function_durable/**'
+      - '.github/workflows/ga12-durable-function-restart.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native-reopen:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Fetch verified Ghidra 12.1.4 PUBLIC
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fLsS --retry 3 --connect-timeout 20 -o "$RUNNER_TEMP/ghidra.zip" \
+            "https://github.com/NationalSecurityAgency/ghidra/releases/download/Ghidra_12.1.4_build/ghidra_12.1.4_PUBLIC_20260921.zip"
+          echo "ddac49f903da9d5bac833e5cc79395098b9c33cfd3279be5f31bd00387d2d4db  $RUNNER_TEMP/ghidra.zip" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/ghidra"
+          unzip -q "$RUNNER_TEMP/ghidra.zip" -d "$RUNNER_TEMP/ghidra"
+          GHIDRA_DIR="$(find "$RUNNER_TEMP/ghidra" -mindepth 1 -maxdepth 1 -type d -name 'ghidra_*' -print -quit)"
+          test -n "$GHIDRA_DIR"
+          echo "GHIDRA_INSTALL_DIR=$GHIDRA_DIR" >> "$GITHUB_ENV"
+      - name: Build complete GhidrAssist extension
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$GHIDRA_INSTALL_DIR/support/gradle/gradlew" --no-daemon buildExtension
+          zip_file="$(find dist -maxdepth 1 -name 'ghidra_12.1.4_PUBLIC_*_GhidrAssist.zip' -type f -print -quit)"
+          test -n "$zip_file"
+          unzip -tq "$zip_file"
+          echo "EXTENSION=$PWD/$zip_file" >> "$GITHUB_ENV"
+          sha256sum "$zip_file"
+      - name: Run three independent real-Ghidra JVMs on isolated synthetic project
+        shell: bash
+        run: |
+          set -euo pipefail
+          HASH="$(sha256sum "$EXTENSION" | cut -d' ' -f1)"
+          python3 tests/ga12_function_durable/run.py \
+            --ghidra "$GHIDRA_INSTALL_DIR" \
+            --java-home "$JAVA_HOME" \
+            --extension-zip "$EXTENSION" --extension-sha256 "$HASH" \
+            --output "$RUNNER_TEMP/ga12-restart"
+          python3 -c 'import json,sys; p=json.load(open(sys.argv[1])); assert p["status"]=="PASSED_SYNTHETIC_REAL_GHIDRA_HEADLESS" and p["partial_function_cancelled"] and p["reopened_function_restored"] and p["edited_function_invalidated"] and p["restart_processes"]==3' \
+            "$RUNNER_TEMP/ga12-restart/summary.json"
+      - name: Show bounded synthetic-only failure diagnostics
+        if: failure()
+        shell: bash
+        run: |
+          for log in "$RUNNER_TEMP"/ga12-restart/{import,compile,integration-write,integration-read,integration-edit}.log; do
+            if test -f "$log"; then echo "==== $(basename "$log") ===="; tail -n 70 "$log"; fi
+          done
+      - name: Preserve deterministic summary only (no Program or raw BIN)
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: GhidrAssist-GA12-Durable-Functions-Real-Ghidra
+          path: ${{ runner.temp }}/ga12-restart/summary.json
+          if-no-files-found: error
+          retention-days: 21

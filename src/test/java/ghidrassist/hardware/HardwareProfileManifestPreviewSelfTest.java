@@ -100,6 +100,20 @@ public final class HardwareProfileManifestPreviewSelfTest {
             SAMPLE.replace("D-6 PDF page 220","D-6 PDF pages 220-221"));
         check(explicit.ambiguousPages()==4,
             "numeric source page range is a claim, not unverified gap");
+        for(String malformed:new String[]{
+                "PDF pages 220-219","PDF page 220-0",
+                "PDF page 999999","PDF page 220-abc"}) {
+            var replaced=HardwareProfileManifestPreview.parse(
+                SAMPLE.replace("D-6 PDF page 220",malformed));
+            check(replaced.ambiguousPages()==6,
+                "reject false numeric PDF page claim: "+malformed);
+        }
+        // A semicolon is already forbidden by the strict profile-label
+        // grammar; it must be rejected at parse time, not counted as an
+        // otherwise syntactically valid but ambiguous page claim.
+        bad(SAMPLE.replace("D-6 PDF page 220",
+                "PDF page 220; PDF page 220"),
+            "reject a second page claim outside the manifest label grammar");
         System.out.println("HardwareProfileManifestPreviewSelfTest OK");
     }
 }

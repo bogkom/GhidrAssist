@@ -94,8 +94,8 @@ def main():
                         "generic-profile","trambar-source","csbar-mm0-reject",
                         "mmio-read-reference","csbar-csor-conditional",
                         "simcr-mm0-literal","trambar-unknown","csor-alternatives",
-                        "branch-simcr","call-barrier","cancel-incomplete",
-                        "function-rename","apply-preserve",
+                        "branch-simcr","call-barrier","leaf-return","branch-leaf","branch-cache","cancel-incomplete",
+                        "function-stage-resume","function-rename","apply-preserve",
                         "provenance-csv","movec-vbr"),
                         default="none",help="Run GA-07/12 or GA-02/03 genuine headless source-evidence checks")
     args=parser.parse_args()
@@ -260,12 +260,42 @@ def main():
                     "call-barrier":(
                         "call_real_jsr_barrier","call_clobbered_pointer_not_reused",
                         "call_alias_blocks_review","call_read_only"),
+                    "branch-leaf":(
+                        "branch_leaf_real_convergent_proven",
+                        "branch_leaf_disagreeing_address_unknown",
+                        "branch_leaf_call_history_uncertain",
+                        "branch_leaf_generic_cpu32_conservative",
+                        "branch_leaf_program_read_only"),
+                    "branch-cache":(
+                        "branch_leaf_real_convergent_proven",
+                        "branch_leaf_disagreeing_address_unknown",
+                        "branch_leaf_call_history_uncertain",
+                        "branch_leaf_generic_cpu32_conservative",
+                        "branch_leaf_program_read_only",
+                        "cross_track_real_branch_source_proven",
+                        "cross_track_real_function_checkpoints",
+                        "cross_track_real_completed_stage_reused",
+                        "cross_track_real_invalidate_recomputed",
+                        "cross_track_real_program_read_only"),
+                    "leaf-return":(
+                        "leaf_real_direct_return_constants",
+                        "leaf_real_call_barrier_history_unknown",
+                        "leaf_real_unproved_call_keeps_alias",
+                        "leaf_real_generic_profile_conservative",
+                        "leaf_real_program_read_only"),
                     "cancel-incomplete":(
                         "cancel_real_scan_mid_traversal",
                         "cancel_incomplete_rag_not_published",
                         "cancel_clean_retry_computed",
                         "cancel_complete_stage_reused",
                         "cancel_real_program_unchanged"),
+                    "function-stage-resume":(
+                        "function_stage_real_partial_cancelled",
+                        "function_stage_completed_before_cancel",
+                        "function_stage_retry_reused",
+                        "function_stage_full_then_reused",
+                        "function_stage_explicit_clear_invalidated",
+                        "function_stage_no_partial_rag_or_edits"),
                     "function-rename":(
                         "rename_real_functions_and_collision",
                         "rename_atomic_rollback",

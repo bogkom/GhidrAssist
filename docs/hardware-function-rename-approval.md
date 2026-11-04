@@ -41,3 +41,18 @@ reset-path reachability, a specific physical MCU or electrical CS wiring.
 
 Local variable, argument and data-pointer renaming and full path-sensitive
 interprocedural analysis remain outside this increment.
+
+## 2026-11-03 — revision-bound final function rename approval
+
+The reviewed naming proposal is now bound to the exact completed Analyze
+snapshot: live Ghidra Program identity, modification/Undo counter, language,
+original-import SHA metadata and manually selected MC68332. The GUI rechecks
+the snapshot **after** the final modal confirmation; the production rename
+service requires and rechecks it **before and inside** its single Ghidra
+transaction, prior to changing any names. Stale, wrong-profile, cloned
+program or missing receipts fail closed even if symbols retain the same name.
+All previously required collision, preflight, explicit approval and Ghidra
+Undo rules are preserved. Ghidra SourceType still does NOT identify whether
+the previous change came from a human, script or model. Static function role
+hints are not proof of executed MCU initialization or active hardware.
+No user program, private firmware, or profile is modified by this code change.

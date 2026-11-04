@@ -4,6 +4,9 @@ on:
   push:
     paths:
       - 'src/main/java/ghidrassist/hardware/HardwareAnalysisRevision.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareFunctionRenameRevisionGate.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareFunctionRenameService.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareFunctionRenameRevisionGateSelfTest.java'
       - 'src/main/java/ghidrassist/hardware/HardwareEvidenceCache.java'
       - 'src/main/java/ghidrassist/ui/tabs/HardwareAnalysisTab.java'
       - 'src/test/java/ghidrassist/hardware/HardwareAnalysisRevisionSelfTest.java'
@@ -11,6 +14,9 @@ on:
   pull_request:
     paths:
       - 'src/main/java/ghidrassist/hardware/HardwareAnalysisRevision.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareFunctionRenameRevisionGate.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareFunctionRenameService.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareFunctionRenameRevisionGateSelfTest.java'
       - 'src/main/java/ghidrassist/hardware/HardwareEvidenceCache.java'
       - 'src/main/java/ghidrassist/ui/tabs/HardwareAnalysisTab.java'
       - 'src/test/java/ghidrassist/hardware/HardwareAnalysisRevisionSelfTest.java'
@@ -36,6 +42,11 @@ jobs:
           mkdir -p "$RUNNER_TEMP/ga12"
           javac --release 21 -d "$RUNNER_TEMP/ga12" \
             src/main/java/ghidrassist/hardware/HardwareAnalysisRevision.java \
-            src/test/java/ghidrassist/hardware/HardwareAnalysisRevisionSelfTest.java
+            src/main/java/ghidrassist/hardware/HardwareFunctionRenameRevisionGate.java \
+            src/test/java/ghidrassist/hardware/HardwareAnalysisRevisionSelfTest.java \
+            src/test/java/ghidrassist/hardware/HardwareFunctionRenameRevisionGateSelfTest.java
       - name: Fail closed on changed program, source, profile, and undo
-        run: java -cp "$RUNNER_TEMP/ga12" ghidrassist.hardware.HardwareAnalysisRevisionSelfTest
+        run: |
+          set -e
+          java -cp "$RUNNER_TEMP/ga12" ghidrassist.hardware.HardwareAnalysisRevisionSelfTest
+          java -cp "$RUNNER_TEMP/ga12" ghidrassist.hardware.HardwareFunctionRenameRevisionGateSelfTest

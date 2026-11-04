@@ -81,8 +81,8 @@ public final class Ga11VectorHeadlessMain {
             "generic-profile","trambar-source","csbar-mm0-reject",
             "mmio-read-reference","csbar-csor-conditional",
             "simcr-mm0-literal","trambar-unknown","csor-alternatives",
-            "branch-simcr","call-barrier","cancel-incomplete",
-            "function-rename","apply-preserve","provenance-csv","movec-vbr").contains(ga18Mode),
+            "branch-simcr","call-barrier","leaf-return","branch-leaf","branch-cache","cancel-incomplete",
+            "function-stage-resume","function-rename","apply-preserve","provenance-csv","movec-vbr").contains(ga18Mode),
             "Unknown GA-18 acceptance mode");
         var config=new HeadlessGhidraApplicationConfiguration();
         config.setApplicationLogFile(out.resolve("ghidra.log").toFile());
@@ -874,6 +874,209 @@ public final class Ga11VectorHeadlessMain {
                     result.addProperty("call_clobbered_pointer_not_reused",true);
                     result.addProperty("call_alias_blocks_review",true);
                     result.addProperty("call_read_only",true);
+                } else if("branch-leaf".equals(ga18Mode) ||
+                        "branch-cache".equals(ga18Mode)) {
+                    // Real CPU32 conditional BNE and BRA; both reachable paths
+                    // agree on A0 in the positive callee. A negative control
+                    // returns conflicting A0 values and must remain unknown.
+                    int branchTx=full.startTransaction("GA02 synthetic branch-convergent leaf");
+                    try {
+                        full.getMemory().setBytes(address(full,0x760L),
+                            java.util.HexFormat.of().parseHex(
+                                "203c000040ca6608207c00fffa006006207c00fffa004e75"));
+                        full.getMemory().setBytes(address(full,0x7a0L),
+                            java.util.HexFormat.of().parseHex(
+                                "203c000040ca6608207c00fffa006006207c007ffa004e75"));
+                        full.getMemory().setBytes(address(full,0x720L),
+                            java.util.HexFormat.of().parseHex(
+                                "4eb90000076030804e75"));
+                        full.getMemory().setBytes(address(full,0x7d0L),
+                            java.util.HexFormat.of().parseHex(
+                                "4eb9000007a030804e75"));
+                    } finally { full.endTransaction(branchTx,true); }
+                    // Ensure the alternative branch targets are also decoded
+                    // in the isolated fixture. The initial disassembler pass
+                    // may stop at the unconditional BRA on the fallthrough.
+                    int branchDecodeTx=full.startTransaction("GA02 synthetic branch arms");
+                    try{
+                        check(new DisassembleCommand(address(full,0x770L),null,false)
+                            .applyTo(full,TaskMonitor.DUMMY),
+                            "Ghidra failed positive alternative branch arm");
+                        check(new DisassembleCommand(address(full,0x7b0L),null,false)
+                            .applyTo(full,TaskMonitor.DUMMY),
+                            "Ghidra failed negative alternative branch arm");
+                    }finally{full.endTransaction(branchDecodeTx,true);}
+                    defineFixtureFunction(full,0x760L,24,"fixture_branch_two_agreeing_returns");
+                    defineFixtureFunction(full,0x7a0L,24,"fixture_branch_disagreeing_return");
+                    defineFixtureFunction(full,0x720L,10,"fixture_branch_positive_caller");
+                    defineFixtureFunction(full,0x7d0L,10,"fixture_branch_negative_caller");
+                    long branchRevisionBefore=full.getModificationNumber();
+                    var report=new GhidraHardwareFlowService().analyze(
+                        full,TaskMonitor.DUMMY,true);
+                    var leafMethod=GhidraHardwareFlowService.class.getDeclaredMethod(
+                        "verifiedLeafReturn",Program.class,Function.class,TaskMonitor.class);
+                    leafMethod.setAccessible(true);
+                    var decodedLeaf=leafMethod.invoke(null,full,
+                        full.getFunctionManager().getFunctionAt(address(full,0x760L)),
+                        TaskMonitor.DUMMY);
+                    StringBuilder branchDiag=new StringBuilder();
+                    var dec=full.getListing().getInstructions(
+                        full.getFunctionManager().getFunctionAt(
+                            address(full,0x760L)).getBody(),true);
+                    while(dec.hasNext()){
+                        var insn=dec.next();
+                        branchDiag.append("pc=").append(insn.getAddress())
+                            .append(" mnemonic=").append(insn.getMnemonicString())
+                            .append(" flows=").append(java.util.Arrays.toString(insn.getFlows()))
+                            .append(" fall=").append(insn.getFallThrough()).append("; ");
+                    }
+                    System.out.println("GA02 BRANCH DIAG returns="+decodedLeaf+
+                        " instructions="+branchDiag+" mmio="+
+                        report.rawCfgMmioSites.stream()
+                            .filter(site->site.pc()>=0x720L && site.pc()<0x7f0L)
+                            .map(site->Long.toHexString(site.pc())+":"+site.register()+
+                                ":"+site.literal()).toList());
+                    check(report.rawCfgMmioSites.stream().anyMatch(site->
+                            site.pc()==0x726L && site.address()==0xfffa00L &&
+                            "SIMCR".equals(site.register()) &&
+                            Integer.valueOf(0x40ca).equals(site.literal()) &&
+                            site.unknownCall()),
+                        "Convergent branch did not prove caller SIMCR registers");
+                    check(report.rawCfgMmioSites.stream().anyMatch(site->
+                            site.pc()==0x7d6L &&
+                            "UNRESOLVED_ALIAS".equals(site.register()) &&
+                            site.unknownCall()),
+                        "Disagreeing branch invented fixed SIMCR address");
+                    check(full.getModificationNumber()==branchRevisionBefore,
+                        "Branch static analysis altered Ghidra Program");
+                    var generic=new GhidraHardwareFlowService().analyze(
+                        full,TaskMonitor.DUMMY,false);
+                    check(generic.rawCfgMmioSites.stream().noneMatch(site->
+                            site.pc()==0x726L &&
+                            "SIMCR".equals(site.register())),
+                        "Generic CPU32 inherited MC68332 register evidence");
+                    if("branch-cache".equals(ga18Mode)){
+                        HardwareFlowStageCache.clear(full);
+                        long revision=full.getModificationNumber();
+                        var stageRevision=HardwareAnalysisRevision.capture(
+                            full,revision,full.getLanguageID().toString(),
+                            full.getExecutableSHA256(),true);
+                        var cold=HardwareFlowStageCache.loadOrAnalyze(
+                            full,stageRevision,TaskMonitor.DUMMY);
+                        check(!cold.reused() &&
+                            cold.report().rawCfgMmioSites.stream().anyMatch(site->
+                                site.pc()==0x726L &&
+                                "SIMCR".equals(site.register()) &&
+                                Integer.valueOf(0x40ca).equals(site.literal()) &&
+                                site.unknownCall()),
+                            "Combined GA-02/03+GA-12 cache lost proven branch CALL source");
+                        check(GhidraHardwareFlowService.checkpointedFunctionStages(full)>0,
+                            "GA-12 did not checkpoint completed CFG functions");
+                        var reused=HardwareFlowStageCache.loadOrAnalyze(
+                            full,stageRevision,TaskMonitor.DUMMY);
+                        check(reused.reused() &&
+                            reused.report().rawCfgMmioSites.equals(
+                                cold.report().rawCfgMmioSites),
+                            "GA-12 whole-stage reuse changed branch CALL source evidence");
+                        HardwareFlowStageCache.clear(full);
+                        var afterClear=HardwareFlowStageCache.loadOrAnalyze(
+                            full,stageRevision,TaskMonitor.DUMMY);
+                        check(!afterClear.reused() &&
+                            afterClear.report().rawCfgMmioSites.equals(
+                                cold.report().rawCfgMmioSites) &&
+                            full.getModificationNumber()==revision,
+                            "Explicit cache invalidation changed source proof or Program");
+                        result.addProperty("cross_track_real_branch_source_proven",true);
+                        result.addProperty("cross_track_real_function_checkpoints",true);
+                        result.addProperty("cross_track_real_completed_stage_reused",true);
+                        result.addProperty("cross_track_real_invalidate_recomputed",true);
+                        result.addProperty("cross_track_real_program_read_only",true);
+                    }
+                    result.addProperty("branch_leaf_real_convergent_proven",true);
+                    result.addProperty("branch_leaf_disagreeing_address_unknown",true);
+                    result.addProperty("branch_leaf_call_history_uncertain",true);
+                    result.addProperty("branch_leaf_generic_cpu32_conservative",true);
+                    result.addProperty("branch_leaf_program_read_only",true);
+                } else if("leaf-return".equals(ga18Mode)) {
+                    // Genuine CPU32 Listing, with real Ghidra callee reference.
+                    // Only strict direct leaf return constants cross the
+                    // generic CALL barrier; memory/MM state remains unknown.
+                    int t=full.startTransaction("GA02 synthetic verified leaf");
+                    try{
+                        full.getMemory().setBytes(address(full,0x640L),
+                            java.util.HexFormat.of().parseHex(
+                                "207c00fffa00203c000040ca4e75"));
+                        full.getMemory().setBytes(address(full,0x600L),
+                            java.util.HexFormat.of().parseHex(
+                                "4eb90000064030804e75"));
+                        full.getMemory().setBytes(address(full,0x680L),
+                            java.util.HexFormat.of().parseHex(
+                                "207c00fffa004eb90000040030bc40ca4e75"));
+                    }finally{full.endTransaction(t,true);}
+                    defineFixtureFunction(full,0x640L,14,"fixture_leaf_returns_both");
+                    defineFixtureFunction(full,0x600L,10,"fixture_leaf_call_positive");
+                    defineFixtureFunction(full,0x680L,18,"fixture_unverified_call_negative");
+                    long revision=full.getModificationNumber();
+                    var evidence=new GhidraHardwareFlowService().analyze(
+                        full,TaskMonitor.DUMMY,true);
+                    check(evidence.markdown.contains(
+                        "- Strictly verified leaf CALL return-register sites: 1"),
+                        "MC68332 source did not accept unique direct leaf");
+                    var callee=full.getFunctionManager().getFunctionAt(
+                        address(full,0x640L));
+                    var postCall=full.getListing().getInstructionAt(
+                        address(full,0x606L));
+                    var transMethod=GhidraHardwareFlowService.class
+                        .getDeclaredMethod("translate",
+                            ghidra.program.model.listing.Instruction.class,
+                            Function.class);
+                    transMethod.setAccessible(true);
+                    var modeled=(ghidrassist.hardware.HardwareDataflow.Step)
+                        transMethod.invoke(null,postCall,
+                            full.getFunctionManager().getFunctionAt(
+                                address(full,0x600L)));
+                    var leafMethod=GhidraHardwareFlowService.class
+                        .getDeclaredMethod("verifiedLeafReturn",
+                            Program.class,Function.class,TaskMonitor.class);
+                    leafMethod.setAccessible(true);
+                    var proved=leafMethod.invoke(null,full,callee,TaskMonitor.DUMMY);
+                    System.out.println("GA02 SYNTHETIC LEAF DIAG"+
+                        " opcode="+postCall.getMnemonicString()+
+                        " srcOperand="+postCall.getDefaultOperandRepresentation(0)+
+                        " modeledSource="+modeled.sourceRegister+
+                        " modeledKind="+modeled.kind+
+                        " knownLeafReturns="+proved);
+                    check(evidence.rawCfgMmioSites.stream().anyMatch(site->
+                        site.pc()==0x606L && site.address()==0xfffa00L &&
+                        "SIMCR".equals(site.register()) &&
+                        Integer.valueOf(0x40ca).equals(site.literal()) &&
+                        site.unknownCall()),
+                        "Real leaf-return register values not recovered conservatively: "+
+                        evidence.rawCfgMmioSites.stream()
+                            .filter(site->site.pc()>=0x600L &&
+                                site.pc()<0x690L)
+                            .map(site->"pc="+Long.toHexString(site.pc())+
+                                ",reg="+site.register()+
+                                ",addr="+Long.toHexString(site.address())+
+                                ",literal="+site.literal()+
+                                ",unknownCall="+site.unknownCall())
+                            .toList());
+                    check(evidence.rawCfgMmioSites.stream().anyMatch(site->
+                        site.pc()==0x68cL &&
+                        "UNRESOLVED_ALIAS".equals(site.register())),
+                        "Unverified callee incorrectly preserved pre-call A0");
+                    check(full.getModificationNumber()==revision,
+                        "Read-only verified leaf analysis edited Ghidra Program");
+                    var generic=new GhidraHardwareFlowService().analyze(
+                        full,TaskMonitor.DUMMY,false);
+                    check(generic.markdown.contains(
+                        "- Strictly verified leaf CALL return-register sites: 0"),
+                        "Generic CPU32 inherited MC68332-only leaf evidence");
+                    result.addProperty("leaf_real_direct_return_constants",true);
+                    result.addProperty("leaf_real_call_barrier_history_unknown",true);
+                    result.addProperty("leaf_real_unproved_call_keeps_alias",true);
+                    result.addProperty("leaf_real_generic_profile_conservative",true);
+                    result.addProperty("leaf_real_program_read_only",true);
                 } else if("cancel-incomplete".equals(ga18Mode)) {
                     // Deterministic cancellation *during* a real Ghidra
                     // traversal (not only before entry). No partial report
@@ -921,6 +1124,80 @@ public final class Ga11VectorHeadlessMain {
                     result.addProperty("cancel_clean_retry_computed",true);
                     result.addProperty("cancel_complete_stage_reused",true);
                     result.addProperty("cancel_real_program_unchanged",true);
+
+                } else if("function-stage-resume".equals(ga18Mode)) {
+                    // Real synthetic Ghidra with >=2 disassembled functions.
+                    // Cancel the *whole* CFG stage immediately AFTER one
+                    // individual fixed point was completely published in
+                    // process-local function-stage cache; never publish a
+                    // partial full Report or Review/RAG on cancellation.
+                    HardwareFlowStageCache.clear(full);
+                    ghidrassist.hardware.HardwareEvidenceCache.clear(full);
+                    long rev=full.getModificationNumber();
+                    HardwareAnalysisRevision started=HardwareAnalysisRevision.capture(
+                        full,rev,full.getLanguageID().toString(),
+                        full.getExecutableSHA256(),true);
+                    check(full.getFunctionManager().getFunctionCount()>=2,
+                        "Fixture lacks two independent real Ghidra functions");
+                    java.util.concurrent.atomic.AtomicInteger checks=
+                        new java.util.concurrent.atomic.AtomicInteger();
+                    final Program observedProgram=full;
+                    TaskMonitor interrupt=(TaskMonitor)java.lang.reflect.Proxy
+                        .newProxyInstance(TaskMonitor.class.getClassLoader(),
+                            new Class[]{TaskMonitor.class},(proxy,method,args2)-> {
+                            if(method.getName().equals("checkCancelled")) {
+                                checks.incrementAndGet();
+                                if(GhidraHardwareFlowService
+                                        .checkpointedFunctionStages(observedProgram)>0)
+                                    throw new CancelledException();
+                                return null;
+                            }
+                            return method.invoke(TaskMonitor.DUMMY,args2);
+                        });
+                    boolean cancelled=false;
+                    try{
+                        HardwareFlowStageCache.loadOrAnalyze(
+                            full,started,interrupt);
+                    }catch(CancelledException expected){cancelled=true;}
+                    int completed=GhidraHardwareFlowService
+                        .checkpointedFunctionStages(full);
+                    check(cancelled && completed>=1 && checks.get()>0,
+                        "Real task did not cancel after a completed function");
+                    check(!ghidrassist.hardware.HardwareEvidenceCache.hasEvidence(full),
+                        "Cancelled scan published RAG before full completion");
+                    check(full.getModificationNumber()==rev,
+                        "Partial CFG did a Ghidra database edit");
+                    var resumed=HardwareFlowStageCache.loadOrAnalyze(
+                        full,started,TaskMonitor.DUMMY);
+                    check(!resumed.reused() &&
+                        resumed.report().markdown.contains(
+                            "- Completed per-function fixed points reused: ") &&
+                        !resumed.report().markdown.contains(
+                            "- Completed per-function fixed points reused: 0;"),
+                        "Same-program retry discarded completed function work");
+                    var again=HardwareFlowStageCache.loadOrAnalyze(
+                        full,started,TaskMonitor.DUMMY);
+                    check(again.reused() && again.report()==resumed.report(),
+                        "Full completion did not retain full-stage cache");
+                    HardwareFlowStageCache.clear(full);
+                    check(GhidraHardwareFlowService
+                            .checkpointedFunctionStages(full)==0,
+                        "Explicit invalidation kept stale partial fixed points");
+                    var clean=HardwareFlowStageCache.loadOrAnalyze(
+                        full,started,TaskMonitor.DUMMY);
+                    check(!clean.reused() &&
+                        clean.report().markdown.contains(
+                            "- Completed per-function fixed points reused: 0;") &&
+                        full.getModificationNumber()==rev,
+                        "Explicit invalidate did not force recomputation");
+                    check(!ghidrassist.hardware.HardwareEvidenceCache.hasEvidence(full),
+                        "Function checkpoints published AI/RAG without Apply");
+                    result.addProperty("function_stage_real_partial_cancelled",true);
+                    result.addProperty("function_stage_completed_before_cancel",true);
+                    result.addProperty("function_stage_retry_reused",true);
+                    result.addProperty("function_stage_full_then_reused",true);
+                    result.addProperty("function_stage_explicit_clear_invalidated",true);
+                    result.addProperty("function_stage_no_partial_rag_or_edits",true);
 
                 } else if("function-rename".equals(ga18Mode)) {
                     // Two genuine FunctionManager objects, three decoded
@@ -980,10 +1257,15 @@ public final class Ga11VectorHeadlessMain {
                         ghidrassist.hardware.HardwareFunctionRenamePolicy.Decision
                             .NAME_COLLISION,
                         "Ghidra global name collision not found in preflight");
+                    var collisionRevision=
+                        ghidrassist.hardware.HardwareAnalysisRevision.capture(
+                            full,full.getModificationNumber(),
+                            full.getLanguageID().toString(),
+                            full.getExecutableSHA256(),true);
                     boolean rolledBack=false;
                     try {
                         ghidrassist.hardware.HardwareFunctionRenameService.apply(
-                            full,List.of(first,second));
+                            full,List.of(first,second),collisionRevision);
                     }catch(IllegalStateException expected) {rolledBack=true;}
                     check(rolledBack &&
                           fn1.getName().equals(firstName) &&
@@ -1005,8 +1287,26 @@ public final class Ga11VectorHeadlessMain {
                             ghidrassist.hardware.HardwareFunctionRenamePolicy
                                 .Decision.READY,
                         "Clean real-Ghidra naming preflight was not READY");
+                    // Removing the conflicting test symbol modifies Ghidra
+                    // even though target function names remain unchanged.
+                    // The previous review receipt must no longer authorize
+                    // the mutation. Fresh explicit Review is required.
+                    boolean staleDenied=false;
+                    try {
+                        ghidrassist.hardware.HardwareFunctionRenameService.apply(
+                            full,List.of(first,second),collisionRevision);
+                    }catch(IllegalStateException expected){staleDenied=true;}
+                    check(staleDenied &&
+                          fn1.getName().equals(firstName) &&
+                          fn2.getName().equals(secondName),
+                        "Stale review receipt after symbol edit must reject renames");
+                    var reviewedRevision=
+                        ghidrassist.hardware.HardwareAnalysisRevision.capture(
+                            full,full.getModificationNumber(),
+                            full.getLanguageID().toString(),
+                            full.getExecutableSHA256(),true);
                     var renamed=ghidrassist.hardware.HardwareFunctionRenameService
-                        .apply(full,List.of(first,second));
+                        .apply(full,List.of(first,second),reviewedRevision);
                     check(renamed.renamed()==2 &&
                           fn1.getName().equals(first.proposedName) &&
                           fn2.getName().equals(second.proposedName),
@@ -1018,6 +1318,7 @@ public final class Ga11VectorHeadlessMain {
                         "Ghidra native Undo failed to restore both function names");
                     result.addProperty("rename_real_functions_and_collision",true);
                     result.addProperty("rename_atomic_rollback",true);
+                    result.addProperty("rename_stale_revision_blocked",true);
                     result.addProperty("rename_transactional_two_function_apply",true);
                     result.addProperty("rename_native_undo_restored",true);
                 } else if("apply-preserve".equals(ga18Mode)) {

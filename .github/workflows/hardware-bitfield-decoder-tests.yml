@@ -4,12 +4,16 @@ on:
   push:
     paths:
       - 'src/main/java/ghidrassist/hardware/HardwareBitfieldDecoder.java'
+      - 'src/main/java/ghidrassist/hardware/ManualPdfPageClaim.java'
+      - 'src/test/java/ghidrassist/hardware/ManualPdfPageClaimSelfTest.java'
       - 'src/main/java/ghidrassist/hardware/HardwareProfiles.java'
       - 'src/test/java/ghidrassist/hardware/HardwareBitfieldDecoderSelfTest.java'
       - '.github/workflows/hardware-bitfield-decoder-tests.yml'
   pull_request:
     paths:
       - 'src/main/java/ghidrassist/hardware/HardwareBitfieldDecoder.java'
+      - 'src/main/java/ghidrassist/hardware/ManualPdfPageClaim.java'
+      - 'src/test/java/ghidrassist/hardware/ManualPdfPageClaimSelfTest.java'
       - 'src/main/java/ghidrassist/hardware/HardwareProfiles.java'
       - 'src/test/java/ghidrassist/hardware/HardwareBitfieldDecoderSelfTest.java'
       - '.github/workflows/hardware-bitfield-decoder-tests.yml'
@@ -35,6 +39,10 @@ jobs:
           javac --release 21 -d "$RUNNER_TEMP/bitfields" \
             src/main/java/ghidrassist/hardware/HardwareProfiles.java \
             src/main/java/ghidrassist/hardware/HardwareBitfieldDecoder.java \
-            src/test/java/ghidrassist/hardware/HardwareBitfieldDecoderSelfTest.java
+            src/main/java/ghidrassist/hardware/ManualPdfPageClaim.java \
+            src/test/java/ghidrassist/hardware/HardwareBitfieldDecoderSelfTest.java \
+            src/test/java/ghidrassist/hardware/ManualPdfPageClaimSelfTest.java
       - name: Verify known bits, source references and UNKNOWN cases
         run: java -cp "$RUNNER_TEMP/bitfields" ghidrassist.hardware.HardwareBitfieldDecoderSelfTest
+      - name: Verify shared physical PDF page-claim validation
+        run: java -cp "$RUNNER_TEMP/bitfields" ghidrassist.hardware.ManualPdfPageClaimSelfTest

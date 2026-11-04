@@ -73,6 +73,15 @@ public class FindingsCache {
     public static final int MAX_ITERATION_SUMMARY_CHARS = 2048;
     private long totalIterationSummaries;
 
+    // Persist structural source truncation independently of ranked findings.
+    // A 1-item findings budget may evict even a score-10 warning when another
+    // score-10 finding was encountered first; it must never hide this fact.
+    private boolean sourceIncomplete;
+    private static final String SOURCE_INCOMPLETE_WARNING =
+        "SOURCE INCOMPLETE: some tool output was not inspected; " +
+        "retrieve the original tool source before claiming completeness.";
+    public boolean isSourceIncomplete() { return sourceIncomplete; }
+
     private static String bounded(String input,int max) {
         if(input==null)return null;
         if(input.length()<=max)return input;
@@ -155,10 +164,12 @@ public class FindingsCache {
                 addFinding(line, line, toolName, relevance);
             }
         }
-        if(output.length()>length || lines.length>2000)
+        if(output.length()>length || lines.length>2000) {
+            sourceIncomplete=true;
             addFinding("SOURCE INCOMPLETE: large tool output truncated for finding extraction",
                 "Tool output exceeded bounded local scan; omitted content NOT analyzed",
-                toolName,10); // Structural incompleteness must survive relevance pruning.
+                toolName,10); // Kept as a finding where the budget permits.
+        }
     }
 
     /**
@@ -228,10 +239,11 @@ public class FindingsCache {
      */
     public String formatForPrompt(int maxShow, int maxCharsPerFinding) {
         if (findings.isEmpty()) {
-            return "No significant findings yet.";
+            return sourceIncomplete ? SOURCE_INCOMPLETE_WARNING :
+                "No significant findings yet.";
         }
 
-        return findings.stream()
+        String formatted=findings.stream()
             .sorted(Comparator.comparingInt(Finding::getRelevance).reversed())
             .limit(Math.max(0,Math.min(maxShow,maxFindings)))
             .map(f -> {
@@ -245,6 +257,7 @@ public class FindingsCache {
                 return "• " + fact;
             })
             .collect(Collectors.joining("\n"));
+        return sourceIncomplete ? SOURCE_INCOMPLETE_WARNING+"\n"+formatted : formatted;
     }
 
     /**
@@ -264,6 +277,8 @@ public class FindingsCache {
      */
     public String formatDetailed(int maxFindings, boolean includeIterationSummaries) {
         StringBuilder sb = new StringBuilder();
+        if(sourceIncomplete)
+            sb.append(SOURCE_INCOMPLETE_WARNING).append("\n\n");
 
         // Add iteration summaries first (provides context)
         if (includeIterationSummaries && !iterationSummaries.isEmpty()) {
@@ -305,7 +320,8 @@ public class FindingsCache {
      */
     public String summarize() {
         if (findings.isEmpty()) {
-            return "No findings to summarize.";
+            return sourceIncomplete ? SOURCE_INCOMPLETE_WARNING :
+                "No findings to summarize.";
         }
 
         // Get top findings by relevance
@@ -315,6 +331,8 @@ public class FindingsCache {
             .collect(Collectors.toList());
 
         StringBuilder sb = new StringBuilder();
+        if(sourceIncomplete)
+            sb.append(SOURCE_INCOMPLETE_WARNING).append("\n");
         sb.append("Key Findings Summary:\n");
         for (Finding f : topFindings) {
             sb.append("- ").append(f.getFact()).append("\n");
@@ -344,13 +362,15 @@ public class FindingsCache {
         findings.clear();
         iterationSummaries.clear();
         totalIterationSummaries=0;
+        sourceIncomplete=false;
     }
 
     /**
      * Get compact representation for progress tracking.
      */
     public String toCompactString() {
-        return String.format("%d findings accumulated", findings.size());
+        return String.format("%d findings accumulated%s", findings.size(),
+            sourceIncomplete?"; SOURCE INCOMPLETE":"");
     }
 
     /**

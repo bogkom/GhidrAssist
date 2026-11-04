@@ -1,8 +1,100 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
-Status: **IN PROGRESS — reconciled 2026-11-03**. Scope source: user-approved 2026-10-28 requirements (A–H, additional features 13.1–13.7, PDF/RAG, testing and Codex Supervisor integration).
+Status: **IN PROGRESS — reviewed 2026-11-04**. Scope source: user-approved 2026-10-28 requirements (A–H, additional features 13.1–13.7, PDF/RAG, testing and Codex Supervisor integration).
 
-## Stan bieżący — 2026-11-03, po integracji do `master`
+
+## Kontrolowana kompozycja — 2026-11-04 (przed scaleniem do `master`)
+
+Kandydat `integration/ga01-ga18-reviewed-20261104` zachowuje oryginalną
+historię i źródłowe dowody CI **wszystkich 13 zależnych/niezależnych
+PR-ów #118–#130**, bez powielania ukończonych testów.
+Punkt wyjścia: chroniony `master` `fda73ad65ff38c1c8030847a74e02a9d56d0afae`.
+
+- Najpierw połączono statyczną analizę MCU `#122 → #123 → #126 → #128`
+  z trwałym cache `#124 → #125 → #127 → #129` w PR #130.
+  Wersja sygnatury funkcji `GA12-FUNCTION-CFG-FIXPOINT-2`
+  obejmuje posortowane `verifiedCallReturns`; zmiana dowodu
+  zwracanego rejestru unieważnia zarówno zapisane wyniki, jak i
+  niedokończony stan CFG. Dokładny SHA PR #130:
+  `21f250507e33c8452830e9438f8170ae954d2e12`;
+  38/38 GitHub Actions SUCCESS.
+- Następnie na osobnej gałęzi włączono PR **#118** z zależnościami
+  RESET → wektory/ISR do wspólnego `GhidraHardwareFlowService`;
+  `GhidraInterruptVectorService` dostaje rzeczywisty statyczny
+  zbiór osiągalnych kandydatów, nie fałszywy ślad wykonania.
+- Pakiety **#119** (zweryfikowane strony PDF, profile, bitfieldy)
+  i **#120** (niekompletne źródła wyników Agentic) zachowują swój
+  pierwotny zakres i historii SHA bez niepotrzebnych zmian.
+- **#121** wymaga zarówno kontroli rewizji `HardwareAnalysisRevision`
+  w `Review → Apply`, jak i regresji w tym samym testowym
+  `Ga11VectorHeadlessMain`. Zachowano gałęzie `branch-cache`,
+  `leaf-return`, `branch-leaf`, `function-stage-resume`
+  oraz negatywną asercję `rename_stale_revision_blocked`.
+
+**Brama do `master`:** najpierw otwarty PR integracyjny, następnie
+kompilacja rozszerzenia dla Ghidry **12.1.4 PUBLIC / Java 25**,
+regresje Java 21, rzeczywista syntetyczna Ghidra headless oraz
+istniejące testy Xvfb/CodeBrowser/Automation API na dokładnym
+commicie kompozycyjnym. GitHub Actions może wymagać ponowienia
+**tylko infrastrukturalnie zablokowanego zadania** (np. Maven HTTP 429),
+nigdy przenoszenia PASS z innego SHA. Dopiero po pozytywnych
+wymaganych kontrolach i zgodnie z ochroną gałęzi możliwe jest
+scalenie zatwierdzonego PR-a.
+
+To nadal **częściowy zakres 18 obszarów**; zwłaszcza analiza RESET,
+SIMCR/MM, CS, VBR/ISR i cache daje dowody statyczne, nie
+potwierdza wykonania MCU ani fizycznej konfiguracji magistrali.
+Issue #106 pozostaje skrzynką problemów produktu; Issue #98
+zachowuje osobną lukę migracji starego profilu CodeBrowser.
+Przerwane testy i workery Wyse/Precision/Codex Supervisora nie
+są uruchamiane.
+
+## Stan przeglądu — 2026-11-04 (PR-y niescalone)
+
+**Źródło prawdy:** `master` nadal na
+`fda73ad65ff38c1c8030847a74e02a9d56d0afae`.
+Poniższe CI dotyczy **dokładnych commitów gałęzi PR**, nie `master`,
+formalnej akceptacji Supervisora ani pełnego zamknięcia GA-01–GA-18.
+Wszystkie obszary pozostają CZĘŚCIOWO lub ODŁOŻONE zgodnie z tabelą niżej.
+
+| Pakiet | PR | CI PASS / wszystkie workflow na HEAD | Etap review |
+|---|---|---:|---|
+| RESET / wektory / ścieżki | #118 | 26/26 | osobny, nakłada się na `GhidraHardwareFlowService` |
+| PDF / MCU / bitfieldy | #119 | 13/13 | niezależny |
+| Agentic / kompletność źródeł | #120 | 2/2 | niezależny; pełna kompilacja w CI |
+| Bezpieczne nazwy względem rewizji | #121 | 24/24 | wymaga dostosowania harnessu przy wspólnej integracji |
+| SIMCR overlapping + modulo 24 bit | #122 | 24/24 | fundament GA-02/03 |
+| Statyczne skutki CALL (unknown alias) | #123 | 24/24 | po #122 |
+| Trwały ukończony etap CFG | #124 | 14/14 | fundament GA-12 |
+| Ukończone funkcje w RAM | #125 | 26/26 | po #124 |
+| Bezwarunkowe wartości po RTS | #126 | 27/27 | po #123 |
+| Trwałe ukończone funkcje po restarcie | #127 | 29/29 | po #125 |
+| Wszystkie ścieżki acyklicznego RTS | #128 | 28/28 | po #126 |
+| Trwała niedokończona kolejka CFG | #129 | 28/28 | po #127 |
+
+**Zależności:** GA-02/03: `#122 → #123 → #126 → #128`;
+GA-12: `#124 → #125 → #127 → #129`. PR **#130** jest
+odizolowanym punktem połączenia *obu historii Git*, z nowym SHA-256
+`HardwareFunctionStageCache.signature` w schemacie `-2`, który
+uwzględnia posortowane `verifiedCallReturns` i odrzuca stare
+checkpointy po zmianie podsumowania funkcji wywoływanej.
+Pełna integracja wymaga **własnego CI na finalnym SHA**.
+
+**Ważne niekompatybilności do review:** #118 rozszerza wywołanie
+`GhidraInterruptVectorService.analyze` i musi zostać zgodnie złączony
+z interproceduralnym `GhidraHardwareFlowService`; #121 wymaga
+`HardwareAnalysisRevision` przy Apply nazw i modyfikuje ten sam
+syntetyczny harness `Ga11VectorHeadlessMain`. Nie wolno pomijać tych
+zmian przez proste zastąpienie pliku.
+
+**Tryb testowania:** tylko GitHub Actions na Ghidrze 12.1.4 PUBLIC
+i Javie 21/25. Historyczne timery, GUI/CUA/headless na Wyse/Precision
+i natywny Supervisor są zatrzymane decyzją właściciela. PR #98
+zachowuje osobny brak testu migracji starego CodeBrowsera;
+Issue #106 pozostaje otwartą skrzynką usterek (brak nowych zgłoszeń).
+`master` nie został automatycznie zmieniony ani scalony.
+
+## Stan historyczny — 2026-11-03, po integracji do `master`
 
 **Punkt odniesienia:** `master` na commicie
 [`2596a5a00e272720a091bc92209b00fb2edffefd`](https://github.com/bogkom/GhidrAssist/commit/2596a5a00e272720a091bc92209b00fb2edffefd).

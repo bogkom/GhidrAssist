@@ -16,8 +16,11 @@ effects, not just instruction address order.
 - `0..1`: earlier local candidate write appears on some branch, but not all.
 - `1..1` or `2+..2+`: a matched local write precedes this site on the
   recognized path. MM hardware acceptance after reset remains unproven.
-- Full 16-bit stores to `0x7FFA00`/`0xFFFA00` and 8-bit stores to the
-  corresponding **low byte** can affect MM and are counted conservatively.
+- Full 16-bit stores to `0x7FFA00`/`0xFFFA00`, low-byte stores,
+  and wider/overlapping stores touching the respective MM **low byte** are
+  source-level MM candidates. Only a complete 16-bit literal at the exact
+  register address can be reported as a known word; partial/long first-site
+  effects remain UNKNOWN and do not prove that the MM latch accepted a write.
 - Unknown register-indirect destinations, intervening calls, exceptions,
   interprocedural ordering and the actual reset-entry route are not solved.
 

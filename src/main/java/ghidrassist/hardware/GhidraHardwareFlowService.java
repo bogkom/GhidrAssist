@@ -33,6 +33,17 @@ import java.util.regex.Pattern;
 public final class GhidraHardwareFlowService {
     private static final int MAX_CFG_MMIO_SITES=12000;
     private static final int MAX_POINTER_ROLE_SITES=8000;
+    private static final HardwareFunctionStageCache<Program> FUNCTION_STAGES=
+        new HardwareFunctionStageCache<>();
+
+    /** Read-only count of process-local completed function CFG checkpoints. */
+    public static int checkpointedFunctionStages(Program program){
+        return program==null?0:FUNCTION_STAGES.completed(program);
+    }
+    /** Explicit revision/authorization invalidation also retires function stages. */
+    public static void invalidateFunctionStages(Program program){
+        if(program!=null)FUNCTION_STAGES.invalidate(program);
+    }
     private static final Pattern REG=Pattern.compile("(?<![A-Z0-9])([AD][0-7])(?![A-Z0-9])");
     private static final Pattern OFFSET=Pattern.compile("(?<![A-Z0-9])(-?0[Xx][0-9A-F]+|-?[0-9]+)(?![A-Z0-9])");
     public static final class Report {
@@ -75,8 +86,8 @@ public final class GhidraHardwareFlowService {
         return s==null?"":s.toUpperCase(Locale.ROOT).trim();
     }
     private static String plainReg(Instruction i,int slot){
-        String s=op(i,slot);
-        return s.matches("[AD][0-7]")?s:null;
+        return HardwareRegisterOperand.sourceOrDestination(
+            op(i,slot),i.getMnemonicString());
     }
     private static String indirectReg(Instruction i,int slot){
         String s=op(i,slot);
@@ -238,8 +249,15 @@ public final class GhidraHardwareFlowService {
                 if((m.equals("ADDA")||m.equals("SUBA"))&&
                         full.endsWith(".W")&&(signed&0x8000L)!=0)
                     signed|=0xffff0000L;
+                int adjustedBits=HardwareDataflow.registerAdjustWidth(dst,full);
+                // A missing size for Dn cannot be modeled as long-register
+                // arithmetic. ADDQ.W #1,Dn keeps its upper word intact.
+                if(adjustedBits==0)return new HardwareDataflow.Step(pc,
+                    HardwareDataflow.Kind.CLOBBER_POINTER,
+                    dst,0,0,null,0,next,full);
                 return new HardwareDataflow.Step(pc,HardwareDataflow.Kind.ADJUST_POINTER,
-                    dst,m.startsWith("SUB")?-signed:signed,0,null,0,next,full);
+                    dst,m.startsWith("SUB")?-signed:signed,0,null,
+                    adjustedBits,next,full);
             }
             return new HardwareDataflow.Step(pc,HardwareDataflow.Kind.CLOBBER_POINTER,
                 dst,0,0,null,0,next,full);
@@ -275,6 +293,53 @@ public final class GhidraHardwareFlowService {
         return new HardwareDataflow.Step(pc,HardwareDataflow.Kind.OTHER,
             null,0,0,null,0,next,full);
     }
+    /**
+     * Strict Ghidra Listing gate. Supports either a simple unconditional
+     * leaf or a bounded acyclic conditional-branch leaf where ALL paths
+     * produce agreeing output registers before an ordinary RTS. No unknown
+     * P-code effects, out-of-function jumps or incomplete body accepted.
+     */
+    private static Map<String,Long> verifiedLeafReturn(
+            Program program,Function callee,TaskMonitor monitor)
+            throws CancelledException{
+        if(callee==null || callee.getBody().getNumAddresses()<8 ||
+                callee.getBody().getNumAddresses()>
+                    HardwareVerifiedBranchReturn.MAX_INSTRUCTIONS*6L)
+            return Map.of();
+        List<HardwareDataflow.Step> steps=new ArrayList<>();
+        Map<Long,Integer> lengths=new LinkedHashMap<>();
+        long decoded=0;
+        InstructionIterator iterator=program.getListing()
+            .getInstructions(callee.getBody(),true);
+        while(iterator.hasNext()){
+            monitor.checkCancelled();
+            if(steps.size()>=HardwareVerifiedBranchReturn.MAX_INSTRUCTIONS)
+                return Map.of();
+            Instruction instruction=iterator.next();
+            if(instruction.getFlowType().isComputed() ||
+                    instruction.getFlowType().isCall())
+                return Map.of();
+            if(instruction.getFlowType().isJump()){
+                Address[] destinations=instruction.getFlows();
+                if(destinations==null || destinations.length==0)
+                    return Map.of();
+                for(Address target:destinations)
+                    if(!callee.getBody().contains(target))return Map.of();
+            }
+            decoded+=instruction.getLength();
+            lengths.put(instruction.getAddress().getOffset(),
+                instruction.getLength());
+            steps.add(translate(instruction,callee));
+        }
+        if(decoded!=callee.getBody().getNumAddresses())
+            return Map.of();
+        Map<String,Long> simple=HardwareVerifiedLeafReturn.summarize(
+            callee.getEntryPoint().getOffset(),decoded,steps);
+        if(!simple.isEmpty())return simple;
+        return HardwareVerifiedBranchReturn.summarize(
+            callee.getEntryPoint().getOffset(),decoded,steps,lengths);
+    }
+
     private static String csEpoch(HardwareDataflow.Snapshot hit,String changed,
             long base,int mm){
         Map<Long,Integer> values=hit.knownPeripheralWords;
@@ -423,14 +488,34 @@ public final class GhidraHardwareFlowService {
     }
     public Report analyze(Program program,TaskMonitor monitor,
             boolean mc68332Selected)throws CancelledException{
+        return analyze(program,monitor,mc68332Selected,null,null);
+    }
+
+    // The disk opt-in is passed exclusively by HardwareFlowStageCache AFTER
+    // the exact full Ghidra program and extension JAR were fingerprinted.
+    Report analyze(Program program,TaskMonitor monitor,boolean mc68332Selected,
+            java.nio.file.Path privateDirectory,
+            HardwareDurableStageStore.Key fullInput)throws CancelledException{
         if(program==null)throw new IllegalArgumentException("Open Ghidra program required");
         if(monitor==null)monitor=TaskMonitor.DUMMY;
+        long functionEpoch=FUNCTION_STAGES.begin(program);
+        HardwareFunctionStageCache.Scope functionScope=
+            new HardwareFunctionStageCache.Scope(
+                program.getModificationNumber(),
+                program.getLanguageID().toString(),
+                program.getExecutableSHA256(),mc68332Selected);
         Map<Long,String> targets=new LinkedHashMap<>();
         HardwareProfiles.Profile p=HardwareProfiles.mc68332();
         for(HardwareProfiles.Register r:p.registers)
             for(int mm=0;mm<2;mm++)targets.put(p.absoluteAddress(r,mm),r.name);
         StringBuilder detail=new StringBuilder();
         List<HardwareCallEffects.FunctionNode> staticCalls=new ArrayList<>();
+        List<HardwareInterproceduralMmEffects.FunctionNode> mmEffectNodes=
+            new ArrayList<>();
+        List<HardwareInterproceduralMmEffects.CallSite> mmCallSites=
+            new ArrayList<>();
+        Map<Long,Map<String,Long>> verifiedLeafByEntry=new HashMap<>();
+        int provenLeafCallSites=0;
         List<Long> evidencedFunctions=new ArrayList<>();
         HardwareEvidenceBudget<HardwarePointerRoleReview.Site> pointerSites=
             new HardwareEvidenceBudget<>(MAX_POINTER_ROLE_SITES);
@@ -441,6 +526,9 @@ public final class GhidraHardwareFlowService {
         int localFirstOmittedFunctions=0;
         int cfgPathLimitedFunctions=0;
         int foundFunctions=0,indirect=0,vbr=0,unresolved=0,visited=0,shown=0;
+        int reusedFunctions=0,computedFunctions=0;
+        int restoredDiskFunctions=0,savedDiskFunctions=0,eligibleDiskFunctions=0;
+        int restoredMidFunctionWorklists=0,savedMidFunctionWorklists=0;
         boolean limited=false;
         FunctionIterator funs=program.getFunctionManager().getFunctions(true);
         while(funs.hasNext()){
@@ -477,6 +565,7 @@ public final class GhidraHardwareFlowService {
                         if(!fun.getBody().contains(destination))
                             uncertainFlow=true;
                 }
+                Long callTarget=null;
                 if(insn.getFlowType().isCall()){
                     Address[] destinations=insn.getFlows();
                     if(destinations==null || destinations.length!=1)
@@ -485,10 +574,31 @@ public final class GhidraHardwareFlowService {
                         Function callee=program.getFunctionManager()
                             .getFunctionAt(destinations[0]);
                         if(callee==null)uncertainFlow=true;
-                        else directCallees.add(callee.getEntryPoint().getOffset());
+                        else {
+                            callTarget=callee.getEntryPoint().getOffset();
+                            directCallees.add(callTarget);
+                        }
+                    }
+                    mmCallSites.add(new HardwareInterproceduralMmEffects.CallSite(
+                        fun.getEntryPoint().getOffset(),
+                        insn.getAddress().getOffset(),callTarget));
+                }
+                HardwareDataflow.Step translated=translate(insn,fun);
+                if(mc68332Selected && callTarget!=null &&
+                        verifiedLeafByEntry.size()<256){
+                    Map<String,Long> proved=verifiedLeafByEntry.get(callTarget);
+                    if(proved==null){
+                        Function callee=program.getFunctionManager()
+                            .getFunctionAt(insn.getFlows()[0]);
+                        proved=verifiedLeafReturn(program,callee,monitor);
+                        verifiedLeafByEntry.put(callTarget,proved);
+                    }
+                    if(!proved.isEmpty()){
+                        translated=translated.withVerifiedCallReturns(proved);
+                        provenLeafCallSites++;
                     }
                 }
-                steps.add(translate(insn,fun));
+                steps.add(translated);
             }
             // Undecoded bytes inside the Ghidra function body are not proof
             // of absence of hidden memory operations/call targets.
@@ -497,12 +607,81 @@ public final class GhidraHardwareFlowService {
             staticCalls.add(new HardwareCallEffects.FunctionNode(
                 fun.getEntryPoint().getOffset(),localStore,localVbr,
                 uncertainFlow,directCallees));
-            if(steps.isEmpty())continue;
-            HardwareDataflow.Result result=HardwareDataflow.analyze(
-                fun.getEntryPoint().getOffset(),steps,targets.keySet(),
-                Math.min(30000,Math.max(300,steps.size()*20)));
+            if(steps.isEmpty()){
+                mmEffectNodes.add(new HardwareInterproceduralMmEffects.FunctionNode(
+                    fun.getEntryPoint().getOffset(),false,false,true,directCallees));
+                continue;
+            }
+            long functionEntry=fun.getEntryPoint().getOffset();
+            int budget=Math.min(30000,Math.max(300,steps.size()*20));
+            HardwareDataflow.Result result=FUNCTION_STAGES.get(
+                program,functionEpoch,functionScope,functionEntry,budget,
+                steps,targets.keySet());
+            boolean diskEligible=privateDirectory!=null && fullInput!=null &&
+                ++eligibleDiskFunctions<=
+                    HardwareDurableFunctionStages.MAX_DURABLE_FUNCTIONS;
+            if(result==null && diskEligible){
+                monitor.checkCancelled();
+                if(program.getModificationNumber()!=functionScope.modification())
+                    throw new CancelledException();
+                result=HardwareDurableFunctionStages.load(
+                    privateDirectory,fullInput,functionEntry,budget,
+                    steps,targets.keySet()).orElse(null);
+                if(result!=null){
+                    monitor.checkCancelled();
+                    if(program.getModificationNumber()!=functionScope.modification())
+                        throw new CancelledException();
+                    if(FUNCTION_STAGES.put(program,functionEpoch,functionScope,
+                            functionEntry,budget,steps,targets.keySet(),result))
+                        restoredDiskFunctions++;
+                    else result=null;
+                }
+            }
+            if(result==null){
+                var sliced=HardwarePartialStageRunner.analyze(
+                    functionEntry,steps,targets.keySet(),budget,
+                    diskEligible?privateDirectory:null,
+                    diskEligible?fullInput:null,monitor,
+                    ()->program.getModificationNumber()==
+                            functionScope.modification() &&
+                        FUNCTION_STAGES.current(program,functionEpoch));
+                result=sliced.result();
+                if(sliced.restoredPartial())restoredMidFunctionWorklists++;
+                savedMidFunctionWorklists+=sliced.storedPartial();
+                // NEVER save an unfinished function, or a stale generation
+                // after Cancel/explicit invalidate or Ghidra Program edit.
+                monitor.checkCancelled();
+                if(program.getModificationNumber()!=functionScope.modification())
+                    throw new CancelledException();
+                boolean completed=FUNCTION_STAGES.put(
+                    program,functionEpoch,functionScope,functionEntry,budget,
+                    steps,targets.keySet(),result);
+                if(diskEligible && completed &&
+                        program.getModificationNumber()==functionScope.modification() &&
+                        HardwareDurableFunctionStages.save(privateDirectory,
+                            fullInput,functionEntry,budget,steps,targets.keySet(),result))
+                    savedDiskFunctions++;
+                computedFunctions++;
+            }else{
+                reusedFunctions++;
+            }
             visited+=result.reachedNodes;
             limited|=result.truncated;
+            boolean localMmCandidate=false,localUnknownStore=false;
+            for(HardwareDataflow.Snapshot hit:result.snapshots){
+                if(hit.kind!=HardwareDataflow.Kind.STORE_DIRECT &&
+                        hit.kind!=HardwareDataflow.Kind.STORE_INDIRECT)continue;
+                if(HardwareInterproceduralMmEffects.unknownMemoryWrite(
+                        hit.effectiveAddress,hit.writeBits))
+                    localUnknownStore=true;
+                else if(mc68332Selected &&
+                        HardwareDataflow.mayTouchSimcrMmLowByte(
+                            hit.effectiveAddress,hit.writeBits))
+                    localMmCandidate=true;
+            }
+            mmEffectNodes.add(new HardwareInterproceduralMmEffects.FunctionNode(
+                fun.getEntryPoint().getOffset(),localMmCandidate,localUnknownStore,
+                uncertainFlow || result.truncated,directCallees));
             for(HardwareDataflow.Snapshot hit:result.snapshots){
                 if(!hit.indirect || hit.effectiveAddress==null ||
                         hit.pointerRegister==null ||
@@ -555,10 +734,17 @@ public final class GhidraHardwareFlowService {
                         continue;
                     HardwareSimcrLocalFirst.Effect next=null;
                     Integer word=null;
-                    if(hit.effectiveAddress!=null &&
-                            "SIMCR".equals(targets.get(hit.effectiveAddress))){
+                    boolean exactSimcr=hit.effectiveAddress!=null &&
+                        "SIMCR".equals(targets.get(hit.effectiveAddress));
+                    // A long STORE spanning SIMCR or a low-byte STORE may be
+                    // the first source write; keep UNKNOWN_WORD, not a full
+                    // word or evidence of an accepted hardware MM latch.
+                    boolean overlapsMm=HardwareDataflow.mayTouchSimcrMmLowByte(
+                        hit.effectiveAddress,hit.writeBits);
+                    if(exactSimcr || overlapsMm){
                         foundSimcr=true;
-                        if(hit.writeBits==16 && hit.writtenWord!=null){
+                        if(exactSimcr && hit.writeBits==16 &&
+                                hit.writtenWord!=null){
                             next=HardwareSimcrLocalFirst.Effect.WORD_LITERAL;
                             word=hit.writtenWord;
                         }else next=HardwareSimcrLocalFirst.Effect.UNKNOWN_WORD;
@@ -749,6 +935,11 @@ public final class GhidraHardwareFlowService {
         if(evidencedFunctions.size()>sideEffectsShown)
             effects.append("- Additional functions omitted by 60-row limit.\n");
         effects.append("\n");
+        String interproceduralMm=mc68332Selected?
+            HardwareInterproceduralMmEffects.analyze(
+                mmEffectNodes,mmCallSites,evidencedFunctions,4,100,80).markdown():
+            "## Interprocedural SIMCR/MM candidates by CALL instruction\n\n"+
+            "Generic CPU32: manual MC68332 profile selection required.\n\n";
 
         ResetCandidates reset=resetStaticCandidates(program,staticCalls,evidencedFunctions);
         StringBuilder out=new StringBuilder();
@@ -765,10 +956,28 @@ public final class GhidraHardwareFlowService {
            .append("- Register-indirect matched writes: ").append(indirect).append("\n")
            .append("- VBR control-register sites: ").append(vbr).append("\n")
            .append("- Unresolved register-based stores: ").append(unresolved).append("\n")
-           .append("- Propagation cap reached: ").append(limited).append("\n\n")
+           .append("- Strictly verified leaf CALL return-register sites: ")
+               .append(provenLeafCallSites).append(" (read-only static sources; ")
+               .append("all peripheral state remains UNKNOWN after CALL).\n")
+           .append("- Propagation cap reached: ").append(limited).append("\n")
+           .append("- Completed per-function fixed points reused: ")
+               .append(reusedFunctions).append("; computed in this pass: ")
+               .append(computedFunctions).append(". These are exact-revision ")
+               .append("process-local checkpoints, not a partially published ")
+               .append("finished report or a runtime RESET trace.\n")
+           .append("- Completed per-function fixed points restored from disk: ")
+               .append(restoredDiskFunctions).append("; newly saved: ")
+               .append(savedDiskFunctions).append(" (at most ")
+               .append(HardwareDurableFunctionStages.MAX_DURABLE_FUNCTIONS)
+               .append(" function slots in this isolated opt-in pass).\n")
+           .append("- Mid-function CFG worklists restored from disk: ")
+               .append(restoredMidFunctionWorklists)
+               .append("; stored: ").append(savedMidFunctionWorklists)
+               .append(" (bounded unfinished computation only).\n\n")
            .append(reset.markdown())
-           .append(GhidraInterruptVectorService.analyze(program,monitor))
-           .append(detail).append(effects);
+           .append(GhidraInterruptVectorService.analyze(program,monitor,
+               reset.recognized(),reset.incomplete(),reset.visited(),staticCalls))
+           .append(detail).append(effects).append(interproceduralMm);
         if(shown>=350)out.append("\n[Detailed report bounded at 350 sites.]\n");
         boolean cfgSourcesComplete=cfgMmioSites.safeAsComplete(!limited);
         out.append("\n- Bounded CFG source capture: ")
