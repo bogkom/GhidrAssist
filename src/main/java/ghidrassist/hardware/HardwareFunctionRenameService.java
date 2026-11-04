@@ -1,5 +1,6 @@
 package ghidrassist.hardware;
 
+import ghidra.framework.options.Options;
 import ghidra.program.model.address.Address;
 import ghidra.program.model.listing.Function;
 import ghidra.program.model.listing.Program;
@@ -9,6 +10,7 @@ import ghidra.program.model.symbol.SymbolIterator;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -49,6 +51,33 @@ public final class HardwareFunctionRenameService {
 
     public record Outcome(int renamed,List<String> names) {}
 
+    /**
+     * Read-only inspection of a persisted source-operation receipt.
+     * An entry records a GhidrAssist operation; it never authenticates an
+     * editor, verifies execution, or replaces the live current-name check.
+     */
+    public static Optional<HardwareFunctionRenameReceipt.Entry> receipt(
+            Program program, long functionAddress) {
+        if(program==null)throw new IllegalArgumentException("No active Program");
+        String key=HardwareFunctionRenameReceipt.optionKey(functionAddress);
+        if(!program.getOptionsNames().contains(
+                HardwareFunctionRenameReceipt.OPTIONS_CATEGORY))
+            return Optional.empty();
+        String stored=program.getOptions(
+            HardwareFunctionRenameReceipt.OPTIONS_CATEGORY).getString(key,null);
+        if(stored==null)return Optional.empty();
+        HardwareFunctionRenameReceipt.Entry decoded;
+        try {
+            decoded=HardwareFunctionRenameReceipt.decode(stored);
+        } catch(IllegalArgumentException invalid){
+            throw new IllegalStateException(
+                "Persisted GhidrAssist rename receipt is malformed",invalid);
+        }
+        if(decoded.entry()!=functionAddress)
+            throw new IllegalStateException("Persisted function address mismatch");
+        return Optional.of(decoded);
+    }
+
     public static Outcome apply(Program program,
             List<HardwareFunctionNamingReview.Proposal> accepted,
             HardwareAnalysisRevision reviewedRevision) throws Exception {
@@ -87,10 +116,38 @@ public final class HardwareFunctionRenameService {
                     throw new IllegalStateException("Function rename preflight failed at "+
                         Long.toHexString(p.functionAddress)+"; no partial rename");
             }
+            // These receipts are part of the SAME Program transaction as
+            // the actual USER_DEFINED names. An existing receipt is never
+            // silently overwritten; corrupted options or a failed write
+            // abort and roll back the entire selected batch.
+            Options receipts=program.getOptions(
+                HardwareFunctionRenameReceipt.OPTIONS_CATEGORY);
+            List<String> prepared=new ArrayList<>();
             for(var p:accepted) {
+                String key=HardwareFunctionRenameReceipt.optionKey(
+                    p.functionAddress);
+                if(receipts.getString(key,null)!=null)
+                    throw new IllegalStateException(
+                        "Existing GA-13 receipt at "+key+"; no rename applied");
+                var row=new HardwareFunctionRenameReceipt.Entry(
+                    p.functionAddress,reviewedRevision.modificationNumber(),
+                    reviewedRevision.sourceSha256()==null ?
+                        "UNKNOWN" : reviewedRevision.sourceSha256(),
+                    p.currentName,p.proposedName,p.role,p.registers,p.writeSites);
+                prepared.add(HardwareFunctionRenameReceipt.encode(row));
+            }
+            for(int i=0;i<accepted.size();i++) {
+                var p=accepted.get(i);
                 Function fn=resolve(program,p);
                 if(fn==null)throw new IllegalStateException("Function disappeared");
                 fn.setName(p.proposedName,SourceType.USER_DEFINED);
+                String key=HardwareFunctionRenameReceipt.optionKey(
+                    p.functionAddress);
+                receipts.setString(key,prepared.get(i));
+                // Fail closed if the transaction's persisted record differs.
+                if(!prepared.get(i).equals(receipts.getString(key,null)))
+                    throw new IllegalStateException(
+                        "GhidrAssist rename receipt write failed");
                 applied.add(p.currentName+" -> "+p.proposedName);
             }
             commit=true;
