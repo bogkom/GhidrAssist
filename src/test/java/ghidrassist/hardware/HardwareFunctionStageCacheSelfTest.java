@@ -104,8 +104,11 @@ public final class HardwareFunctionStageCacheSelfTest {
         }
         check(cache.completed(first)==HardwareFunctionStageCache.MAX_FUNCTIONS,
             "per-Program bound prevents unbounded function checkpoint memory");
-        check(cache.get(first,fresh,scope,0x100,100,graph,targets)==null,
-            "oldest completed stages are evicted deterministically");
+        check(cache.get(first,fresh,scope,0x100,100,graph,targets)==computed,
+            "first completed functions stay reusable after cache reaches cap");
+        long last=0x200L+(HardwareFunctionStageCache.MAX_FUNCTIONS+11L)*16;
+        check(cache.get(first,fresh,scope,last,100,graph,targets)==null,
+            "overflow functions recompute instead of displacing earlier work");
         System.out.println("HardwareFunctionStageCacheSelfTest OK");
     }
 }

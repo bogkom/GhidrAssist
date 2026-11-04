@@ -39,13 +39,14 @@ public final class HardwareFunctionStageCache<K> {
         }
     }
     private record Key(long entry,String stepsSha256,int iterationsBudget){}
+    private record Saved(Key key,HardwareDataflow.Result result){}
     private final class OwnerStages {
         // WeakHashMap uses equals() for key lookup. Retain a SECOND WEAK
         // identity check so two equal-but-distinct Program objects can
         // never exchange stage evidence.
         final WeakReference<K> exactOwner;
         final Scope scope;
-        final LinkedHashMap<Key,HardwareDataflow.Result> stages =
+        final LinkedHashMap<Long,Saved> stages =
             new LinkedHashMap<>();
         OwnerStages(K owner,Scope scope){
             this.exactOwner=new WeakReference<>(owner);
@@ -150,7 +151,8 @@ public final class HardwareFunctionStageCache<K> {
             return null;
         }
         Key key=key(entry,iterationsBudget,steps,targets);
-        return key==null?null:existing.stages.get(key);
+        Saved hit=key==null?null:existing.stages.get(entry);
+        return hit!=null && hit.key().equals(key)?hit.result():null;
     }
 
     /** Refuse incomplete, oversized or stale fixed points. */
@@ -186,9 +188,13 @@ public final class HardwareFunctionStageCache<K> {
             group=new OwnerStages(owner,scope);
             completed.put(owner,group);
         }
-        group.stages.put(key,result);
-        while(group.stages.size()>MAX_FUNCTIONS)
-            group.stages.remove(group.stages.keySet().iterator().next());
+        // Preserve the FIRST fully analyzed functions. Evicting earliest
+        // results when the cap is reached makes a late cancellation retry
+        // discard all saved work before it can be reused in listing order.
+        if(!group.stages.containsKey(entry) &&
+                group.stages.size()>=MAX_FUNCTIONS)
+            return false;
+        group.stages.put(entry,new Saved(key,result));
         return true;
     }
 }

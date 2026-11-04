@@ -90,8 +90,10 @@ iteration budget and a SHA-256 of every translated instruction/CFG successor,
 implicit A/D register side effect and peripheral target address set. A
 function whose input differs is recomputed, and a stale generation cannot
 republish a result after explicit `HardwareFlowStageCache.clear`. Weak
-owner keys avoid pinning closed Ghidra Projects. Cache eviction is bounded
-at 192 functions per Program, with per-function step/snapshot caps and
+owner keys avoid pinning closed Ghidra Projects. Cache retains the first
+192 completed functions per Program and declines later entries rather than
+evicting earlier entries that a cancellation retry would need first. Each
+function also has step/snapshot caps and
 4,096 total saved MMIO-word/register-cell entries per function. An additional
 weak object-identity guard prevents cache reuse even if two distinct Ghidra
 Program objects compare equal via `equals()`.
