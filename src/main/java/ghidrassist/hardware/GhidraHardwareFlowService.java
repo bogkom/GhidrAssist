@@ -1090,6 +1090,7 @@ public final class GhidraHardwareFlowService {
             effects.append("- Additional functions omitted by 60-row limit.\n");
         effects.append("\n");
         String callsiteRegisters;
+        String twoHopRegisters;
         if(mc68332Selected){
             List<HardwareCallsiteRegisterFlow.Callee> contextualCallees=
                 new ArrayList<>();
@@ -1120,9 +1121,66 @@ public final class GhidraHardwareFlowService {
                     " source CALL sites skipped by the bounded 96-site "+
                     "budget or unavailable caller CFG. Missing calls are "+
                     "UNKNOWN, not proven side-effect-free.\n\n";
+            // A separate two-hop analysis is intentionally NOT attached
+            // to the ordinary GA-12 FUNCTION_STAGES or durable checkpoint.
+            // Its scope is one chosen outer CALL PC and ONE nested CALL.
+            List<HardwareCallsiteRegisterFlow.Call> twoHopInputs=
+                new ArrayList<>();
+            int twoHopInputsOmitted=callerContextsOmitted;
+            for(var call:callerContexts)
+                if(twoHopInputs.size()<
+                        HardwareTwoHopRegisterFlow.MAX_OUTER_CALLS)
+                    twoHopInputs.add(call);
+                else twoHopInputsOmitted++;
+            java.util.LinkedHashMap<Long,HardwareTwoHopRegisterFlow.Bridge>
+                bridgeByEntry=new java.util.LinkedHashMap<>();
+            java.util.LinkedHashMap<Long,HardwareCallsiteRegisterFlow.Callee>
+                leafByEntry=new java.util.LinkedHashMap<>();
+            for(var call:twoHopInputs) {
+                monitor.checkCancelled();
+                if(call.directCallee()==null || call.callerIncomplete() ||
+                        call.agreedRegisters().isEmpty())continue;
+                if(program.getModificationNumber()!=
+                        functionScope.modification() ||
+                        !FUNCTION_STAGES.current(program,functionEpoch))
+                    throw new CancelledException();
+                if(!bridgeByEntry.containsKey(call.directCallee())) {
+                    Address middleAddr=program.getAddressFactory()
+                        .getDefaultAddressSpace()
+                        .getAddress(call.directCallee());
+                    Function middle=program.getFunctionManager()
+                        .getFunctionAt(middleAddr);
+                    var bridge=contextualBridge(program,middle,monitor);
+                    if(bridge!=null)
+                        bridgeByEntry.put(bridge.entry(),bridge);
+                }
+                var bridge=bridgeByEntry.get(call.directCallee());
+                if(bridge==null || bridge.finalTarget()==null ||
+                        leafByEntry.containsKey(bridge.finalTarget()))
+                    continue;
+                Address leafAddr=program.getAddressFactory()
+                    .getDefaultAddressSpace().getAddress(bridge.finalTarget());
+                Function leaf=program.getFunctionManager()
+                    .getFunctionAt(leafAddr);
+                var decoded=contextualCallee(program,leaf,monitor);
+                if(decoded!=null)leafByEntry.put(decoded.entry(),decoded);
+            }
+            var twoHop=HardwareTwoHopRegisterFlow.analyze(
+                twoHopInputs,bridgeByEntry.values(),leafByEntry.values(),
+                targets.keySet(),40);
+            twoHopRegisters=twoHop.markdown();
+            if(twoHopInputsOmitted>0)
+                twoHopRegisters+="- **INCOMPLETE INPUT:** "+
+                    twoHopInputsOmitted+" CALL sites beyond the combined "+
+                    "32-site two-hop and 96-site one-hop source caps. "+
+                    "Unseen two-hop paths remain UNKNOWN.\n\n";
         }else {
             callsiteRegisters="## One-hop CALL-site A/D register and "+
                 "MMIO candidates (GA-02/03)\n\n"+
+                "Not evaluated: explicit MC68332 profile required. "+
+                "Generic CPU32 does not imply MCU MMIO.\n\n";
+            twoHopRegisters="## Bounded two-hop CALL argument/MMIO "+
+                "source candidates (GA-02/03)\n\n"+
                 "Not evaluated: explicit MC68332 profile required. "+
                 "Generic CPU32 does not imply MCU MMIO.\n\n";
         }
@@ -1179,7 +1237,7 @@ public final class GhidraHardwareFlowService {
                reset.recognized(),reset.incomplete(),reset.visited(),staticCalls))
            .append(relocatedVbr)
            .append(detail).append(effects).append(interproceduralMm)
-           .append(callsiteRegisters);
+           .append(callsiteRegisters).append(twoHopRegisters);
         if(shown>=350)out.append("\n[Detailed report bounded at 350 sites.]\n");
         boolean cfgSourcesComplete=cfgMmioSites.safeAsComplete(!limited);
         out.append("\n- Bounded CFG source capture: ")
