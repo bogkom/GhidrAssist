@@ -1,5 +1,6 @@
 package ghidrassist.hardware;
 
+import java.lang.ref.WeakReference;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -27,6 +28,8 @@ public final class HardwareFunctionStageCache<K> {
     public static final int MAX_FUNCTIONS=192;
     public static final int MAX_STEPS_PER_FUNCTION=3000;
     public static final int MAX_SNAPSHOTS_PER_FUNCTION=512;
+    public static final int MAX_MMIO_WORD_CELLS=4096;
+    public static final int MAX_REGISTER_CELLS=4096;
 
     public record Scope(long modification,String language,String sourceSha,
                         boolean mc68332) {
@@ -36,11 +39,18 @@ public final class HardwareFunctionStageCache<K> {
         }
     }
     private record Key(long entry,String stepsSha256,int iterationsBudget){}
-    private static final class OwnerStages {
+    private final class OwnerStages {
+        // WeakHashMap uses equals() for key lookup. Retain a SECOND WEAK
+        // identity check so two equal-but-distinct Program objects can
+        // never exchange stage evidence.
+        final WeakReference<K> exactOwner;
         final Scope scope;
         final LinkedHashMap<Key,HardwareDataflow.Result> stages =
             new LinkedHashMap<>();
-        OwnerStages(Scope scope){this.scope=scope;}
+        OwnerStages(K owner,Scope scope){
+            this.exactOwner=new WeakReference<>(owner);
+            this.scope=scope;
+        }
     }
     private final Map<K,OwnerStages> completed=new WeakHashMap<>();
     private final HardwareStageEpochs<K> epochs=new HardwareStageEpochs<>();
@@ -51,7 +61,8 @@ public final class HardwareFunctionStageCache<K> {
     }
     public synchronized int completed(K owner) {
         OwnerStages stages=completed.get(owner);
-        return stages==null?0:stages.stages.size();
+        return stages==null || stages.exactOwner.get()!=owner?
+            0:stages.stages.size();
     }
     public synchronized void invalidate(K owner) {
         if(owner==null)return;
@@ -132,7 +143,8 @@ public final class HardwareFunctionStageCache<K> {
         if(owner==null || scope==null || !epochs.current(owner,generation))
             return null;
         OwnerStages existing=completed.get(owner);
-        if(existing==null)return null;
+        if(existing==null || existing.exactOwner.get()!=owner)
+            return null;
         if(!existing.scope.equals(scope)){
             completed.remove(owner);
             return null;
@@ -142,6 +154,20 @@ public final class HardwareFunctionStageCache<K> {
     }
 
     /** Refuse incomplete, oversized or stale fixed points. */
+    private static boolean withinEvidenceBudget(HardwareDataflow.Result result){
+        long mmioWords=0,registers=0;
+        for(HardwareDataflow.Snapshot snapshot:result.snapshots){
+            if(snapshot==null)return false;
+            mmioWords+=snapshot.knownPeripheralWords.size();
+            if(mmioWords>MAX_MMIO_WORD_CELLS)return false;
+        }
+        for(Map<String,Long> pointers:result.knownPointersAtEntry.values()){
+            if(pointers==null)return false;
+            registers+=pointers.size();
+            if(registers>MAX_REGISTER_CELLS)return false;
+        }
+        return true;
+    }
     public synchronized boolean put(K owner,long generation,Scope scope,
             long entry,int iterationsBudget,
             Collection<HardwareDataflow.Step> steps,Collection<Long> targets,
@@ -149,13 +175,15 @@ public final class HardwareFunctionStageCache<K> {
         if(owner==null || scope==null || result==null || result.truncated ||
                 !epochs.current(owner,generation) ||
                 result.snapshots.size()>MAX_SNAPSHOTS_PER_FUNCTION ||
-                result.knownPointersAtEntry.size()>MAX_STEPS_PER_FUNCTION)
+                result.knownPointersAtEntry.size()>MAX_STEPS_PER_FUNCTION ||
+                !withinEvidenceBudget(result))
             return false;
         Key key=key(entry,iterationsBudget,steps,targets);
         if(key==null)return false;
         OwnerStages group=completed.get(owner);
-        if(group==null || !group.scope.equals(scope)){
-            group=new OwnerStages(scope);
+        if(group==null || group.exactOwner.get()!=owner ||
+                !group.scope.equals(scope)){
+            group=new OwnerStages(owner,scope);
             completed.put(owner,group);
         }
         group.stages.put(key,result);

@@ -91,7 +91,10 @@ implicit A/D register side effect and peripheral target address set. A
 function whose input differs is recomputed, and a stale generation cannot
 republish a result after explicit `HardwareFlowStageCache.clear`. Weak
 owner keys avoid pinning closed Ghidra Projects. Cache eviction is bounded
-at 192 functions per Program, with per-function step/snapshot caps.
+at 192 functions per Program, with per-function step/snapshot caps and
+4,096 total saved MMIO-word/register-cell entries per function. An additional
+weak object-identity guard prevents cache reuse even if two distinct Ghidra
+Program objects compare equal via `equals()`.
 
 The intermediate checkpoints do **not** publish incomplete report, RAG
 evidence or Review/Apply. They avoid only repeated *intraprocedural fixed

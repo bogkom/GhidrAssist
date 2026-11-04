@@ -38,6 +38,16 @@ public final class HardwareFunctionStageCacheSelfTest {
             "same Program/revision/input can reuse completed fixed point");
         check(cache.get(second,cache.begin(second),scope,0x100,100,graph,targets)==null,
             "separate Program instance cannot reuse a stage");
+        Object equalA=new String("equal-owner"),equalB=new String("equal-owner");
+        check(equalA!=equalB && equalA.equals(equalB),
+            "synthetic equal-but-distinct owner precondition");
+        long firstToken=cache.begin(equalA);
+        check(cache.put(equalA,firstToken,scope,0x100,100,graph,targets,computed),
+            "equal-owner identity test installed first Program's stage");
+        long secondToken=cache.begin(equalB);
+        check(cache.get(equalB,secondToken,scope,0x100,100,graph,targets)==null &&
+            cache.completed(equalB)==0,
+            "equal-but-distinct owners must never share a fixed-point snapshot");
         check(cache.get(first,generation,scope,0x100,101,graph,targets)==null,
             "iteration budget is part of fixed-point identity");
         check(cache.get(first,generation,scope,0x130,100,graph,targets)==null,
