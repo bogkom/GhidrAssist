@@ -878,7 +878,7 @@ public final class Ga11VectorHeadlessMain {
                     // Real CPU32 conditional BNE and BRA; both reachable paths
                     // agree on A0 in the positive callee. A negative control
                     // returns conflicting A0 values and must remain unknown.
-                    int tx=full.startTransaction("GA02 synthetic branch-convergent leaf");
+                    int branchTx=full.startTransaction("GA02 synthetic branch-convergent leaf");
                     try {
                         full.getMemory().setBytes(address(full,0x760L),
                             java.util.HexFormat.of().parseHex(
@@ -892,12 +892,12 @@ public final class Ga11VectorHeadlessMain {
                         full.getMemory().setBytes(address(full,0x7d0L),
                             java.util.HexFormat.of().parseHex(
                                 "4eb9000007a030804e75"));
-                    } finally { full.endTransaction(tx,true); }
+                    } finally { full.endTransaction(branchTx,true); }
                     defineFixtureFunction(full,0x760L,24,"fixture_branch_two_agreeing_returns");
                     defineFixtureFunction(full,0x7a0L,24,"fixture_branch_disagreeing_return");
                     defineFixtureFunction(full,0x720L,10,"fixture_branch_positive_caller");
                     defineFixtureFunction(full,0x7d0L,10,"fixture_branch_negative_caller");
-                    long before=full.getModificationNumber();
+                    long branchRevisionBefore=full.getModificationNumber();
                     var report=new GhidraHardwareFlowService().analyze(
                         full,TaskMonitor.DUMMY,true);
                     check(report.rawCfgMmioSites.stream().anyMatch(site->
@@ -911,7 +911,7 @@ public final class Ga11VectorHeadlessMain {
                             "UNRESOLVED_ALIAS".equals(site.register()) &&
                             site.unknownCall()),
                         "Disagreeing branch invented fixed SIMCR address");
-                    check(full.getModificationNumber()==before,
+                    check(full.getModificationNumber()==branchRevisionBefore,
                         "Branch static analysis altered Ghidra Program");
                     var generic=new GhidraHardwareFlowService().analyze(
                         full,TaskMonitor.DUMMY,false);
