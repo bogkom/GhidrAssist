@@ -12,9 +12,14 @@ import java.util.regex.Pattern;
 public final class ManualPdfPageClaim {
     private ManualPdfPageClaim() {}
 
+    // Locate every source marker, not just syntactically valid matches:
+    // an invalid first claim followed by a valid second claim is ambiguous.
+    private static final Pattern PREFIX=Pattern.compile(
+        "\\bPDF\\s+PAGES?\\b",Pattern.CASE_INSENSITIVE);
     private static final Pattern CLAIM=Pattern.compile(
         "\\bPDF\\s+PAGES?\\s+([1-9][0-9]{0,5})"+
-        "(?:\\s*[-–]\\s*([1-9][0-9]{0,5}))?(?![0-9–-])",
+        "(?:\\s*[-–]\\s*([1-9][0-9]{0,5}))?"+
+        "(?!\\s*[/–-])(?=$|[\\s),;\\]\\}]|\\.(?=\\s|$))",
         Pattern.CASE_INSENSITIVE);
 
     /**
@@ -31,8 +36,14 @@ public final class ManualPdfPageClaim {
                 "MAYBE","UNCERTAIN"}) {
             if(upper.contains(unknown))return false;
         }
+        Matcher prefix=PREFIX.matcher(text);
+        if(!prefix.find())return false;
+        int markerStart=prefix.start();
+        // Reject a second marker even if it has malformed numeric text.
+        if(prefix.find())return false;
         Matcher m=CLAIM.matcher(text);
-        if(!m.find())return false;
+        // Never skip a malformed first claim and accept a later substring.
+        if(!m.find() || m.start()!=markerStart)return false;
         int first=Integer.parseInt(m.group(1));
         int last=m.group(2)==null?first:Integer.parseInt(m.group(2));
         if(first>100000 || last>100000 || last<first)return false;
