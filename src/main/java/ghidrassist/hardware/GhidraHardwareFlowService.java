@@ -1033,12 +1033,12 @@ public final class GhidraHardwareFlowService {
                     callerContextsOmitted+
                     " source CALL sites skipped by the bounded 96-site "+
                     "budget or unavailable caller CFG. Missing calls are "+
-                    "UNKNOWN, not proven side-effect-free.\\n\\n";
+                    "UNKNOWN, not proven side-effect-free.\n\n";
         }else {
             callsiteRegisters="## One-hop CALL-site A/D register and "+
-                "MMIO candidates (GA-02/03)\\n\\n"+
+                "MMIO candidates (GA-02/03)\n\n"+
                 "Not evaluated: explicit MC68332 profile required. "+
-                "Generic CPU32 does not imply MCU MMIO.\\n\\n";
+                "Generic CPU32 does not imply MCU MMIO.\n\n";
         }
 
         String interproceduralMm=mc68332Selected?
