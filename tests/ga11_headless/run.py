@@ -95,8 +95,8 @@ def main():
                         "mmio-read-reference","csbar-csor-conditional",
                         "simcr-mm0-literal","trambar-unknown","csor-alternatives",
                         "branch-simcr","call-barrier","leaf-return","call-context","joint-source","two-hop","branch-leaf","branch-cache","cancel-incomplete",
-                        "function-stage-resume","function-rename","apply-preserve",
-                        "provenance-csv","movec-vbr","vbr-relocation"),
+                        "function-stage-resume","function-rename","receipt-restart",
+                        "apply-preserve","provenance-csv","movec-vbr","vbr-relocation"),
                         default="none",help="Run GA-07/12 or GA-02/03 genuine headless source-evidence checks")
     args=parser.parse_args()
     out=Path(args.output).absolute()
@@ -147,19 +147,33 @@ def main():
             cp=os.pathsep.join(str(x) for x in jars)
             call([str(java/"bin/javac"),"-cp",cp,"-d",
                   str(work/"classes"),str(SOURCE)],work,env,out/"compile.log")
-            call([str(java/"bin/java"),
+            java_base=[str(java/"bin/java"),
                   "-Djava.system.class.loader=ghidra.GhidraClassLoader",
                   "-Djava.awt.headless=true",
                   f"-Dapplication.settingsdir={settings}",
                   f"-Dapplication.cachedir={work/'cache'}",
                   f"-Duser.home={work/'home'}",
                   "-cp",str(work/"classes")+os.pathsep+cp,
-                  "Ga11VectorHeadlessMain",
-                  str(ghidra),str(work/"project"),str(out),
-                  str(args.strict_entry).lower(),
-                  args.ga18_mode],
-                 work,env,out/"integration.log",
-                 timeout=240)
+                  "Ga11VectorHeadlessMain",str(ghidra),str(work/"project")]
+            if args.ga18_mode=="receipt-restart":
+                # Separate Java/Ghidra processes share the SAME isolated
+                # on-disk Program DB. Import happens exactly once.
+                phase=out/"receipt-first-jvm"
+                phase.mkdir()
+                call(java_base+[str(phase),str(args.strict_entry).lower(),
+                     "receipt-restart-write"],work,env,phase/"integration.log",
+                     timeout=240)
+                first=json.loads((phase/"result.json").read_text())
+                if (first.get("state")!="PASSED_SYNTHETIC_REAL_GHIDRA_HEADLESS"
+                    or first.get("rename_receipt_first_jvm_saved") is not True
+                    or first.get("rename_receipt_first_jvm_source") is not True):
+                    raise RuntimeError("First Ghidra JVM did not save rename receipt")
+                summary["ga13_first_jvm_saved"]=True
+                mode="receipt-restart-read"
+            else:
+                mode=args.ga18_mode
+            call(java_base+[str(out),str(args.strict_entry).lower(),mode],
+                 work,env,out/"integration.log",timeout=240)
             proof=json.loads((out/"result.json").read_text())
             required=("function_entry_and_body_verified",
                       "production_flow_integration_verified",
@@ -328,6 +342,10 @@ def main():
                         "rename_atomic_rollback",
                         "rename_transactional_two_function_apply",
                         "rename_native_undo_restored"),
+                    "receipt-restart":(
+                        "rename_receipt_second_jvm_reopened",
+                        "rename_receipt_saved_name_and_source",
+                        "rename_receipt_restart_read_only"),
                     "apply-preserve":(
                         "apply_real_label_protected",
                         "apply_real_typed_data_preserved",
@@ -364,6 +382,9 @@ def main():
                         raise RuntimeError("Missing GA-18 real Ghidra proof: "+key)
                 summary["ga18_mode"]=args.ga18_mode
                 summary["ga18_hardware_verified"]=True
+                if args.ga18_mode=="receipt-restart":
+                    summary["ga13_distinct_ghidra_jvms"]=2
+                    summary["ga13_same_saved_project_reopened"]=True
             summary.update({"status":"PASSED_SYNTHETIC_REAL_GHIDRA_HEADLESS",
                             "ghidra_version":"12.1.4",
                             "validated_fields":list(required),
