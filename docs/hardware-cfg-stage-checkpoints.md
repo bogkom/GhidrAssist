@@ -74,3 +74,30 @@ Native synthetic Ghidra 12.1.4 CI runs independent JVM processes for
 cold write, reopen/reuse, and analysis-byte-edit invalidation. Distinguish
 its exact-SHA PASS from source-only persistence tests and from any manual
 Wyse/Precision acceptance.
+
+## GA-12 — completed per-function CFG fixed-point checkpoints
+
+The new `HardwareFunctionStageCache` stores **only completed**, nontruncated
+results from `HardwareDataflow.analyze` in a weak-key, bounded, process-local
+map. If a later function is cancelled, a same-process retry of the whole
+CFG stage can replay those independently completed fixed points. A function
+whose CFG budget was reached, or whose result was interrupted, is NEVER
+reused as completed.
+
+Each entry is bound to the exact Ghidra Program object, modification counter,
+language, original imported SHA, explicit MCU selection, function entry,
+iteration budget and a SHA-256 of every translated instruction/CFG successor,
+implicit A/D register side effect and peripheral target address set. A
+function whose input differs is recomputed, and a stale generation cannot
+republish a result after explicit `HardwareFlowStageCache.clear`. Weak
+owner keys avoid pinning closed Ghidra Projects. Cache eviction is bounded
+at 192 functions per Program, with per-function step/snapshot caps.
+
+The intermediate checkpoints do **not** publish incomplete report, RAG
+evidence or Review/Apply. They avoid only repeated *intraprocedural fixed
+point computations*: functions still undergo Listing/P-code decoding and
+the final full-report aggregation. Unlike the existing opt-in whole-stage
+durable checkpoint, these smaller function checkpoints do not persist over
+Ghidra restart; implementing that requires a separate authenticated typed
+function-result format and persistence limits. No runtime MCU execution
+or hardware MM latch is inferred.

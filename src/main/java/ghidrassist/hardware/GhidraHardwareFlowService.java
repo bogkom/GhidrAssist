@@ -33,6 +33,17 @@ import java.util.regex.Pattern;
 public final class GhidraHardwareFlowService {
     private static final int MAX_CFG_MMIO_SITES=12000;
     private static final int MAX_POINTER_ROLE_SITES=8000;
+    private static final HardwareFunctionStageCache<Program> FUNCTION_STAGES=
+        new HardwareFunctionStageCache<>();
+
+    /** Read-only count of process-local completed function CFG checkpoints. */
+    public static int checkpointedFunctionStages(Program program){
+        return program==null?0:FUNCTION_STAGES.completed(program);
+    }
+    /** Explicit revision/authorization invalidation also retires function stages. */
+    public static void invalidateFunctionStages(Program program){
+        if(program!=null)FUNCTION_STAGES.invalidate(program);
+    }
     private static final Pattern REG=Pattern.compile("(?<![A-Z0-9])([AD][0-7])(?![A-Z0-9])");
     private static final Pattern OFFSET=Pattern.compile("(?<![A-Z0-9])(-?0[Xx][0-9A-F]+|-?[0-9]+)(?![A-Z0-9])");
     public static final class Report {
@@ -425,6 +436,12 @@ public final class GhidraHardwareFlowService {
             boolean mc68332Selected)throws CancelledException{
         if(program==null)throw new IllegalArgumentException("Open Ghidra program required");
         if(monitor==null)monitor=TaskMonitor.DUMMY;
+        long functionEpoch=FUNCTION_STAGES.begin(program);
+        HardwareFunctionStageCache.Scope functionScope=
+            new HardwareFunctionStageCache.Scope(
+                program.getModificationNumber(),
+                program.getLanguageID().toString(),
+                program.getExecutableSHA256(),mc68332Selected);
         Map<Long,String> targets=new LinkedHashMap<>();
         HardwareProfiles.Profile p=HardwareProfiles.mc68332();
         for(HardwareProfiles.Register r:p.registers)
@@ -441,6 +458,7 @@ public final class GhidraHardwareFlowService {
         int localFirstOmittedFunctions=0;
         int cfgPathLimitedFunctions=0;
         int foundFunctions=0,indirect=0,vbr=0,unresolved=0,visited=0,shown=0;
+        int reusedFunctions=0,computedFunctions=0;
         boolean limited=false;
         FunctionIterator funs=program.getFunctionManager().getFunctions(true);
         while(funs.hasNext()){
@@ -498,9 +516,25 @@ public final class GhidraHardwareFlowService {
                 fun.getEntryPoint().getOffset(),localStore,localVbr,
                 uncertainFlow,directCallees));
             if(steps.isEmpty())continue;
-            HardwareDataflow.Result result=HardwareDataflow.analyze(
-                fun.getEntryPoint().getOffset(),steps,targets.keySet(),
-                Math.min(30000,Math.max(300,steps.size()*20)));
+            long functionEntry=fun.getEntryPoint().getOffset();
+            int budget=Math.min(30000,Math.max(300,steps.size()*20));
+            HardwareDataflow.Result result=FUNCTION_STAGES.get(
+                program,functionEpoch,functionScope,functionEntry,budget,
+                steps,targets.keySet());
+            if(result==null){
+                result=HardwareDataflow.analyze(
+                    functionEntry,steps,targets.keySet(),budget);
+                // Never checkpoint a function if cancellation arrived during
+                // its fixed-point evaluation or the Program revision changed.
+                monitor.checkCancelled();
+                if(program.getModificationNumber()!=functionScope.modification())
+                    throw new CancelledException();
+                FUNCTION_STAGES.put(program,functionEpoch,functionScope,
+                    functionEntry,budget,steps,targets.keySet(),result);
+                computedFunctions++;
+            }else{
+                reusedFunctions++;
+            }
             visited+=result.reachedNodes;
             limited|=result.truncated;
             for(HardwareDataflow.Snapshot hit:result.snapshots){
@@ -765,7 +799,12 @@ public final class GhidraHardwareFlowService {
            .append("- Register-indirect matched writes: ").append(indirect).append("\n")
            .append("- VBR control-register sites: ").append(vbr).append("\n")
            .append("- Unresolved register-based stores: ").append(unresolved).append("\n")
-           .append("- Propagation cap reached: ").append(limited).append("\n\n")
+           .append("- Propagation cap reached: ").append(limited).append("\n")
+           .append("- Completed per-function fixed points reused: ")
+               .append(reusedFunctions).append("; computed in this pass: ")
+               .append(computedFunctions).append(". These are exact-revision ")
+               .append("process-local checkpoints, not a partially published ")
+               .append("finished report or a runtime RESET trace.\n\n")
            .append(reset.markdown())
            .append(GhidraInterruptVectorService.analyze(program,monitor))
            .append(detail).append(effects);

@@ -199,6 +199,7 @@ public final class HardwareFlowStageCache {
             EPOCHS.invalidate(program);
             COMPLETED.remove(program);
             SKIP_DISK.put(program,true);
+            GhidraHardwareFlowService.invalidateFunctionStages(program);
         }
     }
 }
