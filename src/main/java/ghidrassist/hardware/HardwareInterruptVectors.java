@@ -85,8 +85,11 @@ public final class HardwareInterruptVectors {
             if(truncated)
                 b.append("- Output truncated to the documented row limit; ")
                  .append("the summary counts cover all inspected slots.\n");
-            b.append("- **STATIC DATA ONLY**: image-zero vector words are not ")
-             .append("proof of the current VBR, a valid vector table, active ")
+            b.append("- **STATIC DATA ONLY**: ")
+             .append(tableAddress==0?
+                 "image-zero vector words":
+                 "relocated source-image vector words")
+             .append(" are not proof of the current VBR, a valid vector table, active ")
              .append("peripheral assignments or code execution. A mapped address ")
              .append("is not proof of an executable ISR. A pointer into a function ") 
              .append("body is NOT a recognized handler entry. Vector 24 and 25–31 ")
