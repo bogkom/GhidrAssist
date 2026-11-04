@@ -215,10 +215,14 @@ public final class HardwareTwoHopRegisterFlow {
             Collection<HardwareCallsiteRegisterFlow.Callee> leaves,
             Collection<Long> trackedAddresses,int displayLimit){
         if(outer==null || bridges==null || leaves==null ||
-                trackedAddresses==null || outer.size()>MAX_OUTER_CALLS ||
+                outer.size()>MAX_OUTER_CALLS ||
                 bridges.size()>MAX_OUTER_CALLS || leaves.size()>MAX_OUTER_CALLS ||
                 displayLimit<1 || displayLimit>MAX_ROWS)
             throw new IllegalArgumentException("Two-hop source budget exceeded");
+        // Apply the same source-address validation as the direct CALL lane
+        // before running any seeded bridge or leaf fixed point.
+        Set<Long> tracked=HardwareCallsiteRegisterFlow
+            .validatedTargets(trackedAddresses);
         Map<Long,Bridge> bridgeByEntry=new HashMap<>();
         for(Bridge b:bridges)
             if(b==null || bridgeByEntry.putIfAbsent(b.entry(),b)!=null)
@@ -255,7 +259,7 @@ public final class HardwareTwoHopRegisterFlow {
             int iterations=Math.min(30000,Math.max(300,
                 bridge.steps().size()*20));
             var state=HardwareDataflow.analyzeWithEntryRegisters(
-                bridge.entry(),bridge.steps(),trackedAddresses,iterations,
+                bridge.entry(),bridge.steps(),tracked,iterations,
                 entryRegisters);
             if(state.truncated){truncated++;continue;}
             Map<String,Long> inner=noStack(state.knownPointersAtEntry
@@ -265,7 +269,7 @@ public final class HardwareTwoHopRegisterFlow {
                 bridge.entry(),bridge.innerCallPc(),bridge.finalTarget(),
                 inner,false);
             var innerEvidence=HardwareCallsiteRegisterFlow.analyze(
-                List.of(nestedCall),List.of(leaf),trackedAddresses,
+                List.of(nestedCall),List.of(leaf),tracked,
                 HardwareCallsiteRegisterFlow.MAX_REPORTED_ROWS);
             if(innerEvidence.rejectedNestedOrBadCfg()!=0 ||
                     innerEvidence.rejectedIncomplete()!=0 ||

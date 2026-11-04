@@ -93,3 +93,27 @@ przedwywołaniowego A7.
 ściśle ograniczonych wielopoziomowych ścieżek z formalnym
 uzasadnieniem zachowania rejestrów, ale bez przenoszenia dynamicznych
 wartości do globalnego dowodu Review/Apply.
+
+## Aktualizacja limitów wejścia — 2026-11-04
+
+Po integracji źródłowego one-hop/two-hop w `master`, oddzielny pakiet
+utrwala limity również na **dekodowanych celach MMIO i callee**.
+Dotychczasowe ograniczenie `96 CALL × 128 kroków` nie ograniczało
+wprost liczby adresów przekazanych do `HashSet` ani liczby callee
+zbudowanych przed analizą.
+
+Oba tory teraz wymagają najwyżej **4096 wejściowych adresów** śledzonych
+rejestrów; każdy adres musi być niepusty i należeć do przestrzeni
+MC68332 `0x000000..0xFFFFFF`. One-hop dodatkowo wymaga najwyżej
+**96 definicji callee**. Dane niepoprawne lub przekraczające limit
+kończą wejście wyjątkiem walidacji zamiast produkować pozornie
+wyczerpujący raport; **nie odrzucamy po cichu żadnego adresu**.
+Poprawne istniejące wyniki i ograniczenia Review/Apply/Undo są
+niezmienione. Jest to limit **wejścia analizy kontekstowej**, nie teza
+o liczbie rzeczywistych rejestrów MCU, wykonaniu CALL czy fizycznej
+mapie magistrali.
+
+Java21 regresja sprawdza adres `null`, 25-bitowy i ujemny,
+97 callee, dokładny próg 4096 oraz odrzucenie 4097 i izolację
+wcześniej obliczonych wyników. Pełne CI i rzeczywista syntetyczna
+Ghidra muszą zakończyć się PASS na końcowym SHA PR.

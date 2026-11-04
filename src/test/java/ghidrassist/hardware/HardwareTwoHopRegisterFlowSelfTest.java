@@ -196,6 +196,34 @@ public final class HardwareTwoHopRegisterFlowSelfTest {
         var upper=scan(List.of(invalid),List.of(bridge),List.of(leaf),48);
         ok(upper.rows().isEmpty() && upper.possibleStores()==0,
             "unmapped high 24-bit alias not promoted as MC68332 MMIO");
+        // Two-hop must not evade the shared one-hop MMIO input budget
+        // during its contextual bridge fixed point or nested leaf solve.
+        reject(()->HardwareTwoHopRegisterFlow.analyze(
+            List.of(left),List.of(bridge),List.of(leaf),
+            java.util.Arrays.asList(simcr,(Long)null),48),
+            "null tracked target must reject nested CALL analysis");
+        reject(()->HardwareTwoHopRegisterFlow.analyze(
+            List.of(left),List.of(bridge),List.of(leaf),
+            Set.of(0x1000000L),48),
+            "25-bit target cannot be accepted as a CPU32 MCU address");
+        var atTargetLimit=new java.util.ArrayList<Long>();
+        atTargetLimit.add(simcr);atTargetLimit.add(cs);
+        for(long address=0;address<
+                HardwareCallsiteRegisterFlow.MAX_TRACKED_ADDRESSES-2;
+                address++)atTargetLimit.add(address);
+        var boundedTargets=HardwareTwoHopRegisterFlow.analyze(
+            List.of(left),List.of(bridge),List.of(leaf),
+            atTargetLimit,48);
+        ok(boundedTargets.possibleStores()==1 &&
+            boundedTargets.rows().get(0).effectiveAddress()==simcr,
+            "exact shared 4096-target boundary preserves two-hop source");
+        atTargetLimit.add(0x1000L);
+        reject(()->HardwareTwoHopRegisterFlow.analyze(
+            List.of(left),List.of(bridge),List.of(leaf),
+            atTargetLimit,48),
+            "4097 targets cannot silently truncate two-hop alias scope");
+        ok(pair.rows().size()==2 && pair.possibleStores()==2,
+            "rejected two-hop inputs never mutate previously shown evidence");
         System.out.println("HardwareTwoHopRegisterFlowSelfTest PASS: assertions="+checks);
     }
 }

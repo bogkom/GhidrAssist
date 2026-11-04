@@ -24,6 +24,8 @@ import java.util.Set;
 public final class HardwareCallsiteRegisterFlow {
     private HardwareCallsiteRegisterFlow() {}
     public static final int MAX_CALL_SITES=96;
+    /** Bounded input for one-hop and two-hop closed CALL context solvers. */
+    public static final int MAX_TRACKED_ADDRESSES=4096;
     public static final int MAX_CALLEE_STEPS=128;
     public static final int MAX_REPORTED_ROWS=96;
     public static final int MAX_REGISTER_CELLS=16;
@@ -119,6 +121,24 @@ public final class HardwareCallsiteRegisterFlow {
         }
     }
     /**
+     * Shared fail-closed MCU24 input gate for both contextual CALL solvers.
+     * Do not silently discard null, out-of-range, or excess addresses:
+     * a truncated address set could be mistaken for full MMIO evidence.
+     */
+    static Set<Long> validatedTargets(Collection<Long> input) {
+        if(input==null || input.size()>MAX_TRACKED_ADDRESSES)
+            throw new IllegalArgumentException("Unbounded CALL MMIO targets");
+        Set<Long> targets=new HashSet<>();
+        for(Long address:input) {
+            if(address==null || address<0 ||
+                    address>HardwareDataflow.MASK24)
+                throw new IllegalArgumentException("Invalid CALL MMIO target");
+            targets.add(address);
+        }
+        return targets;
+    }
+
+    /**
      * No Ghidra dependency. Caller/callee scopes are explicit and keyed by
      * CALL PC; each caller context gets a new cold CFG solve, never a shared
      * state from another caller or the normal GA-12 durable result cache.
@@ -126,8 +146,9 @@ public final class HardwareCallsiteRegisterFlow {
     public static Summary analyze(Collection<Call> calls,
             Collection<Callee> callees,Collection<Long> trackedAddresses,
             int maxRows) {
-        if(calls==null || callees==null || trackedAddresses==null ||
-                calls.size()>MAX_CALL_SITES || maxRows<1 ||
+        if(calls==null || callees==null ||
+                calls.size()>MAX_CALL_SITES ||
+                callees.size()>MAX_CALL_SITES || maxRows<1 ||
                 maxRows>MAX_REPORTED_ROWS)
             throw new IllegalArgumentException("Unbounded CALL-site analysis");
         Map<Long,Callee> targetMap=new HashMap<>();
@@ -135,7 +156,7 @@ public final class HardwareCallsiteRegisterFlow {
             if(callee==null || targetMap.putIfAbsent(callee.entry(),callee)!=null)
                 throw new IllegalArgumentException("Duplicate/null callee");
         }
-        Set<Long> tracked=new HashSet<>(trackedAddresses);
+        Set<Long> tracked=validatedTargets(trackedAddresses);
         List<Call> sorted=new ArrayList<>(calls);
         if(sorted.contains(null))
             throw new IllegalArgumentException("Null CALL");
