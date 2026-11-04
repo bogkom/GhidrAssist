@@ -87,7 +87,8 @@ public final class HardwareFunctionStageCache<K> {
         intValue(digest,bytes.length);
         digest.update(bytes);
     }
-    private static String signature(Collection<HardwareDataflow.Step> steps,
+    /** Full translated CFG input identity; null means not safely cacheable. */
+    public static String signature(Collection<HardwareDataflow.Step> steps,
             Collection<Long> targets) {
         if(steps==null || targets==null ||
                 steps.size()>MAX_STEPS_PER_FUNCTION)return null;

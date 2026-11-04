@@ -132,6 +132,34 @@ public final class HardwareDataflow {
             priorUnknownCall=before.crossedUnknownCall;
             priorUnknownStore=before.crossedUnknownStore;
         }
+        // Typed, bounded decoder only. There is no Java object deserialization.
+        static Snapshot restore(long instruction,Kind kind,Long address,
+                Integer writtenWord,int bits,String pointer,Long vbr,
+                Map<Long,Integer> peripheral,boolean indirect,
+                int min,int max,boolean unknownCall,boolean unknownStore) {
+            if(instruction<0 || kind==null || !(
+                    kind==Kind.STORE_DIRECT || kind==Kind.STORE_INDIRECT ||
+                    kind==Kind.VBR_FROM_REGISTER || kind==Kind.VBR_CONSTANT) ||
+                    min<0 || max<min || max>2 || peripheral==null ||
+                    peripheral.size()>HardwareFunctionStageCache.MAX_MMIO_WORD_CELLS ||
+                    (pointer!=null && !pointer.matches("[AD][0-7]")) ||
+                    (bits!=0 && bits!=8 && bits!=16 && bits!=32))
+                throw new IllegalArgumentException("Invalid decoded CFG snapshot");
+            return new Snapshot(instruction,kind,address,writtenWord,bits,
+                pointer,vbr,peripheral,indirect,min,max,unknownCall,unknownStore);
+        }
+        private Snapshot(long instruction,Kind kind,Long effectiveAddress,
+                Integer writtenWord,int bits,String pointer,Long vbr,
+                Map<Long,Integer> peripheral,boolean indirect,int min,int max,
+                boolean unknownCall,boolean unknownStore) {
+            this.instruction=instruction;this.kind=kind;
+            this.effectiveAddress=effectiveAddress;this.writtenWord=writtenWord;
+            this.writeBits=bits;this.pointerRegister=pointer;this.vbr=vbr;
+            this.knownPeripheralWords=Map.copyOf(peripheral);
+            this.indirect=indirect;this.priorMmCandidateMin=min;
+            this.priorMmCandidateMax=max;this.priorUnknownCall=unknownCall;
+            this.priorUnknownStore=unknownStore;
+        }
     }
     public static final class Result {
         public final List<Snapshot> snapshots;
@@ -143,6 +171,34 @@ public final class HardwareDataflow {
             this.snapshots=List.copyOf(snapshots);this.reachedNodes=reachedNodes;
             this.iterations=iterations;this.truncated=truncated;
             this.knownPointersAtEntry=Collections.unmodifiableMap(pointers);
+        }
+        static Result restore(List<Snapshot> snapshots,int reachedNodes,int iterations,
+                Map<Long,Map<String,Long>> pointers) {
+            if(snapshots==null || pointers==null || reachedNodes<0 ||
+                    reachedNodes>HardwareFunctionStageCache.MAX_STEPS_PER_FUNCTION ||
+                    iterations<0 || iterations>30000 ||
+                    snapshots.size()>HardwareFunctionStageCache.MAX_SNAPSHOTS_PER_FUNCTION ||
+                    pointers.size()>HardwareFunctionStageCache.MAX_STEPS_PER_FUNCTION)
+                throw new IllegalArgumentException("Invalid fixed point bounds");
+            Map<Long,Map<String,Long>> deep=new LinkedHashMap<>();
+            long registers=0;
+            for(var entry:pointers.entrySet()){
+                if(entry.getKey()==null || entry.getKey()<0 ||
+                        entry.getValue()==null)returnInvalid();
+                registers+=entry.getValue().size();
+                if(registers>HardwareFunctionStageCache.MAX_REGISTER_CELLS)
+                    throw new IllegalArgumentException("Too many register cells");
+                for(String reg:entry.getValue().keySet())
+                    if(reg==null || !reg.matches("[AD][0-7]") ||
+                            entry.getValue().get(reg)==null)
+                        throw new IllegalArgumentException("Invalid register snapshot");
+                deep.put(entry.getKey(),Map.copyOf(entry.getValue()));
+            }
+            return new Result(snapshots,reachedNodes,iterations,false,
+                Collections.unmodifiableMap(deep));
+        }
+        private static void returnInvalid(){
+            throw new IllegalArgumentException("Invalid pointer snapshot");
         }
     }
     private static final class State {
