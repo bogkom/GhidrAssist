@@ -81,7 +81,7 @@ public final class Ga11VectorHeadlessMain {
             "generic-profile","trambar-source","csbar-mm0-reject",
             "mmio-read-reference","csbar-csor-conditional",
             "simcr-mm0-literal","trambar-unknown","csor-alternatives",
-            "branch-simcr","call-barrier","leaf-return","call-context","joint-source","branch-leaf","branch-cache","cancel-incomplete",
+            "branch-simcr","call-barrier","leaf-return","call-context","joint-source","two-hop","branch-leaf","branch-cache","cancel-incomplete",
             "function-stage-resume","function-rename","apply-preserve","provenance-csv","movec-vbr","vbr-relocation").contains(ga18Mode),
             "Unknown GA-18 acceptance mode");
         var config=new HeadlessGhidraApplicationConfiguration();
@@ -997,6 +997,107 @@ public final class Ga11VectorHeadlessMain {
                     result.addProperty("branch_leaf_call_history_uncertain",true);
                     result.addProperty("branch_leaf_generic_cpu32_conservative",true);
                     result.addProperty("branch_leaf_program_read_only",true);
+                } else if("two-hop".equals(ga18Mode)) {
+                    // Real CPU32 Listing: two independent outer JSR sources,
+                    // one fully decoded bridge with exactly ONE nested JSR,
+                    // and a leaf indirect STORE. Only potential source
+                    // provenance, never an executed call or hardware state.
+                    int tx=full.startTransaction(
+                        "GA02 isolated two-hop direct JSR fixture");
+                    try{
+                        full.getMemory().setBytes(address(full,0x700L),
+                            java.util.HexFormat.of().parseHex("32804e75"));
+                        full.getMemory().setBytes(address(full,0x640L),
+                            java.util.HexFormat.of().parseHex(
+                                "22484eb9000007004e75"));
+                        full.getMemory().setBytes(address(full,0x600L),
+                            java.util.HexFormat.of().parseHex(
+                                "207c00fffa00203c000040ca4eb9000006404e75"));
+                        full.getMemory().setBytes(address(full,0x680L),
+                            java.util.HexFormat.of().parseHex(
+                                "207c00fffa68203c000048484eb9000006404e75"));
+                        full.getMemory().setBytes(address(full,0x6a0L),
+                            java.util.HexFormat.of().parseHex(
+                                "203c000040ca4eb9000006404e75"));
+                    }finally{full.endTransaction(tx,true);}
+                    defineFixtureFunction(full,0x700L,4,
+                        "ga02_twohop_final_move_d0_to_a1");
+                    defineFixtureFunction(full,0x640L,10,
+                        "ga02_twohop_bridge_movea_and_jsr");
+                    defineFixtureFunction(full,0x600L,20,
+                        "ga02_twohop_simcr_caller");
+                    defineFixtureFunction(full,0x680L,20,
+                        "ga02_twohop_cs_caller");
+                    defineFixtureFunction(full,0x6a0L,14,
+                        "ga02_twohop_unknown_a0_caller");
+                    var nested=full.getListing().getInstructionAt(
+                        address(full,0x642L));
+                    check(nested!=null && nested.getFlowType().isCall() &&
+                        nested.getFlows().length==1 &&
+                        nested.getFlows()[0].equals(address(full,0x700L)),
+                        "Real Ghidra CPU32 did not decode bridge JSR");
+                    var copy=full.getListing().getInstructionAt(
+                        address(full,0x640L));
+                    check(copy!=null && copy.getMnemonicString()
+                        .toUpperCase(Locale.ROOT).startsWith("MOVEA"),
+                        "Real CPU32 did not decode bridge MOVEA.L A0,A1");
+                    long revision=full.getModificationNumber();
+                    var report=new GhidraHardwareFlowService().analyze(
+                        full,TaskMonitor.DUMMY,true);
+                    String markdown=report.markdown;
+                    int section=markdown.indexOf(
+                        "## Bounded two-hop CALL argument/MMIO "+
+                        "source candidates (GA-02/03)");
+                    check(section>=0,"Two-hop source-only report not present");
+                    String source=markdown.substring(section);
+                    check(source.contains(
+                        "| 0x00000600 | 0x0000060C | 0x00000640 | "+
+                        "0x00000642 | 0x00000700 | 0x00000700 | "+
+                        "0x00FFFA00 | 0x000040CA |") &&
+                        source.contains(
+                        "| 0x00000680 | 0x0000068C | 0x00000640 | "+
+                        "0x00000642 | 0x00000700 | 0x00000700 | "+
+                        "0x00FFFA68 | 0x00004848 |"),
+                        "Distinct outer A/D provenance collapsed across "+
+                        "one nested bridge CALL: "+
+                        source.substring(0,Math.min(3800,source.length())));
+                    check(source.contains("SOURCE-ONLY MAY-CANDIDATES") &&
+                        source.contains("NOT EXECUTION") &&
+                        source.contains("A7 is NEVER propagated") &&
+                        source.contains("Review/Apply") &&
+                        source.contains("unknown STORE alias: "),
+                        "Two-hop candidate was promoted to actual MM "+
+                        "execution or unconditional Apply evidence");
+                    check(report.rawCfgMmioSites.stream().noneMatch(s->
+                        s.pc()==0x700L && s.address()==0xfffa00L),
+                        "Nested callee write leaked into global Review/Apply "+
+                        "eligible CFG data");
+                    check(full.getModificationNumber()==revision,
+                        "Two-hop source analysis modified Ghidra Program");
+                    var again=new GhidraHardwareFlowService().analyze(
+                        full,TaskMonitor.DUMMY,true);
+                    String repeated=again.markdown.substring(
+                        again.markdown.indexOf(
+                            "## Bounded two-hop CALL argument/MMIO "));
+                    check(repeated.equals(source) &&
+                        full.getModificationNumber()==revision,
+                        "GA-12 process-local replay mixed call-site contexts");
+                    var generic=new GhidraHardwareFlowService().analyze(
+                        full,TaskMonitor.DUMMY,false);
+                    check(generic.markdown.contains(
+                        "Not evaluated: explicit MC68332 profile required") &&
+                        !generic.markdown.contains(
+                            "| 0x00000600 | 0x0000060C | 0x00000640 | "+
+                            "0x00000642 |") &&
+                        full.getModificationNumber()==revision,
+                        "Generic CPU32 inherited MC68332 two-hop MMIO");
+                    result.addProperty("twohop_real_nested_jsr_decoded",true);
+                    result.addProperty("twohop_independent_a0_d0",true);
+                    result.addProperty("twohop_unknown_alias_not_promoted",true);
+                    result.addProperty("twohop_not_review_apply",true);
+                    result.addProperty("twohop_repeat_deterministic",true);
+                    result.addProperty("twohop_generic_profile_conservative",true);
+                    result.addProperty("twohop_read_only",true);
                 } else if("call-context".equals(ga18Mode) ||
                         "joint-source".equals(ga18Mode)) {
                     boolean jointSource="joint-source".equals(ga18Mode);
