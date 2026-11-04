@@ -233,6 +233,80 @@ public final class HardwareDataflow {
                     crossedUnknownStore!=b.crossedUnknownStore;
         }
     }
+
+    /** Checkpointed state at a CFG instruction entry, never a finished result. */
+    public record EntryState(Map<String,Long> pointers,
+            Map<Long,Integer> peripherals,Long vbr,int mmMin,int mmMax,
+            boolean unknownCall,boolean unknownStore) {
+        public EntryState {
+            if(pointers==null || peripherals==null || mmMin<0 ||
+                    mmMax<mmMin || mmMax>2 || pointers.size()>16 ||
+                    peripherals.size()>256 || (vbr!=null &&
+                    (vbr<0 || vbr>MASK24)))
+                throw new IllegalArgumentException("Invalid CFG work state");
+            for(var p:pointers.entrySet())
+                if(p.getKey()==null || !p.getKey().matches("[AD][0-7]") ||
+                        p.getValue()==null || p.getValue()<0 ||
+                        p.getValue()>MASK24)
+                    throw new IllegalArgumentException("Bad register state");
+            for(var p:peripherals.entrySet())
+                if(p.getKey()==null || p.getKey()<0 ||
+                        p.getKey()>MASK24 || p.getValue()==null ||
+                        p.getValue()<0 || p.getValue()>65535)
+                    throw new IllegalArgumentException("Bad MMIO state");
+            pointers=Map.copyOf(pointers);
+            peripherals=Map.copyOf(peripherals);
+        }
+    }
+    public static final int MAX_PROGRESS_NODES=256;
+    public static final int MAX_PROGRESS_CELLS=4096;
+    /** An in-progress, unpublishable fixed-point worklist snapshot. */
+    public record Progress(long entry,int maxIterations,int iterations,
+            Map<Long,EntryState> atEntry,List<Long> pending) {
+        public Progress {
+            if(entry<0 || maxIterations<1 || maxIterations>30000 ||
+                    iterations<0 || iterations>=maxIterations ||
+                    atEntry==null || pending==null || atEntry.isEmpty() ||
+                    atEntry.size()>MAX_PROGRESS_NODES ||
+                    pending.isEmpty() || pending.size()>MAX_PROGRESS_NODES)
+                throw new IllegalArgumentException("Invalid CFG progress bounds");
+            int cells=0;
+            for(var e:atEntry.entrySet()) {
+                if(e.getKey()==null || e.getKey()<0 || e.getValue()==null)
+                    throw new IllegalArgumentException("Invalid progress node");
+                cells+=e.getValue().pointers().size()+
+                    e.getValue().peripherals().size();
+                if(cells>MAX_PROGRESS_CELLS)
+                    throw new IllegalArgumentException("Oversized progress cells");
+            }
+            if(!atEntry.containsKey(entry) ||
+                    pending.stream().distinct().count()!=pending.size() ||
+                    !atEntry.keySet().containsAll(pending))
+                throw new IllegalArgumentException("Invalid pending queue");
+            atEntry=Map.copyOf(atEntry);
+            pending=List.copyOf(pending);
+        }
+    }
+    /** Exactly one of complete/progress is populated, or both null if too large. */
+    public record Slice(Result complete,Progress progress) {
+        public Slice {
+            if(complete!=null && progress!=null)
+                throw new IllegalArgumentException("Completed and pending");
+        }
+    }
+    private static EntryState capture(State s) {
+        return new EntryState(s.pointers,s.peripherals,s.vbr,
+            s.mmCandidateMin,s.mmCandidateMax,s.crossedUnknownCall,
+            s.crossedUnknownStore);
+    }
+    private static State restore(EntryState e) {
+        State s=new State();
+        s.pointers.putAll(e.pointers());s.peripherals.putAll(e.peripherals());
+        s.vbr=e.vbr();s.mmCandidateMin=e.mmMin();s.mmCandidateMax=e.mmMax();
+        s.crossedUnknownCall=e.unknownCall();s.crossedUnknownStore=e.unknownStore();
+        return s;
+    }
+
     public static Long pcodeInputValue(boolean constant,long literal,Long propagated){
         if(constant)return Long.valueOf(literal);
         return propagated;
@@ -359,41 +433,92 @@ public final class HardwareDataflow {
      * with completely unknown registers. Conservative joins collapse
      * incompatible predecessor values to unknown.
      */
+
     public static Result analyze(long entry,Collection<Step> steps,
                                  Collection<Long> peripherals,int maxIterations){
-        if(maxIterations<1)throw new IllegalArgumentException("Iteration limit must be positive");
+        // The legacy non-checkpointed API retains its exact bounded behavior.
+        Slice one=analyzeSlice(entry,steps,peripherals,maxIterations,null,
+            maxIterations);
+        if(one.complete()==null)
+            throw new IllegalStateException("Unbounded CFG input unexpectedly");
+        return one.complete();
+    }
+
+    /**
+     * Execute at most sliceIterations fixed-point transfers, retaining the
+     * original deterministic worklist ordering. Progress is NEVER analysis
+     * evidence: only a completed Result can be published to a caller.
+     *
+     * A progress snapshot is eligible only when every live state fits strict
+     * resource caps. For oversized functions return (null,null): the caller
+     * must run ordinary analyze() without persistence.
+     */
+    public static Slice analyzeSlice(long entry,Collection<Step> steps,
+            Collection<Long> peripherals,int maxIterations,Progress previous,
+            int sliceIterations){
+        if(maxIterations<1 || sliceIterations<1 ||
+                steps==null || peripherals==null)
+            throw new IllegalArgumentException("Invalid CFG work budget");
         Map<Long,Step> graph=new LinkedHashMap<>();
         for(Step s:steps)
-            if(graph.putIfAbsent(s.address,s)!=null)
-                throw new IllegalArgumentException("Duplicate instruction address "+s.address);
+            if(s==null || graph.putIfAbsent(s.address,s)!=null)
+                throw new IllegalArgumentException("Null or duplicate CFG PC");
         Set<Long> targets=new LinkedHashSet<>(peripherals);
         Map<Long,State> input=new HashMap<>();
         ArrayDeque<Long> queue=new ArrayDeque<>();
         Set<Long> queued=new LinkedHashSet<>();
-        if(graph.containsKey(entry)){
-            input.put(entry,new State());queue.add(entry);queued.add(entry);
-        }
         int iterations=0;
-        while(!queue.isEmpty() && iterations<maxIterations){
+        if(previous==null) {
+            if(graph.containsKey(entry)){
+                input.put(entry,new State());queue.add(entry);queued.add(entry);
+            }
+        } else {
+            if(previous.entry()!=entry ||
+                    previous.maxIterations()!=maxIterations ||
+                    !graph.keySet().containsAll(previous.atEntry().keySet()))
+                throw new IllegalArgumentException("Stale CFG progress");
+            for(var e:previous.atEntry().entrySet())
+                input.put(e.getKey(),restore(e.getValue()));
+            for(Long pc:previous.pending()) {
+                if(!graph.containsKey(pc) || !queued.add(pc))
+                    throw new IllegalArgumentException("Invalid worklist PC");
+                queue.addLast(pc);
+            }
+            iterations=previous.iterations();
+        }
+        int inSlice=0;
+        while(!queue.isEmpty() && iterations<maxIterations &&
+                inSlice<sliceIterations){
             long pc=queue.removeFirst();queued.remove(pc);
             Step step=graph.get(pc);
             if(step==null)continue;
-            State s=transfer(step,input.get(pc),targets);
-            iterations++;
+            State out=transfer(step,input.get(pc),targets);
+            iterations++;inSlice++;
             for(Long successor:step.successors){
                 if(!graph.containsKey(successor))continue;
                 State prior=input.get(successor);
                 boolean changed=false;
-                if(prior==null){input.put(successor,s.copy());changed=true;}
-                else changed=prior.join(s);
+                if(prior==null){input.put(successor,out.copy());changed=true;}
+                else changed=prior.join(out);
                 if(changed && queued.add(successor))queue.addLast(successor);
             }
         }
-        boolean truncated=!queue.isEmpty();
-        // An unfinished fixed point may still have branch-dependent constants
-        // from predecessors not yet visited. Publishing them as evidence would
-        // be unsound. Return only the truncation marker, never inferred values.
-        if(truncated)return new Result(List.of(),input.size(),iterations,true,Map.of());
+        if(!queue.isEmpty()){
+            if(iterations>=maxIterations)
+                return new Slice(new Result(List.of(),input.size(),
+                    iterations,true,Map.of()),null);
+            if(maxIterations>30000 || input.size()>MAX_PROGRESS_NODES ||
+                    queue.size()>MAX_PROGRESS_NODES)
+                return new Slice(null,null);
+            Map<Long,EntryState> states=new HashMap<>();
+            try{
+                for(var e:input.entrySet())states.put(e.getKey(),capture(e.getValue()));
+                return new Slice(null,new Progress(entry,maxIterations,
+                    iterations,states,List.copyOf(queue)));
+            }catch(IllegalArgumentException tooLarge){
+                return new Slice(null,null);
+            }
+        }
         List<Snapshot> found=new ArrayList<>();
         Map<Long,Map<String,Long>> pointers=new LinkedHashMap<>();
         for(Step step:graph.values()){
@@ -411,6 +536,6 @@ public final class HardwareDataflow {
                     before,after));
             }
         }
-        return new Result(found,input.size(),iterations,truncated,pointers);
+        return new Slice(new Result(found,input.size(),iterations,false,pointers),null);
     }
 }
