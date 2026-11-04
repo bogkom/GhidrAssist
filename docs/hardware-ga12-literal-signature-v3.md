@@ -51,3 +51,31 @@ Ghidra 12.1.4 PUBLIC / Java 25 extension build, Java 21
 `HardwareDurableFunctionStagesSelfTest`, and existing real synthetic
 Ghidra GA-12/GA-02 checkpoints. Associate PASS/FAIL only with the
 **exact final PR head SHA**; a created PR is not a CI PASS.
+
+## Follow-up: bounded target inputs and malformed address sets
+
+The v3 signature has a second, independent fail-closed concern:
+`new TreeSet<>(targets)` previously threw `NullPointerException` when a
+partially decoded tracked-address collection contained a `null` element,
+even though the later loop intended to return an uncached result for
+unknown addresses. The checkpoint key is consulted in read-only
+analysis; malformed evidence must not abort the analysis.
+
+`signature()` now checks every tracked address **before** constructing
+a sorted set and returns `null` for an unknown member. It also refuses
+tracked-address collections exceeding **4096 entries** before sorting
+or hashing them. This is a **checkpoint eligibility bound**: it does
+not truncate or reinterpret possible MMIO source observations and does
+not claim that addresses outside this budget are absent from firmware.
+
+The pure Java 21 in-memory and durable checkpoint regressions cover:
+unknown target miss, refusal of save, preservation of a previously
+validated result, acceptance of the exact 4096-entry boundary,
+rejection of 4097 entries, and stable on-disk evidence after malformed
+lookups. Valid target sets keep the **same v3 hash namespace and
+serialization layout**; no schema migration or new persistent data
+is necessary.
+
+No user firmware, Ghidra production project, authorization profile,
+Review/Apply/Undo state, or paused Wyse/Precision/Supervisor tests are
+changed. Exact-SHA CI remains required before integration.
