@@ -4,8 +4,10 @@ on:
     paths:
       - 'src/main/java/ghidrassist/hardware/HardwareDataflow.java'
       - 'src/main/java/ghidrassist/hardware/HardwareVerifiedLeafReturn.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareRegisterOperand.java'
       - 'src/main/java/ghidrassist/hardware/GhidraHardwareFlowService.java'
       - 'src/test/java/ghidrassist/hardware/HardwareVerifiedLeafReturnSelfTest.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareRegisterOperandSelfTest.java'
       - '.github/workflows/hardware-verified-leaf-returns.yml'
   workflow_dispatch:
 permissions:
@@ -28,6 +30,10 @@ jobs:
           javac --release 21 -d "$RUNNER_TEMP/ga0203" \
             src/main/java/ghidrassist/hardware/HardwareDataflow.java \
             src/main/java/ghidrassist/hardware/HardwareVerifiedLeafReturn.java \
-            src/test/java/ghidrassist/hardware/HardwareVerifiedLeafReturnSelfTest.java
+            src/main/java/ghidrassist/hardware/HardwareRegisterOperand.java \
+            src/test/java/ghidrassist/hardware/HardwareVerifiedLeafReturnSelfTest.java \
+            src/test/java/ghidrassist/hardware/HardwareRegisterOperandSelfTest.java
           java -cp "$RUNNER_TEMP/ga0203" \
             ghidrassist.hardware.HardwareVerifiedLeafReturnSelfTest
+          java -cp "$RUNNER_TEMP/ga0203" \
+            ghidrassist.hardware.HardwareRegisterOperandSelfTest

@@ -75,8 +75,8 @@ public final class GhidraHardwareFlowService {
         return s==null?"":s.toUpperCase(Locale.ROOT).trim();
     }
     private static String plainReg(Instruction i,int slot){
-        String s=op(i,slot);
-        return s.matches("[AD][0-7]")?s:null;
+        return HardwareRegisterOperand.sourceOrDestination(
+            op(i,slot),i.getMnemonicString());
     }
     private static String indirectReg(Instruction i,int slot){
         String s=op(i,slot);

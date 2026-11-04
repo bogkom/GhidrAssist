@@ -81,3 +81,10 @@ runtime, that MM is available for a write-once latch, or that another
 caller/different interrupt path executed. All unproven functions, uncertain
 targets and unknown flows remain fully barred. No Review/Apply permissions
 are relaxed.
+
+The Ghidra CPU32 operand parser also handles exact size-qualified A/D source
+views such as `D0w` for `MOVE.W D0,(A0)`, but only when that width
+matches the mnemonic. A partial Dn destination still **clobbers** full
+register provenance; a word view is not promoted to a full long pointer.
+This distinction is asserted both in Java21 and in real Ghidra synthetic
+CALL + indirect SIMCR STORE tests.
