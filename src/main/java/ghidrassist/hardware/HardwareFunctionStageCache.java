@@ -97,7 +97,7 @@ public final class HardwareFunctionStageCache<K> {
                 steps.size()>MAX_STEPS_PER_FUNCTION)return null;
         try {
             MessageDigest digest=MessageDigest.getInstance("SHA-256");
-            text(digest,"GA12-FUNCTION-CFG-FIXPOINT-1");
+            text(digest,"GA12-FUNCTION-CFG-FIXPOINT-2");
             intValue(digest,steps.size());
             for(HardwareDataflow.Step step:steps) {
                 if(step==null)return null;
@@ -122,6 +122,16 @@ public final class HardwareFunctionStageCache<K> {
                 Collections.sort(altered);
                 intValue(digest,altered.size());
                 for(String reg:altered)text(digest,reg);
+                // GA-02/03 post-return constants may change the result even
+                // when the CALL PC and its CFG successors are unchanged.
+                // Sort map keys to guarantee deterministic SHA across JVMs.
+                List<String> verified=new ArrayList<>(step.verifiedCallReturns.keySet());
+                Collections.sort(verified);
+                intValue(digest,verified.size());
+                for(String reg:verified){
+                    text(digest,reg);
+                    longValue(digest,step.verifiedCallReturns.get(reg));
+                }
             }
             // Existing CFG uses target addresses as a SET, not a sequence.
             TreeSet<Long> ordered=new TreeSet<>(targets);
