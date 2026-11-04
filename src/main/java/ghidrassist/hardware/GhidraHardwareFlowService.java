@@ -305,6 +305,73 @@ public final class GhidraHardwareFlowService {
      * off-body jump, CALLOTHER or truncated function rejects the candidate.
      * This is NOT a verified output summary for the caller and is not cached.
      */
+    /**
+     * Exact and fully decoded single nested CALL bridge for GA-02/03.
+     * Ghidra's actual Listing and exact function-entry CALL target are
+     * required; no other calls, stores, CALLOTHER, computed/outside jumps
+     * or hidden undecoded bytes may provide a propagated register context.
+     * A CALL may push return PC on A7, handled by the separate pure solver.
+     */
+    private static HardwareTwoHopRegisterFlow.Bridge contextualBridge(
+            Program program,Function middle,TaskMonitor monitor)
+            throws CancelledException {
+        if(middle==null)return null;
+        long entry=middle.getEntryPoint().getOffset();
+        long bodyBytes=middle.getBody().getNumAddresses();
+        if(bodyBytes<8 || bodyBytes>
+                HardwareTwoHopRegisterFlow.MAX_BRIDGE_STEPS*16L)
+            return null;
+        List<HardwareDataflow.Step> steps=new ArrayList<>();
+        long pc=entry,innerPc=-1;
+        Long innerEntry=null;
+        int calls=0;
+        boolean complete=true;
+        InstructionIterator it=program.getListing()
+            .getInstructions(middle.getBody(),true);
+        while(it.hasNext()){
+            monitor.checkCancelled();
+            Instruction insn=it.next();
+            if(steps.size()>=HardwareTwoHopRegisterFlow.MAX_BRIDGE_STEPS ||
+                    insn.getAddress().getOffset()!=pc ||
+                    insn.getFlowType().isComputed()){
+                complete=false;break;
+            }
+            boolean isCall=insn.getFlowType().isCall();
+            PcodeOp[] ops=insn.getPcode();
+            if(ops!=null)for(PcodeOp op:ops)
+                if(op.getOpcode()==PcodeOp.CALLOTHER ||
+                        // CPU32 JSR itself pushes the return PC. The
+                        // injected context never includes the original A7.
+                        op.getOpcode()==PcodeOp.STORE && !isCall)
+                    complete=false;
+            if(insn.getFlowType().isJump()){
+                Address[] flows=insn.getFlows();
+                if(flows==null || flows.length==0)complete=false;
+                else for(Address dst:flows)
+                    if(!middle.getBody().contains(dst))complete=false;
+            }
+            if(!complete)break;
+            if(isCall) {
+                calls++;
+                if(calls!=1){complete=false;break;}
+                innerPc=pc;
+                Address[] flows=insn.getFlows();
+                if(flows!=null && flows.length==1){
+                    Function leaf=program.getFunctionManager().getFunctionAt(
+                        flows[0]);
+                    if(leaf!=null)
+                        innerEntry=leaf.getEntryPoint().getOffset();
+                }
+            }
+            steps.add(translate(insn,middle));
+            pc+=insn.getLength();
+        }
+        if(calls!=1)return null;
+        return new HardwareTwoHopRegisterFlow.Bridge(
+            entry,steps,innerPc,innerEntry,complete &&
+            pc-entry==bodyBytes);
+    }
+
     private static HardwareCallsiteRegisterFlow.Callee contextualCallee(
             Program program,Function callee,TaskMonitor monitor)
             throws CancelledException{
