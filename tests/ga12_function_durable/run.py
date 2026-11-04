@@ -81,7 +81,7 @@ def main():
                     str(work/"project"),str(out),str(work/"durable"),phase],
                     work,env,out/("integration-"+phase+".log"),timeout=240)
                 proof=json.loads((out/("ga12-function-"+phase+".json")).read_text())
-                if proof["phase"]!=phase or not proof["ghidra_real"]:
+                if proof["phase"]!=phase or not proof["real_ghidra"]:
                     raise RuntimeError("Missing real-Ghidra phase proof")
                 if proof["whole_stage_reused"] or not proof["program_unchanged"]:
                     raise RuntimeError("Partial stage used full report or modified Program")
