@@ -81,7 +81,7 @@ public final class Ga11VectorHeadlessMain {
             "generic-profile","trambar-source","csbar-mm0-reject",
             "mmio-read-reference","csbar-csor-conditional",
             "simcr-mm0-literal","trambar-unknown","csor-alternatives",
-            "branch-simcr","call-barrier","leaf-return","call-context","branch-leaf","branch-cache","cancel-incomplete",
+            "branch-simcr","call-barrier","leaf-return","call-context","joint-source","branch-leaf","branch-cache","cancel-incomplete",
             "function-stage-resume","function-rename","apply-preserve","provenance-csv","movec-vbr","vbr-relocation").contains(ga18Mode),
             "Unknown GA-18 acceptance mode");
         var config=new HeadlessGhidraApplicationConfiguration();
@@ -997,7 +997,9 @@ public final class Ga11VectorHeadlessMain {
                     result.addProperty("branch_leaf_call_history_uncertain",true);
                     result.addProperty("branch_leaf_generic_cpu32_conservative",true);
                     result.addProperty("branch_leaf_program_read_only",true);
-                } else if("call-context".equals(ga18Mode)) {
+                } else if("call-context".equals(ga18Mode) ||
+                        "joint-source".equals(ga18Mode)) {
+                    boolean jointSource="joint-source".equals(ga18Mode);
                     // Two independent CPU32 callers pass different A/D
                     // arguments to the SAME ordinary direct callee.
                     // Each source-only STORE candidate is tied to its CALL PC,
@@ -1016,6 +1018,22 @@ public final class Ga11VectorHeadlessMain {
                         full.getMemory().setBytes(address(full,0x6a0L),
                             java.util.HexFormat.of().parseHex(
                                 "203c000040ca4eb9000006404e75"));
+                        if(jointSource){
+                            // One source image, two independent CALL A/D
+                            // contexts AND a third, independent MOVEC VBR
+                            // candidate. Neither report proves execution.
+                            full.getMemory().setBytes(address(full,0x800L),
+                                new byte[1024]);
+                            full.getMemory().setBytes(address(full,0x868L),
+                                java.util.HexFormat.of().parseHex("00000400"));
+                            full.getMemory().setBytes(address(full,0x86cL),
+                                java.util.HexFormat.of().parseHex("00000402"));
+                            full.getMemory().setBytes(address(full,0x870L),
+                                java.util.HexFormat.of().parseHex("00000401"));
+                            full.getMemory().setBytes(address(full,0x5a0L),
+                                java.util.HexFormat.of().parseHex(
+                                    "203c000008004e7b08014e75"));
+                        }
                     } finally {full.endTransaction(txContext,true);}
                     defineFixtureFunction(full,0x640L,4,
                         "ga02_arg_callee_move_word_d0_a0");
@@ -1025,6 +1043,9 @@ public final class Ga11VectorHeadlessMain {
                         "ga02_arg_caller_cs");
                     defineFixtureFunction(full,0x6a0L,14,
                         "ga02_arg_caller_unknown_pointer");
+                    if(jointSource)
+                        defineFixtureFunction(full,0x5a0L,12,
+                            "ga11_joint_source_vbr_register");
                     long revisionBeforeContext=full.getModificationNumber();
                     var interproc=new GhidraHardwareFlowService().analyze(
                         full,TaskMonitor.DUMMY,true);
@@ -1034,6 +1055,33 @@ public final class Ga11VectorHeadlessMain {
                     check(start>=0,"Real Ghidra did not publish source-only "+
                         "CALL-context analysis");
                     String source=whole.substring(start);
+                    if(jointSource){
+                        String relocatedTitle="### Relocated **source-image** table "+
+                            "candidate at 0x00000800";
+                        int relocatedAt=whole.indexOf(relocatedTitle);
+                        check(relocatedAt>=0 && relocatedAt<start &&
+                            whole.contains("runtime VBR UNKNOWN") &&
+                            whole.contains("STATIC SOURCE CANDIDATES ONLY"),
+                            "Joint CALL-source analysis suppressed GA-11 "+
+                            "relocated VBR evidence or promoted active VBR");
+                        String relocatedSection=whole.substring(relocatedAt,start);
+                        check(relocatedSection.contains(
+                            "RECOGNIZED_FUNCTION_CANDIDATE") &&
+                            relocatedSection.contains(
+                                "INTERIOR_FUNCTION_POINTER_CANDIDATE") &&
+                            relocatedSection.contains("ODD_POINTER"),
+                            "Joint program lost exact/interior/odd ISR "+
+                            "source-image vector classification");
+                        check(interproc.rawCfgMmioSites.stream().noneMatch(s->
+                            s.pc()==0x640L && s.address()==0xfffa00L),
+                            "Joint context CALLEE promoted to global Apply");
+                        result.addProperty(
+                            "joint_onehop_vbr_same_program",true);
+                        result.addProperty(
+                            "joint_uncertainty_no_implicit_apply",true);
+                        result.addProperty(
+                            "joint_relocated_vector_classification",true);
+                    }
                     check(source.contains(
                         "| 0x00000600 | 0x0000060C | 0x00000640 | "+
                         "0x00000640 | 0x00FFFA00 | 0x000040CA |") &&
@@ -1064,6 +1112,16 @@ public final class Ga11VectorHeadlessMain {
                         "MC68332 candidate leaked into generic CPU32");
                     check(full.getModificationNumber()==revisionBeforeContext,
                         "Generic-profile negative analysis edited Program");
+                    if(jointSource){
+                        check(genericContext.markdown.contains(
+                            "Not evaluated: MC68332 profile not explicitly selected") &&
+                            !genericContext.markdown.contains(
+                                "### Relocated **source-image** table candidate"),
+                            "Joint source-image VBR device assumption leaked "+
+                            "into generic CPU32");
+                        result.addProperty("joint_generic_profile_off",true);
+                        result.addProperty("joint_program_read_only",true);
+                    }
                     result.addProperty("arg_direct_call_real_ghidra",true);
                     result.addProperty("arg_independent_call_sites",true);
                     result.addProperty("arg_unknown_alias_not_promoted",true);
