@@ -105,3 +105,35 @@ transactional receipt creation, Undo, Redo and second Undo.
 The existing full extension build and unrelated hardware
 regressions remain required. Tests do not use the original ECU411
 Program or restart the stopped Wyse/Precision/legacy Supervisor.
+
+## GA-13 follow-up — genuine Ghidra save/reload across JVM boundary
+
+A transactionally stored `HardwareFunctionRenameReceipt` passed
+source-only Java21 and real Ghidra **Apply/Undo/Redo** CI on PR #146.
+That proves the record shares the **current Program transaction**,
+but does not by itself prove recovery after process exit and restart.
+
+A separate `receipt-restart` synthetic-only acceptance mode now
+tests **two separate Java 25 / Ghidra 12.1.4 PUBLIC processes** using
+the **same private synthetic Ghidra project**. The runner imports
+`vectors-full.bin` and `vectors-short.bin` only once. JVM #1
+creates the genuine CPU32 test function, applies a reviewed
+GhidrAssist function rename and its Program Options receipt, calls
+Ghidra `Program.save`, releases Program consumers and closes the
+project. JVM #2 independently opens that saved project **without
+reimport**, checks the renamed Ghidra Function and decodes the
+versioned receipt from Program Options, then verifies that inspecting
+it did not modify the Program revision.
+
+The test requires a checked source-import SHA (or explicit UNKNOWN),
+reviewed modification number, old/new names, static role and
+register evidence. It asserts that the record's operation origin
+still says **actor UNKNOWN**: persistence is neither authentication
+nor proof of executed firmware. JSON evidence for the two processes
+is stored separately; the workflow fails if either phase fails,
+rather than reporting a single-process success as restart support.
+
+This test touches synthetic/private test data only; no actual
+ECU411 firmware or production Ghidra project is opened or changed.
+The work remains within GitHub Actions, with the historical
+Wyse/Precision and legacy Supervisor services stopped.

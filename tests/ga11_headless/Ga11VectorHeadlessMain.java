@@ -82,7 +82,9 @@ public final class Ga11VectorHeadlessMain {
             "mmio-read-reference","csbar-csor-conditional",
             "simcr-mm0-literal","trambar-unknown","csor-alternatives",
             "branch-simcr","call-barrier","leaf-return","call-context","joint-source","two-hop","branch-leaf","branch-cache","cancel-incomplete",
-            "function-stage-resume","function-rename","apply-preserve","provenance-csv","movec-vbr","vbr-relocation").contains(ga18Mode),
+            "function-stage-resume","function-rename","receipt-restart-write",
+            "receipt-restart-read","apply-preserve","provenance-csv",
+            "movec-vbr","vbr-relocation").contains(ga18Mode),
             "Unknown GA-18 acceptance mode");
         var config=new HeadlessGhidraApplicationConfiguration();
         config.setApplicationLogFile(out.resolve("ghidra.log").toFile());
@@ -110,17 +112,27 @@ public final class Ga11VectorHeadlessMain {
                 "Real CPU32 big-endian language required");
             check(full.getMemory().getSize()>=4096,"Synthetic memory not imported");
             Address entry=address(full,0x400L);
-            int tx=full.startTransaction("synthetic test-only function definition");
-            try {
-                var d=new DisassembleCommand(entry,null,false);
-                check(d.applyTo(full,TaskMonitor.DUMMY),
-                    "Actual 68000 disassembler rejected synthetic NOP/RTS");
-                Function fun=full.getFunctionManager().createFunction(
-                    "synthetic_vector_handler",entry,
-                    new AddressSet(entry,entry.add(5)),SourceType.ANALYSIS);
-                check(fun!=null&&fun.getEntryPoint().equals(entry),
-                    "Real Ghidra FunctionManager entry missing");
-            } finally {full.endTransaction(tx,true);}
+            // The second JVM of the GA-13 persistence regression opens
+            // the SAME saved synthetic project. Do not create a duplicate
+            // function or modify its database before checking the receipt.
+            if("receipt-restart-read".equals(ga18Mode)) {
+                Function existing=full.getFunctionManager().getFunctionAt(entry);
+                check(existing!=null &&
+                    "synthetic_vector_handler".equals(existing.getName()),
+                    "Saved Ghidra vector fixture not visible after JVM restart");
+            } else {
+                int tx=full.startTransaction("synthetic test-only function definition");
+                try {
+                    var d=new DisassembleCommand(entry,null,false);
+                    check(d.applyTo(full,TaskMonitor.DUMMY),
+                        "Actual 68000 disassembler rejected synthetic NOP/RTS");
+                    Function fun=full.getFunctionManager().createFunction(
+                        "synthetic_vector_handler",entry,
+                        new AddressSet(entry,entry.add(5)),SourceType.ANALYSIS);
+                    check(fun!=null&&fun.getEntryPoint().equals(entry),
+                        "Real Ghidra FunctionManager entry missing");
+                } finally {full.endTransaction(tx,true);}
+            }
             check(full.getFunctionManager().getFunctionContaining(
                 address(full,0x402L))!=null,
                 "Interior target must be inside real Ghidra Function body");
@@ -170,19 +182,30 @@ public final class Ga11VectorHeadlessMain {
                 // Optional synthetic-only integration against an ACTUAL
                 // Ghidra Program. Existing vectors remain untouched.
                 Address mmio=address(full,0x500L);
-                int writeTx=full.startTransaction(
-                    "GA18 TEST-ONLY synthetic SIMCR definition");
-                try {
-                    check(new DisassembleCommand(mmio,null,false)
-                        .applyTo(full,TaskMonitor.DUMMY),
-                        "Real CPU32 disassembler rejected synthetic SIMCR write");
-                    Function mmioFunction=full.getFunctionManager().createFunction(
-                        "synthetic_simcr_write",mmio,
-                        new AddressSet(mmio,mmio.add(9)),SourceType.ANALYSIS);
+                if("receipt-restart-read".equals(ga18Mode)) {
+                    // Phase #1 saved this exact function. Reopening the
+                    // same Ghidra Program MUST NOT create another function
+                    // or run any write transaction before verifying GA-13.
+                    Function mmioFunction=full.getFunctionManager()
+                        .getFunctionAt(mmio);
                     check(mmioFunction!=null &&
-                          mmioFunction.getEntryPoint().equals(mmio),
-                        "Real synthetic SIMCR function entry absent");
-                } finally { full.endTransaction(writeTx,true); }
+                          "synthetic_simcr_write".equals(mmioFunction.getName()),
+                        "Second JVM lost existing synthetic SIMCR function");
+                } else {
+                    int writeTx=full.startTransaction(
+                        "GA18 TEST-ONLY synthetic SIMCR definition");
+                    try {
+                        check(new DisassembleCommand(mmio,null,false)
+                            .applyTo(full,TaskMonitor.DUMMY),
+                            "Real CPU32 disassembler rejected synthetic SIMCR write");
+                        Function mmioFunction=full.getFunctionManager().createFunction(
+                            "synthetic_simcr_write",mmio,
+                            new AddressSet(mmio,mmio.add(9)),SourceType.ANALYSIS);
+                        check(mmioFunction!=null &&
+                              mmioFunction.getEntryPoint().equals(mmio),
+                            "Real synthetic SIMCR function entry absent");
+                    } finally { full.endTransaction(writeTx,true); }
+                }
                 long hwBefore=full.getModificationNumber();
                 if("overview".equals(ga18Mode)){
                     HardwareInventoryService inventoryService=
@@ -1611,6 +1634,114 @@ public final class Ga11VectorHeadlessMain {
                     result.addProperty("rename_atomic_receipt_rollback",true);
                     result.addProperty("rename_receipt_native_undo_redo",true);
                     result.addProperty("rename_receipt_actor_remains_unknown",true);
+                } else if("receipt-restart-write".equals(ga18Mode)) {
+                    // Real Ghidra first JVM: persist an approved rename and
+                    // its GA-13 receipt in an isolated project database.
+                    // The wrapper MUST spawn a second distinct Java process
+                    // which reopens this same saved project from disk.
+                    byte[] code=java.util.HexFormat.of().parseHex(
+                        "33fc387c00fffa4c33fc7c3000fffa4e" +
+                        "33fc2f7f00fffa444e75");
+                    int tx=full.startTransaction("GA13 cross-JVM synthetic rename source");
+                    try {
+                        full.getMemory().setBytes(address(full,0x5a0L),code);
+                    } finally {full.endTransaction(tx,true);}
+                    defineFixtureFunction(full,0x5a0L,26,"FUN_000005A0");
+                    Function target=full.getFunctionManager()
+                        .getFunctionAt(address(full,0x5a0L));
+                    check(target!=null &&
+                        target.getName().matches("(?i)FUN_[0-9A-F]{8}"),
+                        "First JVM original function name invalid: "+
+                            (target==null?"NULL":target.getName()));
+                    // Ghidra canonicalizes auto-generated FUN hex case.
+                    // Always bind the proposal to its actual on-disk
+                    // current name, never a hard-coded fixture spelling.
+                    String originalName=target.getName();
+                    var observations=List.of(
+                        new ghidrassist.hardware.HardwareFunctionNamingReview
+                            .Observation(0x5a0L,originalName,0x5a0L,
+                                "CSPAR0",true),
+                        new ghidrassist.hardware.HardwareFunctionNamingReview
+                            .Observation(0x5a0L,originalName,0x5a8L,
+                                "CSBAR0",true),
+                        new ghidrassist.hardware.HardwareFunctionNamingReview
+                            .Observation(0x5a0L,originalName,0x5b0L,
+                                "CSOR0",true));
+                    var proposal=ghidrassist.hardware.HardwareFunctionNamingReview
+                        .propose(true,observations,List.of()).get(0);
+                    var reviewed=ghidrassist.hardware.HardwareAnalysisRevision.capture(
+                        full,full.getModificationNumber(),
+                        full.getLanguageID().toString(),
+                        full.getExecutableSHA256(),true);
+                    var renamed=ghidrassist.hardware.HardwareFunctionRenameService
+                        .apply(full,List.of(proposal),reviewed);
+                    var receipt=ghidrassist.hardware.HardwareFunctionRenameService
+                        .receipt(full,0x5a0L).orElseThrow();
+                    check(renamed.renamed()==1 &&
+                        receipt.beforeName().equals(originalName) &&
+                        receipt.afterName().equals(target.getName()) &&
+                        receipt.reviewedModification()==reviewed.modificationNumber(),
+                        "First JVM failed to persist approved rename and evidence");
+                    // The prior test only checked Undo/Redo in one JVM.
+                    // This explicitly saves a genuine Ghidra Program DB.
+                    full.save("GA-13 synthetic rename receipt cross-JVM",TaskMonitor.DUMMY);
+                    result.addProperty("rename_receipt_first_jvm_saved",true);
+                    result.addProperty("rename_receipt_first_jvm_source",true);
+                    result.addProperty("ga13_receipt_before",receipt.beforeName());
+                    result.addProperty("ga13_receipt_after",receipt.afterName());
+                    result.addProperty("ga13_receipt_revision",
+                        receipt.reviewedModification());
+                    result.addProperty("ga13_receipt_source_sha",
+                        receipt.sourceSha256());
+                    result.addProperty("ga13_process_pid",
+                        ProcessHandle.current().pid());
+                } else if("receipt-restart-read".equals(ga18Mode)) {
+                    // Real Ghidra second JVM: the wrapper has not re-imported
+                    // the fixture, and did not pass the first Program object.
+                    // Names AND Program-local operation record must survive.
+                    long unchanged=full.getModificationNumber();
+                    Function renamed=full.getFunctionManager()
+                        .getFunctionAt(address(full,0x5a0L));
+                    check(renamed!=null &&
+                        "HW_MC68332_CONFIGURE_CHIP_SELECTS_CANDIDATE_000005A0"
+                            .equals(renamed.getName()),
+                        "Second JVM did not load saved approved function name");
+                    var receipt=ghidrassist.hardware.HardwareFunctionRenameService
+                        .receipt(full,0x5a0L).orElseThrow();
+                    check(receipt.entry()==0x5a0L &&
+                        receipt.beforeName().matches("(?i)FUN_[0-9A-F]{8}") &&
+                        receipt.afterName().equals(renamed.getName()) &&
+                        receipt.writeSites()==3 &&
+                        "CONFIGURE_CHIP_SELECTS".equals(receipt.role()) &&
+                        receipt.reviewedModification()>=0 &&
+                        receipt.sourceSha256().equals(
+                            full.getExecutableSHA256()==null ?
+                                "UNKNOWN":full.getExecutableSHA256()) &&
+                        receipt.registers().contains("CSBAR0") &&
+                        receipt.operationOrigin().contains("actor UNKNOWN"),
+                        "Second JVM lost GA-13 versioned Program operation history");
+                    String stored=full.getOptions(
+                        ghidrassist.hardware.HardwareFunctionRenameReceipt
+                            .OPTIONS_CATEGORY).getString(
+                            ghidrassist.hardware.HardwareFunctionRenameReceipt
+                                .optionKey(0x5a0L),null);
+                    check(stored!=null &&
+                        ghidrassist.hardware.HardwareFunctionRenameReceipt
+                            .decode(stored).equals(receipt),
+                        "Second JVM found noncanonical or missing Options record");
+                    check(full.getModificationNumber()==unchanged,
+                        "Reading persisted receipt must never edit Ghidra Program");
+                    result.addProperty("rename_receipt_second_jvm_reopened",true);
+                    result.addProperty("rename_receipt_saved_name_and_source",true);
+                    result.addProperty("rename_receipt_restart_read_only",true);
+                    result.addProperty("ga13_receipt_before",receipt.beforeName());
+                    result.addProperty("ga13_receipt_after",receipt.afterName());
+                    result.addProperty("ga13_receipt_revision",
+                        receipt.reviewedModification());
+                    result.addProperty("ga13_receipt_source_sha",
+                        receipt.sourceSha256());
+                    result.addProperty("ga13_process_pid",
+                        ProcessHandle.current().pid());
                 } else if("apply-preserve".equals(ga18Mode)) {
                     // Two disposable MC68332 MM1 blocks: preserve a user
                     // symbol, existing Word data and real CPU32 code while
