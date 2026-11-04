@@ -82,7 +82,7 @@ public final class Ga11VectorHeadlessMain {
             "mmio-read-reference","csbar-csor-conditional",
             "simcr-mm0-literal","trambar-unknown","csor-alternatives",
             "branch-simcr","call-barrier","leaf-return","branch-leaf","branch-cache","cancel-incomplete",
-            "function-stage-resume","function-rename","apply-preserve","provenance-csv","movec-vbr").contains(ga18Mode),
+            "function-stage-resume","function-rename","apply-preserve","provenance-csv","movec-vbr","vbr-relocation").contains(ga18Mode),
             "Unknown GA-18 acceptance mode");
         var config=new HeadlessGhidraApplicationConfiguration();
         config.setApplicationLogFile(out.resolve("ghidra.log").toFile());
@@ -1436,6 +1436,105 @@ public final class Ga11VectorHeadlessMain {
                     result.addProperty("provenance_csv_formula_escaped",true);
                     result.addProperty("provenance_csv_read_only",true);
                     Files.writeString(out.resolve("ga18-provenance-source.csv"),csv);
+                } else if("vbr-relocation".equals(ga18Mode)) {
+                    // A synthetic CPU32 MOVEC D0,VBR sources 0x800. A separate
+                    // table at 0x800 has an exact function-entry candidate,
+                    // an interior pointer and an odd address; NONE is active
+                    // IRQ/VBR execution evidence.
+                    int vbrTx=full.startTransaction(
+                        "GA11 isolated relocated table and MOVEC source");
+                    try {
+                        full.getMemory().setBytes(address(full,0x800L),
+                            new byte[1024]);
+                        full.getMemory().setBytes(address(full,0x868L),
+                            java.util.HexFormat.of().parseHex("00000400"));
+                        full.getMemory().setBytes(address(full,0x86cL),
+                            java.util.HexFormat.of().parseHex("00000402"));
+                        full.getMemory().setBytes(address(full,0x870L),
+                            java.util.HexFormat.of().parseHex("00000401"));
+                        full.getMemory().setBytes(address(full,0x5a0L),
+                            java.util.HexFormat.of().parseHex(
+                                "203c000008004e7b08014e75"));
+                    } finally {full.endTransaction(vbrTx,true);}
+                    defineFixtureFunction(full,0x5a0L,12,
+                        "fixture_relocated_vbr_source");
+                    var movecInsn=full.getListing().getInstructionAt(
+                        address(full,0x5a6L));
+                    check(movecInsn!=null &&
+                        movecInsn.toString().toUpperCase(Locale.ROOT)
+                            .contains("VBR"),
+                        "Ghidra CPU32 did not decode relocated MOVEC D0,VBR");
+                    long initialVbrRev=full.getModificationNumber();
+                    var vbrReport=new GhidraHardwareFlowService().analyze(
+                        full,TaskMonitor.DUMMY,true);
+                    String md=vbrReport.markdown;
+                    String baseTag="### Relocated **source-image** table "+
+                        "candidate at 0x00000800";
+                    check(md.contains(baseTag) &&
+                        md.contains("runtime VBR UNKNOWN") &&
+                        md.contains("STATIC SOURCE CANDIDATES ONLY"),
+                        "Relocated byte table promoted to active hardware VBR");
+                    String relocated=md.substring(md.indexOf(baseTag));
+                    check(relocated.contains("RECOGNIZED_FUNCTION_CANDIDATE") &&
+                        relocated.contains(
+                            "INTERIOR_FUNCTION_POINTER_CANDIDATE") &&
+                        relocated.contains("ODD_POINTER") &&
+                        relocated.contains("pointers inside recognized "+
+                            "function bodies (NOT entries): 1"),
+                        "Actual relocated table bytes or function entry "+
+                        "classification missing");
+                    check(full.getModificationNumber()==initialVbrRev,
+                        "Read-only VBR evidence analysis modified Program");
+                    var genericVbr=new GhidraHardwareFlowService().analyze(
+                        full,TaskMonitor.DUMMY,false);
+                    check(genericVbr.markdown.contains("Relocated VBR "+
+                            "source-table candidates") &&
+                        genericVbr.markdown.contains("Not evaluated: "+
+                            "MC68332 profile not explicitly selected") &&
+                        !genericVbr.markdown.contains(baseTag),
+                        "Generic CPU32 accidentally inherited MC68332 "+
+                        "relocated vector-table inference");
+                    // The same programmed MOVEC is unchanged, but source
+                    // vector data changes. No stale result may be reported.
+                    int editVbr=full.startTransaction(
+                        "GA11 isolated candidate vector rewrite");
+                    try {
+                        full.getMemory().setBytes(address(full,0x868L),
+                            java.util.HexFormat.of().parseHex("00000402"));
+                    } finally {full.endTransaction(editVbr,true);}
+                    long updatedVbrRev=full.getModificationNumber();
+                    String edited=new GhidraHardwareFlowService().analyze(
+                        full,TaskMonitor.DUMMY,true).markdown;
+                    String editedRelocated=edited.substring(
+                        edited.indexOf(baseTag));
+                    check(editedRelocated.contains("pointers inside recognized "+
+                            "function bodies (NOT entries): 2") &&
+                        full.getModificationNumber()==updatedVbrRev,
+                        "Relocated table source edit was stale or wrote Program");
+                    check(full.canUndo(),"Synthetic Ghidra vector Undo unavailable");
+                    full.undo();
+                    byte[] restoredVbr=new byte[4];
+                    full.getMemory().getBytes(address(full,0x868L),
+                        restoredVbr);
+                    check(java.util.Arrays.equals(restoredVbr,
+                        java.util.HexFormat.of().parseHex("00000400")),
+                        "Undo did not restore relocated vector source bytes");
+                    long restoredVbrRev=full.getModificationNumber();
+                    String restoredReport=new GhidraHardwareFlowService()
+                        .analyze(full,TaskMonitor.DUMMY,true).markdown;
+                    check(restoredReport.substring(
+                            restoredReport.indexOf(baseTag))
+                            .contains("pointers inside recognized "+
+                                "function bodies (NOT entries): 1") &&
+                        full.getModificationNumber()==restoredVbrRev,
+                        "Undo failed to restore read-only relocated evidence");
+                    result.addProperty("vbr_relocation_real_movec_decoded",true);
+                    result.addProperty("vbr_relocation_exact_and_interior",true);
+                    result.addProperty("vbr_relocation_edit_invalidates",true);
+                    result.addProperty("vbr_relocation_undo_restores",true);
+                    result.addProperty(
+                        "vbr_relocation_generic_cpu32_not_device_profile",true);
+                    result.addProperty("vbr_relocation_read_only",true);
                 } else if("movec-vbr".equals(ga18Mode)) {
                     // MOVE.L #0x400,D0; MOVEC D0,VBR; RTS. Static Ghidra
                     // decode does not prove any MCU-executed VBR write.
