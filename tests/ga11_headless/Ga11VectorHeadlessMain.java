@@ -900,6 +900,29 @@ public final class Ga11VectorHeadlessMain {
                     long branchRevisionBefore=full.getModificationNumber();
                     var report=new GhidraHardwareFlowService().analyze(
                         full,TaskMonitor.DUMMY,true);
+                    var leafMethod=GhidraHardwareFlowService.class.getDeclaredMethod(
+                        "verifiedLeafReturn",Program.class,Function.class,TaskMonitor.class);
+                    leafMethod.setAccessible(true);
+                    var decodedLeaf=leafMethod.invoke(null,full,
+                        full.getFunctionManager().getFunctionAt(address(full,0x760L)),
+                        TaskMonitor.DUMMY);
+                    StringBuilder branchDiag=new StringBuilder();
+                    var dec=full.getListing().getInstructions(
+                        full.getFunctionManager().getFunctionAt(
+                            address(full,0x760L)).getBody(),true);
+                    while(dec.hasNext()){
+                        var insn=dec.next();
+                        branchDiag.append("pc=").append(insn.getAddress())
+                            .append(" mnemonic=").append(insn.getMnemonicString())
+                            .append(" flows=").append(java.util.Arrays.toString(insn.getFlows()))
+                            .append(" fall=").append(insn.getFallThrough()).append("; ");
+                    }
+                    System.out.println("GA02 BRANCH DIAG returns="+decodedLeaf+
+                        " instructions="+branchDiag+" mmio="+
+                        report.rawCfgMmioSites.stream()
+                            .filter(site->site.pc()>=0x720L && site.pc()<0x7f0L)
+                            .map(site->Long.toHexString(site.pc())+":"+site.register()+
+                                ":"+site.literal()).toList());
                     check(report.rawCfgMmioSites.stream().anyMatch(site->
                             site.pc()==0x726L && site.address()==0xfffa00L &&
                             "SIMCR".equals(site.register()) &&
