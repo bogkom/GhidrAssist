@@ -552,8 +552,16 @@ public final class GhidraHardwareFlowService {
                 }
             }
             if(result==null){
-                result=HardwareDataflow.analyze(
-                    functionEntry,steps,targets.keySet(),budget);
+                var sliced=HardwarePartialStageRunner.analyze(
+                    functionEntry,steps,targets.keySet(),budget,
+                    diskEligible?privateDirectory:null,
+                    diskEligible?fullInput:null,monitor,
+                    ()->program.getModificationNumber()==
+                            functionScope.modification() &&
+                        FUNCTION_STAGES.current(program,functionEpoch));
+                result=sliced.result();
+                if(sliced.restoredPartial())restoredMidFunctionWorklists++;
+                savedMidFunctionWorklists+=sliced.storedPartial();
                 // NEVER save an unfinished function, or a stale generation
                 // after Cancel/explicit invalidate or Ghidra Program edit.
                 monitor.checkCancelled();
