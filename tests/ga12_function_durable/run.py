@@ -68,6 +68,7 @@ def main():
             helper.call([str(java/"bin/javac"),"-cp",cp,"-d",
                 str(work/"classes"),str(HERE/"Ga12DurableFunctionsRealGhidraMain.java")],
                 work,env,out/"compile.log")
+            keys={}
             for phase in ("write","read","edit"):
                 helper.call([str(java/"bin/java"),
                     "-Djava.system.class.loader=ghidra.GhidraClassLoader",
@@ -85,6 +86,12 @@ def main():
                     raise RuntimeError("Missing real-Ghidra phase proof")
                 if proof["whole_stage_reused"] or not proof["program_unchanged"]:
                     raise RuntimeError("Partial stage used full report or modified Program")
+                keys[phase]=(proof["project_id_sha256"],proof["input_sha256"])
+                if phase=="read" and keys[phase]!=keys["write"]:
+                    raise RuntimeError("Persisted Ghidra Program content key changed after reopen")
+                if phase=="edit" and (keys[phase][0]!=keys["write"][0] or
+                        keys[phase][1]==keys["write"][1]):
+                    raise RuntimeError("Changed input is not distinguishable from saved Listing")
                 if phase=="write" and (not proof["interrupted"] or
                         proof["function_saved"]<1):
                     raise RuntimeError("First process did not cancel after a saved function")
