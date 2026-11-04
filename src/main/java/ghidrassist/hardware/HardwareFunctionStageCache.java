@@ -60,6 +60,9 @@ public final class HardwareFunctionStageCache<K> {
         if(owner==null)throw new IllegalArgumentException("Missing Program");
         return epochs.begin(owner);
     }
+    public synchronized boolean current(K owner,long generation) {
+        return owner!=null && epochs.current(owner,generation);
+    }
     public synchronized int completed(K owner) {
         OwnerStages stages=completed.get(owner);
         return stages==null || stages.exactOwner.get()!=owner?
