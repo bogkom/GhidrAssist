@@ -81,7 +81,7 @@ public final class Ga11VectorHeadlessMain {
             "generic-profile","trambar-source","csbar-mm0-reject",
             "mmio-read-reference","csbar-csor-conditional",
             "simcr-mm0-literal","trambar-unknown","csor-alternatives",
-            "branch-simcr","call-barrier","leaf-return","branch-leaf","cancel-incomplete",
+            "branch-simcr","call-barrier","leaf-return","branch-leaf","branch-cache","cancel-incomplete",
             "function-stage-resume","function-rename","apply-preserve","provenance-csv","movec-vbr").contains(ga18Mode),
             "Unknown GA-18 acceptance mode");
         var config=new HeadlessGhidraApplicationConfiguration();
@@ -874,7 +874,8 @@ public final class Ga11VectorHeadlessMain {
                     result.addProperty("call_clobbered_pointer_not_reused",true);
                     result.addProperty("call_alias_blocks_review",true);
                     result.addProperty("call_read_only",true);
-                } else if("branch-leaf".equals(ga18Mode)) {
+                } else if("branch-leaf".equals(ga18Mode) ||
+                        "branch-cache".equals(ga18Mode)) {
                     // Real CPU32 conditional BNE and BRA; both reachable paths
                     // agree on A0 in the positive callee. A negative control
                     // returns conflicting A0 values and must remain unknown.
@@ -954,6 +955,43 @@ public final class Ga11VectorHeadlessMain {
                             site.pc()==0x726L &&
                             "SIMCR".equals(site.register())),
                         "Generic CPU32 inherited MC68332 register evidence");
+                    if("branch-cache".equals(ga18Mode)){
+                        HardwareFlowStageCache.clear(full);
+                        long revision=full.getModificationNumber();
+                        var stageRevision=HardwareAnalysisRevision.capture(
+                            full,revision,full.getLanguageID().toString(),
+                            full.getExecutableSHA256(),true);
+                        var cold=HardwareFlowStageCache.loadOrAnalyze(
+                            full,stageRevision,TaskMonitor.DUMMY);
+                        check(!cold.reused() &&
+                            cold.report().rawCfgMmioSites.stream().anyMatch(site->
+                                site.pc()==0x726L &&
+                                "SIMCR".equals(site.register()) &&
+                                Integer.valueOf(0x40ca).equals(site.literal()) &&
+                                site.unknownCall()),
+                            "Combined GA-02/03+GA-12 cache lost proven branch CALL source");
+                        check(GhidraHardwareFlowService.checkpointedFunctionStages(full)>0,
+                            "GA-12 did not checkpoint completed CFG functions");
+                        var reused=HardwareFlowStageCache.loadOrAnalyze(
+                            full,stageRevision,TaskMonitor.DUMMY);
+                        check(reused.reused() &&
+                            reused.report().rawCfgMmioSites.equals(
+                                cold.report().rawCfgMmioSites),
+                            "GA-12 whole-stage reuse changed branch CALL source evidence");
+                        HardwareFlowStageCache.clear(full);
+                        var afterClear=HardwareFlowStageCache.loadOrAnalyze(
+                            full,stageRevision,TaskMonitor.DUMMY);
+                        check(!afterClear.reused() &&
+                            afterClear.report().rawCfgMmioSites.equals(
+                                cold.report().rawCfgMmioSites) &&
+                            full.getModificationNumber()==revision,
+                            "Explicit cache invalidation changed source proof or Program");
+                        result.addProperty("cross_track_real_branch_source_proven",true);
+                        result.addProperty("cross_track_real_function_checkpoints",true);
+                        result.addProperty("cross_track_real_completed_stage_reused",true);
+                        result.addProperty("cross_track_real_invalidate_recomputed",true);
+                        result.addProperty("cross_track_real_program_read_only",true);
+                    }
                     result.addProperty("branch_leaf_real_convergent_proven",true);
                     result.addProperty("branch_leaf_disagreeing_address_unknown",true);
                     result.addProperty("branch_leaf_call_history_uncertain",true);
