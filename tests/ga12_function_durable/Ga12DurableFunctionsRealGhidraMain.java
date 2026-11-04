@@ -108,6 +108,8 @@ public final class Ga12DurableFunctionsRealGhidraMain {
                     !modified.get().inputSha256().equals(original.get().inputSha256()),
                     "Input changes must invalidate full Ghidra fingerprint");
             }
+            var currentFingerprint=HardwareGhidraInputFingerprint.capture(
+                full,TaskMonitor.DUMMY,true).orElseThrow();
             long before=full.getModificationNumber();
             HardwareAnalysisRevision revision=HardwareAnalysisRevision.capture(
                 full,before,full.getLanguageID().toString(),
@@ -169,7 +171,9 @@ public final class Ga12DurableFunctionsRealGhidraMain {
                 ",\"whole_stage_reused\":"+wasReused+
                 ",\"function_restored\":"+restored+
                 ",\"function_saved\":"+saved+
-                ",\"program_unchanged\":true}";
+                ",\"program_unchanged\":true,\"input_sha256\":\""+
+                currentFingerprint.inputSha256()+"\",\"project_id_sha256\":\""+
+                currentFingerprint.programIdSha256()+"\"}";
             Files.writeString(out.resolve("ga12-function-"+phase+".json"),
                 proof+"\n");
             System.out.println("GA12 FUNCTION RESTART "+phase+" PASS "+proof);
