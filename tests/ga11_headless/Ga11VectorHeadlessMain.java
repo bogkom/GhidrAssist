@@ -899,6 +899,30 @@ public final class Ga11VectorHeadlessMain {
                     check(evidence.markdown.contains(
                         "- Strictly verified leaf CALL return-register sites: 1"),
                         "MC68332 source did not accept unique direct leaf");
+                    var callee=full.getFunctionManager().getFunctionAt(
+                        address(full,0x640L));
+                    var postCall=full.getListing().getInstructionAt(
+                        address(full,0x606L));
+                    var transMethod=GhidraHardwareFlowService.class
+                        .getDeclaredMethod("translate",
+                            ghidra.program.model.listing.Instruction.class,
+                            Function.class);
+                    transMethod.setAccessible(true);
+                    var modeled=(ghidrassist.hardware.HardwareDataflow.Step)
+                        transMethod.invoke(null,postCall,
+                            full.getFunctionManager().getFunctionAt(
+                                address(full,0x600L)));
+                    var leafMethod=GhidraHardwareFlowService.class
+                        .getDeclaredMethod("verifiedLeafReturn",
+                            Program.class,Function.class,TaskMonitor.class);
+                    leafMethod.setAccessible(true);
+                    var proved=leafMethod.invoke(null,full,callee,TaskMonitor.DUMMY);
+                    System.out.println("GA02 SYNTHETIC LEAF DIAG"+
+                        " opcode="+postCall.getMnemonicString()+
+                        " srcOperand="+postCall.getDefaultOperandRepresentation(0)+
+                        " modeledSource="+modeled.sourceRegister+
+                        " modeledKind="+modeled.kind+
+                        " knownLeafReturns="+proved);
                     check(evidence.rawCfgMmioSites.stream().anyMatch(site->
                         site.pc()==0x606L && site.address()==0xfffa00L &&
                         "SIMCR".equals(site.register()) &&
