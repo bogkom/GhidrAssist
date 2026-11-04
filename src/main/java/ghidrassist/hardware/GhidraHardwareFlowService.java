@@ -434,6 +434,14 @@ public final class GhidraHardwareFlowService {
     }
     public Report analyze(Program program,TaskMonitor monitor,
             boolean mc68332Selected)throws CancelledException{
+        return analyze(program,monitor,mc68332Selected,null,null);
+    }
+
+    // The disk opt-in is passed exclusively by HardwareFlowStageCache AFTER
+    // the exact full Ghidra program and extension JAR were fingerprinted.
+    Report analyze(Program program,TaskMonitor monitor,boolean mc68332Selected,
+            java.nio.file.Path privateDirectory,
+            HardwareDurableStageStore.Key fullInput)throws CancelledException{
         if(program==null)throw new IllegalArgumentException("Open Ghidra program required");
         if(monitor==null)monitor=TaskMonitor.DUMMY;
         long functionEpoch=FUNCTION_STAGES.begin(program);
@@ -459,6 +467,7 @@ public final class GhidraHardwareFlowService {
         int cfgPathLimitedFunctions=0;
         int foundFunctions=0,indirect=0,vbr=0,unresolved=0,visited=0,shown=0;
         int reusedFunctions=0,computedFunctions=0;
+        int restoredDiskFunctions=0,savedDiskFunctions=0,eligibleDiskFunctions=0;
         boolean limited=false;
         FunctionIterator funs=program.getFunctionManager().getFunctions(true);
         while(funs.hasNext()){
@@ -521,16 +530,42 @@ public final class GhidraHardwareFlowService {
             HardwareDataflow.Result result=FUNCTION_STAGES.get(
                 program,functionEpoch,functionScope,functionEntry,budget,
                 steps,targets.keySet());
-            if(result==null){
-                result=HardwareDataflow.analyze(
-                    functionEntry,steps,targets.keySet(),budget);
-                // Never checkpoint a function if cancellation arrived during
-                // its fixed-point evaluation or the Program revision changed.
+            boolean diskEligible=privateDirectory!=null && fullInput!=null &&
+                ++eligibleDiskFunctions<=
+                    HardwareDurableFunctionStages.MAX_DURABLE_FUNCTIONS;
+            if(result==null && diskEligible){
                 monitor.checkCancelled();
                 if(program.getModificationNumber()!=functionScope.modification())
                     throw new CancelledException();
-                FUNCTION_STAGES.put(program,functionEpoch,functionScope,
-                    functionEntry,budget,steps,targets.keySet(),result);
+                result=HardwareDurableFunctionStages.load(
+                    privateDirectory,fullInput,functionEntry,budget,
+                    steps,targets.keySet()).orElse(null);
+                if(result!=null){
+                    monitor.checkCancelled();
+                    if(program.getModificationNumber()!=functionScope.modification())
+                        throw new CancelledException();
+                    if(FUNCTION_STAGES.put(program,functionEpoch,functionScope,
+                            functionEntry,budget,steps,targets.keySet(),result))
+                        restoredDiskFunctions++;
+                    else result=null;
+                }
+            }
+            if(result==null){
+                result=HardwareDataflow.analyze(
+                    functionEntry,steps,targets.keySet(),budget);
+                // NEVER save an unfinished function, or a stale generation
+                // after Cancel/explicit invalidate or Ghidra Program edit.
+                monitor.checkCancelled();
+                if(program.getModificationNumber()!=functionScope.modification())
+                    throw new CancelledException();
+                boolean completed=FUNCTION_STAGES.put(
+                    program,functionEpoch,functionScope,functionEntry,budget,
+                    steps,targets.keySet(),result);
+                if(diskEligible && completed &&
+                        program.getModificationNumber()==functionScope.modification() &&
+                        HardwareDurableFunctionStages.save(privateDirectory,
+                            fullInput,functionEntry,budget,steps,targets.keySet(),result))
+                    savedDiskFunctions++;
                 computedFunctions++;
             }else{
                 reusedFunctions++;
@@ -804,7 +839,12 @@ public final class GhidraHardwareFlowService {
                .append(reusedFunctions).append("; computed in this pass: ")
                .append(computedFunctions).append(". These are exact-revision ")
                .append("process-local checkpoints, not a partially published ")
-               .append("finished report or a runtime RESET trace.\n\n")
+               .append("finished report or a runtime RESET trace.\n")
+           .append("- Completed per-function fixed points restored from disk: ")
+               .append(restoredDiskFunctions).append("; newly saved: ")
+               .append(savedDiskFunctions).append(" (at most ")
+               .append(HardwareDurableFunctionStages.MAX_DURABLE_FUNCTIONS)
+               .append(" function slots in this isolated opt-in pass).\n\n")
            .append(reset.markdown())
            .append(GhidraInterruptVectorService.analyze(program,monitor))
            .append(detail).append(effects);

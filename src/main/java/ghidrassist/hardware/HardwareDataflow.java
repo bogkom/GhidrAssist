@@ -141,7 +141,7 @@ public final class HardwareDataflow {
                     kind==Kind.STORE_DIRECT || kind==Kind.STORE_INDIRECT ||
                     kind==Kind.VBR_FROM_REGISTER || kind==Kind.VBR_CONSTANT) ||
                     min<0 || max<min || max>2 || peripheral==null ||
-                    peripheral.size()>HardwareFunctionStageCache.MAX_MMIO_WORD_CELLS ||
+                    peripheral.size()>4096 ||
                     (pointer!=null && !pointer.matches("[AD][0-7]")) ||
                     (bits!=0 && bits!=8 && bits!=16 && bits!=32))
                 throw new IllegalArgumentException("Invalid decoded CFG snapshot");
@@ -175,18 +175,19 @@ public final class HardwareDataflow {
         static Result restore(List<Snapshot> snapshots,int reachedNodes,int iterations,
                 Map<Long,Map<String,Long>> pointers) {
             if(snapshots==null || pointers==null || reachedNodes<0 ||
-                    reachedNodes>HardwareFunctionStageCache.MAX_STEPS_PER_FUNCTION ||
+                    reachedNodes>3000 ||
                     iterations<0 || iterations>30000 ||
-                    snapshots.size()>HardwareFunctionStageCache.MAX_SNAPSHOTS_PER_FUNCTION ||
-                    pointers.size()>HardwareFunctionStageCache.MAX_STEPS_PER_FUNCTION)
+                    snapshots.size()>512 ||
+                    pointers.size()>3000)
                 throw new IllegalArgumentException("Invalid fixed point bounds");
             Map<Long,Map<String,Long>> deep=new LinkedHashMap<>();
             long registers=0;
             for(var entry:pointers.entrySet()){
                 if(entry.getKey()==null || entry.getKey()<0 ||
-                        entry.getValue()==null)returnInvalid();
+                        entry.getValue()==null)
+                    throw new IllegalArgumentException("Null pointer state");
                 registers+=entry.getValue().size();
-                if(registers>HardwareFunctionStageCache.MAX_REGISTER_CELLS)
+                if(registers>4096)
                     throw new IllegalArgumentException("Too many register cells");
                 for(String reg:entry.getValue().keySet())
                     if(reg==null || !reg.matches("[AD][0-7]") ||
@@ -196,9 +197,6 @@ public final class HardwareDataflow {
             }
             return new Result(snapshots,reachedNodes,iterations,false,
                 Collections.unmodifiableMap(deep));
-        }
-        private static void returnInvalid(){
-            throw new IllegalArgumentException("Invalid pointer snapshot");
         }
     }
     private static final class State {

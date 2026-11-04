@@ -106,3 +106,32 @@ durable checkpoint, these smaller function checkpoints do not persist over
 Ghidra restart; implementing that requires a separate authenticated typed
 function-result format and persistence limits. No runtime MCU execution
 or hardware MM latch is inferred.
+
+## GA-12 — opt-in durable completed-function continuation
+
+The *same existing* private `ghidrassist.ga12.durable.dir` system property
+also permits saving **individually finished** (not interrupted) function
+fixed points during the full CFG scan. This covers the case where Ghidra
+is closed or analysis cancelled **before the overall report finishes**.
+After restart, if the project, full Ghidra Listing/initialized memory,
+references, extension JAR and MCU profile match exactly, a resumed scan
+may restore each completed function and continue with the next function.
+
+Each per-function key additionally covers its function entry, iteration
+budget and SHA-256 of the entire translated CFG/Step inputs, including
+successors and side effects. At most the first 64 eligible functions have
+external slots per pass; filenames are stable per project+function, so
+revision changes overwrite the old unusable slot instead of creating a
+different file per revision. Incomplete, truncated and oversized fixed
+points are not written. Loading is read-only and does not automatically
+publish an unfinished RAG/Review/Apply report.
+
+Full-report disk resume from PR #124 still takes precedence if an exact
+finished report exists. Explicit `HardwareFlowStageCache.clear` disables
+disk readback for that in-process retry and cancels earlier generation
+work. A changed Ghidra Program input always recomputes.
+
+SHA-256 here detects accidental corruption; it is not an authenticity
+signature against someone who can write the private checkpoint directory.
+Never point it at untrusted/shared locations. No partial *within-function*
+iteration checkpoints, and no firmware execution proof, are implemented.
