@@ -71,3 +71,28 @@ Nie ma żadnej automatycznej operacji Review/Apply/Undo.
 Stan GA-11 **CZĘŚCIOWO**: nadal brak dowodu rzeczywistej relokacji,
 wykonywanej ścieżki ISR, złożonego pośredniego powiązania VBR
 i sprzętowej akceptacji mapy magistrali.
+
+## GA-11 source-provenance regression — 2026-11-04
+
+The relocated MOVEC-to-VBR report must not label the correlated vectors as
+`image-zero`. Previously the shared RESET/vector renderer hard-coded
+`Vector table input: image-zero bytes ONLY` and
+`Image-zero pointer`, even when invoked with a **nonzero relocated VBR
+source-image candidate base**. That mislabeled where the already-readable
+Ghidra bytes came from; it did **not** establish active IRQ.
+
+The source renderer now accepts an explicit relocated source base, preserves
+the original image-zero overload, rejects unaligned or 24-bit-overflow
+bases, and retains the exact source table address in each read-only summary.
+Both the generic vector inventory and the correlated RESET effect table use
+`source-image` language for a nonzero candidate base. The classification,
+function-entry distinction, reset reachability and side-effect uncertainty
+remain unchanged.
+
+Java 21 regressions assert distinct provenance labels without changing
+classifications, and the existing isolated *real* Ghidra 12.1.4 PUBLIC
+`vbr-relocation` headless mode now asserts the same on actual synthetic
+MOVEC and table bytes, including MC68332 scope. It is **source-location
+evidence only**, never proof that the MCU executed MOVEC or selected the
+table. GitHub Actions PASS must be attached to this PR's exact commit SHA.
+Stopped Wyse/Precision/Codex Supervisor tests remain stopped.
