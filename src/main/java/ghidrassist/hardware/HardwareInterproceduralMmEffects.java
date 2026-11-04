@@ -66,24 +66,52 @@ public final class HardwareInterproceduralMmEffects {
             (widthBits!=8 && widthBits!=16 && widthBits!=32);
     }
     private record Work(long pc,int depth){}
-    private static boolean cycle(long pc,Map<Long,FunctionNode> graph,
-            Set<Long> known,Set<Long> gray,Set<Long> black){
-        if(gray.contains(pc))return true;
-        if(!black.add(pc))return false;
-        gray.add(pc);
-        FunctionNode n=graph.get(pc);
-        if(n!=null)for(long callee:n.calls())
-            if(known.contains(callee) &&
-                    cycle(callee,graph,known,gray,black))return true;
-        gray.remove(pc);
+    private record DfsFrame(long pc,Iterator<Long> remaining){}
+
+    /**
+     * An explicit DFS stack avoids stack overflow in a wide graph where all
+     * nodes are reached within the requested BFS depth but a source-only
+     * cross-edge chain is thousands of functions long. Edges outside the
+     * bounded inspected subgraph remain UNKNOWN via the caller's cap flag.
+     */
+    private static boolean cycle(long root,Map<Long,FunctionNode> graph,
+            Set<Long> visited){
+        if(!visited.contains(root))return false;
+        Set<Long> gray=new HashSet<>(),black=new HashSet<>();
+        ArrayDeque<DfsFrame> stack=new ArrayDeque<>();
+        gray.add(root);
+        stack.push(new DfsFrame(root,graph.get(root).calls().iterator()));
+        while(!stack.isEmpty()){
+            DfsFrame frame=stack.peek();
+            if(!frame.remaining().hasNext()){
+                gray.remove(frame.pc());
+                black.add(frame.pc());
+                stack.pop();
+                continue;
+            }
+            long callee=frame.remaining().next();
+            if(!visited.contains(callee))continue;
+            if(gray.contains(callee))return true;
+            if(!black.contains(callee)){
+                FunctionNode next=graph.get(callee);
+                if(next==null)continue; // never infer a missing target as closed
+                gray.add(callee);
+                stack.push(new DfsFrame(callee,next.calls().iterator()));
+            }
+        }
         return false;
     }
     private static Summary inspect(Long target,Map<Long,FunctionNode> graph,
             int maxDepth,int maxCount){
         if(target==null)return new Summary(false,false,true,false,false,0);
         Set<Long> seen=new HashSet<>();
+        // One queue entry per distinct PC, including missing targets.
+        // Previously a many-to-one call graph could enqueue unbounded
+        // duplicate nodes before the visited-node cap was reached.
+        Set<Long> scheduled=new HashSet<>();
         ArrayDeque<Work> queue=new ArrayDeque<>();
         queue.add(new Work(target,0));
+        scheduled.add(target);
         boolean mm=false,alias=false,unknown=false,limit=false;
         while(!queue.isEmpty()){
             Work w=queue.removeFirst();
@@ -93,11 +121,23 @@ public final class HardwareInterproceduralMmEffects {
             if(n==null){unknown=true;continue;}
             seen.add(w.pc());
             mm|=n.mm();alias|=n.unknownAlias();unknown|=n.unknownControl();
-            for(long callee:n.calls())
-                if(w.depth()>=maxDepth){limit=true;unknown=true;}
-                else if(!seen.contains(callee))queue.addLast(new Work(callee,w.depth()+1));
+            for(long callee:n.calls()){
+                if(w.depth()>=maxDepth){
+                    limit=true;unknown=true;
+                }else if(!scheduled.contains(callee)){
+                    // An omitted node may contain a STORE or unknown
+                    // control flow. Preserve the cap as uncertainty; never
+                    // publish a negative MM conclusion from a truncated set.
+                    if(scheduled.size()>=maxCount){
+                        limit=true;unknown=true;
+                    }else{
+                        scheduled.add(callee);
+                        queue.addLast(new Work(callee,w.depth()+1));
+                    }
+                }
+            }
         }
-        boolean cyclic=cycle(target,graph,seen,new HashSet<>(),new HashSet<>());
+        boolean cyclic=cycle(target,graph,seen);
         return new Summary(mm,alias,unknown||cyclic,cyclic,limit,seen.size());
     }
     public static Report analyze(Collection<FunctionNode> functions,
