@@ -384,7 +384,13 @@ public final class HardwareDataflow {
         // instruction's effective address (post-increment uses old A register).
         // The pre-decrement form is unresolved unless modeled separately, but
         // in either case a stale pointer must not survive to a later STORE.
-        for(String reg:step.sideEffectRegisters)s.pointers.remove(reg);
+        for(String reg:step.sideEffectRegisters)
+            // ABI P-code clobbers are effects during the call. An
+            // unconditional leaf proof establishes the result AFTER RTS,
+            // and therefore takes precedence over that generic clobber.
+            if(step.kind!=Kind.CALL_BARRIER ||
+                    !step.verifiedCallReturns.containsKey(reg))
+                s.pointers.remove(reg);
         return s;
     }
     /**
