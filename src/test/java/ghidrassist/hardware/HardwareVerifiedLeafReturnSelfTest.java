@@ -68,6 +68,11 @@ public final class HardwareVerifiedLeafReturnSelfTest {
             List.of(set(0x130,"MOVE.W","D0",0x40ca,0x136L),
                 leaf.get(1),leaf.get(2))).isEmpty(),
             "partial-width Dn write is not a full known pointer constant");
+        ok(HardwareVerifiedLeafReturn.summarize(0x130,14,
+            List.of(leaf.get(0),leaf.get(1),
+                end(0x13c,"RTS").withSideEffects(Set.of("A7"))))
+            .equals(output),
+            "expected stack pop in real RTS does not invalidate unrelated A/D outputs");
         boolean rejected=false;
         try{caller.get(0).withVerifiedCallReturns(output);}
         catch(IllegalArgumentException expected){rejected=true;}

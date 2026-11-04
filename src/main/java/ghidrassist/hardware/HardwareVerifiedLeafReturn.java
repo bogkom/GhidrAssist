@@ -25,9 +25,13 @@ public final class HardwareVerifiedLeafReturn {
         Map<String,Long> constants=new LinkedHashMap<>();
         for(int index=0;index<instructions.size();index++){
             HardwareDataflow.Step step=instructions.get(index);
-            if(step==null || step.address!=cursor ||
-                    !step.sideEffectRegisters.isEmpty())return Map.of();
+            if(step==null || step.address!=cursor)return Map.of();
             boolean last=index==instructions.size()-1;
+            // RTS necessarily advances the stack pointer. Only the
+            // expected A7 implicit write is allowed at this return.
+            if(last ? !step.sideEffectRegisters.isEmpty() &&
+                    !step.sideEffectRegisters.equals(java.util.Set.of("A7")) :
+                    !step.sideEffectRegisters.isEmpty())return Map.of();
             if(last){
                 // Only ordinary subroutine return; RTE and RTR have
                 // materially different semantics for caller state.

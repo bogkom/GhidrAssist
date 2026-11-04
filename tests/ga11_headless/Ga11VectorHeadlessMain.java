@@ -81,7 +81,7 @@ public final class Ga11VectorHeadlessMain {
             "generic-profile","trambar-source","csbar-mm0-reject",
             "mmio-read-reference","csbar-csor-conditional",
             "simcr-mm0-literal","trambar-unknown","csor-alternatives",
-            "branch-simcr","call-barrier","cancel-incomplete",
+            "branch-simcr","call-barrier","leaf-return","cancel-incomplete",
             "function-rename","apply-preserve","provenance-csv","movec-vbr").contains(ga18Mode),
             "Unknown GA-18 acceptance mode");
         var config=new HeadlessGhidraApplicationConfiguration();
@@ -874,6 +874,53 @@ public final class Ga11VectorHeadlessMain {
                     result.addProperty("call_clobbered_pointer_not_reused",true);
                     result.addProperty("call_alias_blocks_review",true);
                     result.addProperty("call_read_only",true);
+                } else if("leaf-return".equals(ga18Mode)) {
+                    // Genuine CPU32 Listing, with real Ghidra callee reference.
+                    // Only strict direct leaf return constants cross the
+                    // generic CALL barrier; memory/MM state remains unknown.
+                    int t=full.startTransaction("GA02 synthetic verified leaf");
+                    try{
+                        full.getMemory().setBytes(address(full,0x640L),
+                            java.util.HexFormat.of().parseHex(
+                                "207c00fffa00203c000040ca4e75"));
+                        full.getMemory().setBytes(address(full,0x600L),
+                            java.util.HexFormat.of().parseHex(
+                                "4eb90000064030804e75"));
+                        full.getMemory().setBytes(address(full,0x680L),
+                            java.util.HexFormat.of().parseHex(
+                                "207c00fffa004eb90000040030bc40ca4e75"));
+                    }finally{full.endTransaction(t,true);}
+                    defineFixtureFunction(full,0x640L,14,"fixture_leaf_returns_both");
+                    defineFixtureFunction(full,0x600L,10,"fixture_leaf_call_positive");
+                    defineFixtureFunction(full,0x680L,18,"fixture_unverified_call_negative");
+                    long revision=full.getModificationNumber();
+                    var evidence=new GhidraHardwareFlowService().analyze(
+                        full,TaskMonitor.DUMMY,true);
+                    check(evidence.markdown.contains(
+                        "- Strictly verified leaf CALL return-register sites: 1"),
+                        "MC68332 source did not accept unique direct leaf");
+                    check(evidence.rawCfgMmioSites.stream().anyMatch(site->
+                        site.pc()==0x606L && site.address()==0xfffa00L &&
+                        "SIMCR".equals(site.register()) &&
+                        Integer.valueOf(0x40ca).equals(site.literal()) &&
+                        site.unknownCall()),
+                        "Real leaf-return register values not recovered conservatively");
+                    check(evidence.rawCfgMmioSites.stream().anyMatch(site->
+                        site.pc()==0x68cL &&
+                        "UNRESOLVED_ALIAS".equals(site.register())),
+                        "Unverified callee incorrectly preserved pre-call A0");
+                    check(full.getModificationNumber()==revision,
+                        "Read-only verified leaf analysis edited Ghidra Program");
+                    var generic=new GhidraHardwareFlowService().analyze(
+                        full,TaskMonitor.DUMMY,false);
+                    check(generic.markdown.contains(
+                        "- Strictly verified leaf CALL return-register sites: 0"),
+                        "Generic CPU32 inherited MC68332-only leaf evidence");
+                    result.addProperty("leaf_real_direct_return_constants",true);
+                    result.addProperty("leaf_real_call_barrier_history_unknown",true);
+                    result.addProperty("leaf_real_unproved_call_keeps_alias",true);
+                    result.addProperty("leaf_real_generic_profile_conservative",true);
+                    result.addProperty("leaf_real_program_read_only",true);
                 } else if("cancel-incomplete".equals(ga18Mode)) {
                     // Deterministic cancellation *during* a real Ghidra
                     // traversal (not only before entry). No partial report
