@@ -49,7 +49,7 @@ public final class HardwareInterruptVectorsSelfTest {
             md.contains("INTERIOR_FUNCTION_POINTER_CANDIDATE"),
             "interior function pointers are not handler entries");
         var moved=HardwareInterruptVectors.inspect(0x800L,input,16);
-        check(moved.sampledSlots()==s.sampledSlots() &&
+        ok(moved.sampledSlots()==s.sampledSlots() &&
             moved.plausibleMapped()==s.plausibleMapped() &&
             moved.markdown().contains("relocated source-image vector words") &&
             !moved.markdown().contains("image-zero vector words") &&
