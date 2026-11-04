@@ -6,6 +6,12 @@ on:
       - 'src/main/java/ghidrassist/hardware/HardwareDurableCfgReport.java'
       - 'src/main/java/ghidrassist/hardware/HardwareGhidraInputFingerprint.java'
       - 'src/main/java/ghidrassist/hardware/HardwareFlowStageCache.java'
+      - 'src/main/java/ghidrassist/hardware/GhidraHardwareFlowService.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareDataflow.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareFunctionStageCache.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareVerifiedLeafReturn.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareVerifiedBranchReturn.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareRegisterOperand.java'
       - 'tests/ga12_midfunction/**'
       - '.github/workflows/ga12-real-midfunction-restart.yml'
   workflow_dispatch:
