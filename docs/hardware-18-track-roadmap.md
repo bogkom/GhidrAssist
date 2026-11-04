@@ -3,6 +3,52 @@
 Status: **IN PROGRESS — reviewed 2026-11-04**. Scope source: user-approved 2026-10-28 requirements (A–H, additional features 13.1–13.7, PDF/RAG, testing and Codex Supervisor integration).
 
 
+## Kontrolowana kompozycja — 2026-11-04 (przed scaleniem do `master`)
+
+Kandydat `integration/ga01-ga18-reviewed-20261104` zachowuje oryginalną
+historię i źródłowe dowody CI **wszystkich 13 zależnych/niezależnych
+PR-ów #118–#130**, bez powielania ukończonych testów.
+Punkt wyjścia: chroniony `master` `fda73ad65ff38c1c8030847a74e02a9d56d0afae`.
+
+- Najpierw połączono statyczną analizę MCU `#122 → #123 → #126 → #128`
+  z trwałym cache `#124 → #125 → #127 → #129` w PR #130.
+  Wersja sygnatury funkcji `GA12-FUNCTION-CFG-FIXPOINT-2`
+  obejmuje posortowane `verifiedCallReturns`; zmiana dowodu
+  zwracanego rejestru unieważnia zarówno zapisane wyniki, jak i
+  niedokończony stan CFG. Dokładny SHA PR #130:
+  `21f250507e33c8452830e9438f8170ae954d2e12`;
+  38/38 GitHub Actions SUCCESS.
+- Następnie na osobnej gałęzi włączono PR **#118** z zależnościami
+  RESET → wektory/ISR do wspólnego `GhidraHardwareFlowService`;
+  `GhidraInterruptVectorService` dostaje rzeczywisty statyczny
+  zbiór osiągalnych kandydatów, nie fałszywy ślad wykonania.
+- Pakiety **#119** (zweryfikowane strony PDF, profile, bitfieldy)
+  i **#120** (niekompletne źródła wyników Agentic) zachowują swój
+  pierwotny zakres i historii SHA bez niepotrzebnych zmian.
+- **#121** wymaga zarówno kontroli rewizji `HardwareAnalysisRevision`
+  w `Review → Apply`, jak i regresji w tym samym testowym
+  `Ga11VectorHeadlessMain`. Zachowano gałęzie `branch-cache`,
+  `leaf-return`, `branch-leaf`, `function-stage-resume`
+  oraz negatywną asercję `rename_stale_revision_blocked`.
+
+**Brama do `master`:** najpierw otwarty PR integracyjny, następnie
+kompilacja rozszerzenia dla Ghidry **12.1.4 PUBLIC / Java 25**,
+regresje Java 21, rzeczywista syntetyczna Ghidra headless oraz
+istniejące testy Xvfb/CodeBrowser/Automation API na dokładnym
+commicie kompozycyjnym. GitHub Actions może wymagać ponowienia
+**tylko infrastrukturalnie zablokowanego zadania** (np. Maven HTTP 429),
+nigdy przenoszenia PASS z innego SHA. Dopiero po pozytywnych
+wymaganych kontrolach i zgodnie z ochroną gałęzi możliwe jest
+scalenie zatwierdzonego PR-a.
+
+To nadal **częściowy zakres 18 obszarów**; zwłaszcza analiza RESET,
+SIMCR/MM, CS, VBR/ISR i cache daje dowody statyczne, nie
+potwierdza wykonania MCU ani fizycznej konfiguracji magistrali.
+Issue #106 pozostaje skrzynką problemów produktu; Issue #98
+zachowuje osobną lukę migracji starego profilu CodeBrowser.
+Przerwane testy i workery Wyse/Precision/Codex Supervisora nie
+są uruchamiane.
+
 ## Stan przeglądu — 2026-11-04 (PR-y niescalone)
 
 **Źródło prawdy:** `master` nadal na
