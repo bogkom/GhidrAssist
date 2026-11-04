@@ -35,7 +35,7 @@ public final class HardwareGhidraInputFingerprint {
     private static final long MAX_INITIALIZED_BYTES=64L*1024L*1024L;
     private static final int MAX_INSTRUCTIONS=1_000_000;
     private static final int MAX_FUNCTIONS=100_000;
-    private static final String SNAPSHOT_ENGINE="GHIDRASSIST-GA12-CFG-SNAPSHOT-1";
+    private static final String SNAPSHOT_ENGINE="GHIDRASSIST-GA12-CFG-SNAPSHOT-2";
 
     private static MessageDigest digest(){
         try{return MessageDigest.getInstance("SHA-256");}
@@ -100,7 +100,12 @@ public final class HardwareGhidraInputFingerprint {
             string(contents,program.getLanguageID().toString());
             string(contents,program.getCompilerSpec().getCompilerSpecID().toString());
             string(contents,source);
-            offset(contents,before);
+            // A Ghidra modification number is a transient in-process
+            // revision guard, NOT a stable cross-JVM content identity.
+            // Save/reopen may renumber an unchanged persisted Program.
+            // The full memory/Listing/P-code/refs digest below is instead
+            // content-addressed; before/after checks still reject edits
+            // occurring WHILE a fingerprint is being captured.
             MemoryBlock[] blocks=program.getMemory().getBlocks();
             offset(contents,blocks.length);
             long bytes=0;
