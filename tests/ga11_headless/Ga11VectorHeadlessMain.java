@@ -893,6 +893,18 @@ public final class Ga11VectorHeadlessMain {
                             java.util.HexFormat.of().parseHex(
                                 "4eb9000007a030804e75"));
                     } finally { full.endTransaction(branchTx,true); }
+                    // Ensure the alternative branch targets are also decoded
+                    // in the isolated fixture. The initial disassembler pass
+                    // may stop at the unconditional BRA on the fallthrough.
+                    int branchDecodeTx=full.startTransaction("GA02 synthetic branch arms");
+                    try{
+                        check(new DisassembleCommand(address(full,0x770L),null,false)
+                            .applyTo(full,TaskMonitor.DUMMY),
+                            "Ghidra failed positive alternative branch arm");
+                        check(new DisassembleCommand(address(full,0x7b0L),null,false)
+                            .applyTo(full,TaskMonitor.DUMMY),
+                            "Ghidra failed negative alternative branch arm");
+                    }finally{full.endTransaction(branchDecodeTx,true);}
                     defineFixtureFunction(full,0x760L,24,"fixture_branch_two_agreeing_returns");
                     defineFixtureFunction(full,0x7a0L,24,"fixture_branch_disagreeing_return");
                     defineFixtureFunction(full,0x720L,10,"fixture_branch_positive_caller");
