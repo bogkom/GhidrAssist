@@ -30,6 +30,8 @@ public final class HardwareFunctionStageCache<K> {
     public static final int MAX_SNAPSHOTS_PER_FUNCTION=512;
     public static final int MAX_MMIO_WORD_CELLS=4096;
     public static final int MAX_REGISTER_CELLS=4096;
+    /** Fail closed before sorting a hostile/oversized tracked-address list. */
+    public static final int MAX_TRACKED_ADDRESSES=4096;
 
     public record Scope(long modification,String language,String sourceSha,
                         boolean mc68332) {
@@ -94,7 +96,8 @@ public final class HardwareFunctionStageCache<K> {
     public static String signature(Collection<HardwareDataflow.Step> steps,
             Collection<Long> targets) {
         if(steps==null || targets==null ||
-                steps.size()>MAX_STEPS_PER_FUNCTION)return null;
+                steps.size()>MAX_STEPS_PER_FUNCTION ||
+                targets.size()>MAX_TRACKED_ADDRESSES)return null;
         try {
             MessageDigest digest=MessageDigest.getInstance("SHA-256");
             text(digest,"GA12-FUNCTION-CFG-FIXPOINT-3");
@@ -140,6 +143,11 @@ public final class HardwareFunctionStageCache<K> {
                 }
             }
             // Existing CFG uses target addresses as a SET, not a sequence.
+            // TreeSet(Collection) throws on a null element before the later
+            // null check; malformed/incomplete evidence is a cache miss,
+            // never an exception that aborts Ghidra's source analysis.
+            for(Long address:targets)
+                if(address==null)return null;
             TreeSet<Long> ordered=new TreeSet<>(targets);
             intValue(digest,ordered.size());
             for(Long address:ordered){

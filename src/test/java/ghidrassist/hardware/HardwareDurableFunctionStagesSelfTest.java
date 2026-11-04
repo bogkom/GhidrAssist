@@ -59,6 +59,30 @@ public final class HardwareDurableFunctionStagesSelfTest {
             check(HardwareDurableFunctionStages.load(
                 temp,key,0x100,100,steps,targets).isPresent(),
                 "independent pure-Java load uses exact key");
+            var unknownTargets=Arrays.asList(0xfffa00L,(Long)null);
+            check(HardwareDurableFunctionStages.load(
+                temp,key,0x100,100,steps,unknownTargets).isEmpty(),
+                "durable load with unknown target must be a cache miss");
+            check(!HardwareDurableFunctionStages.save(
+                temp,key,0x100,100,steps,unknownTargets,computed),
+                "durable save with unknown target refuses to replace proof");
+            check(HardwareDurableFunctionStages.load(
+                temp,key,0x100,100,steps,targets).isPresent(),
+                "rejected malformed targets leave existing disk proof intact");
+            var overflowTargets=new ArrayList<Long>();
+            for(long address=0;
+                    address<=HardwareFunctionStageCache.MAX_TRACKED_ADDRESSES;
+                    address++)overflowTargets.add(address);
+            check(HardwareDurableFunctionStages.load(
+                temp,key,0x100,100,steps,overflowTargets).isEmpty(),
+                "oversized target list cannot restore a function stage");
+            check(!HardwareDurableFunctionStages.save(
+                temp,key,0x100,100,steps,overflowTargets,computed),
+                "oversized target list cannot publish a disk stage");
+            check(HardwareDurableFunctionStages.load(
+                temp,key,0x100,100,steps,targets).isPresent(),
+                "invalid durable inputs cannot evict the exact prior stage");
+
             check(HardwareDurableFunctionStages.load(
                 temp,key,0x100,101,steps,targets).isEmpty(),
                 "fixed-point iteration budget affects digest");
