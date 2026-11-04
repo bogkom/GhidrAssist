@@ -1638,17 +1638,23 @@ public final class Ga11VectorHeadlessMain {
                     defineFixtureFunction(full,0x5a0L,26,"FUN_000005A0");
                     Function target=full.getFunctionManager()
                         .getFunctionAt(address(full,0x5a0L));
-                    check(target!=null && "FUN_000005A0".equals(target.getName()),
-                        "First JVM did not create isolated function");
+                    check(target!=null &&
+                        target.getName().matches("(?i)FUN_[0-9A-F]{8}"),
+                        "First JVM original function name invalid: "+
+                            (target==null?"NULL":target.getName()));
+                    // Ghidra canonicalizes auto-generated FUN hex case.
+                    // Always bind the proposal to its actual on-disk
+                    // current name, never a hard-coded fixture spelling.
+                    String originalName=target.getName();
                     var observations=List.of(
                         new ghidrassist.hardware.HardwareFunctionNamingReview
-                            .Observation(0x5a0L,"FUN_000005A0",0x5a0L,
+                            .Observation(0x5a0L,originalName,0x5a0L,
                                 "CSPAR0",true),
                         new ghidrassist.hardware.HardwareFunctionNamingReview
-                            .Observation(0x5a0L,"FUN_000005A0",0x5a8L,
+                            .Observation(0x5a0L,originalName,0x5a8L,
                                 "CSBAR0",true),
                         new ghidrassist.hardware.HardwareFunctionNamingReview
-                            .Observation(0x5a0L,"FUN_000005A0",0x5b0L,
+                            .Observation(0x5a0L,originalName,0x5b0L,
                                 "CSOR0",true));
                     var proposal=ghidrassist.hardware.HardwareFunctionNamingReview
                         .propose(true,observations,List.of()).get(0);
@@ -1661,7 +1667,7 @@ public final class Ga11VectorHeadlessMain {
                     var receipt=ghidrassist.hardware.HardwareFunctionRenameService
                         .receipt(full,0x5a0L).orElseThrow();
                     check(renamed.renamed()==1 &&
-                        receipt.beforeName().equals("FUN_000005A0") &&
+                        receipt.beforeName().equals(originalName) &&
                         receipt.afterName().equals(target.getName()) &&
                         receipt.reviewedModification()==reviewed.modificationNumber(),
                         "First JVM failed to persist approved rename and evidence");
@@ -1670,6 +1676,12 @@ public final class Ga11VectorHeadlessMain {
                     full.save("GA-13 synthetic rename receipt cross-JVM",TaskMonitor.DUMMY);
                     result.addProperty("rename_receipt_first_jvm_saved",true);
                     result.addProperty("rename_receipt_first_jvm_source",true);
+                    result.addProperty("ga13_receipt_before",receipt.beforeName());
+                    result.addProperty("ga13_receipt_after",receipt.afterName());
+                    result.addProperty("ga13_receipt_revision",
+                        receipt.reviewedModification());
+                    result.addProperty("ga13_receipt_source_sha",
+                        receipt.sourceSha256());
                 } else if("receipt-restart-read".equals(ga18Mode)) {
                     // Real Ghidra second JVM: the wrapper has not re-imported
                     // the fixture, and did not pass the first Program object.
@@ -1684,9 +1696,14 @@ public final class Ga11VectorHeadlessMain {
                     var receipt=ghidrassist.hardware.HardwareFunctionRenameService
                         .receipt(full,0x5a0L).orElseThrow();
                     check(receipt.entry()==0x5a0L &&
-                        receipt.beforeName().equals("FUN_000005A0") &&
+                        receipt.beforeName().matches("(?i)FUN_[0-9A-F]{8}") &&
                         receipt.afterName().equals(renamed.getName()) &&
                         receipt.writeSites()==3 &&
+                        "CONFIGURE_CHIP_SELECTS".equals(receipt.role()) &&
+                        receipt.reviewedModification()>=0 &&
+                        receipt.sourceSha256().equals(
+                            full.getExecutableSHA256()==null ?
+                                "UNKNOWN":full.getExecutableSHA256()) &&
                         receipt.registers().contains("CSBAR0") &&
                         receipt.operationOrigin().contains("actor UNKNOWN"),
                         "Second JVM lost GA-13 versioned Program operation history");
@@ -1704,6 +1721,12 @@ public final class Ga11VectorHeadlessMain {
                     result.addProperty("rename_receipt_second_jvm_reopened",true);
                     result.addProperty("rename_receipt_saved_name_and_source",true);
                     result.addProperty("rename_receipt_restart_read_only",true);
+                    result.addProperty("ga13_receipt_before",receipt.beforeName());
+                    result.addProperty("ga13_receipt_after",receipt.afterName());
+                    result.addProperty("ga13_receipt_revision",
+                        receipt.reviewedModification());
+                    result.addProperty("ga13_receipt_source_sha",
+                        receipt.sourceSha256());
                 } else if("apply-preserve".equals(ga18Mode)) {
                     // Two disposable MC68332 MM1 blocks: preserve a user
                     // symbol, existing Word data and real CPU32 code while
