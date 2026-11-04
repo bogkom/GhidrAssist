@@ -5,6 +5,7 @@ This increment resolves a supported subset of Motorola/Ghidra memory operands:
 - `(A0,D1.W)`, `16(A0,D1.W*2)`, `($20,A3,A2.L)` and corresponding decimal/hex displacements. The decoder enforces the full string syntax, valid A-register bases, 16/32-bit index width and scale values of 1/2/4/8.
 - A word index is **sign-extended** before scaling; the final effective address uses the CPU32 24-bit address bus. This is an address candidate in the selected architecture, **not** a proof that the address is physically decoded.
 - Only when both the base and index registers have predecessor-agreed constants at the STORE site is an effective address published. Branch conflicts, unknown register contents, call barriers and truncated CFG analysis remain **unresolved**.
+- Register arithmetic follows the **actual operand width**: `ADDQ/SUBQ.B` and `ADDQ/SUBQ.W` on Dn wrap only the low byte/word, without carrying into untouched high bits. Operations on An adjust the full address register (including `ADDQ.W`); a Dn arithmetic instruction with no trustworthy width clobbers its modeled constant. Synthetic tests cover signed subtraction and carry/borrow boundaries before an indirect STORE.
 - PC-relative, bracketed memory-indirect, indirect aliases, and nonconforming expressions are intentionally not guessed. If the Ghidra operand rendering differs from the strict grammar, the STORE remains unresolved.
 - An indexed memory access is still only a static disassembly site, not evidence that the instruction executes or that MM has already been relocated.
 

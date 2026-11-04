@@ -187,6 +187,109 @@ public final class HardwareDataflowSelfTest {
         ok(longOverwrite.snapshots.get(2).knownPeripheralWords.containsKey(simcr),
             "known SIMCR value can be re-established after clobber");
 
+        // Partial/long static writes can touch the MM low byte without
+        // establishing any full 16-bit SIMCR word or executed MM latch.
+        ok(HardwareDataflow.mayTouchSimcrMmLowByte(simcr-2,32) &&
+            HardwareDataflow.mayTouchSimcrMmLowByte(simcr+1,8) &&
+            HardwareDataflow.mayTouchSimcrMmLowByte(0x7ff9feL,32) &&
+            !HardwareDataflow.mayTouchSimcrMmLowByte(simcr,8) &&
+            !HardwareDataflow.mayTouchSimcrMmLowByte(cs7,32),
+            "only source writes touching the MM low byte are candidates");
+        var partialMm=HardwareDataflow.analyze(0,List.of(
+            st(0,STORE_DIRECT,null,simcr-2,0,null,32,2L),
+            st(2,STORE_DIRECT,null,simcr,0,0x40ca,16)
+        ),Set.of(simcr),100);
+        ok(partialMm.snapshots.get(0).writtenWord==null &&
+            partialMm.snapshots.get(1).priorMmCandidateMin==1 &&
+            partialMm.snapshots.get(1).priorMmCandidateMax==1,
+            "32-bit spanning STORE is a prior unknown MM candidate");
+        var alternateMm=HardwareDataflow.analyze(0,List.of(
+            st(0,STORE_DIRECT,null,0x7ff9feL,0,null,32,2L),
+            st(2,STORE_DIRECT,null,0x7ffa00L,0,0x4848,16)
+        ),Set.of(0x7ffa00L),100);
+        ok(alternateMm.snapshots.get(1).priorMmCandidateMin==1,
+            "alternate SIMCR alias mapping has same conservative guard");
+        var highByteOnly=HardwareDataflow.analyze(0,List.of(
+            st(0,STORE_DIRECT,null,simcr,0,0x48,8,2L),
+            st(2,STORE_DIRECT,null,simcr,0,0x40ca,16)
+        ),Set.of(simcr),100);
+        ok(highByteOnly.snapshots.get(1).priorMmCandidateMax==0,
+            "high byte alone does not contain the MM bit");
+
+        // Complete STORE over the 24-bit address boundary also touches 0.
+        var wrapped=HardwareDataflow.analyze(0,List.of(
+            st(0,STORE_DIRECT,null,0L,0,0x1234,16,2L),
+            st(2,STORE_DIRECT,null,simcr,0,0x40ca,16,4L),
+            st(4,STORE_DIRECT,null,0xfffffeL,0,null,32,6L),
+            st(6,STORE_DIRECT,null,cs7,0,0xff88,16)
+        ),Set.of(0L,simcr,cs7),100);
+        ok(!wrapped.snapshots.get(2).knownPeripheralWords.containsKey(0L),
+            "32-bit source STORE at 0xFFFFFE invalidates word at 0x000000");
+        ok(wrapped.snapshots.get(2).knownPeripheralWords.get(simcr)==0x40ca &&
+            wrapped.snapshots.get(3).knownPeripheralWords.get(cs7)==0xff88,
+            "unrelated words survive and fresh whole words can be inferred");
+
+        // ADDQ.W / SUBQ.W on Dn change only 16 low bits; an
+        // optimistic 24-bit addition can invent an MMIO address via COPY.
+        ok(HardwareDataflow.registerAdjustWidth("D0","ADDQ.W")==16 &&
+            HardwareDataflow.registerAdjustWidth("D0","SUBQ.B")==8 &&
+            HardwareDataflow.registerAdjustWidth("D0","ADDQ.L")==32 &&
+            HardwareDataflow.registerAdjustWidth("A0","ADDQ.W")==32 &&
+            HardwareDataflow.registerAdjustWidth("D0","ADDQ")==0,
+            "decode arithmetic width without promoting Dn partial writes");
+        var wordAdjust=HardwareDataflow.analyze(0,List.of(
+            st(0,SET_POINTER,"D0",0x00feffffL,0,null,0,2L),
+            st(2,ADJUST_POINTER,"D0",1,0,null,16,4L),
+            new HardwareDataflow.Step(4,COPY_POINTER,"A0","D0",0,0,
+                null,0,List.of(6L),"MOVE.L D0,A0"),
+            st(6,STORE_INDIRECT,"A0",0,0,0x40ca,16)
+        ),Set.of(0x00fe0000L,0x00ff0000L),100);
+        ok(wordAdjust.snapshots.get(0).effectiveAddress==0x00fe0000L,
+            "ADDQ.W Dn low-word rollover must not carry into upper word");
+        var byteAdjust=HardwareDataflow.analyze(0,List.of(
+            st(0,SET_POINTER,"D1",0x00ff12ffL,0,null,0,2L),
+            st(2,ADJUST_POINTER,"D1",1,0,null,8,4L),
+            new HardwareDataflow.Step(4,COPY_POINTER,"A1","D1",0,0,
+                null,0,List.of(6L),"MOVE.L D1,A1"),
+            st(6,STORE_INDIRECT,"A1",0,0,0x40ca,16)
+        ),Set.of(0x00ff1200L),100);
+        ok(byteAdjust.snapshots.get(0).effectiveAddress==0x00ff1200L,
+            "ADDQ.B Dn preserves all unaffected high bits");
+        var subtraction=HardwareDataflow.analyze(0,List.of(
+            st(0,SET_POINTER,"D2",0x00ff0000L,0,null,0,2L),
+            st(2,ADJUST_POINTER,"D2",-1,0,null,16,4L),
+            new HardwareDataflow.Step(4,COPY_POINTER,"A2","D2",0,0,
+                null,0,List.of(6L),"MOVE.L D2,A2"),
+            st(6,STORE_INDIRECT,"A2",0,0,0x40ca,16)
+        ),Set.of(0x00ffffffL),100);
+        ok(subtraction.snapshots.get(0).effectiveAddress==0x00ffffffL,
+            "SUBQ.W Dn underflow does not borrow from preserved upper bits");
+        var fullDataAdjust=HardwareDataflow.analyze(0,List.of(
+            st(0,SET_POINTER,"D0",0x00feffffL,0,null,0,2L),
+            st(2,ADJUST_POINTER,"D0",1,0,null,32,4L),
+            new HardwareDataflow.Step(4,COPY_POINTER,"A0","D0",0,0,
+                null,0,List.of(6L),"MOVE.L D0,A0"),
+            st(6,STORE_INDIRECT,"A0",0,0,0x40ca,16)
+        ),Set.of(0x00ff0000L),100);
+        ok(fullDataAdjust.snapshots.get(0).effectiveAddress==0x00ff0000L,
+            "ADDQ.L Dn really can carry into higher bits");
+        var fullAddressAdjust=HardwareDataflow.analyze(0,List.of(
+            st(0,SET_POINTER,"A0",0x00feffffL,0,null,0,2L),
+            st(2,ADJUST_POINTER,"A0",1,0,null,32,4L),
+            st(4,STORE_INDIRECT,"A0",0,0,0x40ca,16)
+        ),Set.of(0x00ff0000L),100);
+        ok(fullAddressAdjust.snapshots.get(0).effectiveAddress==0x00ff0000L,
+            "ADDQ.W to An adjusts full address register on 68000");
+        var unsizedDataAdjust=HardwareDataflow.analyze(0,List.of(
+            st(0,SET_POINTER,"D0",simcr,0,null,0,2L),
+            st(2,ADJUST_POINTER,"D0",1,0,null,0,4L),
+            new HardwareDataflow.Step(4,COPY_POINTER,"A0","D0",0,0,
+                null,0,List.of(6L),"MOVE.L D0,A0"),
+            st(6,STORE_INDIRECT,"A0",0,0,0x40ca,16)
+        ),Set.of(simcr),100);
+        ok(unsizedDataAdjust.snapshots.get(0).effectiveAddress==null,
+            "unknown Dn arithmetic width invalidates pointer provenance");
+
         var postIncrement=HardwareDataflow.analyze(0,List.of(
             st(0,SET_POINTER,"A0",simcr,0,null,0,2L),
             st(2,STORE_INDIRECT,"A0",0,0,0x40ca,16,4L)

@@ -1,0 +1,46 @@
+name: GA-02/03 SIMCR partial stores and 24-bit overlap safety
+
+on:
+  pull_request:
+    paths:
+      - 'src/main/java/ghidrassist/hardware/HardwareDataflow.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareAutoUpdateRegisters.java'
+      - 'src/main/java/ghidrassist/hardware/GhidraHardwareFlowService.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareDataflowSelfTest.java'
+      - '.github/workflows/hardware-dataflow-simcr-overlap.yml'
+  push:
+    branches: [master]
+    paths:
+      - 'src/main/java/ghidrassist/hardware/HardwareDataflow.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareAutoUpdateRegisters.java'
+      - 'src/main/java/ghidrassist/hardware/GhidraHardwareFlowService.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareDataflowSelfTest.java'
+      - '.github/workflows/hardware-dataflow-simcr-overlap.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+jobs:
+  source-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Compile pure Java CFG model
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/ga0203"
+          javac --release 21 -d "$RUNNER_TEMP/ga0203" \
+            src/main/java/ghidrassist/hardware/HardwareDataflow.java \
+            src/main/java/ghidrassist/hardware/HardwareAutoUpdateRegisters.java \
+            src/test/java/ghidrassist/hardware/HardwareDataflowSelfTest.java
+      - name: Assert partial MM and modulo-24-bit overwrite behavior
+        shell: bash
+        run: |
+          set -euo pipefail
+          java -cp "$RUNNER_TEMP/ga0203" ghidrassist.hardware.HardwareDataflowSelfTest
