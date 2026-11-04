@@ -3,6 +3,32 @@
 Status: **IN PROGRESS — integrated baseline 2026-11-04**. Scope source: user-approved 2026-10-28 requirements (A–H, additional features 13.1–13.7, PDF/RAG, testing and Codex Supervisor integration).
 
 
+## Kontynuacja GA-02/03 — 2026-11-04, po scaleniu #141
+
+Chroniony `master` po właścicielsko zatwierdzonym PR #140 i
+niewielkim, przetestowanym PR #141: merge SHA
+[`703693c52fee4e300e2a896dba4b475262672459`](https://github.com/bogkom/GhidrAssist/commit/703693c52fee4e300e2a896dba4b475262672459).
+PR #141 zachował zgodne drzewo źródeł i uzyskał **25/25 GitHub
+Actions SUCCESS** na dokładnym HEAD oraz **1/1 SUCCESS** (pełna
+kompilacja Ghidry) po scaleniu na dokładnym merge SHA.
+Zależne #133–#139 zostały zamknięte administracyjnie po sprawdzeniu,
+że ich commity są przodkami `master`. Historia i dowody nie zostały
+nadpisane, nie wykonywano drugiego scalania.
+
+Nowy pakiet GA-02/03 na osobnej gałęzi dodaje walidację wejścia
+dla `one-hop` / `two-hop`: maksymalnie 4096 źródłowych adresów
+rejestrów MC68332, brak `null` i adresów spoza przestrzeni 24-bit;
+dodatkowo w `one-hop` maksymalnie 96 opisów callee. To ochrona
+odporności i kompletności **kontekstu źródłowego**, a nie nowe
+twierdzenie o wykonaniu CALL, rzeczywistym SIMCR/MM, VBR czy
+fizycznym CS. Regresje obejmują progi i izolację wyników; **PASS
+dla nowego SHA należy potwierdzić osobno**, nie na podstawie master.
+
+Zależności dalej rozwojowe: wielopoziomowy GA-02/03, trwałe
+Review/Apply/Undo i pochodzenie decyzji GA-08/13 oraz PDF
+GA-06/10/16. GA-14 nadal odłożone, Issue #106 otwarte bez nowych
+problemów; Wyse/Precision/legacy Supervisor pozostają zatrzymane.
+
 ## Aktualizacja master — 2026-11-04, po zatwierdzonym scaleniu PR #140
 
 Na wyraźne polecenie właściciela [PR #140](https://github.com/bogkom/GhidrAssist/pull/140)
