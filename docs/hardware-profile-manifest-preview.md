@@ -40,3 +40,13 @@ is still not implemented.
 CI must pass both the strict parser tests and full Ghidra 12.1.4 extension
 build. GUI preview on an isolated Ghidra project COPY remains a separate
 user-approved Supervisor acceptance test. Do not merge on CI alone.
+
+## 2026-11-03 — fail-closed numeric PDF page claims
+
+GA-06 profile preview shares the `ManualPdfPageClaim` validator with
+GA-10 field decoding. Invalid/reversed/out-of-bounds page ranges and
+ambiguous or duplicate claims increase the preview's `ambiguousPages`
+count rather than being promoted to a numbered citation. Structural
+validation remains preview-only and cannot register MCU profiles or
+mutate Ghidra. Numeric page syntax still is **unverified metadata**:
+it proves neither the document edition nor any register meaning.

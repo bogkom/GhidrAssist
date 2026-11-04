@@ -3,7 +3,6 @@ package ghidrassist.hardware;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.regex.Pattern;
 
 /**
  * Pure, model-scoped interpretation of *complete* observed register words.
@@ -14,22 +13,10 @@ import java.util.regex.Pattern;
 public final class HardwareBitfieldDecoder {
     private HardwareBitfieldDecoder() {}
 
-    // A declared bitfield with only UNKNOWN/UNVERIFIED/ambiguous page text
-    // is not a sourced definition. This checks a citation *claim* only; it
-    // does not independently verify the actual edition or PDF page bytes.
-    private static final Pattern PHYSICAL_PDF_PAGE_CLAIM=Pattern.compile(
-        "(?i)\\bPDF\\s+PAGES?\\s+[1-9][0-9]*(?:\\s*[-–]\\s*[1-9][0-9]*)?\\b");
-
+    // A numeric citation is a claim only; the manual bytes and edition
+    // remain unverified. Use the SAME strict validation as profile preview.
     static boolean hasConcretePdfPageClaim(String page) {
-        if(page==null || page.isBlank())return false;
-        String normalized=page.toUpperCase(Locale.ROOT);
-        if(normalized.contains("UNKNOWN") ||
-                normalized.contains("UNVERIFIED") ||
-                normalized.contains("AMBIGUOUS") ||
-                normalized.contains("TO BE VERIFIED") ||
-                normalized.contains("TO BE CHECKED"))
-            return false;
-        return PHYSICAL_PDF_PAGE_CLAIM.matcher(page).find();
+        return ManualPdfPageClaim.hasSingleConsistentClaim(page);
     }
 
     public enum Status {

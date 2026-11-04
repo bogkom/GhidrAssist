@@ -4,12 +4,16 @@ on:
   push:
     paths:
       - 'src/main/java/ghidrassist/hardware/HardwareProfileManifestPreview.java'
+      - 'src/main/java/ghidrassist/hardware/ManualPdfPageClaim.java'
+      - 'src/test/java/ghidrassist/hardware/ManualPdfPageClaimSelfTest.java'
       - 'src/main/java/ghidrassist/ui/tabs/HardwareAnalysisTab.java'
       - 'src/test/java/ghidrassist/hardware/HardwareProfileManifestPreviewSelfTest.java'
       - '.github/workflows/hardware-profile-manifest-preview.yml'
   pull_request:
     paths:
       - 'src/main/java/ghidrassist/hardware/HardwareProfileManifestPreview.java'
+      - 'src/main/java/ghidrassist/hardware/ManualPdfPageClaim.java'
+      - 'src/test/java/ghidrassist/hardware/ManualPdfPageClaimSelfTest.java'
       - 'src/main/java/ghidrassist/ui/tabs/HardwareAnalysisTab.java'
       - 'src/test/java/ghidrassist/hardware/HardwareProfileManifestPreviewSelfTest.java'
       - '.github/workflows/hardware-profile-manifest-preview.yml'
@@ -34,9 +38,13 @@ jobs:
           mkdir -p "$RUNNER_TEMP/profile-preview"
           javac --release 21 -d "$RUNNER_TEMP/profile-preview" \
             src/main/java/ghidrassist/hardware/HardwareProfileManifestPreview.java \
-            src/test/java/ghidrassist/hardware/HardwareProfileManifestPreviewSelfTest.java
+            src/main/java/ghidrassist/hardware/ManualPdfPageClaim.java \
+            src/test/java/ghidrassist/hardware/HardwareProfileManifestPreviewSelfTest.java \
+            src/test/java/ghidrassist/hardware/ManualPdfPageClaimSelfTest.java
       - name: Test malformed, conflicting and ambiguous profile imports
         shell: bash
         run: |
           java -cp "$RUNNER_TEMP/profile-preview" \
             ghidrassist.hardware.HardwareProfileManifestPreviewSelfTest
+          java -cp "$RUNNER_TEMP/profile-preview" \
+            ghidrassist.hardware.ManualPdfPageClaimSelfTest
