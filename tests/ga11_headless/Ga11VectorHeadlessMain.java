@@ -1257,10 +1257,15 @@ public final class Ga11VectorHeadlessMain {
                         ghidrassist.hardware.HardwareFunctionRenamePolicy.Decision
                             .NAME_COLLISION,
                         "Ghidra global name collision not found in preflight");
+                    var collisionRevision=
+                        ghidrassist.hardware.HardwareAnalysisRevision.capture(
+                            full,full.getModificationNumber(),
+                            full.getLanguageID().toString(),
+                            full.getExecutableSHA256(),true);
                     boolean rolledBack=false;
                     try {
                         ghidrassist.hardware.HardwareFunctionRenameService.apply(
-                            full,List.of(first,second));
+                            full,List.of(first,second),collisionRevision);
                     }catch(IllegalStateException expected) {rolledBack=true;}
                     check(rolledBack &&
                           fn1.getName().equals(firstName) &&
@@ -1282,8 +1287,26 @@ public final class Ga11VectorHeadlessMain {
                             ghidrassist.hardware.HardwareFunctionRenamePolicy
                                 .Decision.READY,
                         "Clean real-Ghidra naming preflight was not READY");
+                    // Removing the conflicting test symbol modifies Ghidra
+                    // even though target function names remain unchanged.
+                    // The previous review receipt must no longer authorize
+                    // the mutation. Fresh explicit Review is required.
+                    boolean staleDenied=false;
+                    try {
+                        ghidrassist.hardware.HardwareFunctionRenameService.apply(
+                            full,List.of(first,second),collisionRevision);
+                    }catch(IllegalStateException expected){staleDenied=true;}
+                    check(staleDenied &&
+                          fn1.getName().equals(firstName) &&
+                          fn2.getName().equals(secondName),
+                        "Stale review receipt after symbol edit must reject renames");
+                    var reviewedRevision=
+                        ghidrassist.hardware.HardwareAnalysisRevision.capture(
+                            full,full.getModificationNumber(),
+                            full.getLanguageID().toString(),
+                            full.getExecutableSHA256(),true);
                     var renamed=ghidrassist.hardware.HardwareFunctionRenameService
-                        .apply(full,List.of(first,second));
+                        .apply(full,List.of(first,second),reviewedRevision);
                     check(renamed.renamed()==2 &&
                           fn1.getName().equals(first.proposedName) &&
                           fn2.getName().equals(second.proposedName),
@@ -1295,6 +1318,7 @@ public final class Ga11VectorHeadlessMain {
                         "Ghidra native Undo failed to restore both function names");
                     result.addProperty("rename_real_functions_and_collision",true);
                     result.addProperty("rename_atomic_rollback",true);
+                    result.addProperty("rename_stale_revision_blocked",true);
                     result.addProperty("rename_transactional_two_function_apply",true);
                     result.addProperty("rename_native_undo_restored",true);
                 } else if("apply-preserve".equals(ga18Mode)) {

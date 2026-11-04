@@ -1111,6 +1111,8 @@ public final class HardwareAnalysisTab extends JPanel {
             status.setText("Choose MC68332 and analyze the active program before reviewing names.");
             return;
         }
+        final ghidrassist.hardware.HardwareAnalysisRevision reviewedRevision=
+            latestRevision;
         final List<HardwareFunctionNamingReview.Proposal> proposals=
             List.copyOf(latestFunctionProposals);
         if(proposals.isEmpty()){
@@ -1211,7 +1213,7 @@ public final class HardwareAnalysisTab extends JPanel {
         });
         dialog.setVisible(true);
         if(selected.isEmpty())return;
-        if(!currentScan()){
+        if(!currentScan() || latestRevision!=reviewedRevision){
             status.setText("Program revision changed; no functions renamed.");
             return;
         }
@@ -1223,8 +1225,13 @@ public final class HardwareAnalysisTab extends JPanel {
             "Final confirmation — change Ghidra function names",
             JOptionPane.YES_NO_OPTION,JOptionPane.WARNING_MESSAGE);
         if(confirm!=JOptionPane.YES_OPTION)return;
+        if(!currentScan() || latestRevision!=reviewedRevision){
+            status.setText("Program revision changed during confirmation; rerun Analyze.");
+            return;
+        }
         try{
-            var outcome=HardwareFunctionRenameService.apply(program,selected);
+            var outcome=HardwareFunctionRenameService.apply(
+                program,selected,reviewedRevision);
             JOptionPane.showMessageDialog(this,
                 "Renamed "+outcome.renamed()+" function(s). Ghidra Undo is available.\n"+
                 "Rerun Hardware Analysis to regenerate evidence.",
