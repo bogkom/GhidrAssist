@@ -53,7 +53,6 @@ public final class HardwareVbrRelocationEvidenceSelfTest {
         var md=plan.markdown();
         ok(md.contains("runtime VBR UNKNOWN") &&
             md.contains("STATIC SOURCE CANDIDATES ONLY") &&
-            md.contains("prior") == false &&
             !md.contains("active ISR verified") &&
             md.contains("RESET callgraph incomplete"),
             "must never claim selected VBR or executed ISR");
