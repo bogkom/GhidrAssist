@@ -43,6 +43,34 @@ public final class HardwareDurableFunctionStages {
         return HardwareDurableStageStore.load(directory,k)
             .flatMap(HardwareFunctionResultCodec::decode);
     }
+
+    /** The same stable function slot holds either incomplete work or a completed result. */
+    public static Optional<HardwareDataflow.Progress> loadProgress(Path directory,
+            HardwareDurableStageStore.Key full,long entry,int budget,
+            Collection<HardwareDataflow.Step> steps,Collection<Long> targets){
+        HardwareDurableStageStore.Key k=key(full,entry,budget,steps,targets);
+        if(directory==null || k==null)return Optional.empty();
+        return HardwareDurableStageStore.load(directory,k)
+            .flatMap(HardwareFunctionProgressCodec::decode);
+    }
+    /** Never store progress unless its typed worklist can be fully encoded. */
+    public static boolean saveProgress(Path directory,
+            HardwareDurableStageStore.Key full,long entry,int budget,
+            Collection<HardwareDataflow.Step> steps,Collection<Long> targets,
+            HardwareDataflow.Progress progress){
+        HardwareDurableStageStore.Key k=key(full,entry,budget,steps,targets);
+        if(directory==null || k==null || progress==null ||
+                progress.entry()!=entry || progress.maxIterations()!=budget)
+            return false;
+        try{
+            HardwareDurableStageStore.save(directory,k,
+                HardwareFunctionProgressCodec.encode(progress));
+            return true;
+        }catch(IOException|IllegalArgumentException invalid){
+            return false;
+        }
+    }
+
     public static boolean save(Path directory,
             HardwareDurableStageStore.Key full,long entry,int budget,
             Collection<HardwareDataflow.Step> steps,Collection<Long> targets,
