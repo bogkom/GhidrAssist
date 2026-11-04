@@ -76,6 +76,30 @@ public final class HardwareVectorResetCorrelationSelfTest {
             && md.contains("NOT function entries")
             && md.contains("not necessarily MMIO"),
             "no execution, physical map, or hardware latch claim");
+        check(!report.relocatedSource() && report.tableAddress()==0 &&
+            md.contains("Vector table input: image-zero bytes ONLY") &&
+            md.contains("| Vector | Image-zero pointer |"),
+            "legacy image-zero inventory must retain its actual source label");
+        var relocated = HardwareVectorResetCorrelation.inspectRelocated(
+            0x800L,true,true,reset.visitedEntries(),targets,graph,32);
+        String relocatedText=relocated.markdown();
+        check(relocated.relocatedSource() && relocated.tableAddress()==0x800L &&
+            relocated.recognizedTargets()==report.recognizedTargets() &&
+            relocated.rows().equals(report.rows()),
+            "origin-aware rendering must not change ISR/RESET classification");
+        check(relocatedText.contains(
+                "relocated MOVEC-to-VBR source-image candidate at 0x00000800") &&
+            relocatedText.contains("| Vector | Relocated source-image pointer |") &&
+            !relocatedText.contains("image-zero bytes ONLY") &&
+            !relocatedText.contains("| Vector | Image-zero pointer |") &&
+            relocatedText.contains("runtime VBR and IRQ activation UNKNOWN"),
+            "relocated VBR vector words must not be mislabeled image-zero");
+        bad(() -> HardwareVectorResetCorrelation.inspectRelocated(
+                0x801L,true,false,Set.of(),targets,graph,32),
+            "unaligned relocated source base rejected");
+        bad(() -> HardwareVectorResetCorrelation.inspectRelocated(
+                0xfffffcL,true,false,Set.of(),targets,graph,32),
+            "truncated 24-bit relocated table rejected");
         var limited = HardwareVectorResetCorrelation.inspect(
             true, false, reset.visitedEntries(), targets, graph, 1);
         check(limited.displayTruncated() && limited.recognizedTargets() == 4 &&
