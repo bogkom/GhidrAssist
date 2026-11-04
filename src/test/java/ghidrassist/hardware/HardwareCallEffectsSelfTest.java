@@ -39,6 +39,35 @@ public final class HardwareCallEffectsSelfTest {
         var countLimited=HardwareCallEffects.summarize(0,graph,10,2);
         ok(countLimited.truncated() && countLimited.unresolved(),
             "bounded node count must remain explicit");
+        // Depth-first traversal used to cache function 4 first at depth=3,
+        // then skip the *shorter* root->4 edge. That wrongly omitted node 5
+        // (STORE) despite a bounded two-hop direct-call path.
+        var shorter=HardwareCallEffects.summarize(0,List.of(
+            n(0,false,false,false,1L,4L),
+            n(1,false,false,false,2L),
+            n(2,false,false,false,4L),
+            n(4,false,true,false,5L),
+            n(5,true,false,false)),3,20);
+        ok(shorter.possibleMemoryStore() && shorter.possibleVbrWrite() &&
+            !shorter.unresolved() && shorter.visited()==5,
+            "shortest source-call path must retain all within-budget effects");
+        var cycleShort=HardwareCallEffects.summarize(0,List.of(
+            n(0,false,false,false,1L,2L),
+            n(1,false,false,false,2L),
+            n(2,false,false,false,1L)),3,20);
+        ok(cycleShort.recursive() && cycleShort.unresolved(),
+            "BFS merge must still detect real source-call cycles");
+        // Very deep static graph should remain bounded by user limits,
+        // not by the JVM call stack.
+        java.util.List<HardwareCallEffects.FunctionNode> longChain=
+            new java.util.ArrayList<>();
+        for(int i=0;i<1500;i++)
+            longChain.add(n(i,i==1499,false,false,
+                i==1499?new Long[0]:new Long[]{(long)i+1}));
+        var deep=HardwareCallEffects.summarize(0,longChain,1500,1600);
+        ok(deep.visited()==1500 && deep.possibleMemoryStore() &&
+            !deep.truncated() && !deep.unresolved(),
+            "deep valid graph must avoid recursion stack exhaustion");
         var noWrites=HardwareCallEffects.summarize(0,
             List.of(n(0,false,false,false,1L),n(1,false,false,false)),5,10);
         ok(!noWrites.possibleMemoryStore() && !noWrites.unresolved(),

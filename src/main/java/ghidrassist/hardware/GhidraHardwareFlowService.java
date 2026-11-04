@@ -975,7 +975,8 @@ public final class GhidraHardwareFlowService {
                .append("; stored: ").append(savedMidFunctionWorklists)
                .append(" (bounded unfinished computation only).\n\n")
            .append(reset.markdown())
-           .append(GhidraInterruptVectorService.analyze(program,monitor))
+           .append(GhidraInterruptVectorService.analyze(program,monitor,
+               reset.recognized(),reset.incomplete(),reset.visited(),staticCalls))
            .append(detail).append(effects).append(interproceduralMm);
         if(shown>=350)out.append("\n[Detailed report bounded at 350 sites.]\n");
         boolean cfgSourcesComplete=cfgMmioSites.safeAsComplete(!limited);

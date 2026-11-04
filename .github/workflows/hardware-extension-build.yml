@@ -90,14 +90,24 @@ jobs:
             -postScript GA18BootstrapSyntheticCallgraph.java \
             -postScript GA18VerifySyntheticCallgraph.java \
             -postScript GA18VerifyAutomationPaths.java \
+            -postScript GA18VerifyVectorResetCorrelation.java \
             -postScript GA18VerifyDecompilerTaskBinding.java \
             -postScript GA18VerifyListingSnapshot.java \
             -postScript GA18VerifyListingRangeAndBodyXrefs.java \
             > "$RUNNER_TEMP/ga18-paths.log" 2>&1 || {
               tail -n 100 "$RUNNER_TEMP/ga18-paths.log"; exit 1;
             }
+          # Expose only the generated synthetic script checks in the Actions log.
+          # Ghidra's headless script runner can log Java-script exceptions
+          # without a nonzero process exit; always surface an assertion failure.
+          grep -E 'GA18 (CALLGRAPH|PRODUCTION PATHS|VECTOR RESET|DECOMPILER TASK|LISTING)|ERROR|Exception' "$RUNNER_TEMP/ga18-paths.log" || true
           grep -q 'GA18 CALLGRAPH PASS: functions=20 edges=19 mmio_static_writes=4 reset_reachable=6 assertions=110' "$RUNNER_TEMP/ga18-paths.log"
           grep -q 'GA18 PRODUCTION PATHS PASS: assertions=22' "$RUNNER_TEMP/ga18-paths.log"
+          if ! grep -q 'GA18 VECTOR RESET CORRELATION PASS: assertions=9' "$RUNNER_TEMP/ga18-paths.log"; then
+            echo 'Native synthetic vector/RESET correlation evidence missing'
+            tail -n 120 "$RUNNER_TEMP/ga18-paths.log"
+            exit 1
+          fi
           grep -q 'GA18 DECOMPILER TASK BINDING PASS: assertions=7' "$RUNNER_TEMP/ga18-paths.log"
           grep -q 'GA18 LISTING SNAPSHOT PASS: assertions=9' "$RUNNER_TEMP/ga18-paths.log"
           grep -q 'GA18 LISTING RANGE BODY XREF PASS:' "$RUNNER_TEMP/ga18-paths.log"

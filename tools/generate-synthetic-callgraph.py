@@ -17,6 +17,11 @@ EDGES={0:1,1:2,2:3,3:4,4:5,5:2,6:7,7:8,8:9,9:10,
 def generate():
     blob=bytearray(b"\x4e\x71"*(SIZE//2))
     blob[0:8]=struct.pack(">II",0x00FFF7FC,BASE)
+    # Image-zero static vector POINTER CANDIDATES: reset-connected,
+    # disconnected exact entry and pointer inside a function body.
+    for vector,target in ((26,BASE+0x30),(32,BASE+6*0x30),
+                          (33,BASE+6*0x30+2)):
+        blob[vector*4:vector*4+4]=struct.pack(">I",target)
     sites={}
     for n in range(COUNT):
         entry=BASE+n*0x30
@@ -46,7 +51,12 @@ def main():
               "function_entries":[f"{BASE+i*0x30:08x}" for i in range(COUNT)],
               "calls":[{"from":f"{BASE+i*0x30:08x}",
                         "to":f"{BASE+j*0x30:08x}"} for i,j in sorted(EDGES.items())],
-              "mmio":sites,"sha256":hashlib.sha256(binary).hexdigest(),
+              "mmio":sites,
+              "image_zero_vector_candidates":[
+                  {"vector":26,"pointer":"00000130","scope":"reset_direct_call_candidate"},
+                  {"vector":32,"pointer":"00000220","scope":"outside_bounded_reset_subset"},
+                  {"vector":33,"pointer":"00000222","scope":"interior_not_function_entry"}],
+              "sha256":hashlib.sha256(binary).hexdigest(),
               "note":"Synthetic static reference model; no runtime/MM/CS claims"}
     a.output.with_suffix(".json").write_text(json.dumps(manifest,indent=2)+"\n")
     print(manifest["sha256"])
