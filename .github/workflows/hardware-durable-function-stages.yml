@@ -32,6 +32,7 @@ jobs:
             src/main/java/ghidrassist/hardware/HardwareFunctionStageCache.java \
             src/main/java/ghidrassist/hardware/HardwareDurableStageStore.java \
             src/main/java/ghidrassist/hardware/HardwareFunctionResultCodec.java \
+            src/main/java/ghidrassist/hardware/HardwareFunctionProgressCodec.java \
             src/main/java/ghidrassist/hardware/HardwareDurableFunctionStages.java \
             src/test/java/ghidrassist/hardware/HardwareDurableFunctionStagesSelfTest.java
           java -cp "$RUNNER_TEMP/ga12-func" \
