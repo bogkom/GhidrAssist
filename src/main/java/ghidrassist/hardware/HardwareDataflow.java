@@ -45,6 +45,8 @@ public final class HardwareDataflow {
         public final List<Long> successors;
         public final String mnemonic;
         public final Set<String> sideEffectRegisters;
+        /** Verified input-independent register constants assigned on leaf return. */
+        public final Map<String,Long> verifiedCallReturns;
         public Step(long address,Kind kind,String register,long operand,long displacement,
                     Integer literalWord,int writeBits,Collection<Long> successors,String mnemonic){
             this.address=address;this.kind=Objects.requireNonNull(kind);
@@ -54,6 +56,7 @@ public final class HardwareDataflow {
             this.literalWord=literalWord;this.writeBits=writeBits;
             this.successors=List.copyOf(successors);this.mnemonic=mnemonic==null?"":mnemonic;
             this.sideEffectRegisters=Set.of();
+            this.verifiedCallReturns=Map.of();
         }
         public Step(long address,Kind kind,String register,String sourceRegister,long operand,
                     long displacement,Integer literalWord,int writeBits,
@@ -65,6 +68,7 @@ public final class HardwareDataflow {
             this.literalWord=literalWord;this.writeBits=writeBits;
             this.successors=List.copyOf(successors);this.mnemonic=mnemonic==null?"":mnemonic;
             this.sideEffectRegisters=Set.of();
+            this.verifiedCallReturns=Map.of();
         }
         /** Indexed STORE: base + displacement + signed .W/.L index * scale. */
         public Step(long address, String baseRegister, String sourceRegister,
@@ -86,6 +90,7 @@ public final class HardwareDataflow {
             this.successors=List.copyOf(successors);
             this.mnemonic=mnemonic==null?"":mnemonic;
             this.sideEffectRegisters=Set.of();
+            this.verifiedCallReturns=Map.of();
         }
         private Step(Step original,Collection<String> sideEffects) {
             this.address=original.address;this.kind=original.kind;
@@ -99,10 +104,34 @@ public final class HardwareDataflow {
                 if(reg==null || !reg.matches("[AD][0-7]"))
                     throw new IllegalArgumentException("Invalid register side effect");
             this.sideEffectRegisters=Set.copyOf(sideEffects);
+            this.verifiedCallReturns=original.verifiedCallReturns;
+        }
+        private Step(Step original,Map<String,Long> provedReturns){
+            if(original.kind!=Kind.CALL_BARRIER)
+                throw new IllegalArgumentException("Call returns require CALL_BARRIER");
+            if(provedReturns==null || provedReturns.size()>14)
+                throw new IllegalArgumentException("Invalid leaf return registers");
+            for(var e:provedReturns.entrySet())
+                if(e.getKey()==null || !e.getKey().matches("[AD][0-6]|D7") ||
+                        e.getValue()==null)
+                    throw new IllegalArgumentException("Unsafe leaf register");
+            this.address=original.address;this.kind=original.kind;
+            this.register=original.register;this.sourceRegister=original.sourceRegister;
+            this.indexRegister=original.indexRegister;
+            this.indexBits=original.indexBits;this.indexScale=original.indexScale;
+            this.operand=original.operand;this.displacement=original.displacement;
+            this.literalWord=original.literalWord;this.writeBits=original.writeBits;
+            this.successors=original.successors;this.mnemonic=original.mnemonic;
+            this.sideEffectRegisters=original.sideEffectRegisters;
+            this.verifiedCallReturns=Map.copyOf(provedReturns);
         }
         public Step withSideEffects(Collection<String> updatedRegisters) {
             if(updatedRegisters==null || updatedRegisters.isEmpty())return this;
             return new Step(this,updatedRegisters);
+        }
+        public Step withVerifiedCallReturns(Map<String,Long> provedReturns){
+            if(provedReturns==null || provedReturns.isEmpty())return this;
+            return new Step(this,provedReturns);
         }
     }
     public static final class Snapshot {
@@ -344,6 +373,10 @@ public final class HardwareDataflow {
                 // means constants cannot cross this boundary.
                 s.pointers.clear();s.peripherals.clear();s.vbr=null;
                 s.crossedUnknownCall=true;
+                // Register evidence is reintroduced only after the generic
+                // CALL barrier, and only from a strictly verified leaf.
+                for(var proved:step.verifiedCallReturns.entrySet())
+                    s.pointers.put(proved.getKey(),proved.getValue()&MASK24);
             }
             default -> {}
         }
