@@ -1,9 +1,82 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
-Status: **IN PROGRESS — reviewed 2026-11-04**. Scope source: user-approved 2026-10-28 requirements (A–H, additional features 13.1–13.7, PDF/RAG, testing and Codex Supervisor integration).
+Status: **IN PROGRESS — integrated baseline 2026-11-04**. Scope source: user-approved 2026-10-28 requirements (A–H, additional features 13.1–13.7, PDF/RAG, testing and Codex Supervisor integration).
 
 
-## Kontrolowana kompozycja — 2026-11-04 (przed scaleniem do `master`)
+## Stan bieżący — 2026-11-04, po kontrolowanym scaleniu PR #131
+
+**GitHub = źródło prawdy.** [PR #131](https://github.com/bogkom/GhidrAssist/pull/131)
+został scalony standardowym merge przez chroniony `master`,
+z zachowaniem oryginalnej historii 13 PR-ów #118–#130.
+
+- **Commit wdrożenia:** [`217a5dd43e48135cde930e6f14dcb9b879c12b23`](https://github.com/bogkom/GhidrAssist/commit/217a5dd43e48135cde930e6f14dcb9b879c12b23).
+- **Dokładny HEAD kandydata:** `e182c0f2b1f49e13b1975727956d1dcc2347d32e`.
+  **55/55 GitHub Actions SUCCESS**, w tym Java 21, kompilacja rozszerzenia
+  Ghidra 12.1.4 PUBLIC / Java 25, rzeczywista syntetyczna Ghidra headless,
+  Xvfb/CodeBrowser oraz Automation API na izolowanym projekcie.
+- **Identyczne drzewa obu commitów:** `4279c8fbead2921d3d5814d635eef63f8908782b`.
+  Zatem komplet zweryfikowanych plików jest dokładnie taki sam na
+  scalonym SHA, bez odchyleń w konflikcie po stronie `master`.
+  Na **dokładnym merge SHA** dodatkowo **22/22 push GitHub Actions SUCCESS**,
+  w tym [pełna kompilacja Ghidry 12.1.4](https://github.com/bogkom/GhidrAssist/actions/runs/41834860451).
+- [RESET / wektory / źródła ISR](https://github.com/bogkom/GhidrAssist/actions/runs/41833621753),
+  [Review/Apply nazw + Undo / odrzucenie starej rewizji](https://github.com/bogkom/GhidrAssist/actions/runs/41833621858),
+  [CALL → checkpoint i unieważnianie cache](https://github.com/bogkom/GhidrAssist/actions/runs/41833621715),
+  [trzy JVM, częściowy fixed point CFG](https://github.com/bogkom/GhidrAssist/actions/runs/41833621809),
+  [Automation API](https://github.com/bogkom/GhidrAssist/actions/runs/41833621839) i
+  [rzeczywisty syntetyczny CodeBrowser pod Xvfb](https://github.com/bogkom/GhidrAssist/actions/runs/41833621737):
+  **CI PASS** na HEAD kandydata — nie oznacza testu na oryginalnym firmware.
+- GitHub oznaczył bezpośrednie PR-y #118, #119, #120, #121, #122,
+  #124 jako `Merged`. Zależne PR-y #123, #125–#130 są **administracyjnie
+  zamknięte**, ponieważ każdy ich HEAD jest już przodkiem `master`
+  (GitHub compare: 0 commitów behind). Odrębne etykiety `Closed`
+  w interfejsie nie oznaczają braku włączenia kodu.
+  Ich oryginalne SHA, komentowane checkpointy i dowody CI pozostają.
+- Starsze, historyczne PR-y spoza tego pakietu nie są automatycznie
+  uznane za wykonane ani zamykane; Issue #106 nadal jest otwartą
+  skrzynką problemów produktu, bez nowych komentarzy. Issue #98
+  nadal wymaga odrębnego dowodu migracji starego profilu CodeBrowser.
+
+**Statusy obszarów po integracji** (18 obszarów, nie 18 jednorazowych
+testów; `BAZA_WDROŻONA` oznacza ograniczoną bazę, nie zakończenie):
+
+| Obszar | Stan | Nowa potwierdzona baza w `master` | Kryteria nadal otwarte |
+|---|---|---|---|
+| **GA-01** RESET | CZĘŚCIOWO | Statyczna korelacja RESET z wektorami, ograniczony graf wywołań i warunki spójności | Niepełne skoki, analiza międzyfunkcyjna, brak śladu wykonania MCU |
+| **GA-02** SIMCR/MM | CZĘŚCIOWO | Możliwe MMIO STORE, nakładanie bajtów SIMCR, 24-bitowe adresy, bounded CALL i stałe po RTS | Warunki pierwszego wykonanego zapisu / write-once, brak dowodu aktywnego MM |
+| **GA-03** pośrednie MMIO | CZĘŚCIOWO | CFG/P-code, indeksowanie, aliasy, bezpieczne unknown STORE, CALL-BARRIER i zgodność ścieżek | Ogólne interproceduralne stany rejestrów, niepełne dynamiczne aliasy |
+| **GA-04** CSBOOT/CS | BAZA_WDROŻONA | Statyczna warunkowa tabela 12 okien z pochodzeniem źródłowym | Więcej konfliktów i wariantów CSPAR/CSOR; brak fizycznej mapy |
+| **GA-05** Review/Apply/Undo | BAZA_WDROŻONA | Jawny preflight, bezpieczne zatwierdzanie, transakcje, Ghidra Undo, blokady niepewności | Rozszerzone scenariusze decyzji i uprawnień, bez automatycznego Apply |
+| **GA-06** profile MCU | CZĘŚCIOWO | MC68332 wybierany jawnie, manifesty i sprawdzanie fizycznych stron PDF fail-closed | Zweryfikowane kolejne MCU i wydania dokumentacji z dowodami |
+| **GA-07** analiza/raport/RAG | BAZA_WDROŻONA | Wersjonowany komplet źródeł, raport statyczny i eksport | Długie scenariusze i dalsza spójność wyników |
+| **GA-08** nazwy | CZĘŚCIOWO | Propozycje funkcji, blokada nieaktualnej rewizji Apply, transakcja i Undo | Zmienne lokalne, argumenty i wskaźniki z Review/Undo |
+| **GA-09** MMIO Explorer | BAZA_WDROŻONA | Read-only Listing i GUI CodeBrowser na syntetycznej Ghidrze w Actions | Dalsze przypadki GUI i rzeczywista migracja starego profilu (#98) |
+| **GA-10** bitfieldy | CZĘŚCIOWO | Wybrane pola MC68332, konsekwentny dowód fizycznej strony i wydania | Pozostałe rejestry i ścisła walidacja pełnego korpusu |
+| **GA-11** IRQ/VBR | CZĘŚCIOWO | Źródłowa korelacja wektor–RESET–funkcja i kandydaty ISR | VBR relocations, pośrednie ISR, brak dowodu aktywnego IRQ |
+| **GA-12** analiza przyrostowa | CZĘŚCIOWO | Ukończony CFG w RAM/dysku, per-function restart oraz bounded mid-function worklist przez JVM; SHA pełnego Program/JAR i CALL returns | Trwałość szerszych sesji i decyzji, więcej przerwań i wersjonowania |
+| **GA-13** pochodzenie zmian | CZĘŚCIOWO | Rewizja zatwierdzonego Rename, SourceType, rollback/Undo | Trwała historia decyzji, autorów i powiązań zmian |
+| **GA-14** firmware diff | ODŁOŻONE | Brak odrębnego porównania firmware | Schemat dowodów, Ghidra Version Tracking i izolowane porównanie |
+| **GA-15** Agentic | CZĘŚCIOWO | Niepełne źródła pozostają oznaczone po pruningu findings-cache | Kontrola długich przebiegów, kontekstu i wznowień |
+| **GA-16** PDF/RAG | CZĘŚCIOWO | Fail-closed fizyczne strony, wydanie i identyfikowalny dokument | Bardziej kompletne źródłowe korelacje rejestrów z PDF |
+| **GA-17** testy/CI | CZĘŚCIOWO | 55/55 PR CI, 22/22 master push CI, realna syntetyczna Ghidra/Xvfb, JSON/JUnit/SHA | Dalsze scenariusze regresyjne, stary profil CodeBrowser #98 |
+| **GA-18** automatyzacja | TOR_ZMIENIONY | Automation API v3 + agent CLI, kontrolowane GitHub Actions, CI-first integracja | Pełna autonomiczna orkiestracja i pomiar limitów wymagają osobnej decyzji |
+
+**Niezmienne ograniczenia bezpieczeństwa:** statyczne P-code/Listing/CFG
+nie dowodzą faktycznego wykonania RESET, zatrzaśnięcia MM, aktywnego
+VBR/ISR ani rzeczywistej mapy magistrali. Generic CPU32 nie dostaje
+automatycznie definicji MC68332; Profile/Review/Apply/Undo pozostają
+kontrolowane. Dane oryginalnego ECU411, projekt Ghidry, profile i OAuth
+nie były dotykane. Historyczne GUI/CUA/headless na Wyse/Precision oraz
+worker, Goal i timery Supervisora **pozostają zatrzymane**.
+
+**Następna praca**: konserwatywna analiza GA-02/03/11 przepływów
+międzyfunkcyjnych i VBR/ISR; GA-06/10/16 zweryfikowane profile i
+bitfieldy z wydaniem/stroną; GA-08/12/13 historia decyzji z Undo oraz
+systematyczne pokrycie funkcjonalności przez GitHub Actions.
+Nie traktować żadnego GA-01–GA-18 jako zamkniętego tylko dlatego, że
+podstawowa funkcjonalność działa.
+
+## Historyczny plan kompozycji — 2026-11-04 (przed scaleniem do `master`)
 
 Kandydat `integration/ga01-ga18-reviewed-20261104` zachowuje oryginalną
 historię i źródłowe dowody CI **wszystkich 13 zależnych/niezależnych
@@ -49,9 +122,9 @@ zachowuje osobną lukę migracji starego profilu CodeBrowser.
 Przerwane testy i workery Wyse/Precision/Codex Supervisora nie
 są uruchamiane.
 
-## Stan przeglądu — 2026-11-04 (PR-y niescalone)
+## Historyczna migawka PR-ów — 2026-11-04 (przed scaleniem #131)
 
-**Źródło prawdy:** `master` nadal na
+**Stan przed scaleniem #131:** ówczesny `master` na
 `fda73ad65ff38c1c8030847a74e02a9d56d0afae`.
 Poniższe CI dotyczy **dokładnych commitów gałęzi PR**, nie `master`,
 formalnej akceptacji Supervisora ani pełnego zamknięcia GA-01–GA-18.
@@ -92,7 +165,8 @@ i Javie 21/25. Historyczne timery, GUI/CUA/headless na Wyse/Precision
 i natywny Supervisor są zatrzymane decyzją właściciela. PR #98
 zachowuje osobny brak testu migracji starego CodeBrowsera;
 Issue #106 pozostaje otwartą skrzynką usterek (brak nowych zgłoszeń).
-`master` nie został automatycznie zmieniony ani scalony.
+W chwili tej historycznej migawki `master` pozostawał niescalony;
+wynik wdrożenia opisano w bieżącej sekcji wyżej.
 
 ## Stan historyczny — 2026-11-03, po integracji do `master`
 
