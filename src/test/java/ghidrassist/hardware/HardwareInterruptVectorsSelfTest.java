@@ -48,6 +48,13 @@ public final class HardwareInterruptVectorsSelfTest {
             md.contains("pointers inside recognized function bodies") &&
             md.contains("INTERIOR_FUNCTION_POINTER_CANDIDATE"),
             "interior function pointers are not handler entries");
+        var moved=HardwareInterruptVectors.inspect(0x800L,input,16);
+        check(moved.sampledSlots()==s.sampledSlots() &&
+            moved.plausibleMapped()==s.plausibleMapped() &&
+            moved.markdown().contains("relocated source-image vector words") &&
+            !moved.markdown().contains("image-zero vector words") &&
+            moved.markdown().contains("candidate table address 0x00000800"),
+            "nonzero source-image table must not be mislabeled image-zero");
         var small=HardwareInterruptVectors.inspect(0,input,2);
         ok(small.truncated() && small.displayed().size()==2 &&
             small.plausibleMapped()==5,"display truncation not a scan truncation");
