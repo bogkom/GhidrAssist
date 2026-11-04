@@ -1,0 +1,32 @@
+name: GA-11 bounded relocated VBR source-table evidence
+on:
+  pull_request:
+    paths:
+      - 'src/main/java/ghidrassist/hardware/HardwareVbrRelocationEvidence.java'
+      - 'src/main/java/ghidrassist/hardware/GhidraInterruptVectorService.java'
+      - 'src/main/java/ghidrassist/hardware/GhidraHardwareFlowService.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareVbrRelocationEvidenceSelfTest.java'
+      - '.github/workflows/hardware-relocated-vbr-source.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  pure-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Read-only VBR candidate caps, unknowns and RESET call subset
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/ga11-relocated-vbr"
+          javac --release 21 -d "$RUNNER_TEMP/ga11-relocated-vbr" \
+            src/main/java/ghidrassist/hardware/HardwareVbrRelocationEvidence.java \
+            src/test/java/ghidrassist/hardware/HardwareVbrRelocationEvidenceSelfTest.java
+          java -cp "$RUNNER_TEMP/ga11-relocated-vbr" \
+            ghidrassist.hardware.HardwareVbrRelocationEvidenceSelfTest
