@@ -67,14 +67,17 @@ public final class HardwareChangeProvenance {
             .replace("\u2029"," ");
         int pos=0;
         while(pos<normalized.length()) {
-            char c=normalized.charAt(pos);
+            // Work in code points so even supplementary format controls
+            // (e.g. Unicode language tags) cannot conceal a CSV formula.
+            int codePoint=normalized.codePointAt(pos);
             // Some spreadsheet importers ignore Unicode formatting
             // controls (Cf) before interpreting a formula. A leading
             // word joiner, bidi mark, zero-width joiner, etc. must not
             // conceal an =, +, -, or @ formula prefix.
-            if(!Character.isWhitespace(c) && !Character.isSpaceChar(c) &&
-                    Character.getType(c)!=Character.FORMAT)break;
-            pos++;
+            if(!Character.isWhitespace(codePoint) &&
+                    !Character.isSpaceChar(codePoint) &&
+                    Character.getType(codePoint)!=Character.FORMAT)break;
+            pos+=Character.charCount(codePoint);
         }
         if(pos<normalized.length() &&
                 "=+-@".indexOf(normalized.charAt(pos))>=0)
