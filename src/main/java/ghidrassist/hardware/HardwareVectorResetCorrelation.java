@@ -87,7 +87,10 @@ public final class HardwareVectorResetCorrelation {
                .append("write, latched MM, ISR entry or a physical CS map.\n\n");
             if (rows.isEmpty()) {
                 out.append("- No recognized vector-function targets in this bounded ")
-                   .append("image-zero inventory; not proof of no exceptions.\n\n");
+                   .append(relocatedSource?
+                       "relocated source-image inventory":
+                       "image-zero inventory")
+                   .append("; not proof of no exceptions.\n\n");
                 return out.toString();
             }
             out.append(relocatedSource?
