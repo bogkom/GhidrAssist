@@ -34,3 +34,24 @@ extension build. Local acceptance: isolated project COPY, cancel during
 inventory after complete CFG, repeat on unchanged revision, edit/Undo
 to confirm recompute, verify no stale RAG or Review/Apply access.
 Do not mark GUI validation PASS until actual host test.
+
+## GA-12 durable checkpoint store — opt-in foundation
+
+The new pure-Java HardwareDurableStageStore can persist bounded, **completed**
+stage bytes in an explicitly supplied, existing, isolated directory. Files
+use SHA-256 checksums, exact project identity, original executable hash,
+analyzer fingerprint, manually selected MCU and, critically, a SHA-256 of the
+**entire current analyzed input**. Checkpoint replacement uses atomic rename
+and rejects symlink targets. Corrupt, oversized, stale or mismatched files are
+cache misses. These files never reach public CI artifacts except synthetic
+test fixtures. No original user firmware, OAuth credentials or configuration
+are copied.
+
+**Important limitation at this stage:** the new persistent I/O primitive is
+NOT YET connected to production HardwareFlowStageCache. That cache still
+resumes only within one process. A validated Ghidra Listing/program fingerprint
+and a bounded decoder for all GhidraHardwareFlowService.Report fields are
+required before any disk checkpoint can replace real computation after a
+restart. Original import SHA, Ghidra modification number and a stage marker
+alone MUST NOT unlock restart reuse. Partial per-function resume remains
+outside this first I/O safety increment.
