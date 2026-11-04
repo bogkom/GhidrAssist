@@ -71,7 +71,9 @@ public final class HardwareCallsiteRegisterFlow {
                .append("- **SOURCE-ONLY MAY-CANDIDATES**: each unique direct CALL ")
                .append("uses only predecessor-agreed source A/D registers at ")
                .append("that instruction, then a separate bounded callee CFG ")
-               .append("solve. Calls may execute conditionally or not at all. ")
+               .append("solve. A7 is excluded: CALL changes the stack ")
+               .append("pointer before the callee entry. ")
+               .append("Calls may execute conditionally or not at all. ")
                .append("No argument convention/actual execution/MC68332 MM ")
                .append("latch or physical bus mapping is inferred.\n")
                .append("- Sampled calls: ").append(sampledCalls)
@@ -149,7 +151,12 @@ public final class HardwareCallsiteRegisterFlow {
             if(call.directCallee()==null) { missing++;continue; }
             direct++;
             if(call.callerIncomplete()) { incomplete++;continue; }
-            if(call.agreedRegisters().isEmpty())continue;
+            // CALL/JSR/BSR pushes a return address to the CPU32 stack.
+            // Caller A7 is NOT a proven value at the callee entry. Do not
+            // propagate it as a pointer even if the caller CFG knew it.
+            Map<String,Long> passed=new HashMap<>(call.agreedRegisters());
+            passed.remove("A7");
+            if(passed.isEmpty())continue;
             contexts++;
             Callee callee=targetMap.get(call.directCallee());
             if(callee==null){missing++;continue;}
@@ -157,7 +164,7 @@ public final class HardwareCallsiteRegisterFlow {
             int iterations=Math.min(30000,Math.max(300,callee.steps().size()*20));
             HardwareDataflow.Result result=HardwareDataflow.analyzeWithEntryRegisters(
                 callee.entry(),callee.steps(),tracked,iterations,
-                call.agreedRegisters());
+                passed);
             if(result.truncated){budget++;continue;}
             for(HardwareDataflow.Snapshot hit:result.snapshots) {
                 if(hit.kind!=HardwareDataflow.Kind.STORE_DIRECT &&
@@ -172,7 +179,7 @@ public final class HardwareCallsiteRegisterFlow {
                         callee.entry(),hit.instruction,hit.kind,
                         hit.effectiveAddress,hit.writtenWord,
                         hit.writeBits,hit.priorUnknownCall,
-                        hit.priorUnknownStore,call.agreedRegisters().size()));
+                        hit.priorUnknownStore,passed.size()));
             }
         }
         return new Summary(sorted.size(),direct,contexts,incomplete,missing,
