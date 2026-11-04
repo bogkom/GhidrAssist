@@ -904,7 +904,16 @@ public final class Ga11VectorHeadlessMain {
                         "SIMCR".equals(site.register()) &&
                         Integer.valueOf(0x40ca).equals(site.literal()) &&
                         site.unknownCall()),
-                        "Real leaf-return register values not recovered conservatively");
+                        "Real leaf-return register values not recovered conservatively: "+
+                        evidence.rawCfgMmioSites.stream()
+                            .filter(site->site.pc()>=0x600L &&
+                                site.pc()<0x690L)
+                            .map(site->"pc="+Long.toHexString(site.pc())+
+                                ",reg="+site.register()+
+                                ",addr="+Long.toHexString(site.address())+
+                                ",literal="+site.literal()+
+                                ",unknownCall="+site.unknownCall())
+                            .toList());
                     check(evidence.rawCfgMmioSites.stream().anyMatch(site->
                         site.pc()==0x68cL &&
                         "UNRESOLVED_ALIAS".equals(site.register())),
