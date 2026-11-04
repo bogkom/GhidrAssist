@@ -61,7 +61,8 @@ public final class HardwareTwoHopRegisterFlowSelfTest {
     private static HardwareCallsiteRegisterFlow.Callee leaf(long pc,
             String target){
         return new HardwareCallsiteRegisterFlow.Callee(pc,List.of(
-            step(pc,STORE_INDIRECT,target,"D0",0,"MOVE.W",pc+2),
+            new HardwareDataflow.Step(pc,STORE_INDIRECT,target,"D0",
+                0,0,null,16,List.of(pc+2),"MOVE.W"),
             ret(pc+2)),true);
     }
     private static HardwareTwoHopRegisterFlow.Summary scan(
