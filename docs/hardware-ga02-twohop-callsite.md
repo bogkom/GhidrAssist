@@ -112,3 +112,20 @@ ECU411 i produkcyjne projekty Ghidry są poza zakresem.
   GA-12 checkpointy, Xvfb/Automation API tam, gdzie wyzwolone.
 
 Wyse, Precision, timery i Codex Supervisor pozostają zatrzymane.
+
+## Aktualizacja bezpieczeństwa wejść — 2026-11-04
+
+Bounded two-hop stosuje ten sam parser/walidator zbioru MMIO co
+one-hop: najwyżej **4096 adresów wejściowych** w fizycznym
+24-bitowym zakresie MC68332, bez `null`. Brak adresu nie może być
+cicho pominięty ani potraktowany jako kompletny dowód braku aliasu;
+przekroczenie limitu odmawia całej analizy kontekstowej. Zbiór
+jest dalej używany wyłącznie jako źródłowy kontekst zasięgu, nie jako
+mapowanie magistrali ani jako uprawnienie Apply.
+
+Nowe Java21 regresje sprawdzają 24-bitową granicę, `null`,
+4096/4097 elementów i to, że poprawny dwupoziomowy przepływ
+`outer → bridge → leaf STORE` oraz wcześniejsze wyniki pozostają
+niezmienne. Ghidra 12.1.4 PUBLIC / Java25 i rzeczywiste
+syntetyczne Ghidra headless wymagają odrębnego CI PASS na
+końcowym SHA; testy lokalne Wyse/Precision pozostają zatrzymane.
