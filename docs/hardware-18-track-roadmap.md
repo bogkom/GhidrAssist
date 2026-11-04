@@ -3,6 +3,42 @@
 Status: **IN PROGRESS — integrated baseline 2026-11-04**. Scope source: user-approved 2026-10-28 requirements (A–H, additional features 13.1–13.7, PDF/RAG, testing and Codex Supervisor integration).
 
 
+## GA-13 — aktualizacja 2026-11-04 po scaleniu PR #146
+
+Chroniony `master` po [PR #146](https://github.com/bogkom/GhidrAssist/pull/146):
+`ab0c61afac00e164c9b5ce2916444e3c297c451b`.
+Dokładny HEAD pakietu:
+`873eccb278f635c7882617574a3bc3625bc9ff6d`,
+**22/22 GitHub Actions SUCCESS**, w tym Ghidra 12.1.4 PUBLIC / Java25
+z prawdziwym syntetycznym `FunctionManager`, transakcyjnym
+GhidrAssist Apply/Undo/Redo i testem Java 21. Identyczne drzewa Git
+przed i po scaleniu:
+`687c1122c84480b03029b155c5e218e31378520d`.
+Na osobnym SHA scalonego `master` zakończyły się
+**3/3 GitHub Actions SUCCESS**, w tym pełna kompilacja rozszerzenia,
+GA-12 rewizje i źródłowy test GA-13.
+
+Dla GA-13 zaimplementowano w Program Options **wersjonowaną
+informację o zatwierdzonej przez GUI operacji zmiany nazwy funkcji**,
+zapisując ją w tej samej transakcji co `setName`; Undo/Redo
+przywraca zarówno nazwę, jak i rekord. To **częściowe**
+pochodzenie operacji, nie ustalenie autorstwa ani audyt wszystkich
+edycji Ghidry, a hash jest kontrolą integralności, nie podpisem.
+
+**Nowy kandydat testowy:** weryfikacja trwałości rzeczywistych
+danych Program po **zapisie i niezależnym uruchomieniu Ghidry w
+drugim JVM**, na tej samej syntetycznej bazie. Jeden przebieg
+tworzy i zapisuje zatwierdzoną nazwę z rekordem, drugi bez
+ponownego importu odczytuje Function/Options i sprawdza
+brak skutków ubocznych odczytu. Testy `ga13-receipt-restart-headless`
+wymagają własnego PASS na dokładnym SHA; nie traktować starego
+Undo/Redo PASS jako dowodu trwałości po restarcie.
+
+Issue #106 pozostaje otwarte bez komentarzy wymagających poprawy;
+#98 jest osobną migracją CodeBrowser. Bez Wyse/Precision/legacy
+Supervisor; wyłącznie syntetyczne dane Ghidry na Actions.
+GA-01–GA-18 nadal rozwijane; GA-14 odłożone.
+
 ## Aktualny stan — 2026-11-04, scalony PR #145 i rozwój GA-13
 
 GitHub `master` po właścicielsko zatwierdzonym [PR #145](https://github.com/bogkom/GhidrAssist/pull/145):
