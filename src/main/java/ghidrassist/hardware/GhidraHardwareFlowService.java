@@ -468,6 +468,7 @@ public final class GhidraHardwareFlowService {
         int foundFunctions=0,indirect=0,vbr=0,unresolved=0,visited=0,shown=0;
         int reusedFunctions=0,computedFunctions=0;
         int restoredDiskFunctions=0,savedDiskFunctions=0,eligibleDiskFunctions=0;
+        int restoredMidFunctionWorklists=0,savedMidFunctionWorklists=0;
         boolean limited=false;
         FunctionIterator funs=program.getFunctionManager().getFunctions(true);
         while(funs.hasNext()){
