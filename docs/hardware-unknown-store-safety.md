@@ -13,7 +13,10 @@ The dataflow model now:
   candidate SIMCR/MM write history.
 - Invalidates the affected register when an 8-bit, 16-bit, or 32-bit write
   overlaps any byte of an existing tracked word (e.g. SIMCR low-byte write to
-  `...A01` invalidates an earlier word at `...A00`).
+  `...A01` invalidates an earlier word at `...A00`). Overlap observes the
+  modeled 24-bit candidate address wrap: a long source STORE at `0xFFFFFE`
+  invalidates a tracked word at `0x000000` instead of keeping a stale
+  constant across the modeled address boundary.
 - Restores an exact register word value only after a fully known 16-bit
   overwrite at the register's aligned address.
 - Treats an unknown-size memory operation as an invalidation barrier. CPU

@@ -555,10 +555,17 @@ public final class GhidraHardwareFlowService {
                         continue;
                     HardwareSimcrLocalFirst.Effect next=null;
                     Integer word=null;
-                    if(hit.effectiveAddress!=null &&
-                            "SIMCR".equals(targets.get(hit.effectiveAddress))){
+                    boolean exactSimcr=hit.effectiveAddress!=null &&
+                        "SIMCR".equals(targets.get(hit.effectiveAddress));
+                    // A long STORE spanning SIMCR or a low-byte STORE may be
+                    // the first source write; keep UNKNOWN_WORD, not a full
+                    // word or evidence of an accepted hardware MM latch.
+                    boolean overlapsMm=HardwareDataflow.mayTouchSimcrMmLowByte(
+                        hit.effectiveAddress,hit.writeBits);
+                    if(exactSimcr || overlapsMm){
                         foundSimcr=true;
-                        if(hit.writeBits==16 && hit.writtenWord!=null){
+                        if(exactSimcr && hit.writeBits==16 &&
+                                hit.writtenWord!=null){
                             next=HardwareSimcrLocalFirst.Effect.WORD_LITERAL;
                             word=hit.writtenWord;
                         }else next=HardwareSimcrLocalFirst.Effect.UNKNOWN_WORD;

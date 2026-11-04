@@ -187,6 +187,48 @@ public final class HardwareDataflowSelfTest {
         ok(longOverwrite.snapshots.get(2).knownPeripheralWords.containsKey(simcr),
             "known SIMCR value can be re-established after clobber");
 
+        // Partial/long static writes can touch the MM low byte without
+        // establishing any full 16-bit SIMCR word or executed MM latch.
+        ok(HardwareDataflow.mayTouchSimcrMmLowByte(simcr-2,32) &&
+            HardwareDataflow.mayTouchSimcrMmLowByte(simcr+1,8) &&
+            HardwareDataflow.mayTouchSimcrMmLowByte(0x7ff9feL,32) &&
+            !HardwareDataflow.mayTouchSimcrMmLowByte(simcr,8) &&
+            !HardwareDataflow.mayTouchSimcrMmLowByte(cs7,32),
+            "only source writes touching the MM low byte are candidates");
+        var partialMm=HardwareDataflow.analyze(0,List.of(
+            st(0,STORE_DIRECT,null,simcr-2,0,null,32,2L),
+            st(2,STORE_DIRECT,null,simcr,0,0x40ca,16)
+        ),Set.of(simcr),100);
+        ok(partialMm.snapshots.get(0).writtenWord==null &&
+            partialMm.snapshots.get(1).priorMmCandidateMin==1 &&
+            partialMm.snapshots.get(1).priorMmCandidateMax==1,
+            "32-bit spanning STORE is a prior unknown MM candidate");
+        var alternateMm=HardwareDataflow.analyze(0,List.of(
+            st(0,STORE_DIRECT,null,0x7ff9feL,0,null,32,2L),
+            st(2,STORE_DIRECT,null,0x7ffa00L,0,0x4848,16)
+        ),Set.of(0x7ffa00L),100);
+        ok(alternateMm.snapshots.get(1).priorMmCandidateMin==1,
+            "alternate SIMCR alias mapping has same conservative guard");
+        var highByteOnly=HardwareDataflow.analyze(0,List.of(
+            st(0,STORE_DIRECT,null,simcr,0,0x48,8,2L),
+            st(2,STORE_DIRECT,null,simcr,0,0x40ca,16)
+        ),Set.of(simcr),100);
+        ok(highByteOnly.snapshots.get(1).priorMmCandidateMax==0,
+            "high byte alone does not contain the MM bit");
+
+        // Complete STORE over the 24-bit address boundary also touches 0.
+        var wrapped=HardwareDataflow.analyze(0,List.of(
+            st(0,STORE_DIRECT,null,0L,0,0x1234,16,2L),
+            st(2,STORE_DIRECT,null,simcr,0,0x40ca,16,4L),
+            st(4,STORE_DIRECT,null,0xfffffeL,0,null,32,6L),
+            st(6,STORE_DIRECT,null,cs7,0,0xff88,16)
+        ),Set.of(0L,simcr,cs7),100);
+        ok(!wrapped.snapshots.get(2).knownPeripheralWords.containsKey(0L),
+            "32-bit source STORE at 0xFFFFFE invalidates word at 0x000000");
+        ok(wrapped.snapshots.get(2).knownPeripheralWords.get(simcr)==0x40ca &&
+            wrapped.snapshots.get(3).knownPeripheralWords.get(cs7)==0xff88,
+            "unrelated words survive and fresh whole words can be inferred");
+
         var postIncrement=HardwareDataflow.analyze(0,List.of(
             st(0,SET_POINTER,"A0",simcr,0,null,0,2L),
             st(2,STORE_INDIRECT,"A0",0,0,0x40ca,16,4L)

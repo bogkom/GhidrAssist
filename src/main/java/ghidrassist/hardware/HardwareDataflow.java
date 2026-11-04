@@ -211,13 +211,40 @@ public final class HardwareDataflow {
      * profile. A static site is not evidence that MM is mapped there, that
      * the code executes, or that the MM write-once latch is still available.
      */
+    private static int storeBytes(int bits) {
+        return switch(bits) {
+            case 8 -> 1;
+            case 16 -> 2;
+            case 32 -> 4;
+            default -> 0;
+        };
+    }
+
+    // CPU32 source-level external addresses are modeled modulo 24 bits.
+    // A long write at 0xFFFFFE can also touch a tracked word at 0x000000.
+    private static boolean overlapsBytes(long start,int size,
+                                         long target,int targetSize) {
+        for(int i=0;i<size;i++)
+            for(int j=0;j<targetSize;j++)
+                if(((start+i)&MASK24)==((target+j)&MASK24))
+                    return true;
+        return false;
+    }
+
+    /**
+     * Candidate touch of the MC68332 MM bit's LOW BYTE under either MM
+     * mapping. A partial/spanning STORE is UNKNOWN first-site evidence, not
+     * a known 16-bit SIMCR value or proof of hardware latch execution.
+     */
+    static boolean mayTouchSimcrMmLowByte(Long address,int bits) {
+        int bytes=storeBytes(bits);
+        return address!=null && bytes>0 &&
+            (overlapsBytes(address,bytes,0x7ffa01L,1) ||
+             overlapsBytes(address,bytes,0xfffa01L,1));
+    }
+
     private static boolean candidateSimcrStore(Step step, Long address) {
-        if (address==null) return false;
-        boolean word=step.writeBits==16 &&
-            (address==0x7ffa00L || address==0xfffa00L);
-        boolean lowByte=step.writeBits==8 &&
-            (address==0x7ffa01L || address==0xfffa01L);
-        return word || lowByte;
+        return mayTouchSimcrMmLowByte(address,step.writeBits);
     }
 
     private static State transfer(Step step,State in,Set<Long> targets){
@@ -261,19 +288,15 @@ public final class HardwareDataflow {
                     // invalidates the full register value. Reintroduce a
                     // constant only for an aligned, complete 16-bit write
                     // with a fully known source.
-                    int bytes = switch(step.writeBits) {
-                        case 8 -> 1;
-                        case 16 -> 2;
-                        case 32 -> 4;
-                        default -> 0;
-                    };
+                    int bytes = storeBytes(step.writeBits);
                     if(bytes==0) {
                         s.peripherals.clear();
                         s.crossedUnknownStore=true;
                     } else {
-                        long last=address+bytes-1;
+                        // Source/word windows can cross 0xFFFFFF:
+                        // invalidate high and wrapped low bytes alike.
                         s.peripherals.keySet().removeIf(reg ->
-                            address<=reg+1 && reg<=last);
+                            overlapsBytes(address,bytes,reg,2));
                         if(step.writeBits==16 && targets.contains(address) &&
                                 (address&1)==0) {
                             Long known=knownStoreValue(step,in);
