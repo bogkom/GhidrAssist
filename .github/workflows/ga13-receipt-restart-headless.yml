@@ -70,6 +70,8 @@ jobs:
           assert summary["status"]=="PASSED_SYNTHETIC_REAL_GHIDRA_HEADLESS",summary
           assert summary.get("ga13_distinct_ghidra_jvms")==2,summary
           assert summary.get("ga13_same_saved_project_reopened") is True,summary
+          assert summary.get("ga13_different_process_pids") is True,summary
+          assert summary.get("ga13_matching_persisted_fields")==4,summary
           assert first.get("rename_receipt_first_jvm_saved") is True,first
           assert second.get("rename_receipt_second_jvm_reopened") is True,second
           assert second.get("rename_receipt_saved_name_and_source") is True,second
