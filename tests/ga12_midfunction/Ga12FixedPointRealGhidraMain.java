@@ -119,16 +119,17 @@ public final class Ga12FixedPointRealGhidraMain {
             boolean wasCancelled=false,wasReused=false;
             int restored=0,saved=0;
             if(phase.equals("write")){
-                Program observed=full;
                 AtomicInteger checks=new AtomicInteger();
                 TaskMonitor interrupt=(TaskMonitor)java.lang.reflect.Proxy
                     .newProxyInstance(TaskMonitor.class.getClassLoader(),
                         new Class[]{TaskMonitor.class},(proxy,method,a)-> {
                             if(method.getName().equals("checkCancelled")) {
                                 checks.incrementAndGet();
-                                if(GhidraHardwareFlowService
-                                        .checkpointedFunctionStages(observed)>0)
-                                    throw new CancelledException();
+                                try(var files=Files.list(directory)){
+                                    if(files.anyMatch(path->
+                                            path.getFileName().toString().endsWith(".chk")))
+                                        throw new CancelledException();
+                                }
                                 return null;
                             }
                             return method.invoke(TaskMonitor.DUMMY,a);
@@ -137,15 +138,15 @@ public final class Ga12FixedPointRealGhidraMain {
                     full,revision,interrupt);}
                 catch(CancelledException expected){wasCancelled=true;}
                 require(wasCancelled && checks.get()>0 &&
-                    GhidraHardwareFlowService.checkpointedFunctionStages(full)>0,
-                    "Scan did not cancel after first complete function");
+                    GhidraHardwareFlowService.checkpointedFunctionStages(full)==0,
+                    "Analysis must interrupt BEFORE finishing the first function");
                 Path finishedStage=HardwareDurableStageStore.checkpointPath(
                     directory,original.get());
                 require(!Files.exists(finishedStage),
-                    "Interrupted full report incorrectly written to disk");
+                    "Incomplete fixed point was saved as whole-stage report");
                 try(var files=Files.list(directory)){
                     require(files.anyMatch(Files::isRegularFile),
-                        "Completed function not saved before interruption");
+                        "No bounded worklist checkpoint before cancellation");
                 }
                 saved=1;
             }else{
