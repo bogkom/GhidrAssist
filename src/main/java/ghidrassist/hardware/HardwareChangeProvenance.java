@@ -68,8 +68,12 @@ public final class HardwareChangeProvenance {
         int pos=0;
         while(pos<normalized.length()) {
             char c=normalized.charAt(pos);
+            // Some spreadsheet importers ignore Unicode formatting
+            // controls (Cf) before interpreting a formula. A leading
+            // word joiner, bidi mark, zero-width joiner, etc. must not
+            // conceal an =, +, -, or @ formula prefix.
             if(!Character.isWhitespace(c) && !Character.isSpaceChar(c) &&
-                    c!='\ufeff' && c!='\u200b')break;
+                    Character.getType(c)!=Character.FORMAT)break;
             pos++;
         }
         if(pos<normalized.length() &&
