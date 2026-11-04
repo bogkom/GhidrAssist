@@ -282,6 +282,36 @@ public final class GhidraHardwareFlowService {
         return new HardwareDataflow.Step(pc,HardwareDataflow.Kind.OTHER,
             null,0,0,null,0,next,full);
     }
+    /**
+     * Strict Ghidra Listing gate: all bytes of the function body must be
+     * decoded into a contiguous, direct, straight-line leaf ending in RTS.
+     * No P-code unknown/implicit A-D effects or multi-branch paths accepted.
+     */
+    private static Map<String,Long> verifiedLeafReturn(
+            Program program,Function callee,TaskMonitor monitor)
+            throws CancelledException{
+        if(callee==null || callee.getBody().getNumAddresses()<8 ||
+                callee.getBody().getNumAddresses()>
+                    HardwareVerifiedLeafReturn.MAX_LEAF_INSTRUCTIONS*6L)
+            return Map.of();
+        List<HardwareDataflow.Step> steps=new ArrayList<>();
+        long decoded=0;
+        InstructionIterator iterator=program.getListing()
+            .getInstructions(callee.getBody(),true);
+        while(iterator.hasNext()){
+            monitor.checkCancelled();
+            if(steps.size()>=HardwareVerifiedLeafReturn.MAX_LEAF_INSTRUCTIONS)
+                return Map.of();
+            Instruction instruction=iterator.next();
+            decoded+=instruction.getLength();
+            steps.add(translate(instruction,callee));
+        }
+        if(decoded!=callee.getBody().getNumAddresses())
+            return Map.of();
+        return HardwareVerifiedLeafReturn.summarize(
+            callee.getEntryPoint().getOffset(),decoded,steps);
+    }
+
     private static String csEpoch(HardwareDataflow.Snapshot hit,String changed,
             long base,int mm){
         Map<Long,Integer> values=hit.knownPeripheralWords;
@@ -442,6 +472,8 @@ public final class GhidraHardwareFlowService {
             new ArrayList<>();
         List<HardwareInterproceduralMmEffects.CallSite> mmCallSites=
             new ArrayList<>();
+        Map<Long,Map<String,Long>> verifiedLeafByEntry=new HashMap<>();
+        int provenLeafCallSites=0;
         List<Long> evidencedFunctions=new ArrayList<>();
         HardwareEvidenceBudget<HardwarePointerRoleReview.Site> pointerSites=
             new HardwareEvidenceBudget<>(MAX_POINTER_ROLE_SITES);
@@ -488,9 +520,9 @@ public final class GhidraHardwareFlowService {
                         if(!fun.getBody().contains(destination))
                             uncertainFlow=true;
                 }
+                Long callTarget=null;
                 if(insn.getFlowType().isCall()){
                     Address[] destinations=insn.getFlows();
-                    Long callTarget=null;
                     if(destinations==null || destinations.length!=1)
                         uncertainFlow=true;
                     else {
@@ -506,7 +538,22 @@ public final class GhidraHardwareFlowService {
                         fun.getEntryPoint().getOffset(),
                         insn.getAddress().getOffset(),callTarget));
                 }
-                steps.add(translate(insn,fun));
+                HardwareDataflow.Step translated=translate(insn,fun);
+                if(mc68332Selected && callTarget!=null &&
+                        verifiedLeafByEntry.size()<256){
+                    Map<String,Long> proved=verifiedLeafByEntry.get(callTarget);
+                    if(proved==null){
+                        Function callee=program.getFunctionManager()
+                            .getFunctionAt(insn.getFlows()[0]);
+                        proved=verifiedLeafReturn(program,callee,monitor);
+                        verifiedLeafByEntry.put(callTarget,proved);
+                    }
+                    if(!proved.isEmpty()){
+                        translated=translated.withVerifiedCallReturns(proved);
+                        provenLeafCallSites++;
+                    }
+                }
+                steps.add(translated);
             }
             // Undecoded bytes inside the Ghidra function body are not proof
             // of absence of hidden memory operations/call targets.
@@ -814,6 +861,9 @@ public final class GhidraHardwareFlowService {
            .append("- Register-indirect matched writes: ").append(indirect).append("\n")
            .append("- VBR control-register sites: ").append(vbr).append("\n")
            .append("- Unresolved register-based stores: ").append(unresolved).append("\n")
+           .append("- Strictly verified leaf CALL return-register sites: ")
+               .append(provenLeafCallSites).append(" (read-only static sources; ")
+               .append("all peripheral state remains UNKNOWN after CALL).\n")
            .append("- Propagation cap reached: ").append(limited).append("\n\n")
            .append(reset.markdown())
            .append(GhidraInterruptVectorService.analyze(program,monitor))
