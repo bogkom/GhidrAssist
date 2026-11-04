@@ -51,3 +51,10 @@ states or the MM write-once latch across calls**. The existing conservative
 CALL_BARRIER remains in force. No hardware first-write chronology, runtime
 execution, bus mapping, or ISR activation is proven. Generic CPU32 never
 inherits MC68332 register meanings.
+
+**Unknown STORE width:** even a known destination is not a safe negative
+SIMCR/MM effect if P-code identifies a memory mutation whose width the
+source adapter cannot model. Such sites are reported as unresolved alias/width
+effects for the transitive callee; they are never treated as a known full
+16-bit SIMCR literal. This protects MC68332 evidence from unsafe no-MM
+conclusions while leaving the original CALL_BARRIER unchanged.

@@ -529,7 +529,9 @@ public final class GhidraHardwareFlowService {
             for(HardwareDataflow.Snapshot hit:result.snapshots){
                 if(hit.kind!=HardwareDataflow.Kind.STORE_DIRECT &&
                         hit.kind!=HardwareDataflow.Kind.STORE_INDIRECT)continue;
-                if(hit.effectiveAddress==null)localUnknownStore=true;
+                if(HardwareInterproceduralMmEffects.unknownMemoryWrite(
+                        hit.effectiveAddress,hit.writeBits))
+                    localUnknownStore=true;
                 else if(mc68332Selected &&
                         HardwareDataflow.mayTouchSimcrMmLowByte(
                             hit.effectiveAddress,hit.writeBits))

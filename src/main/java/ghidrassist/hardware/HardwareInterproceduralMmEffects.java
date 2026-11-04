@@ -43,7 +43,7 @@ public final class HardwareInterproceduralMmEffects {
                     .append(" PC ").append(hex(site.pc())).append(" -> ")
                     .append(site.target()==null?"UNKNOWN":hex(site.target()))
                     .append("; possible SIMCR/MM low-byte STORE=").append(s.mayMm())
-                    .append("; unknown alias=").append(s.unknownAlias())
+                    .append("; unknown alias/width=").append(s.unknownAlias())
                     .append("; unknown callee/flow=").append(s.unknownControl())
                     .append("; cycle=").append(s.cycle())
                     .append("; cap=").append(s.limited())
@@ -54,6 +54,16 @@ public final class HardwareInterproceduralMmEffects {
     }
     private static String hex(long n){
         return String.format(Locale.ROOT,"0x%08X",n);
+    }
+
+    /**
+     * Unknown effective addresses AND unknown STORE widths are possible
+     * aliases to SIMCR; a source address alone does not make a zero-width
+     * or unmodeled P-code memory mutation safe to exclude.
+     */
+    static boolean unknownMemoryWrite(Long effectiveAddress,int widthBits){
+        return effectiveAddress==null ||
+            (widthBits!=8 && widthBits!=16 && widthBits!=32);
     }
     private record Work(long pc,int depth){}
     private static boolean cycle(long pc,Map<Long,FunctionNode> graph,

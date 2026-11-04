@@ -48,6 +48,22 @@ public final class HardwareInterproceduralMmEffectsSelfTest {
         ok(alias.rows().get(0).summary().unknownAlias() &&
             alias.rows().get(0).summary().uncertainOrMm(),
             "unknown effective STORE address may alias SIMCR");
+        ok(HardwareInterproceduralMmEffects.unknownMemoryWrite(
+                0xfffa00L,0) &&
+            HardwareInterproceduralMmEffects.unknownMemoryWrite(
+                0xfff9feL,64) &&
+            HardwareInterproceduralMmEffects.unknownMemoryWrite(null,16) &&
+            !HardwareInterproceduralMmEffects.unknownMemoryWrite(0xfffa00L,8) &&
+            !HardwareInterproceduralMmEffects.unknownMemoryWrite(0xfffa00L,16) &&
+            !HardwareInterproceduralMmEffects.unknownMemoryWrite(0xfffa00L,32),
+            "known destination with unmodeled P-code STORE width must not be"
+                +"classified as harmless to SIMCR");
+        var unknownWidth=run(List.of(node(0x130,false,
+            HardwareInterproceduralMmEffects.unknownMemoryWrite(
+                0xfffa00L,0),false)),List.of(calls.get(0)),4,20,20);
+        ok(unknownWidth.rows().get(0).summary().unknownAlias() &&
+            unknownWidth.rows().get(0).summary().uncertainOrMm(),
+            "unmodeled-width direct callee STORE cannot prove no MM effects");
         var indirect=run(diamond,List.of(call(0x100,0x108,null)),4,20,20);
         ok(indirect.rows().get(0).summary().unknownControl(),
             "indirect unresolved CALL remains unknown");
