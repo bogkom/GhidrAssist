@@ -81,7 +81,7 @@ public final class Ga11VectorHeadlessMain {
             "generic-profile","trambar-source","csbar-mm0-reject",
             "mmio-read-reference","csbar-csor-conditional",
             "simcr-mm0-literal","trambar-unknown","csor-alternatives",
-            "branch-simcr","call-barrier","cancel-incomplete",
+            "branch-simcr","call-barrier","leaf-return","branch-leaf","cancel-incomplete",
             "function-stage-resume","function-rename","apply-preserve","provenance-csv","movec-vbr").contains(ga18Mode),
             "Unknown GA-18 acceptance mode");
         var config=new HeadlessGhidraApplicationConfiguration();
@@ -874,6 +874,171 @@ public final class Ga11VectorHeadlessMain {
                     result.addProperty("call_clobbered_pointer_not_reused",true);
                     result.addProperty("call_alias_blocks_review",true);
                     result.addProperty("call_read_only",true);
+                } else if("branch-leaf".equals(ga18Mode)) {
+                    // Real CPU32 conditional BNE and BRA; both reachable paths
+                    // agree on A0 in the positive callee. A negative control
+                    // returns conflicting A0 values and must remain unknown.
+                    int branchTx=full.startTransaction("GA02 synthetic branch-convergent leaf");
+                    try {
+                        full.getMemory().setBytes(address(full,0x760L),
+                            java.util.HexFormat.of().parseHex(
+                                "203c000040ca6608207c00fffa006006207c00fffa004e75"));
+                        full.getMemory().setBytes(address(full,0x7a0L),
+                            java.util.HexFormat.of().parseHex(
+                                "203c000040ca6608207c00fffa006006207c007ffa004e75"));
+                        full.getMemory().setBytes(address(full,0x720L),
+                            java.util.HexFormat.of().parseHex(
+                                "4eb90000076030804e75"));
+                        full.getMemory().setBytes(address(full,0x7d0L),
+                            java.util.HexFormat.of().parseHex(
+                                "4eb9000007a030804e75"));
+                    } finally { full.endTransaction(branchTx,true); }
+                    // Ensure the alternative branch targets are also decoded
+                    // in the isolated fixture. The initial disassembler pass
+                    // may stop at the unconditional BRA on the fallthrough.
+                    int branchDecodeTx=full.startTransaction("GA02 synthetic branch arms");
+                    try{
+                        check(new DisassembleCommand(address(full,0x770L),null,false)
+                            .applyTo(full,TaskMonitor.DUMMY),
+                            "Ghidra failed positive alternative branch arm");
+                        check(new DisassembleCommand(address(full,0x7b0L),null,false)
+                            .applyTo(full,TaskMonitor.DUMMY),
+                            "Ghidra failed negative alternative branch arm");
+                    }finally{full.endTransaction(branchDecodeTx,true);}
+                    defineFixtureFunction(full,0x760L,24,"fixture_branch_two_agreeing_returns");
+                    defineFixtureFunction(full,0x7a0L,24,"fixture_branch_disagreeing_return");
+                    defineFixtureFunction(full,0x720L,10,"fixture_branch_positive_caller");
+                    defineFixtureFunction(full,0x7d0L,10,"fixture_branch_negative_caller");
+                    long branchRevisionBefore=full.getModificationNumber();
+                    var report=new GhidraHardwareFlowService().analyze(
+                        full,TaskMonitor.DUMMY,true);
+                    var leafMethod=GhidraHardwareFlowService.class.getDeclaredMethod(
+                        "verifiedLeafReturn",Program.class,Function.class,TaskMonitor.class);
+                    leafMethod.setAccessible(true);
+                    var decodedLeaf=leafMethod.invoke(null,full,
+                        full.getFunctionManager().getFunctionAt(address(full,0x760L)),
+                        TaskMonitor.DUMMY);
+                    StringBuilder branchDiag=new StringBuilder();
+                    var dec=full.getListing().getInstructions(
+                        full.getFunctionManager().getFunctionAt(
+                            address(full,0x760L)).getBody(),true);
+                    while(dec.hasNext()){
+                        var insn=dec.next();
+                        branchDiag.append("pc=").append(insn.getAddress())
+                            .append(" mnemonic=").append(insn.getMnemonicString())
+                            .append(" flows=").append(java.util.Arrays.toString(insn.getFlows()))
+                            .append(" fall=").append(insn.getFallThrough()).append("; ");
+                    }
+                    System.out.println("GA02 BRANCH DIAG returns="+decodedLeaf+
+                        " instructions="+branchDiag+" mmio="+
+                        report.rawCfgMmioSites.stream()
+                            .filter(site->site.pc()>=0x720L && site.pc()<0x7f0L)
+                            .map(site->Long.toHexString(site.pc())+":"+site.register()+
+                                ":"+site.literal()).toList());
+                    check(report.rawCfgMmioSites.stream().anyMatch(site->
+                            site.pc()==0x726L && site.address()==0xfffa00L &&
+                            "SIMCR".equals(site.register()) &&
+                            Integer.valueOf(0x40ca).equals(site.literal()) &&
+                            site.unknownCall()),
+                        "Convergent branch did not prove caller SIMCR registers");
+                    check(report.rawCfgMmioSites.stream().anyMatch(site->
+                            site.pc()==0x7d6L &&
+                            "UNRESOLVED_ALIAS".equals(site.register()) &&
+                            site.unknownCall()),
+                        "Disagreeing branch invented fixed SIMCR address");
+                    check(full.getModificationNumber()==branchRevisionBefore,
+                        "Branch static analysis altered Ghidra Program");
+                    var generic=new GhidraHardwareFlowService().analyze(
+                        full,TaskMonitor.DUMMY,false);
+                    check(generic.rawCfgMmioSites.stream().noneMatch(site->
+                            site.pc()==0x726L &&
+                            "SIMCR".equals(site.register())),
+                        "Generic CPU32 inherited MC68332 register evidence");
+                    result.addProperty("branch_leaf_real_convergent_proven",true);
+                    result.addProperty("branch_leaf_disagreeing_address_unknown",true);
+                    result.addProperty("branch_leaf_call_history_uncertain",true);
+                    result.addProperty("branch_leaf_generic_cpu32_conservative",true);
+                    result.addProperty("branch_leaf_program_read_only",true);
+                } else if("leaf-return".equals(ga18Mode)) {
+                    // Genuine CPU32 Listing, with real Ghidra callee reference.
+                    // Only strict direct leaf return constants cross the
+                    // generic CALL barrier; memory/MM state remains unknown.
+                    int t=full.startTransaction("GA02 synthetic verified leaf");
+                    try{
+                        full.getMemory().setBytes(address(full,0x640L),
+                            java.util.HexFormat.of().parseHex(
+                                "207c00fffa00203c000040ca4e75"));
+                        full.getMemory().setBytes(address(full,0x600L),
+                            java.util.HexFormat.of().parseHex(
+                                "4eb90000064030804e75"));
+                        full.getMemory().setBytes(address(full,0x680L),
+                            java.util.HexFormat.of().parseHex(
+                                "207c00fffa004eb90000040030bc40ca4e75"));
+                    }finally{full.endTransaction(t,true);}
+                    defineFixtureFunction(full,0x640L,14,"fixture_leaf_returns_both");
+                    defineFixtureFunction(full,0x600L,10,"fixture_leaf_call_positive");
+                    defineFixtureFunction(full,0x680L,18,"fixture_unverified_call_negative");
+                    long revision=full.getModificationNumber();
+                    var evidence=new GhidraHardwareFlowService().analyze(
+                        full,TaskMonitor.DUMMY,true);
+                    check(evidence.markdown.contains(
+                        "- Strictly verified leaf CALL return-register sites: 1"),
+                        "MC68332 source did not accept unique direct leaf");
+                    var callee=full.getFunctionManager().getFunctionAt(
+                        address(full,0x640L));
+                    var postCall=full.getListing().getInstructionAt(
+                        address(full,0x606L));
+                    var transMethod=GhidraHardwareFlowService.class
+                        .getDeclaredMethod("translate",
+                            ghidra.program.model.listing.Instruction.class,
+                            Function.class);
+                    transMethod.setAccessible(true);
+                    var modeled=(ghidrassist.hardware.HardwareDataflow.Step)
+                        transMethod.invoke(null,postCall,
+                            full.getFunctionManager().getFunctionAt(
+                                address(full,0x600L)));
+                    var leafMethod=GhidraHardwareFlowService.class
+                        .getDeclaredMethod("verifiedLeafReturn",
+                            Program.class,Function.class,TaskMonitor.class);
+                    leafMethod.setAccessible(true);
+                    var proved=leafMethod.invoke(null,full,callee,TaskMonitor.DUMMY);
+                    System.out.println("GA02 SYNTHETIC LEAF DIAG"+
+                        " opcode="+postCall.getMnemonicString()+
+                        " srcOperand="+postCall.getDefaultOperandRepresentation(0)+
+                        " modeledSource="+modeled.sourceRegister+
+                        " modeledKind="+modeled.kind+
+                        " knownLeafReturns="+proved);
+                    check(evidence.rawCfgMmioSites.stream().anyMatch(site->
+                        site.pc()==0x606L && site.address()==0xfffa00L &&
+                        "SIMCR".equals(site.register()) &&
+                        Integer.valueOf(0x40ca).equals(site.literal()) &&
+                        site.unknownCall()),
+                        "Real leaf-return register values not recovered conservatively: "+
+                        evidence.rawCfgMmioSites.stream()
+                            .filter(site->site.pc()>=0x600L &&
+                                site.pc()<0x690L)
+                            .map(site->"pc="+Long.toHexString(site.pc())+
+                                ",reg="+site.register()+
+                                ",addr="+Long.toHexString(site.address())+
+                                ",literal="+site.literal()+
+                                ",unknownCall="+site.unknownCall())
+                            .toList());
+                    check(evidence.rawCfgMmioSites.stream().anyMatch(site->
+                        site.pc()==0x68cL &&
+                        "UNRESOLVED_ALIAS".equals(site.register())),
+                        "Unverified callee incorrectly preserved pre-call A0");
+                    check(full.getModificationNumber()==revision,
+                        "Read-only verified leaf analysis edited Ghidra Program");
+                    var generic=new GhidraHardwareFlowService().analyze(
+                        full,TaskMonitor.DUMMY,false);
+                    check(generic.markdown.contains(
+                        "- Strictly verified leaf CALL return-register sites: 0"),
+                        "Generic CPU32 inherited MC68332-only leaf evidence");
+                    result.addProperty("leaf_real_direct_return_constants",true);
+                    result.addProperty("leaf_real_call_barrier_history_unknown",true);
+                    result.addProperty("leaf_real_unproved_call_keeps_alias",true);
+                    result.addProperty("leaf_real_generic_profile_conservative",true);
+                    result.addProperty("leaf_real_program_read_only",true);
                 } else if("cancel-incomplete".equals(ga18Mode)) {
                     // Deterministic cancellation *during* a real Ghidra
                     // traversal (not only before entry). No partial report
