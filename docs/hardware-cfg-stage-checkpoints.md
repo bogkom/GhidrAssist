@@ -47,11 +47,30 @@ cache misses. These files never reach public CI artifacts except synthetic
 test fixtures. No original user firmware, OAuth credentials or configuration
 are copied.
 
-**Important limitation at this stage:** the new persistent I/O primitive is
-NOT YET connected to production HardwareFlowStageCache. That cache still
-resumes only within one process. A validated Ghidra Listing/program fingerprint
-and a bounded decoder for all GhidraHardwareFlowService.Report fields are
-required before any disk checkpoint can replace real computation after a
-restart. Original import SHA, Ghidra modification number and a stage marker
-alone MUST NOT unlock restart reuse. Partial per-function resume remains
-outside this first I/O safety increment.
+**Opt-in resume of one completed CFG stage:** HardwareFlowStageCache can
+now read and write a bounded, typed, complete GhidraHardwareFlowService.Report
+to this directory. Enable it only in an isolated working-copy environment by
+setting the JVM system property (with an already-created private directory):
+
+    -Dghidrassist.ga12.durable.dir=/path/to/isolated/private/checkpoints
+
+The default is **OFF**; no disk directory is automatically created. The
+fingerprint binds the Ghidra DomainFile file ID and project locator (not
+only the name), imported source SHA-256, selected MCU/language, complete
+initialized memory contents, function bodies, instructions, P-code, references
+and the exact installed extension JAR SHA-256. If any input cannot be
+measured, if any check changes, or if stored evidence is corrupt, the
+checkpoint is ignored and the CFG stage recomputes. Stage writes are atomic.
+No Ghidra project is modified by loading or saving the external checkpoint.
+
+Only complete, non-limited CFG reports are persisted, never partial/failed
+work. A resumed stage remains read-only and all existing Review/Apply/Undo
+authorization applies; it is not proof of executed MCU instructions.
+The model does **not** yet resume mid-function or halfway through CFG.
+This snapshot is derived analysis data that may contain sensitive addresses
+or annotations; keep it private and NEVER upload it to GitHub.
+
+Native synthetic Ghidra 12.1.4 CI runs independent JVM processes for
+cold write, reopen/reuse, and analysis-byte-edit invalidation. Distinguish
+its exact-SHA PASS from source-only persistence tests and from any manual
+Wyse/Precision acceptance.
