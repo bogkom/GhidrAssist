@@ -96,6 +96,63 @@ public final class HardwareInterproceduralMmEffectsSelfTest {
             node(0x130,false,false,false)),List.of(calls.get(0)),4,20,20);}
         catch(IllegalArgumentException expected){fail=true;}
         ok(fail,"reject duplicate functions");
+        // More than a few thousand nodes can all be reachable in one
+        // BFS step (root fan-out), yet form a much deeper DFS cross-edge
+        // chain. Recursive cycle detection can overflow the Java stack.
+        final int fanout=6500;
+        long first=0x2000L;
+        var edges=new java.util.ArrayList<Long>();
+        var graph=new java.util.ArrayList<
+            HardwareInterproceduralMmEffects.FunctionNode>();
+        for(int i=0;i<fanout;i++){
+            long entry=first+2L*i;
+            edges.add(entry);
+            graph.add(node(entry,i==fanout-1,false,false,
+                i==fanout-1?new Long[]{}:new Long[]{entry+2L}));
+        }
+        graph.add(new HardwareInterproceduralMmEffects.FunctionNode(
+            0x130L,false,false,false,edges));
+        var wide=run(graph,List.of(calls.get(0)),2,fanout+1,20)
+            .rows().get(0).summary();
+        ok(wide.visited()==fanout+1 && wide.mayMm() &&
+            !wide.cycle() && !wide.limited() &&
+            !wide.unknownControl(),
+            "iterative cycle audit handles 6500-node shallow-BFS/deep-DFS DAG");
+        // Introduce the back edge only in a fresh synthetic graph.
+        var withCycle=new java.util.ArrayList<>(graph);
+        withCycle.set(fanout-1,node(first+2L*(fanout-1),
+            true,false,false,first));
+        var cyclic=run(withCycle,List.of(calls.get(0)),2,
+            fanout+1,20).rows().get(0).summary();
+        ok(cyclic.visited()==fanout+1 && cyclic.mayMm() &&
+            cyclic.cycle() && cyclic.unknownControl() &&
+            !cyclic.limited(),
+            "iterative DFS must still find long true call cycles");
+        var truncated=run(graph,List.of(calls.get(0)),2,5,20)
+            .rows().get(0).summary();
+        ok(truncated.visited()==5 && !truncated.mayMm() &&
+            truncated.limited() && truncated.unknownControl() &&
+            truncated.uncertainOrMm(),
+            "capped BFS cannot claim absence of MM in unvisited function");
+        // Previously a many-to-one fan-in could enqueue thousands of
+        // duplicate work records despite a maxCount of just two nodes.
+        var duplicateTargets=new HardwareInterproceduralMmEffects
+            .FunctionNode(0x130L,false,false,false,
+                java.util.Collections.nCopies(12000,0x160L));
+        var duplicateSafe=run(List.of(duplicateTargets,
+                node(0x160,true,false,false)),
+            List.of(calls.get(0)),2,2,20).rows().get(0).summary();
+        ok(duplicateSafe.visited()==2 && duplicateSafe.mayMm() &&
+            !duplicateSafe.limited() && !duplicateSafe.cycle(),
+            "repeated same callee must not consume unique BFS work cap");
+        var missingTargets=new java.util.ArrayList<Long>();
+        for(int i=0;i<12000;i++)missingTargets.add(0x100000L+i);
+        var missingWide=run(List.of(new HardwareInterproceduralMmEffects
+                .FunctionNode(0x130L,false,false,false,missingTargets)),
+            List.of(calls.get(0)),2,3,20).rows().get(0).summary();
+        ok(missingWide.visited()==1 && !missingWide.mayMm() &&
+            missingWide.limited() && missingWide.unknownControl(),
+            "unseen/unknown fan-out is explicitly incomplete under node cap");
         System.out.println("HardwareInterproceduralMmEffectsSelfTest OK");
     }
 }

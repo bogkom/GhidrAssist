@@ -3,6 +3,46 @@
 Status: **IN PROGRESS — integrated baseline 2026-11-04**. Scope source: user-approved 2026-10-28 requirements (A–H, additional features 13.1–13.7, PDF/RAG, testing and Codex Supervisor integration).
 
 
+## Aktualizacja GA-02/03 — 2026-11-04, po scaleniu #142 i #143
+
+**Źródło stanu: GitHub.** Właściciel wcześniej zatwierdził scalanie
+przetestowanych pakietów. [PR #142](https://github.com/bogkom/GhidrAssist/pull/142)
+dotyczący ograniczonych wejść one-hop/two-hop został scalony do chronionego
+`master` jako `98be5608eac121e1dcd141fb6db651724e5172ef`.
+Zachowano identyczne drzewo Git PR i merge SHA
+`394e47d945524bfb5291b677333d6e388bf05cf8`.
+Dokładny PR HEAD: `e3384ed94940c781ac788feb5e04fe773d9cb89e`,
+**21/21 GitHub Actions SUCCESS**, w tym Java21, pełny build
+Ghidry 12.1.4 PUBLIC / Java25 i syntetyczna Ghidra headless.
+Na dokładnym merge SHA: osobny **1/1 CI SUCCESS** (pełny build).
+
+[PR #143](https://github.com/bogkom/GhidrAssist/pull/143)
+zabezpiecza starsze eksporty CSV propozycji nazw rejestrów/funkcji
+przed formułami ukrytymi znakami Unicode. Przeszedł **21/21 GitHub
+Actions SUCCESS** na dokładnym HEAD
+`935fa6b9efc6e6dc8470f10d06f0533512ae95b9` i został scalony
+jako `4664e4d3e3a33ccf9b52c24a89d5a42533d6066d`.
+Drugi merge dodaje tylko sześć plików PR #143 do #142; kontrola
+blobów potwierdziła brak nadpisania plików źródłowych obu pakietów.
+Po scaleniu końcowy SHA uzyskał oddzielny **2/2 CI SUCCESS**
+(pełny build + Java21 nazwy/CSV). Te kontrole nie dowodzą
+ruchu na ECU411 ani prawdziwego autorstwa zmian.
+
+**Bieżący następny pakiet GA-02/03:** rozwiązać ryzyko nieograniczonej
+kolejki transytywnego CALL w `HardwareInterproceduralMmEffects` przez
+deduplikację i `maxCount` także dla zaplanowanych/nieznanych adresów,
+oraz zastąpić rekurencyjne wykrywanie cykli iteracyjnym DFS.
+Przekroczenie budżetu pozostaje jawnie **LIMITED/UNKNOWN**, bez
+fałszywego wniosku o braku zapisów SIMCR/MM. Deterministyczne testy
+Java21 mają obejmować szeroki graf, głęboki ciąg krawędzi, prawdziwy
+cykl, wielokrotne wspólne cele oraz nieznane węzły.
+**Przyszłego CI PASS nie wolno zakładać przed wynikiem na dokładnym SHA.**
+
+Issue #106 pozostaje otwarte bez nowych wpisów. PR #98 zachowuje
+oddzielną lukę migracji profilu CodeBrowser. GA-01–GA-18 nadal
+nieukończone; GA-14 odłożone. Testy lokalne Wyse/Precision i
+stary Supervisor pozostają zatrzymane.
+
 ## Kontynuacja GA-02/03 — 2026-11-04, po scaleniu #141
 
 Chroniony `master` po właścicielsko zatwierdzonym PR #140 i

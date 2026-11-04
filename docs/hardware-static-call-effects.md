@@ -88,3 +88,45 @@ matches the mnemonic. A partial Dn destination still **clobbers** full
 register provenance; a word view is not promoted to a full long pointer.
 This distinction is asserted both in Java21 and in real Ghidra synthetic
 CALL + indirect SIMCR STORE tests.
+
+## 2026-11-04 — bounded queue and nonrecursive CALL-cycle audit (GA-02/03)
+
+A transitive function-node budget alone did not constrain the **BFS
+work queue**: convergent direct CALL sites could schedule the same target
+repeatedly before that target was examined, and a wide set of unknown
+destinations could consume excessive memory even at a small `maxCount`.
+
+The SIMCR/MM CALL-site analyzer now maintains a **deduplicated
+scheduled-PC set**, including unresolved callees. At most `maxCount`
+distinct addresses are enqueued in one source-site inspection.
+Discovering another address beyond this cap sets both `limited=true`
+and `unknownControl=true`. Nothing is silently called "no MM effect";
+the report's **cap** field identifies the incomplete horizon. When a
+known node's edge target is already scheduled, it does not consume
+additional queue space. Results of ordinary complete graphs stay
+unchanged, including the existing `visited` count of *recognized*
+functions (not unknown targets).
+
+The cycle scan formerly used a **recursive** DFS over the inspected
+subgraph. A graph with thousands of vertices can be reached in only
+one BFS edge from a high-fanout root yet contain a long DFS chain of
+cross-edges. That exceeded the Java call stack even though the
+source-site's `maxCount` and `maxDepth` were valid. Cycle detection
+now uses an explicit stack of vertex and edge iterators, with gray/black
+sets; the same cycle/acyclic evidence is returned without risking Java
+stack overflow.
+
+Deterministic Java 21 tests cover: **6500** parallel descendants plus
+a 6500-link chain (acyclic with a remote MM source); a long backedge
+cycle; budget truncation hiding a later MM source; **12,000** duplicate
+edges to one known leaf (no false cap); and 12,000 distinct missing
+destinations with a three-node queue budget (explicit UNKNOWN and cap).
+The same Ghidra 12.1.4 PUBLIC / Java 25 extension build and existing
+synthetic-Ghidra hardware gates remain required on the **exact PR HEAD**.
+
+**Static source only:** no runtime RESET/CALL, first executed SIMCR
+write, write-once MM latch, physical CS address mapping or active ISR
+is inferred. No result is used as a Review/Apply/Undo authorization,
+a provenance receipt or an upgraded GA-12 cache. No original ECU411
+files, user profiles, OAuth or stopped Wyse/Precision/Supervisor
+testing are touched.
