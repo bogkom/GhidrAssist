@@ -181,8 +181,8 @@ public final class GhidraInterruptVectorService {
                 .append(" (not necessarily selected by the MCU)\n\n")
                 .append(HardwareInterruptVectors.inspect(
                     base,observations,12).markdown())
-                .append(HardwareVectorResetCorrelation.inspect(
-                    resetRootRecognized,resetGraphIncomplete,resetVisited,
+                .append(HardwareVectorResetCorrelation.inspectRelocated(
+                    base,resetRootRecognized,resetGraphIncomplete,resetVisited,
                     targets,callGraph,12).markdown());
         }
         return report.toString();
