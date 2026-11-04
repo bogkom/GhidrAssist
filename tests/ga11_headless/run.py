@@ -175,6 +175,20 @@ def main():
             call(java_base+[str(out),str(args.strict_entry).lower(),mode],
                  work,env,out/"integration.log",timeout=240)
             proof=json.loads((out/"result.json").read_text())
+            if args.ga18_mode=="receipt-restart":
+                # Both independently launched Java/Ghidra JVMs must report
+                # the SAME saved per-function record, not just the fact
+                # that some record exists after a second launch.
+                for field in ("ga13_receipt_before","ga13_receipt_after",
+                              "ga13_receipt_revision","ga13_receipt_source_sha"):
+                    if field not in first or first[field]!=proof.get(field):
+                        raise RuntimeError("Cross-JVM receipt changed: "+field)
+                if (not isinstance(first.get("ga13_process_pid"),int)
+                    or not isinstance(proof.get("ga13_process_pid"),int)
+                    or first["ga13_process_pid"]==proof["ga13_process_pid"]):
+                    raise RuntimeError("Ghidra restart did not use two JVM PIDs")
+                summary["ga13_matching_persisted_fields"]=4
+                summary["ga13_different_process_pids"]=True
             required=("function_entry_and_body_verified",
                       "production_flow_integration_verified",
                       "read_only_analyze_verified","no_runtime_vbr_isr_claim")
