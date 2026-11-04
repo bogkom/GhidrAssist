@@ -299,6 +299,55 @@ public final class GhidraHardwareFlowService {
      * produce agreeing output registers before an ordinary RTS. No unknown
      * P-code effects, out-of-function jumps or incomplete body accepted.
      */
+    /**
+     * Single-hop source-only callee input. A closed, contiguous, fully
+     * disassembled local body is required; any nested CALL, computed flow,
+     * off-body jump, CALLOTHER or truncated function rejects the candidate.
+     * This is NOT a verified output summary for the caller and is not cached.
+     */
+    private static HardwareCallsiteRegisterFlow.Callee contextualCallee(
+            Program program,Function callee,TaskMonitor monitor)
+            throws CancelledException{
+        if(callee==null)return null;
+        long entry=callee.getEntryPoint().getOffset();
+        long bodyBytes=callee.getBody().getNumAddresses();
+        if(bodyBytes<2 || bodyBytes>
+                HardwareCallsiteRegisterFlow.MAX_CALLEE_STEPS*16L)
+            return new HardwareCallsiteRegisterFlow.Callee(
+                entry,List.of(),false);
+        List<HardwareDataflow.Step> steps=new ArrayList<>();
+        long cursor=entry;
+        boolean safe=true;
+        InstructionIterator it=program.getListing()
+            .getInstructions(callee.getBody(),true);
+        while(it.hasNext()){
+            monitor.checkCancelled();
+            Instruction insn=it.next();
+            if(steps.size()>=HardwareCallsiteRegisterFlow.MAX_CALLEE_STEPS ||
+                    insn.getAddress().getOffset()!=cursor ||
+                    insn.getFlowType().isCall() ||
+                    insn.getFlowType().isComputed()){
+                safe=false;break;
+            }
+            PcodeOp[] ops=insn.getPcode();
+            if(ops!=null)for(PcodeOp op:ops)
+                if(op.getOpcode()==PcodeOp.CALLOTHER)
+                    safe=false;
+            if(insn.getFlowType().isJump()){
+                Address[] destinations=insn.getFlows();
+                if(destinations==null || destinations.length==0)
+                    safe=false;
+                else for(Address dst:destinations)
+                    if(!callee.getBody().contains(dst))safe=false;
+            }
+            if(!safe)break;
+            steps.add(translate(insn,callee));
+            cursor+=insn.getLength();
+        }
+        return new HardwareCallsiteRegisterFlow.Callee(
+            entry,steps,safe && cursor-entry==bodyBytes);
+    }
+
     private static Map<String,Long> verifiedLeafReturn(
             Program program,Function callee,TaskMonitor monitor)
             throws CancelledException{
@@ -515,6 +564,9 @@ public final class GhidraHardwareFlowService {
         List<HardwareInterproceduralMmEffects.CallSite> mmCallSites=
             new ArrayList<>();
         Map<Long,Map<String,Long>> verifiedLeafByEntry=new HashMap<>();
+        List<HardwareCallsiteRegisterFlow.Call> callerContexts=
+            new ArrayList<>();
+        int callerContextsOmitted=0;
         int provenLeafCallSites=0;
         List<Long> evidencedFunctions=new ArrayList<>();
         HardwareEvidenceBudget<HardwarePointerRoleReview.Site> pointerSites=
@@ -538,6 +590,7 @@ public final class GhidraHardwareFlowService {
             List<Long> directCallees=new ArrayList<>();
             boolean localStore=false,localVbr=false,uncertainFlow=false;
             long decodedBytes=0;
+            int firstFunctionCallSite=mmCallSites.size();
             InstructionIterator it=program.getListing().getInstructions(fun.getBody(),true);
             while(it.hasNext()){
                 monitor.checkCancelled();
@@ -610,6 +663,7 @@ public final class GhidraHardwareFlowService {
             if(steps.isEmpty()){
                 mmEffectNodes.add(new HardwareInterproceduralMmEffects.FunctionNode(
                     fun.getEntryPoint().getOffset(),false,false,true,directCallees));
+                callerContextsOmitted+=mmCallSites.size()-firstFunctionCallSite;
                 continue;
             }
             long functionEntry=fun.getEntryPoint().getOffset();
@@ -667,6 +721,20 @@ public final class GhidraHardwareFlowService {
             }
             visited+=result.reachedNodes;
             limited|=result.truncated;
+            if(mc68332Selected)for(int idx=firstFunctionCallSite;
+                    idx<mmCallSites.size();idx++){
+                if(callerContexts.size()>=
+                        HardwareCallsiteRegisterFlow.MAX_CALL_SITES){
+                    callerContextsOmitted++;
+                    continue;
+                }
+                var call=mmCallSites.get(idx);
+                Map<String,Long> registers=result.knownPointersAtEntry
+                    .getOrDefault(call.pc(),Map.of());
+                callerContexts.add(new HardwareCallsiteRegisterFlow.Call(
+                    functionEntry,call.pc(),call.target(),registers,
+                    uncertainFlow || result.truncated));
+            }
             boolean localMmCandidate=false,localUnknownStore=false;
             for(HardwareDataflow.Snapshot hit:result.snapshots){
                 if(hit.kind!=HardwareDataflow.Kind.STORE_DIRECT &&
@@ -935,6 +1003,44 @@ public final class GhidraHardwareFlowService {
         if(evidencedFunctions.size()>sideEffectsShown)
             effects.append("- Additional functions omitted by 60-row limit.\n");
         effects.append("\n");
+        String callsiteRegisters;
+        if(mc68332Selected){
+            List<HardwareCallsiteRegisterFlow.Callee> contextualCallees=
+                new ArrayList<>();
+            java.util.LinkedHashSet<Long> needed=new java.util.LinkedHashSet<>();
+            for(var call:callerContexts)
+                if(call.directCallee()!=null &&
+                        !call.agreedRegisters().isEmpty() &&
+                        !call.callerIncomplete())
+                    needed.add(call.directCallee());
+            for(Long entry:needed){
+                monitor.checkCancelled();
+                if(program.getModificationNumber()!=
+                        functionScope.modification() ||
+                        !FUNCTION_STAGES.current(program,functionEpoch))
+                    throw new CancelledException();
+                Address addr=program.getAddressFactory()
+                    .getDefaultAddressSpace().getAddress(entry);
+                Function callee=program.getFunctionManager().getFunctionAt(addr);
+                var decoded=contextualCallee(program,callee,monitor);
+                if(decoded!=null)contextualCallees.add(decoded);
+            }
+            var contextual=HardwareCallsiteRegisterFlow.analyze(
+                callerContexts,contextualCallees,targets.keySet(),80);
+            callsiteRegisters=contextual.markdown();
+            if(callerContextsOmitted>0)
+                callsiteRegisters+="- **INCOMPLETE INPUT:** "+
+                    callerContextsOmitted+
+                    " source CALL sites skipped by the bounded 96-site "+
+                    "budget or unavailable caller CFG. Missing calls are "+
+                    "UNKNOWN, not proven side-effect-free.\\n\\n";
+        }else {
+            callsiteRegisters="## One-hop CALL-site A/D register and "+
+                "MMIO candidates (GA-02/03)\\n\\n"+
+                "Not evaluated: explicit MC68332 profile required. "+
+                "Generic CPU32 does not imply MCU MMIO.\\n\\n";
+        }
+
         String interproceduralMm=mc68332Selected?
             HardwareInterproceduralMmEffects.analyze(
                 mmEffectNodes,mmCallSites,evidencedFunctions,4,100,80).markdown():
@@ -977,7 +1083,8 @@ public final class GhidraHardwareFlowService {
            .append(reset.markdown())
            .append(GhidraInterruptVectorService.analyze(program,monitor,
                reset.recognized(),reset.incomplete(),reset.visited(),staticCalls))
-           .append(detail).append(effects).append(interproceduralMm);
+           .append(detail).append(effects).append(interproceduralMm)
+           .append(callsiteRegisters);
         if(shown>=350)out.append("\n[Detailed report bounded at 350 sites.]\n");
         boolean cfgSourcesComplete=cfgMmioSites.safeAsComplete(!limited);
         out.append("\n- Bounded CFG source capture: ")
