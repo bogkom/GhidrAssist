@@ -38,6 +38,31 @@ public final class HardwareFunctionStageCacheSelfTest {
             "same Program/revision/input can reuse completed fixed point");
         check(cache.get(second,cache.begin(second),scope,0x100,100,graph,targets)==null,
             "separate Program instance cannot reuse a stage");
+        // A partially decoded peripheral target list must never throw
+        // from TreeSet(Collection) or overwrite an otherwise valid stage.
+        var unknownTargets=java.util.Arrays.asList(0xfffa00L,(Long)null);
+        check(HardwareFunctionStageCache.signature(graph,unknownTargets)==null,
+            "null tracked target must be uncached, not a sort exception");
+        check(cache.get(first,generation,scope,0x100,100,graph,
+            unknownTargets)==null,
+            "incomplete target identity cannot reuse complete CFG evidence");
+        check(!cache.put(first,generation,scope,0x100,100,graph,
+            unknownTargets,computed),
+            "unknown tracked target must not publish completed evidence");
+        check(cache.get(first,generation,scope,0x100,100,graph,targets)==computed,
+            "rejected unknown input preserves already validated cache stage");
+        var bounded=new java.util.ArrayList<Long>();
+        for(long address=0;address<HardwareFunctionStageCache.MAX_TRACKED_ADDRESSES;
+                address++)bounded.add(address);
+        check(HardwareFunctionStageCache.signature(graph,bounded)!=null,
+            "the documented tracked-target boundary remains eligible");
+        bounded.add((long)HardwareFunctionStageCache.MAX_TRACKED_ADDRESSES);
+        check(HardwareFunctionStageCache.signature(graph,bounded)==null,
+            "oversized tracked-target source rejects without hashing/sorting");
+        check(!cache.put(first,generation,scope,0x100,100,graph,
+            bounded,computed),
+            "oversized target input cannot persist a function checkpoint");
+
         Object equalA=new String("equal-owner"),equalB=new String("equal-owner");
         check(equalA!=equalB && equalA.equals(equalB),
             "synthetic equal-but-distinct owner precondition");
