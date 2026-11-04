@@ -155,9 +155,9 @@ public final class Ga12FixedPointRealGhidraMain {
                 wasReused=completed.reused();
                 require(!wasReused,"Unexpected finished-report disk cache reuse");
                 restored=count(completed.report().markdown,
-                    "- Completed per-function fixed points restored from disk: ");
+                    "- Mid-function CFG worklists restored from disk: ");
                 saved=count(completed.report().markdown,
-                    "; newly saved: ");
+                    "; stored: ");
                 if(phase.equals("read")) {
                     require(restored>=1,"Previously saved function not restored across JVM");
                 }else {
@@ -166,20 +166,34 @@ public final class Ga12FixedPointRealGhidraMain {
                 require(completed.report().markdown.contains(
                     "CFG/P-code initialization evidence"),
                     "No real computed CFG report after restore");
+                // Compare resumed evidence against independent cold analysis.
+                HardwareFlowStageCache.clear(full);
+                System.clearProperty("ghidrassist.ga12.durable.dir");
+                var cold=HardwareFlowStageCache.loadOrAnalyze(
+                    full,revision,TaskMonitor.DUMMY);
+                require(!cold.reused() &&
+                    cold.report().visited==completed.report().visited &&
+                    cold.report().rawCfgMmioSites.equals(
+                        completed.report().rawCfgMmioSites) &&
+                    cold.report().functions==completed.report().functions &&
+                    cold.report().unresolved==completed.report().unresolved &&
+                    cold.report().cfgReviewComplete==
+                        completed.report().cfgReviewComplete,
+                    "Restored worklist disagrees with cold real-Ghidra CFG");
             }
             require(full.getModificationNumber()==before,
                 "Read-only staged analysis edited Ghidra database");
             String proof="{\"phase\":\""+phase+"\",\"synthetic_only\":true,"+
                 "\"real_ghidra\":true,\"interrupted\":"+wasCancelled+
                 ",\"whole_stage_reused\":"+wasReused+
-                ",\"function_restored\":"+restored+
-                ",\"function_saved\":"+saved+
+                ",\"worklist_restored\":"+restored+
+                ",\"worklist_saved\":"+saved+
                 ",\"program_unchanged\":true,\"input_sha256\":\""+
                 currentFingerprint.inputSha256()+"\",\"project_id_sha256\":\""+
                 currentFingerprint.programIdSha256()+"\"}";
-            Files.writeString(out.resolve("ga12-function-"+phase+".json"),
+            Files.writeString(out.resolve("ga12-midfunction-"+phase+".json"),
                 proof+"\n");
-            System.out.println("GA12 FUNCTION RESTART "+phase+" PASS "+proof);
+            System.out.println("GA12 MIDFUNCTION RESTART "+phase+" PASS "+proof);
         }finally{
             if(full!=null)full.release(consumer);
             project.close();
