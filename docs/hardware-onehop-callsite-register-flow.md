@@ -40,6 +40,16 @@ Review/Apply/Undo ani etapów GA-12.
    Nieznane aliasy są zliczane osobno; limit wyświetlania 96 wierszy
    oznacza `INCOMPLETE DISPLAY`, nigdy brak innych zapisów.
 
+## Zabezpieczenie rejestru stosu A7 (pakiet two-hop)
+
+`JSR/BSR` zapisuje adres powrotu na stosie. Wartość A7 rozpoznana
+przed `CALL` **nie jest** tożsama z A7 na wejściu do wywołanej
+funkcji. Oba tory — niniejszy `one-hop` i nowy `two-hop`
+(`docs/hardware-ga02-twohop-callsite.md`) — jawnie usuwają A7
+na każdej granicy CALL. Nie domniemają rozmiaru ramki, aktualnego
+supervisor/user stack pointer ani fizycznej mapy MMIO na podstawie
+przedwywołaniowego A7.
+
 ## Zabezpieczenia
 
 - Analiza działa wyłącznie po **jawnej selekcji profilu MC68332**;
