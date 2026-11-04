@@ -81,7 +81,7 @@ public final class Ga11VectorHeadlessMain {
             "generic-profile","trambar-source","csbar-mm0-reject",
             "mmio-read-reference","csbar-csor-conditional",
             "simcr-mm0-literal","trambar-unknown","csor-alternatives",
-            "branch-simcr","call-barrier","leaf-return","cancel-incomplete",
+            "branch-simcr","call-barrier","leaf-return","branch-leaf","cancel-incomplete",
             "function-rename","apply-preserve","provenance-csv","movec-vbr").contains(ga18Mode),
             "Unknown GA-18 acceptance mode");
         var config=new HeadlessGhidraApplicationConfiguration();
@@ -874,6 +874,56 @@ public final class Ga11VectorHeadlessMain {
                     result.addProperty("call_clobbered_pointer_not_reused",true);
                     result.addProperty("call_alias_blocks_review",true);
                     result.addProperty("call_read_only",true);
+                } else if("branch-leaf".equals(ga18Mode)) {
+                    // Real CPU32 conditional BNE and BRA; both reachable paths
+                    // agree on A0 in the positive callee. A negative control
+                    // returns conflicting A0 values and must remain unknown.
+                    int tx=full.startTransaction("GA02 synthetic branch-convergent leaf");
+                    try {
+                        full.getMemory().setBytes(address(full,0x760L),
+                            java.util.HexFormat.of().parseHex(
+                                "203c000040ca6608207c00fffa006006207c00fffa004e75"));
+                        full.getMemory().setBytes(address(full,0x7a0L),
+                            java.util.HexFormat.of().parseHex(
+                                "203c000040ca6608207c00fffa006006207c007ffa004e75"));
+                        full.getMemory().setBytes(address(full,0x720L),
+                            java.util.HexFormat.of().parseHex(
+                                "4eb90000076030804e75"));
+                        full.getMemory().setBytes(address(full,0x7d0L),
+                            java.util.HexFormat.of().parseHex(
+                                "4eb9000007a030804e75"));
+                    } finally { full.endTransaction(tx,true); }
+                    defineFixtureFunction(full,0x760L,24,"fixture_branch_two_agreeing_returns");
+                    defineFixtureFunction(full,0x7a0L,24,"fixture_branch_disagreeing_return");
+                    defineFixtureFunction(full,0x720L,10,"fixture_branch_positive_caller");
+                    defineFixtureFunction(full,0x7d0L,10,"fixture_branch_negative_caller");
+                    long before=full.getModificationNumber();
+                    var report=new GhidraHardwareFlowService().analyze(
+                        full,TaskMonitor.DUMMY,true);
+                    check(report.rawCfgMmioSites.stream().anyMatch(site->
+                            site.pc()==0x726L && site.address()==0xfffa00L &&
+                            "SIMCR".equals(site.register()) &&
+                            Integer.valueOf(0x40ca).equals(site.literal()) &&
+                            site.unknownCall()),
+                        "Convergent branch did not prove caller SIMCR registers");
+                    check(report.rawCfgMmioSites.stream().anyMatch(site->
+                            site.pc()==0x7d6L &&
+                            "UNRESOLVED_ALIAS".equals(site.register()) &&
+                            site.unknownCall()),
+                        "Disagreeing branch invented fixed SIMCR address");
+                    check(full.getModificationNumber()==before,
+                        "Branch static analysis altered Ghidra Program");
+                    var generic=new GhidraHardwareFlowService().analyze(
+                        full,TaskMonitor.DUMMY,false);
+                    check(generic.rawCfgMmioSites.stream().noneMatch(site->
+                            site.pc()==0x726L &&
+                            "SIMCR".equals(site.register())),
+                        "Generic CPU32 inherited MC68332 register evidence");
+                    result.addProperty("branch_leaf_real_convergent_proven",true);
+                    result.addProperty("branch_leaf_disagreeing_address_unknown",true);
+                    result.addProperty("branch_leaf_call_history_uncertain",true);
+                    result.addProperty("branch_leaf_generic_cpu32_conservative",true);
+                    result.addProperty("branch_leaf_program_read_only",true);
                 } else if("leaf-return".equals(ga18Mode)) {
                     // Genuine CPU32 Listing, with real Ghidra callee reference.
                     // Only strict direct leaf return constants cross the
