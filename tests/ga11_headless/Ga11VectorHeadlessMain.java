@@ -938,13 +938,14 @@ public final class Ga11VectorHeadlessMain {
                         "Fixture lacks two independent real Ghidra functions");
                     java.util.concurrent.atomic.AtomicInteger checks=
                         new java.util.concurrent.atomic.AtomicInteger();
+                    final Program observedProgram=full;
                     TaskMonitor interrupt=(TaskMonitor)java.lang.reflect.Proxy
                         .newProxyInstance(TaskMonitor.class.getClassLoader(),
                             new Class[]{TaskMonitor.class},(proxy,method,args2)-> {
                             if(method.getName().equals("checkCancelled")) {
                                 checks.incrementAndGet();
                                 if(GhidraHardwareFlowService
-                                        .checkpointedFunctionStages(full)>0)
+                                        .checkpointedFunctionStages(observedProgram)>0)
                                     throw new CancelledException();
                                 return null;
                             }
