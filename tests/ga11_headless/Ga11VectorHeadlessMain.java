@@ -81,7 +81,7 @@ public final class Ga11VectorHeadlessMain {
             "generic-profile","trambar-source","csbar-mm0-reject",
             "mmio-read-reference","csbar-csor-conditional",
             "simcr-mm0-literal","trambar-unknown","csor-alternatives",
-            "branch-simcr","call-barrier","leaf-return","branch-leaf","branch-cache","cancel-incomplete",
+            "branch-simcr","call-barrier","leaf-return","call-context","branch-leaf","branch-cache","cancel-incomplete",
             "function-stage-resume","function-rename","apply-preserve","provenance-csv","movec-vbr").contains(ga18Mode),
             "Unknown GA-18 acceptance mode");
         var config=new HeadlessGhidraApplicationConfiguration();
@@ -997,6 +997,79 @@ public final class Ga11VectorHeadlessMain {
                     result.addProperty("branch_leaf_call_history_uncertain",true);
                     result.addProperty("branch_leaf_generic_cpu32_conservative",true);
                     result.addProperty("branch_leaf_program_read_only",true);
+                } else if("call-context".equals(ga18Mode)) {
+                    // Two independent CPU32 callers pass different A/D
+                    // arguments to the SAME ordinary direct callee.
+                    // Each source-only STORE candidate is tied to its CALL PC,
+                    // and never promoted into the global Review/Apply sites.
+                    int txContext=full.startTransaction(
+                        "GA02 synthetic callsite A/D argument propagation");
+                    try {
+                        full.getMemory().setBytes(address(full,0x640L),
+                            java.util.HexFormat.of().parseHex("30804e75"));
+                        full.getMemory().setBytes(address(full,0x600L),
+                            java.util.HexFormat.of().parseHex(
+                                "207c00fffa00203c000040ca4eb9000006404e75"));
+                        full.getMemory().setBytes(address(full,0x680L),
+                            java.util.HexFormat.of().parseHex(
+                                "207c00fffa68203c000048484eb9000006404e75"));
+                        full.getMemory().setBytes(address(full,0x6a0L),
+                            java.util.HexFormat.of().parseHex(
+                                "203c000040ca4eb9000006404e75"));
+                    } finally {full.endTransaction(txContext,true);}
+                    defineFixtureFunction(full,0x640L,4,
+                        "ga02_arg_callee_move_word_d0_a0");
+                    defineFixtureFunction(full,0x600L,20,
+                        "ga02_arg_caller_simcr");
+                    defineFixtureFunction(full,0x680L,20,
+                        "ga02_arg_caller_cs");
+                    defineFixtureFunction(full,0x6a0L,14,
+                        "ga02_arg_caller_unknown_pointer");
+                    long revisionBeforeContext=full.getModificationNumber();
+                    var interproc=new GhidraHardwareFlowService().analyze(
+                        full,TaskMonitor.DUMMY,true);
+                    String whole=interproc.markdown;
+                    int start=whole.indexOf(
+                        "## One-hop CALL-site A/D register and MMIO candidates");
+                    check(start>=0,"Real Ghidra did not publish source-only "+
+                        "CALL-context analysis");
+                    String source=whole.substring(start);
+                    check(source.contains(
+                        "| 0x00000600 | 0x0000060C | 0x00000640 | "+
+                        "0x00000640 | 0x00FFFA00 | 0x000040CA |") &&
+                        source.contains(
+                        "| 0x00000680 | 0x0000068C | 0x00000640 | "+
+                        "0x00000640 | 0x00FFFA68 | 0x00004848 |"),
+                        "Two distinct caller A/D contexts did not preserve "+
+                        "their own candidate MMIO address and value: "+
+                        source.substring(0,Math.min(3200,source.length())));
+                    check(source.contains("unknown STORE aliases: ") &&
+                        source.contains("SOURCE-ONLY MAY-CANDIDATES") &&
+                        source.contains("No result is published") &&
+                        source.contains("No argument convention/actual"),
+                        "Caller arguments were promoted to false execution "+
+                        "or Review/Apply evidence");
+                    check(interproc.rawCfgMmioSites.stream().noneMatch(s->
+                        s.pc()==0x640L && s.address()==0xfffa00L),
+                        "Contextual source-only MMIO was promoted to "+
+                        "function-global Review/Apply proof");
+                    check(full.getModificationNumber()==revisionBeforeContext,
+                        "Per-CALL argument analysis edited Program");
+                    var genericContext=new GhidraHardwareFlowService().analyze(
+                        full,TaskMonitor.DUMMY,false);
+                    check(genericContext.markdown.contains(
+                        "Generic CPU32 does not imply MCU MMIO") &&
+                        !genericContext.markdown.contains(
+                            "| 0x00000600 | 0x0000060C | 0x00000640 |"),
+                        "MC68332 candidate leaked into generic CPU32");
+                    check(full.getModificationNumber()==revisionBeforeContext,
+                        "Generic-profile negative analysis edited Program");
+                    result.addProperty("arg_direct_call_real_ghidra",true);
+                    result.addProperty("arg_independent_call_sites",true);
+                    result.addProperty("arg_unknown_alias_not_promoted",true);
+                    result.addProperty("arg_not_review_apply",true);
+                    result.addProperty("arg_generic_profile_conservative",true);
+                    result.addProperty("arg_read_only",true);
                 } else if("leaf-return".equals(ga18Mode)) {
                     // Genuine CPU32 Listing, with real Ghidra callee reference.
                     // Only strict direct leaf return constants cross the
