@@ -94,7 +94,7 @@ def main():
                         "generic-profile","trambar-source","csbar-mm0-reject",
                         "mmio-read-reference","csbar-csor-conditional",
                         "simcr-mm0-literal","trambar-unknown","csor-alternatives",
-                        "branch-simcr","call-barrier","leaf-return","call-context","joint-source","branch-leaf","branch-cache","cancel-incomplete",
+                        "branch-simcr","call-barrier","leaf-return","call-context","joint-source","two-hop","branch-leaf","branch-cache","cancel-incomplete",
                         "function-stage-resume","function-rename","apply-preserve",
                         "provenance-csv","movec-vbr","vbr-relocation"),
                         default="none",help="Run GA-07/12 or GA-02/03 genuine headless source-evidence checks")
@@ -277,6 +277,14 @@ def main():
                         "cross_track_real_completed_stage_reused",
                         "cross_track_real_invalidate_recomputed",
                         "cross_track_real_program_read_only"),
+                    "two-hop":(
+                        "twohop_real_nested_jsr_decoded",
+                        "twohop_independent_a0_d0",
+                        "twohop_unknown_alias_not_promoted",
+                        "twohop_not_review_apply",
+                        "twohop_repeat_deterministic",
+                        "twohop_generic_profile_conservative",
+                        "twohop_read_only"),
                     "joint-source":(
                         "arg_direct_call_real_ghidra",
                         "arg_independent_call_sites",
