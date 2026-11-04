@@ -510,6 +510,8 @@ public final class GhidraHardwareFlowService {
             for(int mm=0;mm<2;mm++)targets.put(p.absoluteAddress(r,mm),r.name);
         StringBuilder detail=new StringBuilder();
         List<HardwareCallEffects.FunctionNode> staticCalls=new ArrayList<>();
+        List<HardwareVbrRelocationEvidence.Site> vbrSourceSites=new ArrayList<>();
+        int vbrSourceSitesOmitted=0;
         List<HardwareInterproceduralMmEffects.FunctionNode> mmEffectNodes=
             new ArrayList<>();
         List<HardwareInterproceduralMmEffects.CallSite> mmCallSites=
@@ -667,6 +669,23 @@ public final class GhidraHardwareFlowService {
             }
             visited+=result.reachedNodes;
             limited|=result.truncated;
+            // A MOVEC-to-VBR source is only an intraprocedural CFG candidate.
+            // Correlate its containing function with the static RESET graph
+            // after scanning every function; never treat it as active VBR.
+            if(mc68332Selected)for(HardwareDataflow.Snapshot hit:result.snapshots){
+                if(hit.kind!=HardwareDataflow.Kind.VBR_FROM_REGISTER)continue;
+                if(vbrSourceSites.size()>=
+                        HardwareVbrRelocationEvidence.MAX_SOURCE_SITES ||
+                        fun.getEntryPoint().getOffset()>
+                            HardwareVbrRelocationEvidence.MAX_24BIT ||
+                        hit.instruction>HardwareVbrRelocationEvidence.MAX_24BIT){
+                    vbrSourceSitesOmitted++;
+                    continue;
+                }
+                vbrSourceSites.add(new HardwareVbrRelocationEvidence.Site(
+                    functionEntry,hit.instruction,hit.vbr,
+                    result.truncated || uncertainFlow,hit.priorUnknownCall));
+            }
             boolean localMmCandidate=false,localUnknownStore=false;
             for(HardwareDataflow.Snapshot hit:result.snapshots){
                 if(hit.kind!=HardwareDataflow.Kind.STORE_DIRECT &&
@@ -942,6 +961,14 @@ public final class GhidraHardwareFlowService {
             "Generic CPU32: manual MC68332 profile selection required.\n\n";
 
         ResetCandidates reset=resetStaticCandidates(program,staticCalls,evidencedFunctions);
+        String relocatedVbr=mc68332Selected?
+            GhidraInterruptVectorService.analyzeRelocatedSourceTables(
+                program,monitor,vbrSourceSites,vbrSourceSitesOmitted,
+                reset.recognized(),reset.incomplete(),reset.visited(),
+                staticCalls):
+            "## Relocated VBR source-table candidates (GA-11)\\n\\n"+
+            "Not evaluated: MC68332 profile not explicitly selected. "+
+            "Generic CPU32 does not imply a device-specific vector table.\\n\\n";
         StringBuilder out=new StringBuilder();
         out.append("## CFG/P-code initialization evidence (SIMCR/MM, TRAMBAR, CSBAR, CSOR, VBR)\n\n")
            .append("Only predecessor-agreed intraprocedural constants survive branch joins. ")
@@ -977,6 +1004,7 @@ public final class GhidraHardwareFlowService {
            .append(reset.markdown())
            .append(GhidraInterruptVectorService.analyze(program,monitor,
                reset.recognized(),reset.incomplete(),reset.visited(),staticCalls))
+           .append(relocatedVbr)
            .append(detail).append(effects).append(interproceduralMm);
         if(shown>=350)out.append("\n[Detailed report bounded at 350 sites.]\n");
         boolean cfgSourcesComplete=cfgMmioSites.safeAsComplete(!limited);
