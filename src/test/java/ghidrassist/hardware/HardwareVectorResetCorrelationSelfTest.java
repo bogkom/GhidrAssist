@@ -94,6 +94,12 @@ public final class HardwareVectorResetCorrelationSelfTest {
             !relocatedText.contains("| Vector | Image-zero pointer |") &&
             relocatedText.contains("runtime VBR and IRQ activation UNKNOWN"),
             "relocated VBR vector words must not be mislabeled image-zero");
+        var emptyRelocated=HardwareVectorResetCorrelation.inspectRelocated(
+            0x800L,true,false,Set.of(),List.of(),graph,32);
+        check(emptyRelocated.rows().isEmpty() &&
+            emptyRelocated.markdown().contains("relocated source-image inventory") &&
+            !emptyRelocated.markdown().contains("image-zero inventory"),
+            "empty relocated table keeps true provenance without handlers");
         bad(() -> HardwareVectorResetCorrelation.inspectRelocated(
                 0x801L,true,false,Set.of(),targets,graph,32),
             "unaligned relocated source base rejected");
