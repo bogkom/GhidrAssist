@@ -438,6 +438,10 @@ public final class GhidraHardwareFlowService {
             for(int mm=0;mm<2;mm++)targets.put(p.absoluteAddress(r,mm),r.name);
         StringBuilder detail=new StringBuilder();
         List<HardwareCallEffects.FunctionNode> staticCalls=new ArrayList<>();
+        List<HardwareInterproceduralMmEffects.FunctionNode> mmEffectNodes=
+            new ArrayList<>();
+        List<HardwareInterproceduralMmEffects.CallSite> mmCallSites=
+            new ArrayList<>();
         List<Long> evidencedFunctions=new ArrayList<>();
         HardwareEvidenceBudget<HardwarePointerRoleReview.Site> pointerSites=
             new HardwareEvidenceBudget<>(MAX_POINTER_ROLE_SITES);
@@ -486,14 +490,21 @@ public final class GhidraHardwareFlowService {
                 }
                 if(insn.getFlowType().isCall()){
                     Address[] destinations=insn.getFlows();
+                    Long callTarget=null;
                     if(destinations==null || destinations.length!=1)
                         uncertainFlow=true;
                     else {
                         Function callee=program.getFunctionManager()
                             .getFunctionAt(destinations[0]);
                         if(callee==null)uncertainFlow=true;
-                        else directCallees.add(callee.getEntryPoint().getOffset());
+                        else {
+                            callTarget=callee.getEntryPoint().getOffset();
+                            directCallees.add(callTarget);
+                        }
                     }
+                    mmCallSites.add(new HardwareInterproceduralMmEffects.CallSite(
+                        fun.getEntryPoint().getOffset(),
+                        insn.getAddress().getOffset(),callTarget));
                 }
                 steps.add(translate(insn,fun));
             }
@@ -504,12 +515,29 @@ public final class GhidraHardwareFlowService {
             staticCalls.add(new HardwareCallEffects.FunctionNode(
                 fun.getEntryPoint().getOffset(),localStore,localVbr,
                 uncertainFlow,directCallees));
-            if(steps.isEmpty())continue;
+            if(steps.isEmpty()){
+                mmEffectNodes.add(new HardwareInterproceduralMmEffects.FunctionNode(
+                    fun.getEntryPoint().getOffset(),false,false,true,directCallees));
+                continue;
+            }
             HardwareDataflow.Result result=HardwareDataflow.analyze(
                 fun.getEntryPoint().getOffset(),steps,targets.keySet(),
                 Math.min(30000,Math.max(300,steps.size()*20)));
             visited+=result.reachedNodes;
             limited|=result.truncated;
+            boolean localMmCandidate=false,localUnknownStore=false;
+            for(HardwareDataflow.Snapshot hit:result.snapshots){
+                if(hit.kind!=HardwareDataflow.Kind.STORE_DIRECT &&
+                        hit.kind!=HardwareDataflow.Kind.STORE_INDIRECT)continue;
+                if(hit.effectiveAddress==null)localUnknownStore=true;
+                else if(mc68332Selected &&
+                        HardwareDataflow.mayTouchSimcrMmLowByte(
+                            hit.effectiveAddress,hit.writeBits))
+                    localMmCandidate=true;
+            }
+            mmEffectNodes.add(new HardwareInterproceduralMmEffects.FunctionNode(
+                fun.getEntryPoint().getOffset(),localMmCandidate,localUnknownStore,
+                uncertainFlow || result.truncated,directCallees));
             for(HardwareDataflow.Snapshot hit:result.snapshots){
                 if(!hit.indirect || hit.effectiveAddress==null ||
                         hit.pointerRegister==null ||
@@ -763,6 +791,11 @@ public final class GhidraHardwareFlowService {
         if(evidencedFunctions.size()>sideEffectsShown)
             effects.append("- Additional functions omitted by 60-row limit.\n");
         effects.append("\n");
+        String interproceduralMm=mc68332Selected?
+            HardwareInterproceduralMmEffects.analyze(
+                mmEffectNodes,mmCallSites,evidencedFunctions,4,100,80).markdown():
+            "## Interprocedural SIMCR/MM candidates by CALL instruction\n\n"+
+            "Generic CPU32: manual MC68332 profile selection required.\n\n";
 
         ResetCandidates reset=resetStaticCandidates(program,staticCalls,evidencedFunctions);
         StringBuilder out=new StringBuilder();
@@ -782,7 +815,7 @@ public final class GhidraHardwareFlowService {
            .append("- Propagation cap reached: ").append(limited).append("\n\n")
            .append(reset.markdown())
            .append(GhidraInterruptVectorService.analyze(program,monitor))
-           .append(detail).append(effects);
+           .append(detail).append(effects).append(interproceduralMm);
         if(shown>=350)out.append("\n[Detailed report bounded at 350 sites.]\n");
         boolean cfgSourcesComplete=cfgMmioSites.safeAsComplete(!limited);
         out.append("\n- Bounded CFG source capture: ")

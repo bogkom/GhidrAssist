@@ -35,3 +35,19 @@ This can later support *provably safe* call-summary effects once model
 scope, missing code, bus function codes, and interrupt/exception ordering
 are handled. It makes no Ghidra project changes, accesses no private BIN,
 and never identifies MC68332 automatically.
+
+## GA-02/03 — bounded CALL-site SIMCR/MM provenance
+
+With an explicitly selected MC68332 profile, the report now correlates
+individual decoded CALL PCs with bounded transitive candidate SIMCR low-byte
+writes in their resolved callees. A STORE of 8/16/32 bits touching either
+candidate SIMCR MM-low-byte address can contribute a possible site. Unknown
+aliases, missing targets, truncated/incomplete functions, recursion and
+call graph limits retain uncertainty. The display is capped with a count
+of omitted rows.
+
+The model is read-only and **does not transport register values, memory
+states or the MM write-once latch across calls**. The existing conservative
+CALL_BARRIER remains in force. No hardware first-write chronology, runtime
+execution, bus mapping, or ISR activation is proven. Generic CPU32 never
+inherits MC68332 register meanings.
