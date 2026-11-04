@@ -544,11 +544,46 @@ public final class HardwareDataflow {
      * resource caps. For oversized functions return (null,null): the caller
      * must run ordinary analyze() without persistence.
      */
+    /**
+     * Contextual, read-only one-hop analysis for a particular source CALL
+     * instruction. Entry A/D values are caller-predecessor-agreed constants,
+     * NOT a function-wide, input-independent guarantee. This does not alter
+     * the legacy cold solve or any GA-12 cache/durable checkpoint key.
+     *
+     * NEVER publish this call-site result as a full-program Review/Apply
+     * proof: a different caller or unobserved runtime path may disagree.
+     */
+    public static Result analyzeWithEntryRegisters(long entry,
+            Collection<Step> steps,Collection<Long> peripherals,
+            int maxIterations,Map<String,Long> entryRegisters){
+        if(entryRegisters==null || entryRegisters.size()>16)
+            throw new IllegalArgumentException("Invalid caller register count");
+        for(var e:entryRegisters.entrySet())
+            if(e.getKey()==null || !e.getKey().matches("[AD][0-7]") ||
+                    e.getValue()==null || e.getValue()<0 ||
+                    e.getValue()>MASK24)
+                throw new IllegalArgumentException("Invalid caller register value");
+        Slice one=analyzeSlice(entry,steps,peripherals,maxIterations,
+            null,maxIterations,entryRegisters);
+        if(one.complete()==null)
+            throw new IllegalStateException("Incomplete contextual CFG solve");
+        return one.complete();
+    }
     public static Slice analyzeSlice(long entry,Collection<Step> steps,
             Collection<Long> peripherals,int maxIterations,Progress previous,
             int sliceIterations){
+        // Existing callers (including GA-12 persisted progress) always start
+        // without injected registers, preserving their exact hash/semantics.
+        return analyzeSlice(entry,steps,peripherals,maxIterations,previous,
+            sliceIterations,Map.of());
+    }
+    private static Slice analyzeSlice(long entry,Collection<Step> steps,
+            Collection<Long> peripherals,int maxIterations,Progress previous,
+            int sliceIterations,Map<String,Long> initialRegisters){
         if(maxIterations<1 || sliceIterations<1 ||
-                steps==null || peripherals==null)
+                steps==null || peripherals==null ||
+                initialRegisters==null || (previous!=null &&
+                    !initialRegisters.isEmpty()))
             throw new IllegalArgumentException("Invalid CFG work budget");
         Map<Long,Step> graph=new LinkedHashMap<>();
         for(Step s:steps)
@@ -561,7 +596,9 @@ public final class HardwareDataflow {
         int iterations=0;
         if(previous==null) {
             if(graph.containsKey(entry)){
-                input.put(entry,new State());queue.add(entry);queued.add(entry);
+                State initial=new State();
+                initial.pointers.putAll(initialRegisters);
+                input.put(entry,initial);queue.add(entry);queued.add(entry);
             }
         } else {
             if(previous.entry()!=entry ||

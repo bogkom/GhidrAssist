@@ -111,6 +111,39 @@ public final class HardwareDurableFunctionStagesSelfTest {
             check(HardwareDurableFunctionStages.load(
                 temp,key,0x100,100,steps,targets).isPresent(),
                 "repaired complete checkpoint remains available");
+            // The disk slot is stable for (project,function), but its
+            // embedded signature must distinguish UNKNOWN from signed -1.
+            // Old GA12 signature v2 encoded BOTH as the integer -1.
+            var missingWord=List.of(steps.get(0),
+                new HardwareDataflow.Step(0x102,STORE_INDIRECT,
+                    "A0",0,0,null,16,List.of(0x104L),"synthetic"),
+                steps.get(2));
+            var signedMinusOne=List.of(steps.get(0),
+                new HardwareDataflow.Step(0x102,STORE_INDIRECT,
+                    "A0",0,0,-1,16,List.of(0x104L),"synthetic"),
+                steps.get(2));
+            var unknownProof=HardwareDataflow.analyze(
+                0x100,missingWord,targets,100);
+            var knownProof=HardwareDataflow.analyze(
+                0x100,signedMinusOne,targets,100);
+            check(unknownProof.snapshots.get(0).writtenWord==null &&
+                knownProof.snapshots.get(0).writtenWord==0xffff,
+                "disk-cache collision fixtures differ in hardware evidence");
+            check(HardwareDurableFunctionStages.save(
+                temp,key,0x100,100,missingWord,targets,unknownProof),
+                "save missing-literal proof in stable per-function slot");
+            check(HardwareDurableFunctionStages.load(
+                temp,key,0x100,100,signedMinusOne,targets).isEmpty(),
+                "signed -1 must NOT read UNKNOWN-source disk checkpoint");
+            check(HardwareDurableFunctionStages.save(
+                temp,key,0x100,100,signedMinusOne,targets,knownProof),
+                "save signed -1 proof in the same stable function slot");
+            check(HardwareDurableFunctionStages.load(
+                temp,key,0x100,100,missingWord,targets).isEmpty(),
+                "UNKNOWN source must NOT read concrete 0xFFFF checkpoint");
+            check(HardwareDurableFunctionStages.load(
+                temp,key,0x100,100,signedMinusOne,targets).isPresent(),
+                "current exact signed-source checkpoint can be restored");
             System.out.println("HardwareDurableFunctionStagesSelfTest OK");
         }finally{
             try(var files=Files.list(temp)){

@@ -69,6 +69,40 @@ public final class HardwareFunctionStageCacheSelfTest {
             graph.get(1).withSideEffects(Set.of("A0")),graph.get(2));
         check(cache.get(first,generation,scope,0x100,100,sideEffects,targets)==null,
             "implicit register mutation participates in input fingerprint");
+        // Regression: the old -1 sentinel made an absent STORE literal
+        // hash-identical to the valid signed immediate -1 (MOVE.W #$FFFF).
+        // Both have the same entry, CFG and successors but different proof.
+        var unknownLiteral=List.of(graph.get(0),
+            new HardwareDataflow.Step(0x102,STORE_INDIRECT,"A0",
+                0,0,null,16,List.of(0x104L),"synthetic"),graph.get(2));
+        var negativeLiteral=List.of(graph.get(0),
+            new HardwareDataflow.Step(0x102,STORE_INDIRECT,"A0",
+                0,0,-1,16,List.of(0x104L),"synthetic"),graph.get(2));
+        check(!HardwareFunctionStageCache.signature(unknownLiteral,targets)
+            .equals(HardwareFunctionStageCache.signature(negativeLiteral,targets)),
+            "missing literal and valid signed -1 must have distinct CFG SHA");
+        var unknownProof=HardwareDataflow.analyze(
+            0x100,unknownLiteral,targets,100);
+        var signedProof=HardwareDataflow.analyze(
+            0x100,negativeLiteral,targets,100);
+        check(unknownProof.snapshots.get(0).writtenWord==null &&
+            signedProof.snapshots.get(0).writtenWord==0xffff,
+            "UNKNOWN source and concrete 0xFFFF have different evidence");
+        var isolated=new HardwareFunctionStageCache<Object>();
+        Object isolatedProgram=new Object();
+        long isolatedEpoch=isolated.begin(isolatedProgram);
+        check(isolated.put(isolatedProgram,isolatedEpoch,scope,0x100,100,
+            unknownLiteral,targets,unknownProof),
+            "UNKNOWN-source function may be separately checkpointed");
+        check(isolated.get(isolatedProgram,isolatedEpoch,scope,0x100,100,
+            negativeLiteral,targets)==null,
+            "known signed literal must never reuse UNKNOWN-source cache");
+        check(isolated.put(isolatedProgram,isolatedEpoch,scope,0x100,100,
+            negativeLiteral,targets,signedProof),
+            "known signed literal may be separately checkpointed");
+        check(isolated.get(isolatedProgram,isolatedEpoch,scope,0x100,100,
+            unknownLiteral,targets)==null,
+            "UNKNOWN source must never inherit the known 0xFFFF cache");
         var differentProfile=new HardwareFunctionStageCache.Scope(
             3,"68000:BE:32:CPU32","synthetic-import",false);
         check(cache.get(first,generation,differentProfile,0x100,100,graph,targets)==null,

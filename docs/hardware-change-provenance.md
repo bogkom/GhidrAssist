@@ -31,3 +31,22 @@ Validation: deterministic standalone Java CSV/provenance tests and full
 Ghidra 12.1.4 extension build in Actions. On a disposable project COPY,
 verify SourceType display, checkboxes, CSV, Undo, stale-program guard and
 absence of OAuth edits before merging. No local PASS is implied by CI.
+
+## 2026-11-04 — Unicode format controls in local CSV
+
+The read-only `Export review CSV...` path treats leading Unicode
+`Cf` formatting code points (WORD JOINER, zero-width joiners, bidi marks
+and supplementary format tags) as ignorable **for formula-prefix
+detection only**. Some importers may discard these controls before
+interpreting `=`, `+`, `-`, or `@`, even though CSV cells are quoted.
+A suspicious cell is prefixed with an apostrophe; the original visible
+text, quotes and Unicode code points are otherwise retained.
+
+The detector iterates **code points**, not UTF-16 code units. Java 21
+regressions check BMP and supplementary Unicode formats, mixed spacing
+and harmless format controls inside ordinary identifiers. The existing
+5000-row/512-character limits and omission markers are unchanged.
+This is a defense-in-depth safeguard for *untrusted review text*, not
+proof that an arbitrary spreadsheet importer handles every encoding
+the same way. No CSV import/Apply, automatic rename, Ghidra Program
+mutation or external upload is introduced.

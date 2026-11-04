@@ -94,9 +94,9 @@ def main():
                         "generic-profile","trambar-source","csbar-mm0-reject",
                         "mmio-read-reference","csbar-csor-conditional",
                         "simcr-mm0-literal","trambar-unknown","csor-alternatives",
-                        "branch-simcr","call-barrier","leaf-return","branch-leaf","branch-cache","cancel-incomplete",
+                        "branch-simcr","call-barrier","leaf-return","call-context","joint-source","two-hop","branch-leaf","branch-cache","cancel-incomplete",
                         "function-stage-resume","function-rename","apply-preserve",
-                        "provenance-csv","movec-vbr"),
+                        "provenance-csv","movec-vbr","vbr-relocation"),
                         default="none",help="Run GA-07/12 or GA-02/03 genuine headless source-evidence checks")
     args=parser.parse_args()
     out=Path(args.output).absolute()
@@ -277,6 +277,33 @@ def main():
                         "cross_track_real_completed_stage_reused",
                         "cross_track_real_invalidate_recomputed",
                         "cross_track_real_program_read_only"),
+                    "two-hop":(
+                        "twohop_real_nested_jsr_decoded",
+                        "twohop_independent_a0_d0",
+                        "twohop_unknown_alias_not_promoted",
+                        "twohop_not_review_apply",
+                        "twohop_repeat_deterministic",
+                        "twohop_generic_profile_conservative",
+                        "twohop_read_only"),
+                    "joint-source":(
+                        "arg_direct_call_real_ghidra",
+                        "arg_independent_call_sites",
+                        "arg_unknown_alias_not_promoted",
+                        "arg_not_review_apply",
+                        "arg_generic_profile_conservative",
+                        "arg_read_only",
+                        "joint_onehop_vbr_same_program",
+                        "joint_uncertainty_no_implicit_apply",
+                        "joint_relocated_vector_classification",
+                        "joint_generic_profile_off",
+                        "joint_program_read_only"),
+                    "call-context":(
+                        "arg_direct_call_real_ghidra",
+                        "arg_independent_call_sites",
+                        "arg_unknown_alias_not_promoted",
+                        "arg_not_review_apply",
+                        "arg_generic_profile_conservative",
+                        "arg_read_only"),
                     "leaf-return":(
                         "leaf_real_direct_return_constants",
                         "leaf_real_call_barrier_history_unknown",
@@ -311,6 +338,13 @@ def main():
                         "provenance_authorship_not_invented",
                         "provenance_csv_formula_escaped",
                         "provenance_csv_read_only"),
+                    "vbr-relocation":(
+                        "vbr_relocation_real_movec_decoded",
+                        "vbr_relocation_exact_and_interior",
+                        "vbr_relocation_edit_invalidates",
+                        "vbr_relocation_undo_restores",
+                        "vbr_relocation_generic_cpu32_not_device_profile",
+                        "vbr_relocation_read_only"),
                     "movec-vbr":(
                         "movec_actual_cpu32_decoded",
                         "movec_source_vbr_recognized",

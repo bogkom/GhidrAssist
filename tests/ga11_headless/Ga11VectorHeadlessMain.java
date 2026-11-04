@@ -81,8 +81,8 @@ public final class Ga11VectorHeadlessMain {
             "generic-profile","trambar-source","csbar-mm0-reject",
             "mmio-read-reference","csbar-csor-conditional",
             "simcr-mm0-literal","trambar-unknown","csor-alternatives",
-            "branch-simcr","call-barrier","leaf-return","branch-leaf","branch-cache","cancel-incomplete",
-            "function-stage-resume","function-rename","apply-preserve","provenance-csv","movec-vbr").contains(ga18Mode),
+            "branch-simcr","call-barrier","leaf-return","call-context","joint-source","two-hop","branch-leaf","branch-cache","cancel-incomplete",
+            "function-stage-resume","function-rename","apply-preserve","provenance-csv","movec-vbr","vbr-relocation").contains(ga18Mode),
             "Unknown GA-18 acceptance mode");
         var config=new HeadlessGhidraApplicationConfiguration();
         config.setApplicationLogFile(out.resolve("ghidra.log").toFile());
@@ -997,6 +997,238 @@ public final class Ga11VectorHeadlessMain {
                     result.addProperty("branch_leaf_call_history_uncertain",true);
                     result.addProperty("branch_leaf_generic_cpu32_conservative",true);
                     result.addProperty("branch_leaf_program_read_only",true);
+                } else if("two-hop".equals(ga18Mode)) {
+                    // Real CPU32 Listing: two independent outer JSR sources,
+                    // one fully decoded bridge with exactly ONE nested JSR,
+                    // and a leaf indirect STORE. Only potential source
+                    // provenance, never an executed call or hardware state.
+                    int txTwoHop=full.startTransaction(
+                        "GA02 isolated two-hop direct JSR fixture");
+                    try{
+                        full.getMemory().setBytes(address(full,0x700L),
+                            java.util.HexFormat.of().parseHex("32804e75"));
+                        full.getMemory().setBytes(address(full,0x640L),
+                            java.util.HexFormat.of().parseHex(
+                                "22484eb9000007004e75"));
+                        full.getMemory().setBytes(address(full,0x600L),
+                            java.util.HexFormat.of().parseHex(
+                                "207c00fffa00203c000040ca4eb9000006404e75"));
+                        full.getMemory().setBytes(address(full,0x680L),
+                            java.util.HexFormat.of().parseHex(
+                                "207c00fffa68203c000048484eb9000006404e75"));
+                        full.getMemory().setBytes(address(full,0x6a0L),
+                            java.util.HexFormat.of().parseHex(
+                                "203c000040ca4eb9000006404e75"));
+                    }finally{full.endTransaction(txTwoHop,true);}
+                    defineFixtureFunction(full,0x700L,4,
+                        "ga02_twohop_final_move_d0_to_a1");
+                    defineFixtureFunction(full,0x640L,10,
+                        "ga02_twohop_bridge_movea_and_jsr");
+                    defineFixtureFunction(full,0x600L,20,
+                        "ga02_twohop_simcr_caller");
+                    defineFixtureFunction(full,0x680L,20,
+                        "ga02_twohop_cs_caller");
+                    defineFixtureFunction(full,0x6a0L,14,
+                        "ga02_twohop_unknown_a0_caller");
+                    var nested=full.getListing().getInstructionAt(
+                        address(full,0x642L));
+                    check(nested!=null && nested.getFlowType().isCall() &&
+                        nested.getFlows().length==1 &&
+                        nested.getFlows()[0].equals(address(full,0x700L)),
+                        "Real Ghidra CPU32 did not decode bridge JSR");
+                    var copy=full.getListing().getInstructionAt(
+                        address(full,0x640L));
+                    check(copy!=null && copy.getMnemonicString()
+                        .toUpperCase(Locale.ROOT).startsWith("MOVEA"),
+                        "Real CPU32 did not decode bridge MOVEA.L A0,A1");
+                    long revision=full.getModificationNumber();
+                    var report=new GhidraHardwareFlowService().analyze(
+                        full,TaskMonitor.DUMMY,true);
+                    String markdown=report.markdown;
+                    int section=markdown.indexOf(
+                        "## Bounded two-hop CALL argument/MMIO "+
+                        "source candidates (GA-02/03)");
+                    check(section>=0,"Two-hop source-only report not present");
+                    String source=markdown.substring(section);
+                    check(source.contains(
+                        "| 0x00000600 | 0x0000060C | 0x00000640 | "+
+                        "0x00000642 | 0x00000700 | 0x00000700 | "+
+                        "0x00FFFA00 | 0x000040CA |") &&
+                        source.contains(
+                        "| 0x00000680 | 0x0000068C | 0x00000640 | "+
+                        "0x00000642 | 0x00000700 | 0x00000700 | "+
+                        "0x00FFFA68 | 0x00004848 |"),
+                        "Distinct outer A/D provenance collapsed across "+
+                        "one nested bridge CALL: "+
+                        source.substring(0,Math.min(3800,source.length())));
+                    check(source.contains("SOURCE-ONLY MAY-CANDIDATES") &&
+                        source.contains("NOT EXECUTION") &&
+                        source.contains("A7 is NEVER propagated") &&
+                        source.contains("Review/Apply") &&
+                        source.contains("unknown STORE alias: "),
+                        "Two-hop candidate was promoted to actual MM "+
+                        "execution or unconditional Apply evidence");
+                    check(report.rawCfgMmioSites.stream().noneMatch(s->
+                        s.pc()==0x700L && s.address()==0xfffa00L),
+                        "Nested callee write leaked into global Review/Apply "+
+                        "eligible CFG data");
+                    check(full.getModificationNumber()==revision,
+                        "Two-hop source analysis modified Ghidra Program");
+                    var again=new GhidraHardwareFlowService().analyze(
+                        full,TaskMonitor.DUMMY,true);
+                    String repeated=again.markdown.substring(
+                        again.markdown.indexOf(
+                            "## Bounded two-hop CALL argument/MMIO "));
+                    check(repeated.equals(source) &&
+                        full.getModificationNumber()==revision,
+                        "GA-12 process-local replay mixed call-site contexts");
+                    var generic=new GhidraHardwareFlowService().analyze(
+                        full,TaskMonitor.DUMMY,false);
+                    check(generic.markdown.contains(
+                        "Not evaluated: explicit MC68332 profile required") &&
+                        !generic.markdown.contains(
+                            "| 0x00000600 | 0x0000060C | 0x00000640 | "+
+                            "0x00000642 |") &&
+                        full.getModificationNumber()==revision,
+                        "Generic CPU32 inherited MC68332 two-hop MMIO");
+                    result.addProperty("twohop_real_nested_jsr_decoded",true);
+                    result.addProperty("twohop_independent_a0_d0",true);
+                    result.addProperty("twohop_unknown_alias_not_promoted",true);
+                    result.addProperty("twohop_not_review_apply",true);
+                    result.addProperty("twohop_repeat_deterministic",true);
+                    result.addProperty("twohop_generic_profile_conservative",true);
+                    result.addProperty("twohop_read_only",true);
+                } else if("call-context".equals(ga18Mode) ||
+                        "joint-source".equals(ga18Mode)) {
+                    boolean jointSource="joint-source".equals(ga18Mode);
+                    // Two independent CPU32 callers pass different A/D
+                    // arguments to the SAME ordinary direct callee.
+                    // Each source-only STORE candidate is tied to its CALL PC,
+                    // and never promoted into the global Review/Apply sites.
+                    int txContext=full.startTransaction(
+                        "GA02 synthetic callsite A/D argument propagation");
+                    try {
+                        full.getMemory().setBytes(address(full,0x640L),
+                            java.util.HexFormat.of().parseHex("30804e75"));
+                        full.getMemory().setBytes(address(full,0x600L),
+                            java.util.HexFormat.of().parseHex(
+                                "207c00fffa00203c000040ca4eb9000006404e75"));
+                        full.getMemory().setBytes(address(full,0x680L),
+                            java.util.HexFormat.of().parseHex(
+                                "207c00fffa68203c000048484eb9000006404e75"));
+                        full.getMemory().setBytes(address(full,0x6a0L),
+                            java.util.HexFormat.of().parseHex(
+                                "203c000040ca4eb9000006404e75"));
+                        if(jointSource){
+                            // One source image, two independent CALL A/D
+                            // contexts AND a third, independent MOVEC VBR
+                            // candidate. Neither report proves execution.
+                            full.getMemory().setBytes(address(full,0x800L),
+                                new byte[1024]);
+                            full.getMemory().setBytes(address(full,0x868L),
+                                java.util.HexFormat.of().parseHex("00000400"));
+                            full.getMemory().setBytes(address(full,0x86cL),
+                                java.util.HexFormat.of().parseHex("00000402"));
+                            full.getMemory().setBytes(address(full,0x870L),
+                                java.util.HexFormat.of().parseHex("00000401"));
+                            full.getMemory().setBytes(address(full,0x5a0L),
+                                java.util.HexFormat.of().parseHex(
+                                    "203c000008004e7b08014e75"));
+                        }
+                    } finally {full.endTransaction(txContext,true);}
+                    defineFixtureFunction(full,0x640L,4,
+                        "ga02_arg_callee_move_word_d0_a0");
+                    defineFixtureFunction(full,0x600L,20,
+                        "ga02_arg_caller_simcr");
+                    defineFixtureFunction(full,0x680L,20,
+                        "ga02_arg_caller_cs");
+                    defineFixtureFunction(full,0x6a0L,14,
+                        "ga02_arg_caller_unknown_pointer");
+                    if(jointSource)
+                        defineFixtureFunction(full,0x5a0L,12,
+                            "ga11_joint_source_vbr_register");
+                    long revisionBeforeContext=full.getModificationNumber();
+                    var interproc=new GhidraHardwareFlowService().analyze(
+                        full,TaskMonitor.DUMMY,true);
+                    String whole=interproc.markdown;
+                    int start=whole.indexOf(
+                        "## One-hop CALL-site A/D register and MMIO candidates");
+                    check(start>=0,"Real Ghidra did not publish source-only "+
+                        "CALL-context analysis");
+                    String source=whole.substring(start);
+                    if(jointSource){
+                        String relocatedTitle="### Relocated **source-image** table "+
+                            "candidate at 0x00000800";
+                        int relocatedAt=whole.indexOf(relocatedTitle);
+                        check(relocatedAt>=0 && relocatedAt<start &&
+                            whole.contains("runtime VBR UNKNOWN") &&
+                            whole.contains("STATIC SOURCE CANDIDATES ONLY"),
+                            "Joint CALL-source analysis suppressed GA-11 "+
+                            "relocated VBR evidence or promoted active VBR");
+                        String relocatedSection=whole.substring(relocatedAt,start);
+                        check(relocatedSection.contains(
+                            "RECOGNIZED_FUNCTION_CANDIDATE") &&
+                            relocatedSection.contains(
+                                "INTERIOR_FUNCTION_POINTER_CANDIDATE") &&
+                            relocatedSection.contains("ODD_POINTER"),
+                            "Joint program lost exact/interior/odd ISR "+
+                            "source-image vector classification");
+                        check(interproc.rawCfgMmioSites.stream().noneMatch(s->
+                            s.pc()==0x640L && s.address()==0xfffa00L),
+                            "Joint context CALLEE promoted to global Apply");
+                        result.addProperty(
+                            "joint_onehop_vbr_same_program",true);
+                        result.addProperty(
+                            "joint_uncertainty_no_implicit_apply",true);
+                        result.addProperty(
+                            "joint_relocated_vector_classification",true);
+                    }
+                    check(source.contains(
+                        "| 0x00000600 | 0x0000060C | 0x00000640 | "+
+                        "0x00000640 | 0x00FFFA00 | 0x000040CA |") &&
+                        source.contains(
+                        "| 0x00000680 | 0x0000068C | 0x00000640 | "+
+                        "0x00000640 | 0x00FFFA68 | 0x00004848 |"),
+                        "Two distinct caller A/D contexts did not preserve "+
+                        "their own candidate MMIO address and value: "+
+                        source.substring(0,Math.min(3200,source.length())));
+                    check(source.contains("unknown STORE aliases: ") &&
+                        source.contains("SOURCE-ONLY MAY-CANDIDATES") &&
+                        source.contains("No result is published") &&
+                        source.contains("No argument convention/actual"),
+                        "Caller arguments were promoted to false execution "+
+                        "or Review/Apply evidence");
+                    check(interproc.rawCfgMmioSites.stream().noneMatch(s->
+                        s.pc()==0x640L && s.address()==0xfffa00L),
+                        "Contextual source-only MMIO was promoted to "+
+                        "function-global Review/Apply proof");
+                    check(full.getModificationNumber()==revisionBeforeContext,
+                        "Per-CALL argument analysis edited Program");
+                    var genericContext=new GhidraHardwareFlowService().analyze(
+                        full,TaskMonitor.DUMMY,false);
+                    check(genericContext.markdown.contains(
+                        "Generic CPU32 does not imply MCU MMIO") &&
+                        !genericContext.markdown.contains(
+                            "| 0x00000600 | 0x0000060C | 0x00000640 |"),
+                        "MC68332 candidate leaked into generic CPU32");
+                    check(full.getModificationNumber()==revisionBeforeContext,
+                        "Generic-profile negative analysis edited Program");
+                    if(jointSource){
+                        check(genericContext.markdown.contains(
+                            "Not evaluated: MC68332 profile not explicitly selected") &&
+                            !genericContext.markdown.contains(
+                                "### Relocated **source-image** table candidate"),
+                            "Joint source-image VBR device assumption leaked "+
+                            "into generic CPU32");
+                        result.addProperty("joint_generic_profile_off",true);
+                        result.addProperty("joint_program_read_only",true);
+                    }
+                    result.addProperty("arg_direct_call_real_ghidra",true);
+                    result.addProperty("arg_independent_call_sites",true);
+                    result.addProperty("arg_unknown_alias_not_promoted",true);
+                    result.addProperty("arg_not_review_apply",true);
+                    result.addProperty("arg_generic_profile_conservative",true);
+                    result.addProperty("arg_read_only",true);
                 } else if("leaf-return".equals(ga18Mode)) {
                     // Genuine CPU32 Listing, with real Ghidra callee reference.
                     // Only strict direct leaf return constants cross the
@@ -1436,6 +1668,113 @@ public final class Ga11VectorHeadlessMain {
                     result.addProperty("provenance_csv_formula_escaped",true);
                     result.addProperty("provenance_csv_read_only",true);
                     Files.writeString(out.resolve("ga18-provenance-source.csv"),csv);
+                } else if("vbr-relocation".equals(ga18Mode)) {
+                    // A synthetic CPU32 MOVEC D0,VBR sources 0x800. A separate
+                    // table at 0x800 has an exact function-entry candidate,
+                    // an interior pointer and an odd address; NONE is active
+                    // IRQ/VBR execution evidence.
+                    int vbrTx=full.startTransaction(
+                        "GA11 isolated relocated table and MOVEC source");
+                    try {
+                        full.getMemory().setBytes(address(full,0x800L),
+                            new byte[1024]);
+                        full.getMemory().setBytes(address(full,0x868L),
+                            java.util.HexFormat.of().parseHex("00000400"));
+                        full.getMemory().setBytes(address(full,0x86cL),
+                            java.util.HexFormat.of().parseHex("00000402"));
+                        full.getMemory().setBytes(address(full,0x870L),
+                            java.util.HexFormat.of().parseHex("00000401"));
+                        full.getMemory().setBytes(address(full,0x5a0L),
+                            java.util.HexFormat.of().parseHex(
+                                "203c000008004e7b08014e75"));
+                    } finally {full.endTransaction(vbrTx,true);}
+                    defineFixtureFunction(full,0x5a0L,12,
+                        "fixture_relocated_vbr_source");
+                    var movecInsn=full.getListing().getInstructionAt(
+                        address(full,0x5a6L));
+                    check(movecInsn!=null &&
+                        movecInsn.toString().toUpperCase(Locale.ROOT)
+                            .contains("VBR"),
+                        "Ghidra CPU32 did not decode relocated MOVEC D0,VBR");
+                    long initialVbrRev=full.getModificationNumber();
+                    var vbrReport=new GhidraHardwareFlowService().analyze(
+                        full,TaskMonitor.DUMMY,true);
+                    String md=vbrReport.markdown;
+                    String baseTag="### Relocated **source-image** table "+
+                        "candidate at 0x00000800";
+                    check(md.contains(baseTag) &&
+                        md.contains("runtime VBR UNKNOWN") &&
+                        md.contains("STATIC SOURCE CANDIDATES ONLY"),
+                        "Relocated byte table promoted to active hardware VBR");
+                    String relocated=md.substring(md.indexOf(baseTag));
+                    check(relocated.contains("relocated MOVEC-to-VBR "+
+                            "source-image candidate at 0x00000800") &&
+                        relocated.contains("| Vector | Relocated source-image pointer |") &&
+                        relocated.contains("relocated source-image vector words") &&
+                        !relocated.contains("Vector table input: image-zero bytes ONLY") &&
+                        !relocated.contains("| Vector | Image-zero pointer |") &&
+                        relocated.contains("runtime VBR and IRQ activation UNKNOWN"),
+                        "Relocated real Program source vector mislabeled as image-zero");
+                    check(relocated.contains("RECOGNIZED_FUNCTION_CANDIDATE") &&
+                        relocated.contains(
+                            "INTERIOR_FUNCTION_POINTER_CANDIDATE") &&
+                        relocated.contains("ODD_POINTER") &&
+                        relocated.contains("pointers inside recognized "+
+                            "function bodies (NOT entries): 1"),
+                        "Actual relocated table bytes or function entry "+
+                        "classification missing");
+                    check(full.getModificationNumber()==initialVbrRev,
+                        "Read-only VBR evidence analysis modified Program");
+                    var genericVbr=new GhidraHardwareFlowService().analyze(
+                        full,TaskMonitor.DUMMY,false);
+                    check(genericVbr.markdown.contains("Relocated VBR "+
+                            "source-table candidates") &&
+                        genericVbr.markdown.contains("Not evaluated: "+
+                            "MC68332 profile not explicitly selected") &&
+                        !genericVbr.markdown.contains(baseTag),
+                        "Generic CPU32 accidentally inherited MC68332 "+
+                        "relocated vector-table inference");
+                    // The same programmed MOVEC is unchanged, but source
+                    // vector data changes. No stale result may be reported.
+                    int editVbr=full.startTransaction(
+                        "GA11 isolated candidate vector rewrite");
+                    try {
+                        full.getMemory().setBytes(address(full,0x868L),
+                            java.util.HexFormat.of().parseHex("00000402"));
+                    } finally {full.endTransaction(editVbr,true);}
+                    long updatedVbrRev=full.getModificationNumber();
+                    String edited=new GhidraHardwareFlowService().analyze(
+                        full,TaskMonitor.DUMMY,true).markdown;
+                    String editedRelocated=edited.substring(
+                        edited.indexOf(baseTag));
+                    check(editedRelocated.contains("pointers inside recognized "+
+                            "function bodies (NOT entries): 2") &&
+                        full.getModificationNumber()==updatedVbrRev,
+                        "Relocated table source edit was stale or wrote Program");
+                    check(full.canUndo(),"Synthetic Ghidra vector Undo unavailable");
+                    full.undo();
+                    byte[] restoredVbr=new byte[4];
+                    full.getMemory().getBytes(address(full,0x868L),
+                        restoredVbr);
+                    check(java.util.Arrays.equals(restoredVbr,
+                        java.util.HexFormat.of().parseHex("00000400")),
+                        "Undo did not restore relocated vector source bytes");
+                    long restoredVbrRev=full.getModificationNumber();
+                    String restoredReport=new GhidraHardwareFlowService()
+                        .analyze(full,TaskMonitor.DUMMY,true).markdown;
+                    check(restoredReport.substring(
+                            restoredReport.indexOf(baseTag))
+                            .contains("pointers inside recognized "+
+                                "function bodies (NOT entries): 1") &&
+                        full.getModificationNumber()==restoredVbrRev,
+                        "Undo failed to restore read-only relocated evidence");
+                    result.addProperty("vbr_relocation_real_movec_decoded",true);
+                    result.addProperty("vbr_relocation_exact_and_interior",true);
+                    result.addProperty("vbr_relocation_edit_invalidates",true);
+                    result.addProperty("vbr_relocation_undo_restores",true);
+                    result.addProperty(
+                        "vbr_relocation_generic_cpu32_not_device_profile",true);
+                    result.addProperty("vbr_relocation_read_only",true);
                 } else if("movec-vbr".equals(ga18Mode)) {
                     // MOVE.L #0x400,D0; MOVEC D0,VBR; RTS. Static Ghidra
                     // decode does not prove any MCU-executed VBR write.
