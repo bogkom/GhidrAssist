@@ -43,8 +43,8 @@ testów; `BAZA_WDROŻONA` oznacza ograniczoną bazę, nie zakończenie):
 | Obszar | Stan | Nowa potwierdzona baza w `master` | Kryteria nadal otwarte |
 |---|---|---|---|
 | **GA-01** RESET | CZĘŚCIOWO | Statyczna korelacja RESET z wektorami, ograniczony graf wywołań i warunki spójności | Niepełne skoki, analiza międzyfunkcyjna, brak śladu wykonania MCU |
-| **GA-02** SIMCR/MM | CZĘŚCIOWO | Możliwe MMIO STORE, nakładanie bajtów SIMCR, 24-bitowe adresy, bounded CALL i stałe po RTS | Warunki pierwszego wykonanego zapisu / write-once, brak dowodu aktywnego MM |
-| **GA-03** pośrednie MMIO | CZĘŚCIOWO | CFG/P-code, indeksowanie, aliasy, bezpieczne unknown STORE, CALL-BARRIER i zgodność ścieżek | Ogólne interproceduralne stany rejestrów, niepełne dynamiczne aliasy |
+| **GA-02** SIMCR/MM | CZĘŚCIOWO | Możliwe MMIO STORE, nakładanie bajtów SIMCR, 24-bitowe adresy, bounded CALL i stałe po RTS; **w nowym PR**: odrębne konteksty argumentów A/D dla jednego bezpośredniego CALL | Warunki pierwszego wykonanego zapisu / write-once, wielopoziomowe ścieżki, brak dowodu aktywnego MM |
+| **GA-03** pośrednie MMIO | CZĘŚCIOWO | CFG/P-code, indeksowanie, aliasy, bezpieczne unknown STORE, CALL-BARRIER i zgodność ścieżek; **w nowym PR**: potencjalne MMIO według argumentów ustalonych na konkretnym CALL PC (nie globalny Apply) | Dalsze międzyfunkcyjne ścieżki, pośrednie CALL, niepełne dynamiczne aliasy |
 | **GA-04** CSBOOT/CS | BAZA_WDROŻONA | Statyczna warunkowa tabela 12 okien z pochodzeniem źródłowym | Więcej konfliktów i wariantów CSPAR/CSOR; brak fizycznej mapy |
 | **GA-05** Review/Apply/Undo | BAZA_WDROŻONA | Jawny preflight, bezpieczne zatwierdzanie, transakcje, Ghidra Undo, blokady niepewności | Rozszerzone scenariusze decyzji i uprawnień, bez automatycznego Apply |
 | **GA-06** profile MCU | CZĘŚCIOWO | MC68332 wybierany jawnie, manifesty i sprawdzanie fizycznych stron PDF fail-closed | Zweryfikowane kolejne MCU i wydania dokumentacji z dowodami |
