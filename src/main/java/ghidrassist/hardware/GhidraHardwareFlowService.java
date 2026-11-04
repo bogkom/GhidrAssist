@@ -853,7 +853,11 @@ public final class GhidraHardwareFlowService {
                .append(restoredDiskFunctions).append("; newly saved: ")
                .append(savedDiskFunctions).append(" (at most ")
                .append(HardwareDurableFunctionStages.MAX_DURABLE_FUNCTIONS)
-               .append(" function slots in this isolated opt-in pass).\n\n")
+               .append(" function slots in this isolated opt-in pass).\n")
+           .append("- Mid-function CFG worklists restored from disk: ")
+               .append(restoredMidFunctionWorklists)
+               .append("; stored: ").append(savedMidFunctionWorklists)
+               .append(" (bounded unfinished computation only).\n\n")
            .append(reset.markdown())
            .append(GhidraInterruptVectorService.analyze(program,monitor))
            .append(detail).append(effects);
