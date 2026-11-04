@@ -96,7 +96,7 @@ def main():
                         "simcr-mm0-literal","trambar-unknown","csor-alternatives",
                         "branch-simcr","call-barrier","leaf-return","call-context","branch-leaf","branch-cache","cancel-incomplete",
                         "function-stage-resume","function-rename","apply-preserve",
-                        "provenance-csv","movec-vbr"),
+                        "provenance-csv","movec-vbr","vbr-relocation"),
                         default="none",help="Run GA-07/12 or GA-02/03 genuine headless source-evidence checks")
     args=parser.parse_args()
     out=Path(args.output).absolute()
@@ -318,6 +318,13 @@ def main():
                         "provenance_authorship_not_invented",
                         "provenance_csv_formula_escaped",
                         "provenance_csv_read_only"),
+                    "vbr-relocation":(
+                        "vbr_relocation_real_movec_decoded",
+                        "vbr_relocation_exact_and_interior",
+                        "vbr_relocation_edit_invalidates",
+                        "vbr_relocation_undo_restores",
+                        "vbr_relocation_generic_cpu32_not_device_profile",
+                        "vbr_relocation_read_only"),
                     "movec-vbr":(
                         "movec_actual_cpu32_decoded",
                         "movec_source_vbr_recognized",
