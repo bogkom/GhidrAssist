@@ -130,6 +130,8 @@ public final class HardwareVbrRelocationEvidence {
                 maxRows>MAX_REPORTED_SITES)
             throw new IllegalArgumentException("Unbounded VBR source candidates");
         List<Site> ordered=new ArrayList<>(sites);
+        if(ordered.contains(null))
+            throw new IllegalArgumentException("Null MOVEC site");
         ordered.sort(Comparator.comparingLong(Site::instruction));
         Set<Long> seenPc=new HashSet<>();
         TreeSet<Long> bases=new TreeSet<>();
