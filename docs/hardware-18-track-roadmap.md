@@ -3,7 +3,44 @@
 Status: **IN PROGRESS — integrated baseline 2026-11-04**. Scope source: user-approved 2026-10-28 requirements (A–H, additional features 13.1–13.7, PDF/RAG, testing and Codex Supervisor integration).
 
 
-## Stan bieżący — 2026-11-04, po kontrolowanym scaleniu PR #131
+## Aktualizacja master — 2026-11-04, po zatwierdzonym scaleniu PR #140
+
+Na wyraźne polecenie właściciela [PR #140](https://github.com/bogkom/GhidrAssist/pull/140)
+został scalony standardowym merge do chronionego `master`.
+Commit scalający: [`73363ccd881efb976b0690857acb6157398b20d2`](https://github.com/bogkom/GhidrAssist/commit/73363ccd881efb976b0690857acb6157398b20d2).
+Dokładny HEAD kandydata:
+[`eccdc7ac7743533c2df7a6f477fe33367f247572`](https://github.com/bogkom/GhidrAssist/commit/eccdc7ac7743533c2df7a6f477fe33367f247572).
+
+- **55/55 GitHub Actions SUCCESS** na kandydata SHA, w tym Ghidra
+  **12.1.4 PUBLIC / Java 25**, Java 21, rzeczywista syntetyczna
+  Ghidra headless z CALL/VBR/ISR i trwałym checkpointem oraz
+  deterministyczne testy bezpieczeństwa.
+- **Identyczne drzewa Git** na kandydacie i commicie scalającym:
+  `4b7f55449acf6de0552532d91bed6e71522319d9`.
+  Odrębne workflow `master` na **dokładnym merge SHA**:
+  **11/11 GitHub Actions SUCCESS**, w tym pełna kompilacja rozszerzenia.
+- Historia oryginalnych PR-ów **#133–#139** została zachowana w
+  dwurodzicowych commitach integracyjnych. #135 obejmuje GA-02/03
+  jednopoziomowy CALL i GA-11 MOVEC/VBR; #136 dwa poziomy CALL;
+  #137 podpis checkpointu rozróżniający `null` i `-1`;
+  #138 eksport CSV odporny na niewidoczne prefiksy Unicode;
+  #139 właściwe pochodzenie tabel VBR zamiast etykiety image-zero.
+  W testowym pliku Ghidry zachowano obie regresje CALL/VBR.
+- **Wszystkie 18 obszarów pozostają rozwojowe** według kryteriów z tabeli
+  poniżej; to rozszerzenie bazy GA-02/03/11/12/13, a **nie** dowód
+  wykonania kodu na ECU411, aktywnego MM/VBR, fizycznego dekodowania CS
+  ani ukończenia GA-01–GA-18. GA-14 wciąż odłożone.
+- Issue #106 nadal otwarte (brak nowych zgłoszeń); Issue #98 to
+  niezależna luka migracji starego profilu CodeBrowser. Nie wznowiono
+  lokalnych testów Wyse/Precision, zatrzymanych workerów, timerów
+  ani Codex Supervisora. Testy kolejnych zmian pozostają CI-first.
+
+Punkt kolejnej kontynuacji: pogłębianie GA-02/03 statycznych przepływów
+pośrednich rejestrów, bezpieczne checkpointy GA-12 oraz pochodzenie
+Review/Apply/Undo GA-08/13; dokumentacja profilowa GA-06/10/16 z
+wydaniem i stroną PDF.
+
+## Historyczny stan — 2026-11-04, po kontrolowanym scaleniu PR #131
 
 **GitHub = źródło prawdy.** [PR #131](https://github.com/bogkom/GhidrAssist/pull/131)
 został scalony standardowym merge przez chroniony `master`,
