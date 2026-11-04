@@ -37,3 +37,21 @@ exact commit/ZIP on an isolated Ghidra project through the existing
 GA-18 private Supervisor and the owner's standing test authorization.
 A CI success is not a local real-Ghidra PASS. No second programming
 Codex session, original firmware edits or OAuth changes are needed.
+
+## 2026-11-03 — sticky source-incompleteness receipt (GA-15)
+
+The earlier source truncation receipt was a relevance-ranked `Finding`.
+When `maxFindings=1`, an earlier score-10 finding can evict a later
+score-10 `SOURCE INCOMPLETE` marker. That leaves the agent prompt with
+no explicit warning even though the tool output was only partially read.
+
+The cache now tracks `sourceIncomplete` independently of the findings
+budget and prepends a fixed, trusted `SOURCE INCOMPLETE` message to prompt,
+detailed summary and compact/progress views. User/tool text cannot set this
+receipt through an ordinary `addFinding` call; it is set only when an
+actual output extraction is capped by the byte/line budget and cleared
+only by `clear()`. The original marker may still appear among retained
+findings, but its eviction cannot create a false-complete context.
+Java regression includes the score-10 tie under capacity 1, independent
+summary views, reset behavior, and unchanged bounded finding count.
+No remote model calls, firmware data, Supervisor plans, host or GUI tests.
