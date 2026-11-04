@@ -3,7 +3,9 @@ on:
   pull_request:
     paths:
       - 'src/main/java/ghidrassist/hardware/HardwareDurableStageStore.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareDurableCfgReport.java'
       - 'src/test/java/ghidrassist/hardware/HardwareDurableStageStoreSelfTest.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareDurableCfgReportSelfTest.java'
       - '.github/workflows/hardware-durable-stage-checkpoint.yml'
   workflow_dispatch:
 permissions:
@@ -25,6 +27,10 @@ jobs:
           mkdir -p "$RUNNER_TEMP/ga12"
           javac --release 21 -d "$RUNNER_TEMP/ga12" \
             src/main/java/ghidrassist/hardware/HardwareDurableStageStore.java \
-            src/test/java/ghidrassist/hardware/HardwareDurableStageStoreSelfTest.java
+            src/main/java/ghidrassist/hardware/HardwareDurableCfgReport.java \
+            src/test/java/ghidrassist/hardware/HardwareDurableStageStoreSelfTest.java \
+            src/test/java/ghidrassist/hardware/HardwareDurableCfgReportSelfTest.java
           java -cp "$RUNNER_TEMP/ga12" \
             ghidrassist.hardware.HardwareDurableStageStoreSelfTest
+          java -cp "$RUNNER_TEMP/ga12" \
+            ghidrassist.hardware.HardwareDurableCfgReportSelfTest
