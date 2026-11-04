@@ -143,6 +143,7 @@ public final class GhidraInterruptVectorService {
                                 value=(value<<8)|(part&0xffL);
                             pointer=value;
                             if(value!=0 && value!=0xffffffffL &&
+                                    value<=HardwareVbrRelocationEvidence.MAX_24BIT &&
                                     (value&1)==0){
                                 try{
                                     Address dest=program.getAddressFactory()
