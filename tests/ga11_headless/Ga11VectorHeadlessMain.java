@@ -182,19 +182,30 @@ public final class Ga11VectorHeadlessMain {
                 // Optional synthetic-only integration against an ACTUAL
                 // Ghidra Program. Existing vectors remain untouched.
                 Address mmio=address(full,0x500L);
-                int writeTx=full.startTransaction(
-                    "GA18 TEST-ONLY synthetic SIMCR definition");
-                try {
-                    check(new DisassembleCommand(mmio,null,false)
-                        .applyTo(full,TaskMonitor.DUMMY),
-                        "Real CPU32 disassembler rejected synthetic SIMCR write");
-                    Function mmioFunction=full.getFunctionManager().createFunction(
-                        "synthetic_simcr_write",mmio,
-                        new AddressSet(mmio,mmio.add(9)),SourceType.ANALYSIS);
+                if("receipt-restart-read".equals(ga18Mode)) {
+                    // Phase #1 saved this exact function. Reopening the
+                    // same Ghidra Program MUST NOT create another function
+                    // or run any write transaction before verifying GA-13.
+                    Function mmioFunction=full.getFunctionManager()
+                        .getFunctionAt(mmio);
                     check(mmioFunction!=null &&
-                          mmioFunction.getEntryPoint().equals(mmio),
-                        "Real synthetic SIMCR function entry absent");
-                } finally { full.endTransaction(writeTx,true); }
+                          "synthetic_simcr_write".equals(mmioFunction.getName()),
+                        "Second JVM lost existing synthetic SIMCR function");
+                } else {
+                    int writeTx=full.startTransaction(
+                        "GA18 TEST-ONLY synthetic SIMCR definition");
+                    try {
+                        check(new DisassembleCommand(mmio,null,false)
+                            .applyTo(full,TaskMonitor.DUMMY),
+                            "Real CPU32 disassembler rejected synthetic SIMCR write");
+                        Function mmioFunction=full.getFunctionManager().createFunction(
+                            "synthetic_simcr_write",mmio,
+                            new AddressSet(mmio,mmio.add(9)),SourceType.ANALYSIS);
+                        check(mmioFunction!=null &&
+                              mmioFunction.getEntryPoint().equals(mmio),
+                            "Real synthetic SIMCR function entry absent");
+                    } finally { full.endTransaction(writeTx,true); }
+                }
                 long hwBefore=full.getModificationNumber();
                 if("overview".equals(ga18Mode)){
                     HardwareInventoryService inventoryService=
