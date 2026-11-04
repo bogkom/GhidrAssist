@@ -1,0 +1,39 @@
+name: GA-12 resumable intrafunction CFG worklist source integrity
+on:
+  pull_request:
+    paths:
+      - 'src/main/java/ghidrassist/hardware/HardwareDataflow.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareFunctionProgressCodec.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareDurableFunctionStages.java'
+      - 'src/main/java/ghidrassist/hardware/HardwarePartialStageRunner.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareDataflowSliceSelfTest.java'
+      - '.github/workflows/ga12-midfunction-fixedpoint-regression.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  source-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Verify typed worklist checkpoint and cold vs sliced equivalence
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/ga12-slice"
+          javac --release 21 -d "$RUNNER_TEMP/ga12-slice" \
+            src/main/java/ghidrassist/hardware/HardwareDataflow.java \
+            src/main/java/ghidrassist/hardware/HardwareStageEpochs.java \
+            src/main/java/ghidrassist/hardware/HardwareFunctionStageCache.java \
+            src/main/java/ghidrassist/hardware/HardwareDurableStageStore.java \
+            src/main/java/ghidrassist/hardware/HardwareFunctionProgressCodec.java \
+            src/main/java/ghidrassist/hardware/HardwareFunctionResultCodec.java \
+            src/main/java/ghidrassist/hardware/HardwareDurableFunctionStages.java \
+            src/test/java/ghidrassist/hardware/HardwareDataflowSliceSelfTest.java
+          java -cp "$RUNNER_TEMP/ga12-slice" \
+            ghidrassist.hardware.HardwareDataflowSliceSelfTest
