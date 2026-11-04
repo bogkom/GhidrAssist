@@ -966,9 +966,9 @@ public final class GhidraHardwareFlowService {
                 program,monitor,vbrSourceSites,vbrSourceSitesOmitted,
                 reset.recognized(),reset.incomplete(),reset.visited(),
                 staticCalls):
-            "## Relocated VBR source-table candidates (GA-11)\\n\\n"+
+            "## Relocated VBR source-table candidates (GA-11)\n\n"+
             "Not evaluated: MC68332 profile not explicitly selected. "+
-            "Generic CPU32 does not imply a device-specific vector table.\\n\\n";
+            "Generic CPU32 does not imply a device-specific vector table.\n\n";
         StringBuilder out=new StringBuilder();
         out.append("## CFG/P-code initialization evidence (SIMCR/MM, TRAMBAR, CSBAR, CSOR, VBR)\n\n")
            .append("Only predecessor-agreed intraprocedural constants survive branch joins. ")
