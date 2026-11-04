@@ -35,8 +35,9 @@ public final class HardwareFunctionNamingReview {
         }
 
         private static String cell(String v) {
-            return "\"" + (v==null?"":v).replace("\"","\"\"")
-                .replace("\r"," ").replace("\n"," ") + "\"";
+            // Both GA-08 naming CSV exports share the same bounded,
+            // formula-safe encoder; neither CSV ever authorizes Apply.
+            return HardwareNamingReview.cell(v);
         }
         /** Compatible with the existing seven-column register-review CSV. */
         public String csv() {
