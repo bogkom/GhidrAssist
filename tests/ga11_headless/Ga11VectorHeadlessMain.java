@@ -1606,6 +1606,14 @@ public final class Ga11VectorHeadlessMain {
                         md.contains("STATIC SOURCE CANDIDATES ONLY"),
                         "Relocated byte table promoted to active hardware VBR");
                     String relocated=md.substring(md.indexOf(baseTag));
+                    check(relocated.contains("relocated MOVEC-to-VBR "+
+                            "source-image candidate at 0x00000800") &&
+                        relocated.contains("| Vector | Relocated source-image pointer |") &&
+                        relocated.contains("relocated source-image vector words") &&
+                        !relocated.contains("Vector table input: image-zero bytes ONLY") &&
+                        !relocated.contains("| Vector | Image-zero pointer |") &&
+                        relocated.contains("runtime VBR and IRQ activation UNKNOWN"),
+                        "Relocated real Program source vector mislabeled as image-zero");
                     check(relocated.contains("RECOGNIZED_FUNCTION_CANDIDATE") &&
                         relocated.contains(
                             "INTERIOR_FUNCTION_POINTER_CANDIDATE") &&
