@@ -154,6 +154,42 @@ public final class HardwareCallsiteRegisterFlowSelfTest {
         ok(results.candidates().stream().allMatch(r->
             !r.priorUnknownCall() && !r.priorUnknownStore()),
             "No fabricated unknown-effects conclusions in clean source");
+        // The CALL source budgets covered call PCs/steps, but not the
+        // candidate address collection or number of decoded callees.
+        // An incomplete null/foreign-address set must not be silently
+        // interpreted as the exhaustive set of MC68332 MMIO registers.
+        rejects(()->HardwareCallsiteRegisterFlow.analyze(
+            List.of(left),List.of(callee),
+            java.util.Arrays.asList(simcr,(Long)null),8),
+            "unknown tracked MMIO address must reject one-hop evidence");
+        rejects(()->HardwareCallsiteRegisterFlow.analyze(
+            List.of(left),List.of(callee),Set.of(0x1000000L),8),
+            "foreign 25-bit MMIO address rejected for MC68332");
+        rejects(()->HardwareCallsiteRegisterFlow.analyze(
+            List.of(left),List.of(callee),Set.of(-1L),8),
+            "negative tracked MMIO address cannot be reinterpreted");
+        rejects(()->HardwareCallsiteRegisterFlow.analyze(
+            List.of(left),java.util.Collections.nCopies(
+                HardwareCallsiteRegisterFlow.MAX_CALL_SITES+1,callee),
+            Set.of(simcr),8),
+            "unbounded callee descriptors rejected before graph allocation");
+        var exactBudget=new java.util.ArrayList<Long>();
+        exactBudget.add(simcr); exactBudget.add(cs);
+        for(long address=0;address<
+                HardwareCallsiteRegisterFlow.MAX_TRACKED_ADDRESSES-2;
+                address++)exactBudget.add(address);
+        var atLimit=HardwareCallsiteRegisterFlow.analyze(
+            List.of(left),List.of(callee),exactBudget,8);
+        ok(atLimit.possibleStoreSites()==1 &&
+            atLimit.candidates().get(0).address()==simcr,
+            "exact 4096 valid target budget preserves source candidate");
+        exactBudget.add(0x1000L);
+        rejects(()->HardwareCallsiteRegisterFlow.analyze(
+            List.of(left),List.of(callee),exactBudget,8),
+            "4097 tracked addresses reject without truncation");
+        ok(results.candidates().size()==2 &&
+            results.candidates().get(0).address()==simcr,
+            "invalid external inputs never mutate previously returned rows");
         System.out.println("HardwareCallsiteRegisterFlowSelfTest PASS: assertions="+assertions);
     }
 }
