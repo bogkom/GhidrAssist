@@ -51,6 +51,35 @@ public final class HardwareFunctionNamingReviewSelfTest {
         ok(csv.contains("FUNCTION_ROLE:CONFIGURE_CHIP_SELECTS") &&
             csv.contains("REVIEW_REQUIRED") && !csv.contains("setName("),
             "single existing CSV schema and no renaming");
+        // Function-role proposals share the seven-column register CSV.
+        // Existing names can be user-defined or imported and must not
+        // be treated as harmless spreadsheet text simply because quoted.
+        var hostileNames=List.of(
+            obs(0x3000,0x3000,"CSPAR1",true,"\u2060=HYPERLINK(1)"),
+            obs(0x3000,0x3002,"CSBAR7",true,"\u2060=HYPERLINK(1)"),
+            obs(0x3000,0x3004,"CSOR7",true,"\u2060=HYPERLINK(1)"));
+        var hostile=HardwareFunctionNamingReview.propose(
+            true,hostileNames,List.of());
+        ok(hostile.size()==1 &&
+            hostile.get(0).status==HardwareNamingReview.Status.ALREADY_NAMED,
+            "untrusted manual/imported names must never auto-rename");
+        String safe=HardwareFunctionNamingReview.toCsvRows(hostile);
+        ok(safe.contains("\"'\u2060=HYPERLINK(1)\"") &&
+            safe.contains("\"ALREADY_NAMED\"") &&
+            safe.lines().count()==1,
+            "function review CSV neutralizes format-hidden formula prefix");
+        String giantName="=SUM(1,2)"+"Z".repeat(10000);
+        var giant=HardwareFunctionNamingReview.propose(true,List.of(
+            obs(0x4000,0x4000,"CSPAR1",true,giantName),
+            obs(0x4000,0x4002,"CSBAR7",true,giantName),
+            obs(0x4000,0x4004,"CSOR7",true,giantName)),List.of());
+        String capped=HardwareFunctionNamingReview.toCsvRows(giant);
+        ok(capped.contains("\"'=SUM(1,2)") &&
+            capped.contains("SOURCE_TRUNCATED") &&
+            capped.length()<1700,
+            "oversized function symbol cannot produce an unbounded CSV cell");
+        ok(HardwareFunctionNamingReview.toCsvRows(proposals).equals(csv),
+            "normal register/function review rows remain byte-identical");
         System.out.println("HardwareFunctionNamingReviewSelfTest OK");
     }
 }
