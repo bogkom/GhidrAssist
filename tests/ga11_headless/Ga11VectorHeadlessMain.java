@@ -1002,7 +1002,7 @@ public final class Ga11VectorHeadlessMain {
                     // one fully decoded bridge with exactly ONE nested JSR,
                     // and a leaf indirect STORE. Only potential source
                     // provenance, never an executed call or hardware state.
-                    int tx=full.startTransaction(
+                    int txTwoHop=full.startTransaction(
                         "GA02 isolated two-hop direct JSR fixture");
                     try{
                         full.getMemory().setBytes(address(full,0x700L),
@@ -1019,7 +1019,7 @@ public final class Ga11VectorHeadlessMain {
                         full.getMemory().setBytes(address(full,0x6a0L),
                             java.util.HexFormat.of().parseHex(
                                 "203c000040ca4eb9000006404e75"));
-                    }finally{full.endTransaction(tx,true);}
+                    }finally{full.endTransaction(txTwoHop,true);}
                     defineFixtureFunction(full,0x700L,4,
                         "ga02_twohop_final_move_d0_to_a1");
                     defineFixtureFunction(full,0x640L,10,
