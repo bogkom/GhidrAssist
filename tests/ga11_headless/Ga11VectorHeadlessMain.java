@@ -1682,6 +1682,8 @@ public final class Ga11VectorHeadlessMain {
                         receipt.reviewedModification());
                     result.addProperty("ga13_receipt_source_sha",
                         receipt.sourceSha256());
+                    result.addProperty("ga13_process_pid",
+                        ProcessHandle.current().pid());
                 } else if("receipt-restart-read".equals(ga18Mode)) {
                     // Real Ghidra second JVM: the wrapper has not re-imported
                     // the fixture, and did not pass the first Program object.
@@ -1727,6 +1729,8 @@ public final class Ga11VectorHeadlessMain {
                         receipt.reviewedModification());
                     result.addProperty("ga13_receipt_source_sha",
                         receipt.sourceSha256());
+                    result.addProperty("ga13_process_pid",
+                        ProcessHandle.current().pid());
                 } else if("apply-preserve".equals(ga18Mode)) {
                     // Two disposable MC68332 MM1 blocks: preserve a user
                     // symbol, existing Word data and real CPU32 code while
