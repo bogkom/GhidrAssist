@@ -94,7 +94,7 @@ def main():
                         "generic-profile","trambar-source","csbar-mm0-reject",
                         "mmio-read-reference","csbar-csor-conditional",
                         "simcr-mm0-literal","trambar-unknown","csor-alternatives",
-                        "branch-simcr","call-barrier","leaf-return","call-context","branch-leaf","branch-cache","cancel-incomplete",
+                        "branch-simcr","call-barrier","leaf-return","call-context","joint-source","branch-leaf","branch-cache","cancel-incomplete",
                         "function-stage-resume","function-rename","apply-preserve",
                         "provenance-csv","movec-vbr","vbr-relocation"),
                         default="none",help="Run GA-07/12 or GA-02/03 genuine headless source-evidence checks")
@@ -277,6 +277,18 @@ def main():
                         "cross_track_real_completed_stage_reused",
                         "cross_track_real_invalidate_recomputed",
                         "cross_track_real_program_read_only"),
+                    "joint-source":(
+                        "arg_direct_call_real_ghidra",
+                        "arg_independent_call_sites",
+                        "arg_unknown_alias_not_promoted",
+                        "arg_not_review_apply",
+                        "arg_generic_profile_conservative",
+                        "arg_read_only",
+                        "joint_onehop_vbr_same_program",
+                        "joint_uncertainty_no_implicit_apply",
+                        "joint_relocated_vector_classification",
+                        "joint_generic_profile_off",
+                        "joint_program_read_only"),
                     "call-context":(
                         "arg_direct_call_real_ghidra",
                         "arg_independent_call_sites",
