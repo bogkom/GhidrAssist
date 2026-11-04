@@ -73,9 +73,36 @@ public final class HardwareNamingReview {
         }
         return List.copyOf(rows);
     }
-    private static String cell(String value){
-        return "\""+(value==null?"":value).replace("\"","\"\"")
-            .replace("\r"," ").replace("\n"," ")+"\"";
+    /** Shared read-only review CSV field encoding for register/function hints.
+     * Quoting alone does not stop spreadsheet formula execution. */
+    static final int MAX_CSV_CELL_CHARS=512;
+    private static final String CELL_TRUNCATION=" [SOURCE_TRUNCATED]";
+    static String cell(String value){
+        if(value==null)value="";
+        if(value.length()>MAX_CSV_CELL_CHARS) {
+            int cut=MAX_CSV_CELL_CHARS-CELL_TRUNCATION.length();
+            // Keep UTF-16 surrogate pairs intact at the clipping boundary.
+            if(cut>0 && Character.isHighSurrogate(value.charAt(cut-1)) &&
+                    Character.isLowSurrogate(value.charAt(cut)))cut--;
+            value=value.substring(0,cut)+CELL_TRUNCATION;
+        }
+        String normalized=value.replace("\r"," ").replace("\n"," ")
+            .replace("\u0000"," ").replace("\u2028"," ")
+            .replace("\u2029"," ");
+        int pos=0;
+        while(pos<normalized.length()){
+            int cp=normalized.codePointAt(pos);
+            if(!Character.isWhitespace(cp) &&
+                    !Character.isSpaceChar(cp) &&
+                    Character.getType(cp)!=Character.FORMAT)break;
+            pos+=Character.charCount(cp);
+        }
+        if(pos<normalized.length() &&
+                "=+-@".indexOf(normalized.charAt(pos))>=0)
+            normalized="'"+normalized;
+        else if(normalized.startsWith("\t"))
+            normalized="'"+normalized;
+        return "\"" + normalized.replace("\"","\"\"") + "\"";
     }
     public static String toCsv(List<Entry> entries){
         StringBuilder b=new StringBuilder(
