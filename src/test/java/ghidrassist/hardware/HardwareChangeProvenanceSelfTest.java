@@ -67,6 +67,28 @@ public final class HardwareChangeProvenanceSelfTest {
             safeUnicode.contains("\"'\u200B-9\"") &&
             !safeUnicode.contains("\u2028") && !safeUnicode.contains("\u2029"),
             "Unicode spacing must not hide spreadsheet formulas/newline markers");
+        // Java 21 Unicode Cf code points are not necessarily whitespace.
+        // A spreadsheet importer may ignore format controls before a
+        // formula prefix; quoting the CSV column is not a protection.
+        String supplementaryFormat=new String(Character.toChars(0xE0001));
+        check(Character.getType(0xE0001)==Character.FORMAT &&
+            Character.getType('\u2060')==Character.FORMAT,
+            "synthetic invisible formula prefixes are Unicode format");
+        var hiddenFormula=new HardwareChangeProvenance.ReviewRow("REGISTER",
+            "0x0","\u2060=SUM(1,2)",
+            " \u200d\u200e+1+1",null,"MANUAL_REVIEW",false,
+            supplementaryFormat+"@SUM(2,3)");
+        String safeFormat=HardwareChangeProvenance.csv(List.of(hiddenFormula));
+        check(safeFormat.contains("\"'\u2060=SUM(1,2)\"") &&
+            safeFormat.contains("\"' \u200d\u200e+1+1\"") &&
+            safeFormat.contains("\"'"+supplementaryFormat+"@SUM(2,3)\""),
+            "all leading Unicode Cf controls must not conceal CSV formulae");
+        var harmlessFormat=new HardwareChangeProvenance.ReviewRow(
+            "REGISTER","0x0","name\u2060=symbol",null,null,
+            "MANUAL_REVIEW",false,"ordinary label");
+        check(HardwareChangeProvenance.csv(List.of(harmlessFormat))
+            .contains("\"name\u2060=symbol\""),
+            "format characters inside ordinary nonformula text are preserved");
         var many=new java.util.ArrayList<HardwareChangeProvenance.ReviewRow>();
         for(int n=0;n<HardwareChangeProvenance.MAX_CSV_ROWS+7;n++)
             many.add(a);
