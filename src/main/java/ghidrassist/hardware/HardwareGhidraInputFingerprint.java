@@ -62,13 +62,16 @@ public final class HardwareGhidraInputFingerprint {
         if(program==null || monitor==null)return Optional.empty();
         long before=program.getModificationNumber();
         try {
-            if(program.getDomainFile()==null || program.getUniversalID()==null ||
+            if(program.getDomainFile()==null ||
+                    program.getDomainFile().getFileID()==null ||
+                    program.getDomainFile().getProjectLocator()==null ||
                     program.getExecutableSHA256()==null ||
                     !program.getExecutableSHA256().matches("(?i)[0-9a-f]{64}"))
                 return Optional.empty();
             String source=program.getExecutableSHA256().toLowerCase(Locale.ROOT);
             MessageDigest identity=digest();
-            string(identity,String.valueOf(program.getUniversalID()));
+            string(identity,program.getDomainFile().getFileID());
+            string(identity,program.getDomainFile().getProjectLocator().toString());
             string(identity,program.getDomainFile().getPathname());
             String projectId=hex(identity);
 
