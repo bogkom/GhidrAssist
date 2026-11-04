@@ -238,8 +238,15 @@ public final class GhidraHardwareFlowService {
                 if((m.equals("ADDA")||m.equals("SUBA"))&&
                         full.endsWith(".W")&&(signed&0x8000L)!=0)
                     signed|=0xffff0000L;
+                int adjustedBits=HardwareDataflow.registerAdjustWidth(dst,full);
+                // A missing size for Dn cannot be modeled as long-register
+                // arithmetic. ADDQ.W #1,Dn keeps its upper word intact.
+                if(adjustedBits==0)return new HardwareDataflow.Step(pc,
+                    HardwareDataflow.Kind.CLOBBER_POINTER,
+                    dst,0,0,null,0,next,full);
                 return new HardwareDataflow.Step(pc,HardwareDataflow.Kind.ADJUST_POINTER,
-                    dst,m.startsWith("SUB")?-signed:signed,0,null,0,next,full);
+                    dst,m.startsWith("SUB")?-signed:signed,0,null,
+                    adjustedBits,next,full);
             }
             return new HardwareDataflow.Step(pc,HardwareDataflow.Kind.CLOBBER_POINTER,
                 dst,0,0,null,0,next,full);

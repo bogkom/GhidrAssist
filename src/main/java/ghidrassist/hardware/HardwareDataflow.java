@@ -183,6 +183,24 @@ public final class HardwareDataflow {
         if(constant)return Long.valueOf(literal);
         return propagated;
     }
+
+    /**
+     * 68000 ADDQ/SUBQ to An adjusts the full address register regardless of
+     * the instruction .W spelling. To Dn, .B/.W update only the low byte/word
+     * and must NOT carry into untouched high bits. Zero means unknown size;
+     * callers must clobber Dn rather than invent a full-register result.
+     */
+    static int registerAdjustWidth(String destination,String mnemonic) {
+        if(destination==null || mnemonic==null ||
+                !destination.matches("[AD][0-7]"))
+            return 0;
+        if(destination.startsWith("A"))return 32;
+        String spelling=mnemonic.toUpperCase(java.util.Locale.ROOT);
+        if(spelling.endsWith(".B"))return 8;
+        if(spelling.endsWith(".W"))return 16;
+        if(spelling.endsWith(".L"))return 32;
+        return 0;
+    }
     private static Long resolve(Step step,State s) {
         if(step.kind==Kind.STORE_DIRECT) return step.operand&MASK24;
         if(step.kind==Kind.STORE_INDIRECT){
@@ -263,8 +281,21 @@ public final class HardwareDataflow {
             case ADJUST_POINTER -> {
                 if(step.register!=null){
                     Long v=s.pointers.get(step.register);
-                    if(v==null)s.pointers.remove(step.register);
-                    else s.pointers.put(step.register,(v+step.operand)&MASK24);
+                    // Dn size is required. A partial Dn arithmetic update
+                    // must NOT carry into the preserved high byte/word.
+                    if(v==null || step.register.startsWith("D") &&
+                            step.writeBits!=8 && step.writeBits!=16 &&
+                            step.writeBits!=32) {
+                        s.pointers.remove(step.register);
+                    }else {
+                        long mask=step.register.startsWith("D") &&
+                            step.writeBits==8?0xffL:
+                            step.register.startsWith("D") &&
+                            step.writeBits==16?0xffffL:MASK24;
+                        long changed=(v & ~mask) |
+                            ((v+step.operand)&mask);
+                        s.pointers.put(step.register,changed&MASK24);
+                    }
                 }
             }
             case CLOBBER_POINTER -> {
