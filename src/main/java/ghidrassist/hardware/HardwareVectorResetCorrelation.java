@@ -41,18 +41,29 @@ public final class HardwareVectorResetCorrelation {
                       Relation relation, String memoryStoreEffect,
                       String vbrEffect, boolean flowUncertain) {}
 
-    public record Summary(boolean resetRootRecognized, boolean resetGraphIncomplete,
+    public record Summary(boolean relocatedSource, long tableAddress,
+                          boolean resetRootRecognized, boolean resetGraphIncomplete,
                           int recognizedTargets, int exactEntries,
                           int sharedResetSubset, int outsideObservedSubset,
                           int interiorPointers, boolean displayTruncated,
                           List<Row> rows) {
-        public Summary { rows = List.copyOf(rows); }
+        public Summary {
+            if(tableAddress<0 || (tableAddress&3)!=0 ||
+                    relocatedSource && tableAddress>0xffffffL-1023L ||
+                    !relocatedSource && tableAddress!=0)
+                throw new IllegalArgumentException("Invalid vector source table");
+            rows = List.copyOf(rows);
+        }
 
         public String markdown() {
             StringBuilder out = new StringBuilder();
             out.append("## Vector / RESET static-call relation candidates (GA-01/02/03/11)\n\n")
-               .append("- Vector table input: image-zero bytes ONLY; runtime VBR ")
-               .append("and IRQ activation UNKNOWN. RESET function recognized: ")
+               .append("- Vector table input: ")
+               .append(relocatedSource?
+                   "relocated MOVEC-to-VBR source-image candidate at "+hex(tableAddress)+
+                   " (not an active VBR)":
+                   "image-zero bytes ONLY")
+               .append("; runtime VBR and IRQ activation UNKNOWN. RESET function recognized: ")
                .append(resetRootRecognized)
                .append("; RESET direct-call graph incomplete: ")
                .append(resetGraphIncomplete)
@@ -79,7 +90,9 @@ public final class HardwareVectorResetCorrelation {
                    .append("image-zero inventory; not proof of no exceptions.\n\n");
                 return out.toString();
             }
-            out.append("| Vector | Image-zero pointer | Containing function | ")
+            out.append(relocatedSource?
+                    "| Vector | Relocated source-image pointer | Containing function | ":
+                    "| Vector | Image-zero pointer | Containing function | ")
                .append("RESET relation | Memory STORE in static call subtree | ")
                .append("VBR in static call subtree | Flow uncertainty |\n")
                .append("|---|---|---|---|---|---|---|\n");
@@ -115,6 +128,30 @@ public final class HardwareVectorResetCorrelation {
             boolean resetGraphIncomplete, Set<Long> resetVisited,
             List<Target> resolvedVectors,
             Collection<HardwareCallEffects.FunctionNode> graph, int maxRows) {
+        return inspectSource(false,0,resetRootRecognized,resetGraphIncomplete,
+            resetVisited,resolvedVectors,graph,maxRows);
+    }
+
+    /**
+     * Same bounded static correlation, but the vector words came from a
+     * candidate MOVEC-to-VBR source-image table, not the image-zero inventory.
+     * A mapped handler still does not establish executed MOVEC or active IRQ.
+     */
+    public static Summary inspectRelocated(long sourceBase,
+            boolean resetRootRecognized, boolean resetGraphIncomplete,
+            Set<Long> resetVisited, List<Target> resolvedVectors,
+            Collection<HardwareCallEffects.FunctionNode> graph,int maxRows) {
+        if(sourceBase<0 || (sourceBase&3)!=0 ||
+                sourceBase>0xffffffL-1023L)
+            throw new IllegalArgumentException("Invalid relocated VBR source base");
+        return inspectSource(true,sourceBase,resetRootRecognized,
+            resetGraphIncomplete,resetVisited,resolvedVectors,graph,maxRows);
+    }
+
+    private static Summary inspectSource(boolean relocatedSource,long sourceBase,
+            boolean resetRootRecognized,boolean resetGraphIncomplete,
+            Set<Long> resetVisited,List<Target> resolvedVectors,
+            Collection<HardwareCallEffects.FunctionNode> graph,int maxRows) {
         if (resetVisited == null || resolvedVectors == null || graph == null ||
                 maxRows < 1 || maxRows > 64)
             throw new IllegalArgumentException("Invalid vector/reset correlation input");
@@ -154,8 +191,8 @@ public final class HardwareVectorResetCorrelation {
                     effect(effects != null && effects.possibleVbrWrite(), effects),
                     effects == null || effects.unresolved() || effects.truncated()));
         }
-        return new Summary(resetRootRecognized, resetGraphIncomplete,
-            sorted.size(), exact, shared, outside, interior,
-            rows.size() < sorted.size(), rows);
+        return new Summary(relocatedSource,sourceBase,
+            resetRootRecognized,resetGraphIncomplete,sorted.size(), exact,
+            shared, outside, interior,rows.size() < sorted.size(), rows);
     }
 }
