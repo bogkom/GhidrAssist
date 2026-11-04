@@ -1,4 +1,4 @@
-name: GA-08/13 legacy naming CSV formula safety
+name: GA-08/13 legacy naming and pointer CSV safety
 
 on:
   pull_request:
@@ -7,6 +7,8 @@ on:
       - 'src/main/java/ghidrassist/hardware/HardwareFunctionNamingReview.java'
       - 'src/test/java/ghidrassist/hardware/HardwareNamingReviewSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/HardwareFunctionNamingReviewSelfTest.java'
+      - 'src/main/java/ghidrassist/hardware/HardwarePointerRoleReview.java'
+      - 'src/test/java/ghidrassist/hardware/HardwarePointerRoleReviewSelfTest.java'
       - '.github/workflows/hardware-naming-csv-safety.yml'
   push:
     paths:
@@ -14,6 +16,8 @@ on:
       - 'src/main/java/ghidrassist/hardware/HardwareFunctionNamingReview.java'
       - 'src/test/java/ghidrassist/hardware/HardwareNamingReviewSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/HardwareFunctionNamingReviewSelfTest.java'
+      - 'src/main/java/ghidrassist/hardware/HardwarePointerRoleReview.java'
+      - 'src/test/java/ghidrassist/hardware/HardwarePointerRoleReviewSelfTest.java'
       - '.github/workflows/hardware-naming-csv-safety.yml'
   workflow_dispatch:
 
@@ -39,9 +43,11 @@ jobs:
             src/main/java/ghidrassist/hardware/ChipSelectModel.java \
             src/main/java/ghidrassist/hardware/HardwareNamingReview.java \
             src/main/java/ghidrassist/hardware/HardwareFunctionNamingReview.java \
+            src/main/java/ghidrassist/hardware/HardwarePointerRoleReview.java \
             src/test/java/ghidrassist/hardware/HardwareNamingReviewSelfTest.java \
-            src/test/java/ghidrassist/hardware/HardwareFunctionNamingReviewSelfTest.java
-      - name: Reject formula injection in register and function hint CSV
+            src/test/java/ghidrassist/hardware/HardwareFunctionNamingReviewSelfTest.java \
+            src/test/java/ghidrassist/hardware/HardwarePointerRoleReviewSelfTest.java
+      - name: Reject formula/oversize inputs in register, function and pointer review CSV
         shell: bash
         run: |
           set -euo pipefail
@@ -49,3 +55,5 @@ jobs:
             ghidrassist.hardware.HardwareNamingReviewSelfTest
           java -cp "$RUNNER_TEMP/naming" \
             ghidrassist.hardware.HardwareFunctionNamingReviewSelfTest
+          java -cp "$RUNNER_TEMP/naming" \
+            ghidrassist.hardware.HardwarePointerRoleReviewSelfTest
