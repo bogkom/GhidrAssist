@@ -45,6 +45,8 @@ public final class HardwareDataflow {
         public final List<Long> successors;
         public final String mnemonic;
         public final Set<String> sideEffectRegisters;
+        /** Verified input-independent register constants assigned on leaf return. */
+        public final Map<String,Long> verifiedCallReturns;
         public Step(long address,Kind kind,String register,long operand,long displacement,
                     Integer literalWord,int writeBits,Collection<Long> successors,String mnemonic){
             this.address=address;this.kind=Objects.requireNonNull(kind);
@@ -54,6 +56,7 @@ public final class HardwareDataflow {
             this.literalWord=literalWord;this.writeBits=writeBits;
             this.successors=List.copyOf(successors);this.mnemonic=mnemonic==null?"":mnemonic;
             this.sideEffectRegisters=Set.of();
+            this.verifiedCallReturns=Map.of();
         }
         public Step(long address,Kind kind,String register,String sourceRegister,long operand,
                     long displacement,Integer literalWord,int writeBits,
@@ -65,6 +68,7 @@ public final class HardwareDataflow {
             this.literalWord=literalWord;this.writeBits=writeBits;
             this.successors=List.copyOf(successors);this.mnemonic=mnemonic==null?"":mnemonic;
             this.sideEffectRegisters=Set.of();
+            this.verifiedCallReturns=Map.of();
         }
         /** Indexed STORE: base + displacement + signed .W/.L index * scale. */
         public Step(long address, String baseRegister, String sourceRegister,
@@ -86,6 +90,7 @@ public final class HardwareDataflow {
             this.successors=List.copyOf(successors);
             this.mnemonic=mnemonic==null?"":mnemonic;
             this.sideEffectRegisters=Set.of();
+            this.verifiedCallReturns=Map.of();
         }
         private Step(Step original,Collection<String> sideEffects) {
             this.address=original.address;this.kind=original.kind;
@@ -99,10 +104,34 @@ public final class HardwareDataflow {
                 if(reg==null || !reg.matches("[AD][0-7]"))
                     throw new IllegalArgumentException("Invalid register side effect");
             this.sideEffectRegisters=Set.copyOf(sideEffects);
+            this.verifiedCallReturns=original.verifiedCallReturns;
+        }
+        private Step(Step original,Map<String,Long> provedReturns){
+            if(original.kind!=Kind.CALL_BARRIER)
+                throw new IllegalArgumentException("Call returns require CALL_BARRIER");
+            if(provedReturns==null || provedReturns.size()>14)
+                throw new IllegalArgumentException("Invalid leaf return registers");
+            for(var e:provedReturns.entrySet())
+                if(e.getKey()==null || !e.getKey().matches("[AD][0-6]|D7") ||
+                        e.getValue()==null)
+                    throw new IllegalArgumentException("Unsafe leaf register");
+            this.address=original.address;this.kind=original.kind;
+            this.register=original.register;this.sourceRegister=original.sourceRegister;
+            this.indexRegister=original.indexRegister;
+            this.indexBits=original.indexBits;this.indexScale=original.indexScale;
+            this.operand=original.operand;this.displacement=original.displacement;
+            this.literalWord=original.literalWord;this.writeBits=original.writeBits;
+            this.successors=original.successors;this.mnemonic=original.mnemonic;
+            this.sideEffectRegisters=original.sideEffectRegisters;
+            this.verifiedCallReturns=Map.copyOf(provedReturns);
         }
         public Step withSideEffects(Collection<String> updatedRegisters) {
             if(updatedRegisters==null || updatedRegisters.isEmpty())return this;
             return new Step(this,updatedRegisters);
+        }
+        public Step withVerifiedCallReturns(Map<String,Long> provedReturns){
+            if(provedReturns==null || provedReturns.isEmpty())return this;
+            return new Step(this,provedReturns);
         }
     }
     public static final class Snapshot {
@@ -233,7 +262,6 @@ public final class HardwareDataflow {
                     crossedUnknownStore!=b.crossedUnknownStore;
         }
     }
-
     /** Checkpointed state at a CFG instruction entry, never a finished result. */
     public record EntryState(Map<String,Long> pointers,
             Map<Long,Integer> peripherals,Long vbr,int mmMin,int mmMax,
@@ -311,6 +339,24 @@ public final class HardwareDataflow {
         if(constant)return Long.valueOf(literal);
         return propagated;
     }
+
+    /**
+     * 68000 ADDQ/SUBQ to An adjusts the full address register regardless of
+     * the instruction .W spelling. To Dn, .B/.W update only the low byte/word
+     * and must NOT carry into untouched high bits. Zero means unknown size;
+     * callers must clobber Dn rather than invent a full-register result.
+     */
+    static int registerAdjustWidth(String destination,String mnemonic) {
+        if(destination==null || mnemonic==null ||
+                !destination.matches("[AD][0-7]"))
+            return 0;
+        if(destination.startsWith("A"))return 32;
+        String spelling=mnemonic.toUpperCase(java.util.Locale.ROOT);
+        if(spelling.endsWith(".B"))return 8;
+        if(spelling.endsWith(".W"))return 16;
+        if(spelling.endsWith(".L"))return 32;
+        return 0;
+    }
     private static Long resolve(Step step,State s) {
         if(step.kind==Kind.STORE_DIRECT) return step.operand&MASK24;
         if(step.kind==Kind.STORE_INDIRECT){
@@ -339,13 +385,40 @@ public final class HardwareDataflow {
      * profile. A static site is not evidence that MM is mapped there, that
      * the code executes, or that the MM write-once latch is still available.
      */
+    private static int storeBytes(int bits) {
+        return switch(bits) {
+            case 8 -> 1;
+            case 16 -> 2;
+            case 32 -> 4;
+            default -> 0;
+        };
+    }
+
+    // CPU32 source-level external addresses are modeled modulo 24 bits.
+    // A long write at 0xFFFFFE can also touch a tracked word at 0x000000.
+    private static boolean overlapsBytes(long start,int size,
+                                         long target,int targetSize) {
+        for(int i=0;i<size;i++)
+            for(int j=0;j<targetSize;j++)
+                if(((start+i)&MASK24)==((target+j)&MASK24))
+                    return true;
+        return false;
+    }
+
+    /**
+     * Candidate touch of the MC68332 MM bit's LOW BYTE under either MM
+     * mapping. A partial/spanning STORE is UNKNOWN first-site evidence, not
+     * a known 16-bit SIMCR value or proof of hardware latch execution.
+     */
+    static boolean mayTouchSimcrMmLowByte(Long address,int bits) {
+        int bytes=storeBytes(bits);
+        return address!=null && bytes>0 &&
+            (overlapsBytes(address,bytes,0x7ffa01L,1) ||
+             overlapsBytes(address,bytes,0xfffa01L,1));
+    }
+
     private static boolean candidateSimcrStore(Step step, Long address) {
-        if (address==null) return false;
-        boolean word=step.writeBits==16 &&
-            (address==0x7ffa00L || address==0xfffa00L);
-        boolean lowByte=step.writeBits==8 &&
-            (address==0x7ffa01L || address==0xfffa01L);
-        return word || lowByte;
+        return mayTouchSimcrMmLowByte(address,step.writeBits);
     }
 
     private static State transfer(Step step,State in,Set<Long> targets){
@@ -364,8 +437,21 @@ public final class HardwareDataflow {
             case ADJUST_POINTER -> {
                 if(step.register!=null){
                     Long v=s.pointers.get(step.register);
-                    if(v==null)s.pointers.remove(step.register);
-                    else s.pointers.put(step.register,(v+step.operand)&MASK24);
+                    // Dn size is required. A partial Dn arithmetic update
+                    // must NOT carry into the preserved high byte/word.
+                    if(v==null || step.register.startsWith("D") &&
+                            step.writeBits!=8 && step.writeBits!=16 &&
+                            step.writeBits!=32) {
+                        s.pointers.remove(step.register);
+                    }else {
+                        long mask=step.register.startsWith("D") &&
+                            step.writeBits==8?0xffL:
+                            step.register.startsWith("D") &&
+                            step.writeBits==16?0xffffL:MASK24;
+                        long changed=(v & ~mask) |
+                            ((v+step.operand)&mask);
+                        s.pointers.put(step.register,changed&MASK24);
+                    }
                 }
             }
             case CLOBBER_POINTER -> {
@@ -389,19 +475,15 @@ public final class HardwareDataflow {
                     // invalidates the full register value. Reintroduce a
                     // constant only for an aligned, complete 16-bit write
                     // with a fully known source.
-                    int bytes = switch(step.writeBits) {
-                        case 8 -> 1;
-                        case 16 -> 2;
-                        case 32 -> 4;
-                        default -> 0;
-                    };
+                    int bytes = storeBytes(step.writeBits);
                     if(bytes==0) {
                         s.peripherals.clear();
                         s.crossedUnknownStore=true;
                     } else {
-                        long last=address+bytes-1;
+                        // Source/word windows can cross 0xFFFFFF:
+                        // invalidate high and wrapped low bytes alike.
                         s.peripherals.keySet().removeIf(reg ->
-                            address<=reg+1 && reg<=last);
+                            overlapsBytes(address,bytes,reg,2));
                         if(step.writeBits==16 && targets.contains(address) &&
                                 (address&1)==0) {
                             Long known=knownStoreValue(step,in);
@@ -418,6 +500,10 @@ public final class HardwareDataflow {
                 // means constants cannot cross this boundary.
                 s.pointers.clear();s.peripherals.clear();s.vbr=null;
                 s.crossedUnknownCall=true;
+                // Register evidence is reintroduced only after the generic
+                // CALL barrier, and only from a strictly verified leaf.
+                for(var proved:step.verifiedCallReturns.entrySet())
+                    s.pointers.put(proved.getKey(),proved.getValue()&MASK24);
             }
             default -> {}
         }
@@ -425,7 +511,13 @@ public final class HardwareDataflow {
         // instruction's effective address (post-increment uses old A register).
         // The pre-decrement form is unresolved unless modeled separately, but
         // in either case a stale pointer must not survive to a later STORE.
-        for(String reg:step.sideEffectRegisters)s.pointers.remove(reg);
+        for(String reg:step.sideEffectRegisters)
+            // ABI P-code clobbers are effects during the call. An
+            // unconditional leaf proof establishes the result AFTER RTS,
+            // and therefore takes precedence over that generic clobber.
+            if(step.kind!=Kind.CALL_BARRIER ||
+                    !step.verifiedCallReturns.containsKey(reg))
+                s.pointers.remove(reg);
         return s;
     }
     /**
@@ -433,7 +525,6 @@ public final class HardwareDataflow {
      * with completely unknown registers. Conservative joins collapse
      * incompatible predecessor values to unknown.
      */
-
     public static Result analyze(long entry,Collection<Step> steps,
                                  Collection<Long> peripherals,int maxIterations){
         // The legacy non-checkpointed API retains its exact bounded behavior.
