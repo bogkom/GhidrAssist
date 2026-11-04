@@ -97,7 +97,7 @@ public final class HardwareFunctionStageCache<K> {
                 steps.size()>MAX_STEPS_PER_FUNCTION)return null;
         try {
             MessageDigest digest=MessageDigest.getInstance("SHA-256");
-            text(digest,"GA12-FUNCTION-CFG-FIXPOINT-2");
+            text(digest,"GA12-FUNCTION-CFG-FIXPOINT-3");
             intValue(digest,steps.size());
             for(HardwareDataflow.Step step:steps) {
                 if(step==null)return null;
@@ -110,7 +110,13 @@ public final class HardwareFunctionStageCache<K> {
                 intValue(digest,step.indexScale);
                 longValue(digest,step.operand);
                 longValue(digest,step.displacement);
-                intValue(digest,step.literalWord==null?-1:step.literalWord);
+                // A missing literal is UNKNOWN, while -1 is a legitimate
+                // signed source literal (0xFFFF for MOVE.W). Encoding both
+                // as -1 once reused a checkpoint across different evidence.
+                // The v3 marker invalidates all older memory/disk signatures.
+                intValue(digest,step.literalWord==null?0:1);
+                if(step.literalWord!=null)
+                    intValue(digest,step.literalWord);
                 intValue(digest,step.writeBits);
                 text(digest,step.mnemonic);
                 intValue(digest,step.successors.size());
