@@ -1,0 +1,98 @@
+name: GA-13 real Ghidra saved rename receipt across distinct JVMs
+
+on:
+  pull_request:
+    paths:
+      - 'tests/ga11_headless/run.py'
+      - 'tests/ga11_headless/Ga11VectorHeadlessMain.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareFunctionRenameReceipt.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareFunctionRenameService.java'
+      - '.github/workflows/ga13-receipt-restart-headless.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  two-jvm-program-persistence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Verify deterministic isolated runner syntax
+        run: python3 -m py_compile tests/ga11_headless/run.py
+      - name: Fetch SHA-256 verified Ghidra 12.1.4 PUBLIC
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fLsS --retry 3 --connect-timeout 20 \
+            -o "$RUNNER_TEMP/ghidra.zip" \
+            "https://github.com/NationalSecurityAgency/ghidra/releases/download/Ghidra_12.1.4_build/ghidra_12.1.4_PUBLIC_20260921.zip"
+          echo "ddac49f903da9d5bac833e5cc79395098b9c33cfd3279be5f31bd00387d2d4db  $RUNNER_TEMP/ghidra.zip" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/ghidra"
+          unzip -q "$RUNNER_TEMP/ghidra.zip" -d "$RUNNER_TEMP/ghidra"
+          GHIDRA_DIR="$(find "$RUNNER_TEMP/ghidra" -mindepth 1 -maxdepth 1 -type d -name 'ghidra_*' -print -quit)"
+          test -n "$GHIDRA_DIR"
+          echo "GHIDRA_INSTALL_DIR=$GHIDRA_DIR" >> "$GITHUB_ENV"
+      - name: Build exact GhidrAssist extension
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$GHIDRA_INSTALL_DIR/support/gradle/gradlew" --no-daemon buildExtension
+          shopt -s nullglob
+          packages=(dist/ghidra_12.1.4_PUBLIC_*_GhidrAssist.zip)
+          test "${#packages[@]}" -eq 1
+          unzip -tq "${packages[0]}"
+          echo "EXTENSION=$PWD/${packages[0]}" >> "$GITHUB_ENV"
+      - name: Save approved rename then open same Program in fresh Ghidra JVM
+        shell: bash
+        run: |
+          set -euo pipefail
+          EXTENSION_SHA="$(sha256sum "$EXTENSION" | cut -d' ' -f1)"
+          python3 tests/ga11_headless/run.py \
+            --ghidra "$GHIDRA_INSTALL_DIR" \
+            --java-home "$JAVA_HOME" \
+            --extension-zip "$EXTENSION" \
+            --extension-sha256 "$EXTENSION_SHA" \
+            --output "$RUNNER_TEMP/ga13-receipt-restart" \
+            --strict-entry --ga18-mode receipt-restart
+          python3 - <<'PY'
+          import json,os
+          from pathlib import Path
+          root=Path(os.environ["RUNNER_TEMP"])/"ga13-receipt-restart"
+          summary=json.loads((root/"summary.json").read_text())
+          first=json.loads((root/"receipt-first-jvm"/"result.json").read_text())
+          second=json.loads((root/"result.json").read_text())
+          assert summary["status"]=="PASSED_SYNTHETIC_REAL_GHIDRA_HEADLESS",summary
+          assert summary.get("ga13_distinct_ghidra_jvms")==2,summary
+          assert summary.get("ga13_same_saved_project_reopened") is True,summary
+          assert first.get("rename_receipt_first_jvm_saved") is True,first
+          assert second.get("rename_receipt_second_jvm_reopened") is True,second
+          assert second.get("rename_receipt_saved_name_and_source") is True,second
+          assert second.get("rename_receipt_restart_read_only") is True,second
+          print("GA13 REAL GHIDRA TWO-JVM SAVED RECEIPT PASS", summary["ghidra_version"])
+          PY
+      - name: Bounded isolated failure diagnostics
+        if: failure()
+        shell: bash
+        run: |
+          root="$RUNNER_TEMP/ga13-receipt-restart"
+          for p in "$root/integration.log" "$root/receipt-first-jvm/integration.log" \
+                   "$root/compile.log" "$root/summary.json"; do
+            if test -f "$p"; then
+              echo "== $(basename "$p") =="
+              tail -n 50 "$p"
+            fi
+          done
+      - name: Publish synthetic-only cross-JVM evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ga13-two-jvm-receipt-${{ github.run_id }}
+          path: ${{ runner.temp }}/ga13-receipt-restart/
+          if-no-files-found: ignore
+          retention-days: 21
