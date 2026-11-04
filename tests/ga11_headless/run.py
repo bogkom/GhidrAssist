@@ -95,7 +95,7 @@ def main():
                         "mmio-read-reference","csbar-csor-conditional",
                         "simcr-mm0-literal","trambar-unknown","csor-alternatives",
                         "branch-simcr","call-barrier","cancel-incomplete",
-                        "function-rename","apply-preserve",
+                        "function-stage-resume","function-rename","apply-preserve",
                         "provenance-csv","movec-vbr"),
                         default="none",help="Run GA-07/12 or GA-02/03 genuine headless source-evidence checks")
     args=parser.parse_args()
@@ -266,6 +266,13 @@ def main():
                         "cancel_clean_retry_computed",
                         "cancel_complete_stage_reused",
                         "cancel_real_program_unchanged"),
+                    "function-stage-resume":(
+                        "function_stage_real_partial_cancelled",
+                        "function_stage_completed_before_cancel",
+                        "function_stage_retry_reused",
+                        "function_stage_full_then_reused",
+                        "function_stage_explicit_clear_invalidated",
+                        "function_stage_no_partial_rag_or_edits"),
                     "function-rename":(
                         "rename_real_functions_and_collision",
                         "rename_atomic_rollback",

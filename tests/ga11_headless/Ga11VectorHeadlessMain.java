@@ -82,7 +82,7 @@ public final class Ga11VectorHeadlessMain {
             "mmio-read-reference","csbar-csor-conditional",
             "simcr-mm0-literal","trambar-unknown","csor-alternatives",
             "branch-simcr","call-barrier","cancel-incomplete",
-            "function-rename","apply-preserve","provenance-csv","movec-vbr").contains(ga18Mode),
+            "function-stage-resume","function-rename","apply-preserve","provenance-csv","movec-vbr").contains(ga18Mode),
             "Unknown GA-18 acceptance mode");
         var config=new HeadlessGhidraApplicationConfiguration();
         config.setApplicationLogFile(out.resolve("ghidra.log").toFile());
@@ -921,6 +921,79 @@ public final class Ga11VectorHeadlessMain {
                     result.addProperty("cancel_clean_retry_computed",true);
                     result.addProperty("cancel_complete_stage_reused",true);
                     result.addProperty("cancel_real_program_unchanged",true);
+
+                } else if("function-stage-resume".equals(ga18Mode)) {
+                    // Real synthetic Ghidra with >=2 disassembled functions.
+                    // Cancel the *whole* CFG stage immediately AFTER one
+                    // individual fixed point was completely published in
+                    // process-local function-stage cache; never publish a
+                    // partial full Report or Review/RAG on cancellation.
+                    HardwareFlowStageCache.clear(full);
+                    ghidrassist.hardware.HardwareEvidenceCache.clear(full);
+                    long rev=full.getModificationNumber();
+                    HardwareAnalysisRevision started=HardwareAnalysisRevision.capture(
+                        full,rev,full.getLanguageID().toString(),
+                        full.getExecutableSHA256(),true);
+                    check(full.getFunctionManager().getFunctionCount()>=2,
+                        "Fixture lacks two independent real Ghidra functions");
+                    java.util.concurrent.atomic.AtomicInteger checks=
+                        new java.util.concurrent.atomic.AtomicInteger();
+                    TaskMonitor interrupt=(TaskMonitor)java.lang.reflect.Proxy
+                        .newProxyInstance(TaskMonitor.class.getClassLoader(),
+                            new Class[]{TaskMonitor.class},(proxy,method,args2)-> {
+                            if(method.getName().equals("checkCancelled")) {
+                                checks.incrementAndGet();
+                                if(GhidraHardwareFlowService
+                                        .checkpointedFunctionStages(full)>0)
+                                    throw new CancelledException();
+                                return null;
+                            }
+                            return method.invoke(TaskMonitor.DUMMY,args2);
+                        });
+                    boolean cancelled=false;
+                    try{
+                        HardwareFlowStageCache.loadOrAnalyze(
+                            full,started,interrupt);
+                    }catch(CancelledException expected){cancelled=true;}
+                    int completed=GhidraHardwareFlowService
+                        .checkpointedFunctionStages(full);
+                    check(cancelled && completed>=1 && checks.get()>0,
+                        "Real task did not cancel after a completed function");
+                    check(!ghidrassist.hardware.HardwareEvidenceCache.hasEvidence(full),
+                        "Cancelled scan published RAG before full completion");
+                    check(full.getModificationNumber()==rev,
+                        "Partial CFG did a Ghidra database edit");
+                    var resumed=HardwareFlowStageCache.loadOrAnalyze(
+                        full,started,TaskMonitor.DUMMY);
+                    check(!resumed.reused() &&
+                        resumed.report().markdown.contains(
+                            "- Completed per-function fixed points reused: ") &&
+                        !resumed.report().markdown.contains(
+                            "- Completed per-function fixed points reused: 0;"),
+                        "Same-program retry discarded completed function work");
+                    var again=HardwareFlowStageCache.loadOrAnalyze(
+                        full,started,TaskMonitor.DUMMY);
+                    check(again.reused() && again.report()==resumed.report(),
+                        "Full completion did not retain full-stage cache");
+                    HardwareFlowStageCache.clear(full);
+                    check(GhidraHardwareFlowService
+                            .checkpointedFunctionStages(full)==0,
+                        "Explicit invalidation kept stale partial fixed points");
+                    var clean=HardwareFlowStageCache.loadOrAnalyze(
+                        full,started,TaskMonitor.DUMMY);
+                    check(!clean.reused() &&
+                        clean.report().markdown.contains(
+                            "- Completed per-function fixed points reused: 0;") &&
+                        full.getModificationNumber()==rev,
+                        "Explicit invalidate did not force recomputation");
+                    check(!ghidrassist.hardware.HardwareEvidenceCache.hasEvidence(full),
+                        "Function checkpoints published AI/RAG without Apply");
+                    result.addProperty("function_stage_real_partial_cancelled",true);
+                    result.addProperty("function_stage_completed_before_cancel",true);
+                    result.addProperty("function_stage_retry_reused",true);
+                    result.addProperty("function_stage_full_then_reused",true);
+                    result.addProperty("function_stage_explicit_clear_invalidated",true);
+                    result.addProperty("function_stage_no_partial_rag_or_edits",true);
 
                 } else if("function-rename".equals(ga18Mode)) {
                     // Two genuine FunctionManager objects, three decoded
