@@ -283,33 +283,50 @@ public final class GhidraHardwareFlowService {
             null,0,0,null,0,next,full);
     }
     /**
-     * Strict Ghidra Listing gate: all bytes of the function body must be
-     * decoded into a contiguous, direct, straight-line leaf ending in RTS.
-     * No P-code unknown/implicit A-D effects or multi-branch paths accepted.
+     * Strict Ghidra Listing gate. Supports either a simple unconditional
+     * leaf or a bounded acyclic conditional-branch leaf where ALL paths
+     * produce agreeing output registers before an ordinary RTS. No unknown
+     * P-code effects, out-of-function jumps or incomplete body accepted.
      */
     private static Map<String,Long> verifiedLeafReturn(
             Program program,Function callee,TaskMonitor monitor)
             throws CancelledException{
         if(callee==null || callee.getBody().getNumAddresses()<8 ||
                 callee.getBody().getNumAddresses()>
-                    HardwareVerifiedLeafReturn.MAX_LEAF_INSTRUCTIONS*6L)
+                    HardwareVerifiedBranchReturn.MAX_INSTRUCTIONS*6L)
             return Map.of();
         List<HardwareDataflow.Step> steps=new ArrayList<>();
+        Map<Long,Integer> lengths=new LinkedHashMap<>();
         long decoded=0;
         InstructionIterator iterator=program.getListing()
             .getInstructions(callee.getBody(),true);
         while(iterator.hasNext()){
             monitor.checkCancelled();
-            if(steps.size()>=HardwareVerifiedLeafReturn.MAX_LEAF_INSTRUCTIONS)
+            if(steps.size()>=HardwareVerifiedBranchReturn.MAX_INSTRUCTIONS)
                 return Map.of();
             Instruction instruction=iterator.next();
+            if(instruction.getFlowType().isComputed() ||
+                    instruction.getFlowType().isCall())
+                return Map.of();
+            if(instruction.getFlowType().isJump()){
+                Address[] destinations=instruction.getFlows();
+                if(destinations==null || destinations.length==0)
+                    return Map.of();
+                for(Address target:destinations)
+                    if(!callee.getBody().contains(target))return Map.of();
+            }
             decoded+=instruction.getLength();
+            lengths.put(instruction.getAddress().getOffset(),
+                instruction.getLength());
             steps.add(translate(instruction,callee));
         }
         if(decoded!=callee.getBody().getNumAddresses())
             return Map.of();
-        return HardwareVerifiedLeafReturn.summarize(
+        Map<String,Long> simple=HardwareVerifiedLeafReturn.summarize(
             callee.getEntryPoint().getOffset(),decoded,steps);
+        if(!simple.isEmpty())return simple;
+        return HardwareVerifiedBranchReturn.summarize(
+            callee.getEntryPoint().getOffset(),decoded,steps,lengths);
     }
 
     private static String csEpoch(HardwareDataflow.Snapshot hit,String changed,
