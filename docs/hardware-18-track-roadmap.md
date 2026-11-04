@@ -3,6 +3,41 @@
 Status: **IN PROGRESS — integrated baseline 2026-11-04**. Scope source: user-approved 2026-10-28 requirements (A–H, additional features 13.1–13.7, PDF/RAG, testing and Codex Supervisor integration).
 
 
+## GA-02/03 oraz GA-08/13 — 2026-11-04, po scaleniu PR #144
+
+Na wyraźnej wcześniejszej zgodzie właściciela na bezpieczne scalanie
+przetestowanych pakietów zamknięto
+[PR #144](https://github.com/bogkom/GhidrAssist/pull/144)
+z `merged=true`. Chroniony `master`:
+[`30b1a9146b19939d884200648d545fb45797620c`](https://github.com/bogkom/GhidrAssist/commit/30b1a9146b19939d884200648d545fb45797620c).
+Dokładny, przetestowany PR HEAD:
+`406d4464efaf3ccf3ef55064b4244c46909ffe67`;
+**20/20 GitHub Actions SUCCESS** (Java21, Ghidra
+12.1.4 PUBLIC / Java25 i rzeczywista syntetyczna Ghidra headless).
+Drzewa Git PR HEAD / merge są identyczne:
+`cb7b23d97a20f46c4167847be0daf3d8979b37ac`.
+Po scaleniu osobna pełna kompilacja na dokładnym merge SHA
+**1/1 GitHub Actions SUCCESS** ([41885764324](https://github.com/bogkom/GhidrAssist/actions/runs/41885764324)).
+GA-02/03 pozostają **CZĘŚCIOWO**: kolejka transytywnego grafu CALL
+jest teraz limitowana również liczbą zaplanowanych i nierozpoznanych
+węzłów; głęboka detekcja cykli nie przepełnia stosu Javy.
+Wynik `LIMITED/UNKNOWN` nie wyklucza późniejszego STORE SIMCR/MM.
+
+**Nowy, niezależny pakiet GA-08/13:** zabezpieczenie trzeciego
+(starszego) eksportu CSV z podpowiedziami **ról wskaźników** przez
+wspólny encoder komórek Review (limit 512 znaków, maskowanie
+formuł/Unicode) oraz osobny limit 5000 wierszy z licznikiem
+`OMITTED_ROWS` i znacznikiem `INCOMPLETE_EXPORT_NEVER_AUTO_APPLY`.
+Nie tworzy automatycznych nazw, zatwierdzeń, rzeczywistej historii
+autorów ani trwałego dziennika Undo; wymaga własnych nowych
+regresji Java21/Ghidra 12.1.4 i **PASS na dokładnym SHA** przed
+scaleniem.
+
+Issue #106 nadal otwarte bez nowych problemów; Issue #98 pozostaje
+osobną luką migracji starego CodeBrowser. Wszystkie 18 obszarów
+nadal rozwojowe, GA-14 odłożone. Nie uruchomiono zatrzymanych
+testów Wyse/Precision, timerów, sesji ani Supervisora.
+
 ## Aktualizacja GA-02/03 — 2026-11-04, po scaleniu #142 i #143
 
 **Źródło stanu: GitHub.** Właściciel wcześniej zatwierdził scalanie

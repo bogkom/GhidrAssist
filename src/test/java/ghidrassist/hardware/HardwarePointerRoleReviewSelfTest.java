@@ -80,6 +80,51 @@ public final class HardwarePointerRoleReviewSelfTest {
         check(HardwarePointerRoleReview.csvRows(crossScope)
             .contains("SCOPE_CONFLICT; NEVER_AUTO_APPLY"),
             "scope conflict remains CSV review only");
+        // GA-08/13: pointer-role rows are appended to the *same* legacy
+        // seven-column naming preview. Existing function names are
+        // untrusted, and giant values must not allocate unbounded CSV.
+        var malicious=new HardwarePointerRoleReview.Proposal(
+            0x2bc0L,"imported", "\u2060=1+2","SIM",1,2,2,
+            HardwarePointerRoleReview.Status.REVIEW_ONLY,"=HYPERLINK(1)");
+        String protectedRow=HardwarePointerRoleReview.csvRows(List.of(malicious));
+        check(protectedRow.contains("\"'\u2060=1+2 in imported\"") &&
+            protectedRow.contains("\"'=HYPERLINK(1)\"") &&
+            protectedRow.contains("\"POINTER_ROLE:SIM:MM1\""),
+            "directly supplied pointer-role row cannot inject CSV formula");
+        String hugeName="=SUM(2,2)"+"X".repeat(1_000_000);
+        var huge=new HardwarePointerRoleReview.Proposal(
+            0x2bc0L,hugeName,"A0","SIM",1,2,2,
+            HardwarePointerRoleReview.Status.REVIEW_ONLY,
+            "p_hw_sim_mm1_candidate");
+        String limited=HardwarePointerRoleReview.csvRows(List.of(huge));
+        check(limited.contains("SOURCE_TRUNCATED") &&
+            limited.length()<1400 && limited.contains("NEVER_AUTO_APPLY"),
+            "million-character Ghidra function name is bounded and marked");
+        var overflow=java.util.Collections.nCopies(
+            HardwarePointerRoleReview.MAX_CSV_ROWS+4,hints.get(0));
+        String omitted=HardwarePointerRoleReview.csvRows(overflow);
+        check(omitted.lines().count()==
+            HardwarePointerRoleReview.MAX_CSV_ROWS+1 &&
+            omitted.contains("4 rows omitted") &&
+            omitted.contains("INCOMPLETE_EXPORT_NEVER_AUTO_APPLY") &&
+            omitted.contains("POINTER_ROLE_EXPORT_INCOMPLETE"),
+            "bounded rows must disclose four missing hint proposals");
+        boolean nullRejected=false;
+        var malformed=new java.util.ArrayList<
+            HardwarePointerRoleReview.Proposal>();
+        malformed.add(hints.get(0));malformed.add(null);
+        try{HardwarePointerRoleReview.csvRows(malformed);}
+        catch(IllegalArgumentException expected){nullRejected=true;}
+        check(nullRejected,"missing pointer role must not disappear silently");
+        nullRejected=false;
+        try{HardwarePointerRoleReview.csvRows(null);}
+        catch(IllegalArgumentException expected){nullRejected=true;}
+        check(nullRejected,"null pointer role export rejected");
+        check(HardwarePointerRoleReview.csvRows(hints)
+            .contains("A0 in fun_reset") &&
+            HardwarePointerRoleReview.csvRows(hints)
+            .contains("p_hw_sim_mm1_candidate"),
+            "ordinary pointer-role rows stay unchanged");
         System.out.println("HardwarePointerRoleReviewSelfTest OK");
     }
 }

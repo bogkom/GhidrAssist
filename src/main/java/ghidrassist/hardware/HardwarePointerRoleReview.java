@@ -28,7 +28,10 @@ public final class HardwarePointerRoleReview {
         }
     }
     private static String cell(String v) {
-        return "\""+v.replace("\"","\"\"").replace("\r"," ").replace("\n"," ")+"\"";
+        // Register, function, and pointer role previews share exactly the
+        // same Unicode/formula guard and 512-code-unit source disclosure.
+        // CSV is read-only and NEVER licenses a Ghidra rename/Apply.
+        return HardwareNamingReview.cell(v);
     }
     private static class Group {
         final Site first;
@@ -78,9 +81,24 @@ public final class HardwarePointerRoleReview {
         }
         return List.copyOf(result);
     }
+    /** Truncation is explicit; a partial preview is never Apply input. */
+    public static final int MAX_CSV_ROWS=5000;
     public static String csvRows(List<Proposal> rows) {
+        if(rows==null || rows.stream().anyMatch(Objects::isNull))
+            throw new IllegalArgumentException("Null pointer-role review row");
         StringBuilder b=new StringBuilder();
-        for(Proposal p:rows)b.append(p.csv());
+        int retained=Math.min(rows.size(),MAX_CSV_ROWS);
+        for(int i=0;i<retained;i++)b.append(rows.get(i).csv());
+        if(rows.size()>retained){
+            b.append(cell("OMITTED_ROWS")).append(',')
+                .append(cell("")).append(',').append(cell(""))
+                .append(',').append(cell(""))
+                .append(',').append(cell("POINTER_ROLE_EXPORT_INCOMPLETE"))
+                .append(',').append("0").append(',')
+                .append(cell((rows.size()-retained)+
+                    " rows omitted; INCOMPLETE_EXPORT_NEVER_AUTO_APPLY"))
+                .append('\n');
+        }
         return b.toString();
     }
     public static String report(List<Proposal> rows) {
