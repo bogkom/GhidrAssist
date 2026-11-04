@@ -3,6 +3,42 @@
 Status: **IN PROGRESS — integrated baseline 2026-11-04**. Scope source: user-approved 2026-10-28 requirements (A–H, additional features 13.1–13.7, PDF/RAG, testing and Codex Supervisor integration).
 
 
+## Aktualny stan — 2026-11-04, scalony PR #145 i rozwój GA-13
+
+GitHub `master` po właścicielsko zatwierdzonym [PR #145](https://github.com/bogkom/GhidrAssist/pull/145):
+[`d77f679977645961673c7727074df105c027cd49`](https://github.com/bogkom/GhidrAssist/commit/d77f679977645961673c7727074df105c027cd49),
+drzewo `07ae919f359abf3c928f7bc4db94e87875143ba1`
+**identyczne** z przetestowanym PR HEAD
+`9e1eec99d28919f8da2b9f3abafc6b901c2cb2de`.
+Na HEAD **21/21 GitHub Actions SUCCESS**, w tym Java21, pełna
+kompilacja Ghidry 12.1.4 PUBLIC / Java25 i rzeczywista syntetyczna
+Ghidra headless; **na dokładnym scalonym master 2/2 GitHub Actions
+SUCCESS**, osobno Java21 nazw/CSV i pełny build.
+
+**Priorytet następny GA-13:** oparta na istniejącym `Review names…`
+trwała, wersjonowana informacja o **konkretnej operacji nazwania
+funkcji**, przechowywana w Ghidra Program Options i zapisywana
+**w tej samej transakcji** co zaakceptowane `setName`.
+Zawiera Function entry, przed/po, źródłowy import SHA (nie SHA
+nowszego programu), rewizję przeglądu, statyczną rolę, zebrane
+rejestry i licznik unikalnych miejsc zapisu. Odporny na niepełne
+pola i zmianę formatu odczyt ma umożliwiać powiązanie Undo/Redo
+z usunięciem/przywróceniem rekordu. Wpis przypisuje operację
+GhidrAssist, **NIE** potwierdza autora ludzkiego/AI; hash jest
+kontrolą spójności, nie uwierzytelnieniem.
+
+Wymagane testy: Java21 deterministyczny codec i limit pól;
+rzeczywista izolowana Ghidra 12.1.4 PUBLIC z dwufunkcyjnym
+Apply, rollback, Undo, Redo i ponownym Undo; pełna kompilacja
+rozszerzenia na **dokładnym nowym SHA**. Ten pakiet pozostaje
+kandydatem do czasu weryfikacji CI. Nie rozszerza Review/Apply
+uprawnień ani nie twierdzi o wykonaniu ECU411.
+
+Issue #106 nadal otwarte (zero nowych komentarzy); Issue #98
+osobna luka migracji starego CodeBrowser. Wszystkie GA-01–GA-18
+pozostają rozwojowe, GA-14 odłożone. Wyse/Precision/legacy
+Supervisor nie uruchomiono.
+
 ## GA-02/03 oraz GA-08/13 — 2026-11-04, po scaleniu PR #144
 
 Na wyraźnej wcześniejszej zgodzie właściciela na bezpieczne scalanie
