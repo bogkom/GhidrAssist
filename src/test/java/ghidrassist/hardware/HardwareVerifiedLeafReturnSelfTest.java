@@ -37,6 +37,13 @@ public final class HardwareVerifiedLeafReturnSelfTest {
             analysed.snapshots.get(0).writtenWord==0x40ca &&
             analysed.snapshots.get(0).priorUnknownCall,
             "verified leaf returns unlock source only while CALL hazard remains");
+        var abiClobber=HardwareDataflow.analyze(0x100,List.of(
+            caller.get(0),
+            caller.get(1).withSideEffects(Set.of("D0","A7")),
+            caller.get(2)),Set.of(0xfffa00L),100);
+        ok(abiClobber.snapshots.get(0).effectiveAddress==0xfffa00L &&
+            abiClobber.snapshots.get(0).writtenWord==0x40ca,
+            "proven post-call return registers survive generic ABI clobber");
         var unproved=HardwareDataflow.analyze(0x100,List.of(
             caller.get(0),new HardwareDataflow.Step(0x106,CALL_BARRIER,
                 null,0,0,null,0,List.of(0x10aL),"JSR"),caller.get(2)),
