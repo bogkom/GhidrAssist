@@ -50,3 +50,26 @@ This is a defense-in-depth safeguard for *untrusted review text*, not
 proof that an arbitrary spreadsheet importer handles every encoding
 the same way. No CSV import/Apply, automatic rename, Ghidra Program
 mutation or external upload is introduced.
+
+## GA-13 — new per-function GhidrAssist operation receipts
+
+The read-only review CSV documented above still does not authenticate
+who made a pre-existing change. A separate, explicitly approved
+**function renaming** code path now proposes recording a limited
+operation receipt in the Ghidra Program Options category
+`GhidrAssist Function Rename Receipts`, **in the same transaction**
+as Ghidra's function-name edit.
+
+This receipt names the **GhidrAssist approval operation**, original
+function name, proposed source-only role, import SHA metadata and
+reviewed Program revision. It does not claim that any individual
+user, assistant, model or third-party script authored earlier data,
+and is not a complete per-symbol or per-variable audit. Ghidra
+Undo/Redo must move the receipt and function name together; any
+malformed persisted entry must be rejected rather than silently
+trusted. The v1 record has a checksum for accidental corruption
+only, not a cryptographic identity signature or actor attestation.
+
+This is separate from the preview CSV and from GA-12 analysis
+checkpoints. It changes neither export/Apply permission nor
+the physical interpretation of MCU firmware.

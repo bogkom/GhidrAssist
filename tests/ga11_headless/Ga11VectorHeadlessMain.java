@@ -1501,8 +1501,12 @@ public final class Ga11VectorHeadlessMain {
                     }catch(IllegalStateException expected) {rolledBack=true;}
                     check(rolledBack &&
                           fn1.getName().equals(firstName) &&
-                          fn2.getName().equals(secondName),
-                        "Name collision committed a partial batch rename");
+                          fn2.getName().equals(secondName) &&
+                          ghidrassist.hardware.HardwareFunctionRenameService
+                              .receipt(full,0x5a0L).isEmpty() &&
+                          ghidrassist.hardware.HardwareFunctionRenameService
+                              .receipt(full,0x640L).isEmpty(),
+                        "Failed approval must roll back both names and receipts");
                     int remove=full.startTransaction(
                         "GA18 B remove test-only collision");
                     try {
@@ -1543,16 +1547,70 @@ public final class Ga11VectorHeadlessMain {
                           fn1.getName().equals(first.proposedName) &&
                           fn2.getName().equals(second.proposedName),
                         "Actual Ghidra USER_DEFINED function rename failed");
+                    var receipt1=ghidrassist.hardware.HardwareFunctionRenameService
+                        .receipt(full,0x5a0L).orElseThrow();
+                    var receipt2=ghidrassist.hardware.HardwareFunctionRenameService
+                        .receipt(full,0x640L).orElseThrow();
+                    check(receipt1.entry()==0x5a0L &&
+                          receipt2.entry()==0x640L &&
+                          receipt1.reviewedModification()==
+                              reviewedRevision.modificationNumber() &&
+                          receipt2.reviewedModification()==
+                              reviewedRevision.modificationNumber() &&
+                          receipt1.beforeName().equals(firstName) &&
+                          receipt1.afterName().equals(first.proposedName) &&
+                          receipt2.beforeName().equals(secondName) &&
+                          receipt2.afterName().equals(second.proposedName) &&
+                          receipt1.sourceSha256().equals(
+                              full.getExecutableSHA256()==null ?
+                                  "UNKNOWN":full.getExecutableSHA256()) &&
+                          receipt1.registers().contains("CSBAR") &&
+                          receipt1.operationOrigin().contains("actor UNKNOWN"),
+                        "Persistent per-function receipt lacks source, revision or origin");
+                    String persisted=full.getOptions(
+                        ghidrassist.hardware.HardwareFunctionRenameReceipt
+                            .OPTIONS_CATEGORY).getString(
+                            ghidrassist.hardware.HardwareFunctionRenameReceipt
+                                .optionKey(0x5a0L),null);
+                    check(persisted!=null &&
+                          ghidrassist.hardware.HardwareFunctionRenameReceipt
+                            .decode(persisted).equals(receipt1),
+                        "Ghidra Program Options do not preserve canonical GA-13 receipt");
                     check(full.canUndo(),"Real Ghidra Undo unavailable after renames");
                     full.undo();
                     check(fn1.getName().equals(firstName) &&
-                          fn2.getName().equals(secondName),
-                        "Ghidra native Undo failed to restore both function names");
+                          fn2.getName().equals(secondName) &&
+                          ghidrassist.hardware.HardwareFunctionRenameService
+                              .receipt(full,0x5a0L).isEmpty() &&
+                          ghidrassist.hardware.HardwareFunctionRenameService
+                              .receipt(full,0x640L).isEmpty(),
+                        "Ghidra native Undo must restore function names AND provenance");
+                    check(full.canRedo(),"Ghidra Redo unavailable for receipt transaction");
+                    full.redo();
+                    check(fn1.getName().equals(first.proposedName) &&
+                          fn2.getName().equals(second.proposedName) &&
+                          ghidrassist.hardware.HardwareFunctionRenameService
+                              .receipt(full,0x5a0L).orElseThrow().equals(receipt1) &&
+                          ghidrassist.hardware.HardwareFunctionRenameService
+                              .receipt(full,0x640L).orElseThrow().equals(receipt2),
+                        "Ghidra Redo must restore BOTH names and exact GA-13 receipts");
+                    full.undo();
+                    check(fn1.getName().equals(firstName) &&
+                          fn2.getName().equals(secondName) &&
+                          ghidrassist.hardware.HardwareFunctionRenameService
+                              .receipt(full,0x5a0L).isEmpty() &&
+                          ghidrassist.hardware.HardwareFunctionRenameService
+                              .receipt(full,0x640L).isEmpty(),
+                        "Second Undo must again clear both receipt and name");
                     result.addProperty("rename_real_functions_and_collision",true);
                     result.addProperty("rename_atomic_rollback",true);
                     result.addProperty("rename_stale_revision_blocked",true);
                     result.addProperty("rename_transactional_two_function_apply",true);
                     result.addProperty("rename_native_undo_restored",true);
+                    result.addProperty("rename_program_options_receipt_written",true);
+                    result.addProperty("rename_atomic_receipt_rollback",true);
+                    result.addProperty("rename_receipt_native_undo_redo",true);
+                    result.addProperty("rename_receipt_actor_remains_unknown",true);
                 } else if("apply-preserve".equals(ga18Mode)) {
                     // Two disposable MC68332 MM1 blocks: preserve a user
                     // symbol, existing Word data and real CPU32 code while

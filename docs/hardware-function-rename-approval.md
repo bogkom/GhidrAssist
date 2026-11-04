@@ -56,3 +56,52 @@ Undo rules are preserved. Ghidra SourceType still does NOT identify whether
 the previous change came from a human, script or model. Static function role
 hints are not proof of executed MCU initialization or active hardware.
 No user program, private firmware, or profile is modified by this code change.
+
+## GA-13 — approved function rename receipts in the Program transaction
+
+Prior iterations only produced read-only naming previews and Ghidra
+`USER_DEFINED` function symbols. `SourceType` does **not** identify
+which human, model or script initiated the change. An explicitly
+user-confirmed Apply now also writes a bounded, versioned **per-function
+operation receipt** into the **same Ghidra Program transaction** as
+the `setName` call. Neither Analyze nor preview creates a receipt.
+
+Receipt storage uses a dedicated Ghidra Program **Options** category,
+`GhidrAssist Function Rename Receipts`, with keys
+`FN_<8-digit-24-bit-entry>`. It is **Program-local**, not the user
+Ghidra profile, original firmware, external file, RAG database, network
+service or OAuth credentials. Fields record the original Ghidra import
+SHA metadata (`UNKNOWN` if unavailable), reviewed modification number,
+function entry, before/after names, static role, register evidence names
+and distinct write-site count. All fields are size bounded and
+deterministically encoded in `GA13-FUNCTION-RENAME-1` format.
+
+Every selected entry is revalidated **before** writing anything.
+An existing receipt at the same address refuses an additional
+automatic rename instead of replacing previously retained evidence.
+All changes share Ghidra's native single undoable transaction:
+a failed preflight, collision, write or corrupt receipt must roll back
+the whole batch. A successful Undo should restore **both** the
+function name and the Program-local receipt; Redo restores both.
+The new `HardwareFunctionRenameService.receipt(program,address)`
+is a **read-only** accessor and rejects malformed data rather
+than inventing an audit record.
+
+The stored SHA-256 checksum detects accidental corruption or
+truncation; it is **not a signature or proof of honest provenance**.
+No actor identity or durable cryptographic attestation is created.
+A current or later `USER_DEFINED` symbol does not prove a human
+editor, execution of code, specific MC68332 behavior, or retained
+permission to Apply again. Receipts may be altered by other scripts
+with Program write access and are subject to Ghidra Undo/Redo and
+save. This is an initial operation-level provenance subset of GA-13,
+**not** the complete, tamper-proof history of arbitrary edits.
+
+The exact-commit gate includes a Java21 source-only checksum,
+version, UTF-8, source SHA, 24-bit address and evidence-limit suite;
+a **real isolated synthetic Ghidra 12.1.4 PUBLIC / Java25**
+`function-rename` mode tests two names, preflight rejection,
+transactional receipt creation, Undo, Redo and second Undo.
+The existing full extension build and unrelated hardware
+regressions remain required. Tests do not use the original ECU411
+Program or restart the stopped Wyse/Precision/legacy Supervisor.
