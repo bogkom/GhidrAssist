@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - 'src/main/java/ghidrassist/hardware/HardwarePointerRoleReview.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareNamingReview.java'
+      - 'src/main/java/ghidrassist/hardware/ChipSelectModel.java'
       - 'src/main/java/ghidrassist/hardware/GhidraHardwareFlowService.java'
       - 'src/main/java/ghidrassist/hardware/HardwareInventoryService.java'
       - 'src/test/java/ghidrassist/hardware/HardwarePointerRoleReviewSelfTest.java'
@@ -26,6 +28,8 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/pointers"
           javac --release 21 -d "$RUNNER_TEMP/pointers" \
+            src/main/java/ghidrassist/hardware/ChipSelectModel.java \
+            src/main/java/ghidrassist/hardware/HardwareNamingReview.java \
             src/main/java/ghidrassist/hardware/HardwarePointerRoleReview.java \
             src/test/java/ghidrassist/hardware/HardwarePointerRoleReviewSelfTest.java
       - name: Verify no automatic pointer naming
