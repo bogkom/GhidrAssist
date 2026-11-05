@@ -181,3 +181,15 @@ No original ECU411 firmware or user project is used.
 
 These are **possible static MMIO source candidates**, never executed
 CALL traces, an active SIMCR MM bit or proof of the physical bus map.
+
+### Actual Ghidra indexed operand decoder finding
+
+The new real CPU32 fixture exposed the genuine operand syntax
+`(0x1,A1,D1w*0x1)`. The previous strict parser required
+`D1.W*1`; it therefore failed to extract a verified index even
+though Ghidra decoded the CPU32 instruction and the two JSRs.
+The parser was amended to accept both equivalent spellings with
+only scales 1/2/4/8 and word/long index widths. A dedicated
+Java21 parser regression accompanies the real integration test;
+this is a source parser compatibility fix, not a new general
+interprocedural solver or a claim of MMIO execution.
