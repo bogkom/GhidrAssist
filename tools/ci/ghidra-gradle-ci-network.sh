@@ -32,7 +32,27 @@ esac
 
 tmp="$props.ga18-ci.$$"
 trap 'rm -f "$tmp"' EXIT
-sed -e '/^networkTimeout=/d' -e '/^retries=/d' -e '/^retryBackOffMs=/d' "$props" > "$tmp"
-printf '\nnetworkTimeout=120000\nretries=2\nretryBackOffMs=1000\n' >> "$tmp"
+# Replace the first timeout stanza in place, or append once if missing.
+# Never grow the file with an extra blank line on a second invocation.
+awk '
+  /^networkTimeout=/ {
+    if (!emitted) {
+      print "networkTimeout=120000"
+      print "retries=2"
+      print "retryBackOffMs=1000"
+      emitted=1
+    }
+    next
+  }
+  /^retries=/ || /^retryBackOffMs=/ { next }
+  { print }
+  END {
+    if (!emitted) {
+      print "networkTimeout=120000"
+      print "retries=2"
+      print "retryBackOffMs=1000"
+    }
+  }
+' "$props" > "$tmp"
 mv -f "$tmp" "$props"
 echo "Ghidra 12.1.4 isolated Gradle wrapper: timeout=120000ms retries=2 (URL/version unchanged)"
