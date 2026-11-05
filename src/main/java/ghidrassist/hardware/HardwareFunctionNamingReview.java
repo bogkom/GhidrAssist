@@ -127,8 +127,13 @@ public final class HardwareFunctionNamingReview {
      * A truncated proposal list must not look like complete review evidence. */
     public static final int MAX_CSV_ROWS=5_000;
     public static String toCsvRows(List<Proposal> proposals) {
-        if(proposals==null || proposals.contains(null))
+        if(proposals==null)
             throw new IllegalArgumentException("Missing function-review proposals");
+        // Immutable List.of()/List.copyOf() throws NPE for contains(null).
+        // Explicit validation works for both immutable and mutable input.
+        for(Proposal proposal:proposals)
+            if(proposal==null)
+                throw new IllegalArgumentException("Null function-review row");
         StringBuilder b=new StringBuilder();
         int retained=Math.min(MAX_CSV_ROWS,proposals.size());
         for(int i=0;i<retained;i++)b.append(proposals.get(i).csv());
