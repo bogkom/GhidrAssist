@@ -686,36 +686,38 @@ public final class GhidraHardwareFlowService {
                     uncertainFlow=true;
                 if(mc68332Selected && insn.getFlowType().isCall() &&
                         insn.getFlowType().isComputed()) {
-                    // This is a SEPARATE, source-only provenance display.
-                    // The existing Automation API verifier checks exact
-                    // CPU32 MOVEA immediate/JSR register bytes and exact
-                    // Ghidra function entry. Never turn this into a direct
-                    // call in RESET, CALL-effects, context, or Review/Apply.
-                    Address candidate=null;
-                    Instruction previous=program.getListing()
-                        .getInstructionBefore(insn.getAddress());
-                    if(previous!=null && fun.getBody().contains(
-                            previous.getAddress())) {
-                        try {
-                            candidate=AutomationCallPaths
-                                .adjacentConstantRegisterCall(program,insn);
-                        } catch(MemoryAccessException unavailable) {
-                            // Invalid/incomplete Listing is UNKNOWN.
-                        }
+                    // Display-only MAY evidence. The same byte-proven
+                    // Automation API verifier proves either an adjacent
+                    // MOVEA/JSR or <=3 NOP/MOVEQ instructions between
+                    // the two. The owner scope checks EVERY instruction
+                    // belongs to this exact Function body. Do NOT make
+                    // inferred CALL edges, RESET paths, cache checkpoints
+                    // or Review/Apply-eligible MMIO writes from this.
+                    AutomationCallPaths.BoundedCallSource witness=null;
+                    try {
+                        witness=AutomationCallPaths
+                            .boundedConstantRegisterSource(
+                                program,insn,fun);
+                    } catch(MemoryAccessException unavailable) {
+                        // Incomplete or invalid Ghidra memory is UNKNOWN.
                     }
                     long pc=insn.getAddress().getOffset();
-                    if(candidate!=null &&
+                    if(witness!=null &&
                             fun.getEntryPoint().getOffset()<=
                                 HardwareDataflow.MASK24 &&
+                            witness.movePc().getOffset()<=
+                                HardwareDataflow.MASK24 &&
                             pc<=HardwareDataflow.MASK24 &&
-                            candidate.getOffset()<=HardwareDataflow.MASK24) {
+                            witness.target().getOffset()<=
+                                HardwareDataflow.MASK24) {
                         if(indirectCandidates.size()<
                                 HardwareIndirectCallEvidence.MAX_SITES)
                             indirectCandidates.add(
                                 new HardwareIndirectCallEvidence.Site(
                                     fun.getEntryPoint().getOffset(),
-                                    previous.getAddress().getOffset(),
-                                    pc,candidate.getOffset()));
+                                    witness.movePc().getOffset(),
+                                    pc,witness.target().getOffset(),
+                                    witness.evidence()));
                         else indirectCandidatesOmitted++;
                     }else indirectUnknownCalls++;
                 }

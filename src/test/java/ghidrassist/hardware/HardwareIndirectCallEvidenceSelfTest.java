@@ -29,7 +29,7 @@ public final class HardwareIndirectCallEvidenceSelfTest {
             "source provenance deterministic regardless input collection order");
         check(source.contains("unresolved computed calls: 3") &&
             source.contains("NOT EXECUTION") &&
-            source.contains("No other computed CALL target") &&
+            source.contains("Other computed CALL targets remain UNKNOWN") &&
             source.contains("Review/Apply"),
             "unresolved remains unknown, NEVER promoted to execution/Apply");
         check(HardwareIndirectCallEvidence.markdown(List.of(),7,0)
@@ -61,6 +61,33 @@ public final class HardwareIndirectCallEvidenceSelfTest {
         many.add(new HardwareIndirectCallEvidence.Site(0,0,200,0x130));
         reject(()->HardwareIndirectCallEvidence.markdown(many,0,0),
             "over-cap source rows refused before report");
+        var nop=new HardwareIndirectCallEvidence.Site(0x300,0x300,
+            0x308,0x700,"bounded_movea_nop_chain");
+        var safe=new HardwareIndirectCallEvidence.Site(0x340,0x340,
+            0x34a,0x700,"bounded_movea_safe_chain");
+        String chains=HardwareIndirectCallEvidence.markdown(
+            List.of(safe,nop,a),3,0);
+        check(chains.contains(
+            "| 0x00000300 | 0x00000300 | 0x00000308 | 0x00000700 | bounded_movea_nop_chain |") &&
+            chains.contains(
+            "| 0x00000340 | 0x00000340 | 0x0000034A | 0x00000700 | bounded_movea_safe_chain |") &&
+            chains.contains("adjacent_movea_immediate") &&
+            chains.contains("up to three NOP/MOVEQ") &&
+            chains.contains("No branch") &&
+            chains.contains("Other computed CALL targets remain UNKNOWN"),
+            "bounded nonadjacent witnesses are distinguishable and MAY-only");
+        check(chains.equals(HardwareIndirectCallEvidence.markdown(
+            List.of(a,nop,safe),3,0)),
+            "bounded indirect chain output deterministic across input order");
+        reject(()->new HardwareIndirectCallEvidence.Site(0x300,0x300,
+                0x308,0x700,"ghidra_call_reference"),
+            "unverified Ghidra reference cannot masquerade as bounded byte proof");
+        reject(()->new HardwareIndirectCallEvidence.Site(0x300,0x300,
+                0x308,0x700,"bounded_movea_arbitrary_chain"),
+            "unsupported intermediate instructions have no provenance class");
+        reject(()->new HardwareIndirectCallEvidence.Site(0x300,0x300,
+                0x308,0x700,null),
+            "untrusted/null source marker rejected");
         System.out.println("HardwareIndirectCallEvidenceSelfTest PASS: assertions="+checks);
     }
 }

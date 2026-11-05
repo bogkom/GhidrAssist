@@ -10,7 +10,8 @@ import java.util.Set;
 
 /**
  * GA-02/03: display-only SOURCE provenance for an exactly byte-proven
- * CPU32 MOVEA.L #imm,An immediately followed by JSR (An).
+ * CPU32 MOVEA.L #imm,An followed by at most three NOP/MOVEQ operations
+ * and JSR (An), with the same target address register.
  *
  * This class NEVER establishes executed calls, global call-graph edges,
  * MM latch states, or Review/Apply-eligible writes. Other computed targets
@@ -20,13 +21,22 @@ public final class HardwareIndirectCallEvidence {
     private HardwareIndirectCallEvidence() {}
     public static final int MAX_SITES=96;
 
-    public record Site(long caller,long movePc,long callPc,long target) {
+    private static final Set<String> PROVENANCES=Set.of(
+        "adjacent_movea_immediate","bounded_movea_nop_chain",
+        "bounded_movea_safe_chain");
+    public record Site(long caller,long movePc,long callPc,long target,
+                       String provenance) {
+        /** Backward-compatible exact adjacent witness. */
+        public Site(long caller,long movePc,long callPc,long target) {
+            this(caller,movePc,callPc,target,"adjacent_movea_immediate");
+        }
         public Site {
             if(caller<0 || movePc<caller || callPc<=movePc ||
                     target<0 || caller>HardwareDataflow.MASK24 ||
                     movePc>HardwareDataflow.MASK24 ||
                     callPc>HardwareDataflow.MASK24 ||
-                    target>HardwareDataflow.MASK24)
+                    target>HardwareDataflow.MASK24 ||
+                    provenance==null || !PROVENANCES.contains(provenance))
                 throw new IllegalArgumentException(
                     "Invalid bounded CPU32 indirect CALL provenance");
         }
@@ -51,16 +61,19 @@ public final class HardwareIndirectCallEvidence {
             "## CPU32 adjacent-immediate indirect JSR source candidates (GA-02/03)\n\n")
             .append("**STATIC SOURCE-ONLY PROVENANCE — NOT EXECUTION**. ")
             .append("An existing, exact Ghidra function entry was encoded ")
-            .append("by an immediately preceding CPU32 MOVEA.L #imm,An; ")
-            .append("the following CPU32 JSR (An) names the SAME register. ")
-            .append("The adjacent instruction bytes are verified by the ")
+            .append("by a CPU32 MOVEA.L #imm,An, optionally followed by up ")
+            .append("to three NOP/MOVEQ instructions before CPU32 JSR (An) " +
+            "to the SAME register. No branch, unknown instruction, " +
+            "address-register or memory change is modeled. ")
+            .append("The complete bounded instruction bytes are verified by the ")
             .append("existing Automation API call-path verifier. ")
-            .append("No other computed CALL target, function graph edge, ")
+            .append("Other computed CALL targets remain UNKNOWN; no new " +
+            "function graph edge, ")
             .append("reachable RESET path, active SIMCR/MM, or physical ")
             .append("chip-select mapping is inferred. ")
             .append("No automatic Review/Apply/Undo operation or cache ")
             .append("checkpoint is created.\n")
-            .append("- Exact adjacent candidates displayed: ")
+            .append("- Exact bounded source candidates displayed: ")
             .append(sorted.size())
             .append("; unresolved computed calls: ").append(unresolved)
             .append("; candidates omitted by cap: ").append(omitted)
@@ -76,7 +89,7 @@ public final class HardwareIndirectCallEvidence {
                     .append(" | ").append(hex(s.movePc()))
                     .append(" | ").append(hex(s.callPc()))
                     .append(" | ").append(hex(s.target()))
-                    .append(" | adjacent_movea_immediate |\n");
+                    .append(" | ").append(s.provenance()).append(" |\n");
         }else b.append("- No exactly proven indirect JSR candidates. ")
             .append("This does NOT prove the absence of indirect calls.\n");
         return b.append("\n").toString();

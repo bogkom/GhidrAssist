@@ -62,3 +62,34 @@ branch-dependent addresses, memory-loaded vectors, address-register
 arithmetic and nonadjacent provenance, remain UNKNOWN. This patch does
 not enable any implicit cross-function dataflow or prove that the
 24-bit CPU32 logical address corresponds to a physical chip-select.
+
+## 2026-11-05 — additional bounded source paths (GA-02/03)
+
+The Automation API had already implemented a more general **strictly
+straight-line** CPU32 fall-back for `JSR (An)`: walk back no more than
+four decoded instruction boundaries to a `MOVEA.L #<exact entry>,An`,
+allowing only zero to three interposed `NOP` and/or `MOVEQ #imm,Dn`
+instructions (both leave An intact). The hardware report previously
+showed only the adjacent pair. It now reuses the same original byte
+checker, with an **additional Function-body containment requirement for
+every instruction** in the traced source chain. It never speculates
+through branches, memory loads, ADDQ/CLR, arbitrary register writes,
+or missing exact target Functions.
+
+The report preserves three distinct source labels:
+`adjacent_movea_immediate`, `bounded_movea_nop_chain` and
+`bounded_movea_safe_chain`. Strictly bounded, sorted and unique
+display rows include MOVEA PC, JSR PC, target and provenance.
+Unresolved, over-budget and uninspected calls remain UNKNOWN.
+These are **possible static source paths**, not guaranteed or executed
+dispatch, and remain outside direct CALL graph, RESET reachability,
+MC68332 active MM latch and all Review/Apply/Undo decisions.
+
+A dedicated real synthetic Ghidra 12.1.4 PUBLIC/Java25 fixture
+decodes bytecode for both allowed chains and negative controls
+(unsupported CLR.L, mismatched A1/A0, absent exact Function).
+It checks all per-source evidence, unchanged Program revision,
+repeat determinism, generic CPU32 gate and non-promotion to Apply.
+Java21 independently verifies allowed label integrity and output
+bounds. Existing adjacent source and Automation API call-path
+regressions must remain green on the exact PR SHA.
