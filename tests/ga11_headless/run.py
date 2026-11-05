@@ -344,6 +344,8 @@ def main():
                         "indirect_adjacent_static_only",
                         "indirect_adjacent_repeat_deterministic",
                         "indirect_adjacent_generic_cpu32_safe",
+                        "indirect_adjacent_untrusted_xref_unknown",
+                        "indirect_adjacent_byte_proof_preserved",
                         "indirect_adjacent_program_read_only"),
                     "indirect-bounded":(
                         "indirect_bounded_real_cpu32_jsrs",

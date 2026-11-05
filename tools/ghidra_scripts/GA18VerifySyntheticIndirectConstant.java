@@ -71,14 +71,28 @@ public class GA18VerifySyntheticIndirectConstant extends GhidraScript {
                 check(row.get("write_site").getAsString().equalsIgnoreCase("00000130"),"write instruction");
                 check(row.get("mmio_target").getAsString().equalsIgnoreCase("00fffa00"),"MMIO target");
 
-                refs.addMemoryReference(callsite,target,RefType.UNCONDITIONAL_CALL,SourceType.USER_DEFINED,0);
-                JsonObject referenced=(JsonObject)query.invoke(null,currentProgram,"reset","",8,0,10);
-                check(referenced.get("total_paths").getAsInt()==1,"reference path");
-                check(referenced.get("reachable_count").getAsInt()==2,"reference reachability");
-                check(referenced.getAsJsonArray("paths").get(0).getAsJsonObject()
-                    .getAsJsonArray("call_evidence").get(0).getAsString()
-                    .equals("ghidra_call_reference"),"reference provenance mandatory");
-                check(referenced.get("complete").getAsBoolean(),"reference complete");
+                // A wrong user-supplied computed CALL reference points
+                // at caller 0x100, while actual CPU32 bytes prove 0x130.
+                Reference forged=refs.addMemoryReference(
+                    callsite,space.getAddress(0x100),RefType.COMPUTED_CALL,
+                    SourceType.USER_DEFINED,0);
+                check(forged!=null && forged.getReferenceType().isCall(),
+                    "wrong computed CALL reference injected");
+                JsonObject referenced=(JsonObject)query.invoke(
+                    null,currentProgram,"reset","",8,0,10);
+                check(referenced.get("total_paths").getAsInt()==1 &&
+                    referenced.get("reachable_count").getAsInt()==2,
+                    "untrusted reference does not create a second path");
+                var checkedRow=referenced.getAsJsonArray("paths")
+                    .get(0).getAsJsonObject();
+                check(checkedRow.getAsJsonArray("functions").get(1)
+                        .getAsString().equalsIgnoreCase("00000130") &&
+                    checkedRow.getAsJsonArray("call_evidence").get(0)
+                        .getAsString().equals("adjacent_movea_immediate"),
+                    "byte-proven JSR target overrides wrong Ghidra reference");
+                check(referenced.get("complete").getAsBoolean() &&
+                    referenced.get("unresolved_calls").getAsInt()==0,
+                    "valid byte-proven JSR remains complete");
             } finally {
                 currentProgram.endTransaction(tx,false); // Never persist injected/deleted test references.
             }

@@ -15,6 +15,7 @@ import ghidra.program.model.address.AddressSet;
 import ghidra.program.model.listing.Function;
 import ghidra.program.model.listing.Program;
 import ghidra.program.model.data.WordDataType;
+import ghidra.program.model.symbol.RefType;
 import ghidra.program.model.symbol.SourceType;
 import ghidra.util.task.TaskMonitor;
 import ghidra.util.exception.CancelledException;
@@ -1430,6 +1431,49 @@ public final class Ga11VectorHeadlessMain {
                             "Unknown computed CALL cannot be inferred at "+
                                 Long.toHexString(unknownPc));
                     }
+                    // A user-supplied computed-CALL reference is NOT an
+                    // exhaustive proof of JSR (A1)'s register value.
+                    // The byte verifier knows nothing about A1, so even a
+                    // reference to an existing MMIO-writing function must
+                    // leave paths COMPLETE=false and this site UNKNOWN.
+                    int txRef=full.startTransaction(
+                        "GA02 synthetic arbitrary computed CALL xref");
+                    try {
+                        var xref=full.getReferenceManager().addMemoryReference(
+                            address(full,0x680L),address(full,0x700L),
+                            RefType.COMPUTED_CALL,
+                            SourceType.USER_DEFINED,0);
+                        check(xref!=null &&
+                            xref.getReferenceType().isCall() &&
+                            xref.getToAddress().equals(address(full,0x700L)),
+                            "Ghidra failed to create the synthetic unproven CALL ref");
+                    } finally {full.endTransaction(txRef,true); }
+                    var fake=full.getListing().getInstructionAt(
+                        address(full,0x680L));
+                    check(fake!=null && fake.getFlowType().isCall() &&
+                        fake.getFlowType().isComputed() &&
+                        fake.getReferencesFrom().length>0,
+                        "The regression must retain a computed JSR with a CALL ref");
+                    var unknownPaths=ghidrassist.automation.AutomationCallPaths.query(
+                        full,"entry","00000680",8,0,10);
+                    check(!unknownPaths.get("complete").getAsBoolean() &&
+                        unknownPaths.get("unresolved_calls").getAsInt()==1 &&
+                        unknownPaths.get("total_paths").getAsInt()==0 &&
+                        unknownPaths.getAsJsonArray("unresolved_call_sites")
+                            .toString().contains("00000680") &&
+                        unknownPaths.getAsJsonArray("unreachable_entries")
+                            .toString().contains("00000700"),
+                        "Manual computed-CALL reference must NOT make a "+
+                        "JSR (A1) path complete or spuriously reachable: "+
+                        unknownPaths);
+                    var exactPaths=ghidrassist.automation.AutomationCallPaths.query(
+                        full,"entry","00000600",8,0,10);
+                    check(exactPaths.get("unresolved_calls").getAsInt()==0 &&
+                        exactPaths.get("complete").getAsBoolean() &&
+                        exactPaths.getAsJsonArray("reachable_entries")
+                            .toString().contains("00000700"),
+                        "The original byte-proven adjacent JSR (A0) "+
+                        "must still resolve: "+exactPaths);
                     long revision=full.getModificationNumber();
                     var report=new GhidraHardwareFlowService().analyze(
                         full,TaskMonitor.DUMMY,true);
@@ -1483,6 +1527,8 @@ public final class Ga11VectorHeadlessMain {
                     result.addProperty("indirect_adjacent_static_only",true);
                     result.addProperty("indirect_adjacent_repeat_deterministic",true);
                     result.addProperty("indirect_adjacent_generic_cpu32_safe",true);
+                    result.addProperty("indirect_adjacent_untrusted_xref_unknown",true);
+                    result.addProperty("indirect_adjacent_byte_proof_preserved",true);
                     result.addProperty("indirect_adjacent_program_read_only",true);
                 } else if("indirect-bounded".equals(ga18Mode)) {
                     // Actual CPU32 bytes: one source A0 immediate, followed
