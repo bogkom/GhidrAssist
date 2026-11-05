@@ -153,6 +153,73 @@ public final class HardwareInterproceduralMmEffectsSelfTest {
         ok(missingWide.visited()==1 && !missingWide.mayMm() &&
             missingWide.limited() && missingWide.unknownControl(),
             "unseen/unknown fan-out is explicitly incomplete under node cap");
+        // One analysis run must cap total queued targets across distinct
+        // call sites, not merely each CALL's own maxCount allowance.
+        // Unknown targets consume the same budget as decoded targets.
+        int half=HardwareInterproceduralMmEffects.MAX_BATCH_SCHEDULED/2;
+        var unknownA=new java.util.ArrayList<Long>();
+        var unknownB=new java.util.ArrayList<Long>();
+        for(int i=0;i<half-1;i++){
+            unknownA.add(0x10000L+i);
+            unknownB.add(0x20000L+i);
+        }
+        var batchGraph=List.of(
+            new HardwareInterproceduralMmEffects.FunctionNode(
+                0x130L,false,false,false,unknownA),
+            new HardwareInterproceduralMmEffects.FunctionNode(
+                0x160L,false,false,false,unknownB),
+            node(0x190,true,false,false));
+        var batchCalls=List.of(
+            call(0x100,0x108,0x130L),
+            call(0x100,0x110,0x160L),
+            call(0x100,0x118,0x190L),
+            call(0x100,0x120,0x130L));
+        var batch=run(batchGraph,batchCalls,2,10000,20);
+        ok(batch.rows().size()==4 && batch.omitted()==0,
+            "aggregate-budget regression reports every selected CALL PC");
+        var before=batch.rows().get(0).summary();
+        var second=batch.rows().get(1).summary();
+        var after=batch.rows().get(2).summary();
+        var repeated=batch.rows().get(3).summary();
+        ok(before.visited()==1 && before.unknownControl() &&
+            !before.limited() && second.visited()==1 &&
+            second.unknownControl() && !second.limited(),
+            "first two distinct roots fully inspect unresolved targets");
+        ok(after.visited()==0 && !after.mayMm() &&
+            after.limited() && after.unknownControl() &&
+            after.uncertainOrMm(),
+            "exhaustion before known MM leaf must be explicit UNKNOWN/LIMITED");
+        ok(before.equals(repeated),
+            "repeated exact CALL target reuses its original evidence under exhaustion");
+        ok(batch.markdown().contains("cap=true") &&
+            batch.markdown().contains("unknown callee/flow=true"),
+            "batch truncation is visible in rendered evidence");
+        var reordered=new java.util.ArrayList<>(batchCalls);
+        java.util.Collections.reverse(reordered);
+        ok(run(batchGraph,reordered,2,10000,20).equals(batch),
+            "batch analysis is deterministic regardless of callsite input order");
+        var ties=run(List.of(node(0x130,false,false,false),
+                node(0x160,true,false,false)),
+            List.of(call(0x100,0x108,0x160L),
+                call(0x100,0x108,0x130L)),2,20,20);
+        ok(ties.rows().get(0).call().target()==0x130L &&
+            ties.rows().get(1).call().target()==0x160L,
+            "equal caller PCs sort deterministically by target");
+        fail=false;
+        try {
+            HardwareInterproceduralMmEffects.analyze(
+                List.of(node(0x130,false,false,false)),
+                List.of(calls.get(0)), java.util.Arrays.asList((Long)null),
+                2,20,20);
+        } catch(IllegalArgumentException expected){fail=true;}
+        ok(fail,"null interesting caller is rejected even in mutable lists");
+        fail=false;
+        try {
+            HardwareInterproceduralMmEffects.analyze(
+                List.of(node(0x130,false,false,false)),
+                List.of(calls.get(0)), List.of(-1L),2,20,20);
+        } catch(IllegalArgumentException expected){fail=true;}
+        ok(fail,"negative interesting caller is rejected");
         System.out.println("HardwareInterproceduralMmEffectsSelfTest OK");
     }
 }
