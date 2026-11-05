@@ -44,3 +44,23 @@ PC-relative, memory-indirect and malformed expressions. Dedicated
 Java21 source tests and the genuine synthetic two-hop Ghidra test
 must both pass on the same exact PR SHA. This is not a reason to
 infer unknown index registers or hardware activity.
+
+### Confirmed second real CPU32 decode gap: MOVEQ signed literal
+
+The same headless fixture showed another exact Ghidra 12.1.4 PUBLIC
+spelling difference: `moveq -0x1,D1` has operand representation
+`-0x1` **without a leading `#`**. The existing
+`GhidraHardwareFlowService.immediate` refused it; the translated
+instruction became `CLOBBER_POINTER(D1)`. The outer caller entered
+the first JSR without D1, so both otherwise distinct indexed MMIO
+candidates remained unresolved. When a validated D1=-1 constant was
+manually seeded in a test-only diagnostic, the same real decoded
+leaf produced the expected modulo-24-bit address `0xFFFA00`.
+
+The production gate now permits a bare signed numeric immediate
+**only when the opcode is `MOVEQ`** and Ghidra supplies a real
+`Scalar`. All other numeric operands still require `#`; plain
+register and memory operands remain rejected. The shared strict
+register-operand Java21 regression tests both positive and negative
+forms. The diagnostic reflection was removed from the final harness.
+No global propagation or hardware execution is implied.
