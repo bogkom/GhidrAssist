@@ -861,3 +861,13 @@ Deterministic Java21 fixtures cover 12,000 distinct and duplicate edges,
 unknown targets, budget validation, and preserve existing shortest-path /
 cycle semantics. Full Ghidra 12.1.4 PUBLIC/Java25 CI required on exact PR
 SHA. Read-only source evidence, not runtime vector/RESET activation.
+
+## GA-01/11 — candidate 2026-11-05: vector target memo / bounds
+
+Repeated vector slots sharing an exact function handler now reuse its
+read-only transitive CALL effect summary within one report. Each numbered
+vector remains separately counted and correlated with RESET; no persisted
+cache or execution claim is introduced. Fail closed on more than 254
+vector candidates, overlarge graph/RESET subsets, null targets and
+invalid RESET addresses. Requires Java21, full Ghidra 12.1.4 PUBLIC /
+Java25 and synthetic headless CI on the exact new SHA.
