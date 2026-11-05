@@ -81,7 +81,7 @@ public final class HardwareVectorResetCorrelationSelfTest {
             md.contains("| Vector | Image-zero pointer |"),
             "legacy image-zero inventory must retain its actual source label");
         var relocated = HardwareVectorResetCorrelation.inspectRelocated(
-            0x800L,true,false,reset.visitedEntries(),targets,graph,32);
+            0x800L,true,true,reset.visitedEntries(),targets,graph,32);
         String relocatedText=relocated.markdown();
         check(relocated.relocatedSource() && relocated.tableAddress()==0x800L &&
             relocated.recognizedTargets()==report.recognizedTargets() &&
@@ -109,6 +109,15 @@ public final class HardwareVectorResetCorrelationSelfTest {
         check(incompleteImageZero.rows().stream().allMatch(
                 HardwareVectorResetCorrelation.Row::flowUncertain),
             "image-zero source rows receive the same RESET incompleteness gate");
+        var completeRelocated=HardwareVectorResetCorrelation.inspectRelocated(
+            0x800L,true,false,reset.visitedEntries(),targets,graph,32);
+        check(!completeRelocated.rows().get(1).flowUncertain() &&
+            incompleteRelocated.rows().get(1).flowUncertain() &&
+            completeRelocated.rows().get(1).relation()==
+                incompleteRelocated.rows().get(1).relation() &&
+            completeRelocated.rows().get(1).memoryStoreEffect().equals(
+                incompleteRelocated.rows().get(1).memoryStoreEffect()),
+            "row confidence changes with RESET horizon, not static local effect");
         var emptyRelocated=HardwareVectorResetCorrelation.inspectRelocated(
             0x800L,true,false,Set.of(),List.of(),graph,32);
         check(emptyRelocated.rows().isEmpty() &&
