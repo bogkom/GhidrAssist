@@ -1128,3 +1128,21 @@ Ghidry 12.1.4 PUBLIC / Java25 oraz rzeczywista
 syntetyczna Ghidra mają przejść na dokładnym SHA PR.
 Weryfikacja strony PDF nie zastępuje podpisu,
 autentyczności wydania i lokalnego SHA pliku.
+
+## GA-02/03 + GA-17/18 — kandydat 2026-11-05: pośredni CALL z NOP/MOVEQ
+
+Po #172 osobny raport źródłowy rozpoznawał tylko sąsiadujące
+`MOVEA.L #entry,An; JSR (An)`. Automation API obsługiwało już
+dodatkowo do trzech bezpiecznych instrukcji `NOP/MOVEQ`
+między nimi, ale dowodu nie pokazywano w analizie sprzętowej.
+Nowy wspólny interfejs źródłowy podaje adres MOVEA,
+potwierdzony cel i precyzyjny wariant pochodzenia.
+Główny raport wymaga ponadto przynależności **wszystkich**
+instrukcji do tej samej funkcji i pozostaje MAY-only.
+Nieznane, niezgodne lub nieobsługiwane pośrednie CALL to UNKNOWN,
+bez dodawania krawędzi RESET i bez automatycznego Apply.
+
+Wymagany rzeczywisty izolowany test Ghidry 12.1.4 PUBLIC/Java25
+z syntetycznym CPU32, test Java21, pełny build rozszerzenia
+i PASS na dokładnym SHA. Historia #172 pozostaje zachowana;
+GA-02/03 nie stają się z tego powodu ukończone.
