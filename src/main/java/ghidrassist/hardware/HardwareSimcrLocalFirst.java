@@ -16,6 +16,8 @@ import java.util.TreeMap;
  */
 public final class HardwareSimcrLocalFirst {
     private HardwareSimcrLocalFirst(){}
+    /** Maximum total source-CFG successor references per function report. */
+    public static final int MAX_SOURCE_EDGES=200_000;
     public enum Effect { NONE, WORD_LITERAL, UNKNOWN_WORD, ALIAS_OR_CALL_BARRIER }
     public record Node(long pc,List<Long> successors,Effect effect,Integer word) {
         public Node {
@@ -40,9 +42,17 @@ public final class HardwareSimcrLocalFirst {
                 graph.size()>50000)
             throw new IllegalArgumentException("Invalid first-site search budget");
         Map<Long,Node> nodes=new HashMap<>();
+        long edges=0;
         for(Node n:graph) {
             if(n==null || nodes.putIfAbsent(n.pc(),n)!=null)
                 throw new IllegalArgumentException("Duplicate/invalid CFG node");
+            // A node-count limit alone does not bound the traversal or
+            // memory of a giant fanout / duplicate successor list.
+            // Reject the entire source inventory before drawing a
+            // misleading partial first-SIMCR conclusion.
+            edges+=n.successors().size();
+            if(edges>MAX_SOURCE_EDGES)
+                throw new IllegalArgumentException("Unbounded first-SIMCR CFG edges");
         }
         if(!nodes.containsKey(entry))
             return new Result(function,List.of(),true,false,true,false,0);
