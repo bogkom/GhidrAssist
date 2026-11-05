@@ -68,3 +68,25 @@ vector counts and candidate STORE/VBR effects are unchanged; this flag is
 not an execution trace or an ISR activation result. Deterministic Java21
 regressions cover both image-zero and relocated candidate tables, a
 missing RESET root, and retained local effects/counters.
+
+## 2026-11-05 — bounded source inventory and per-handler summary reuse
+
+The same exact function entry can be pointed to by multiple numbered
+vector slots. `HardwareVectorResetCorrelation` now evaluates the bounded
+read-only STORE/MOVEC call effects of such a function **once per report**
+and reuses the immutable summary for every matching vector row.
+This memo is never persisted, shared across different Ghidra Programs,
+revision changes, or source-table provenance. It does not merge the slots:
+each still contributes its own vector number, exact-entry count and
+RESET relation.
+
+The source gate checks at most 254 recognized vector slots (2..255),
+50,000 source graph nodes, 50,000 observed RESET entries and refuses
+null/negative RESET entries or null vector targets with an explicit input
+error before sorting or building effects. Java21 tests cover repeated
+handler targets, ordering invariance and malformed/oversized data;
+full Ghidra 12.1.4 PUBLIC/Java25 build and real synthetic headless
+regressions remain required on the exact PR SHA.
+
+This is bounded static source correlation only; no active VBR/IRQ,
+executable CALL ordering, MM latch or ECU411 runtime effect is inferred.
