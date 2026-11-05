@@ -78,6 +78,45 @@ public final class HardwareConfigurationEvidenceCsvSelfTest {
             "non-CSV",merged,true);}
         catch(IllegalArgumentException expected){rejectedMerged=true;}
         check(rejectedMerged,"invalid raw CSV must fail closed");
+        // Source Ghidra labels are untrusted. Unicode format controls
+        // and whitespace can hide executable spreadsheet formulas despite
+        // RFC-style quoted CSV cells. Keep the original prefix visible but
+        // force a literal apostrophe before potential formula evaluation.
+        var unicodeSites=HardwareCfgWriteAudit.inspect(true,List.of(
+            new HardwareCfgWriteAudit.Site(0x500,0x500,
+                "\u2060=HYPERLINK(1)",0xfffa00,false,16,0x40ca,
+                0,0,false,false,false),
+            new HardwareCfgWriteAudit.Site(0x500,0x502,
+                " \u200d\u200e+5+5",0xfffa04,false,16,0x100,
+                0,0,false,false,false),
+            new HardwareCfgWriteAudit.Site(0x500,0x504,
+                "\uFEFF@SUM(1,2)",0xfffa08,false,16,0x22,
+                0,0,false,false,false)));
+        String unicodeCsv=HardwareConfigurationEvidenceCsv.serialize(
+            unicodeSites,List.of(),true);
+        check(unicodeCsv.contains("\"'\u2060=HYPERLINK(1)\"") &&
+            unicodeCsv.contains("\"' \u200d\u200e+5+5\"") &&
+            unicodeCsv.contains("\"'\uFEFF@SUM(1,2)\""),
+            "Unicode format-hidden spreadsheet formulas are neutralized");
+        // Large input is clipped before replace/quote expansion, with a
+        // visible loss marker and without cutting a surrogate pair.
+        int edge=HardwareConfigurationEvidenceCsv.MAX_CSV_CELL_CHARS-
+            " [SOURCE_TRUNCATED]".length()-1;
+        String hugeLabel="R".repeat(edge)+"\uD83D\uDE80"+"Q".repeat(100_000);
+        var hugeSite=HardwareCfgWriteAudit.inspect(true,List.of(
+            new HardwareCfgWriteAudit.Site(0x500,0x506,
+                hugeLabel,0xfffa0c,false,16,0x33,
+                0,0,false,false,false)));
+        String hugeCsv=HardwareConfigurationEvidenceCsv.serialize(
+            hugeSite,List.of(),true);
+        check(hugeCsv.contains("SOURCE_TRUNCATED") &&
+            hugeCsv.length()<2500 &&
+            !hugeCsv.contains("\uD83D [SOURCE_TRUNCATED]") &&
+            !hugeCsv.contains("\uD83D\uDE80"),
+            "giant register cells bounded without a half-surrogate");
+        check(!HardwareConfigurationEvidenceCsv.serialize(
+                unicodeSites,List.of(),false).contains("HYPERLINK"),
+            "generic CPU32 must continue suppressing MCU-specific register evidence");
         System.out.println("HardwareConfigurationEvidenceCsvSelfTest OK");
     }
 }
