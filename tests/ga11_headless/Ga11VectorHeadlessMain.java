@@ -82,7 +82,7 @@ public final class Ga11VectorHeadlessMain {
             "generic-profile","trambar-source","csbar-mm0-reject",
             "mmio-read-reference","csbar-csor-conditional",
             "simcr-mm0-literal","trambar-unknown","csor-alternatives",
-            "branch-simcr","call-barrier","leaf-return","call-context","joint-source","two-hop","two-hop-indexed","two-hop-indexed-wrap","branch-leaf","branch-cache","cancel-incomplete",
+            "branch-simcr","call-barrier","leaf-return","call-context","joint-source","two-hop","two-hop-indexed","two-hop-indexed-wrap","indirect-adjacent","branch-leaf","branch-cache","cancel-incomplete",
             "function-stage-resume","function-rename","receipt-restart-write",
             "receipt-restart-read","apply-preserve","provenance-csv",
             "movec-vbr","vbr-relocation").contains(ga18Mode),
@@ -1373,6 +1373,117 @@ public final class Ga11VectorHeadlessMain {
                     result.addProperty("twohop_wrap_replay_deterministic",true);
                     result.addProperty("twohop_wrap_generic_cpu32_conservative",true);
                     result.addProperty("twohop_wrap_program_read_only",true);
+                } else if("indirect-adjacent".equals(ga18Mode)) {
+                    // REAL CPU32: MOVEA.L #0x700,A0 immediately followed
+                    // by JSR (A0), never a decoded direct JSR edge.
+                    // Negative controls: unknown A1, mismatched A1/A0,
+                    // and an immediate pointing to no exact Function.
+                    int txIndirect=full.startTransaction(
+                        "GA02 isolated proven indirect JSR source fixture");
+                    try {
+                        full.getMemory().setBytes(address(full,0x600L),
+                            java.util.HexFormat.of().parseHex(
+                                "207c000007004e904e75"));
+                        full.getMemory().setBytes(address(full,0x680L),
+                            java.util.HexFormat.of().parseHex("4e914e75"));
+                        full.getMemory().setBytes(address(full,0x6a0L),
+                            java.util.HexFormat.of().parseHex(
+                                "227c000007004e904e75"));
+                        full.getMemory().setBytes(address(full,0x6c0L),
+                            java.util.HexFormat.of().parseHex(
+                                "207c000007204e904e75"));
+                        full.getMemory().setBytes(address(full,0x700L),
+                            java.util.HexFormat.of().parseHex(
+                                "33fc40ca00fffa004e75"));
+                    }finally {full.endTransaction(txIndirect,true);}
+                    defineFixtureFunction(full,0x700L,10,
+                        "ga02_indirect_target_simcr_static_store");
+                    defineFixtureFunction(full,0x600L,10,
+                        "ga02_indirect_adjacent_movea_jsr");
+                    defineFixtureFunction(full,0x680L,4,
+                        "ga02_indirect_unknown_a1");
+                    defineFixtureFunction(full,0x6a0L,10,
+                        "ga02_indirect_wrong_register");
+                    defineFixtureFunction(full,0x6c0L,10,
+                        "ga02_indirect_missing_exact_function");
+                    var computed=full.getListing().getInstructionAt(
+                        address(full,0x606L));
+                    check(computed!=null &&
+                        computed.getFlowType().isCall() &&
+                        computed.getFlowType().isComputed() &&
+                        computed.getNumOperands()==1,
+                        "Real Ghidra must decode JSR (A0) as computed CALL");
+                    check(ghidrassist.automation.AutomationCallPaths
+                            .adjacentConstantRegisterCall(full,computed)
+                            .equals(address(full,0x700L)),
+                        "Shared Automation API byte-proven indirect target missing");
+                    for(long unknownPc:new long[]{
+                            0x680L,0x6a6L,0x6c6L}){
+                        var unknownInsn=full.getListing().getInstructionAt(
+                            address(full,unknownPc));
+                        check(unknownInsn!=null &&
+                            unknownInsn.getFlowType().isComputed() &&
+                            unknownInsn.getFlowType().isCall() &&
+                            ghidrassist.automation.AutomationCallPaths
+                                .adjacentConstantRegisterCall(
+                                    full,unknownInsn)==null,
+                            "Unknown computed CALL cannot be inferred at "+
+                                Long.toHexString(unknownPc));
+                    }
+                    long revision=full.getModificationNumber();
+                    var report=new GhidraHardwareFlowService().analyze(
+                        full,TaskMonitor.DUMMY,true);
+                    int section=report.markdown.indexOf(
+                        "## CPU32 adjacent-immediate indirect JSR source "+
+                        "candidates (GA-02/03)");
+                    check(section>=0,
+                        "Hardware report missing indirect CALL provenance");
+                    String evidence=report.markdown.substring(section);
+                    check(evidence.contains(
+                        "| 0x00000600 | 0x00000600 | 0x00000606 | "+
+                        "0x00000700 | adjacent_movea_immediate |") &&
+                        evidence.contains("Exact adjacent candidates displayed: 1") &&
+                        evidence.contains("unresolved computed calls: 3"),
+                        "Proven exact indirect JSR vs 3 UNKNOWN wrong forms: "+
+                        evidence.substring(0,Math.min(2500,evidence.length())));
+                    check(!evidence.contains("| 0x00000680 |") &&
+                        !evidence.contains("| 0x000006A0 |") &&
+                        !evidence.contains("| 0x000006C0 |") &&
+                        evidence.contains("STATIC SOURCE-ONLY PROVENANCE") &&
+                        evidence.contains("NOT EXECUTION") &&
+                        evidence.contains("Review/Apply"),
+                        "Unknown indirect calls or Apply wrongly promoted");
+                    check(report.rawCfgMmioSites.stream().noneMatch(x->
+                        x.pc()==0x606L),
+                        "Computed JSR must not become direct CFG write evidence");
+                    check(full.getModificationNumber()==revision,
+                        "Read-only indirect source audit mutated Program");
+                    var repeated=new GhidraHardwareFlowService().analyze(
+                        full,TaskMonitor.DUMMY,true);
+                    String repeatedEvidence=repeated.markdown.substring(
+                        repeated.markdown.indexOf(
+                            "## CPU32 adjacent-immediate indirect JSR source "));
+                    check(repeatedEvidence.equals(evidence) &&
+                        full.getModificationNumber()==revision,
+                        "Report reused inconsistent indirect JSR source proof");
+                    var generic=new GhidraHardwareFlowService().analyze(
+                        full,TaskMonitor.DUMMY,false);
+                    check(generic.markdown.contains(
+                        "Not evaluated: explicit MC68332 profile required") &&
+                        !generic.markdown.contains(
+                            "| 0x00000600 | 0x00000600 | 0x00000606 |") &&
+                        full.getModificationNumber()==revision,
+                        "Generic CPU32 got MCU-specific indirect call proof");
+                    result.addProperty("indirect_adjacent_real_jsr",true);
+                    result.addProperty("indirect_adjacent_shared_api_proof",true);
+                    result.addProperty("indirect_adjacent_exact_function",true);
+                    result.addProperty("indirect_adjacent_three_unknowns",true);
+                    result.addProperty("indirect_adjacent_not_direct_cfg",true);
+                    result.addProperty("indirect_adjacent_not_review_apply",true);
+                    result.addProperty("indirect_adjacent_static_only",true);
+                    result.addProperty("indirect_adjacent_repeat_deterministic",true);
+                    result.addProperty("indirect_adjacent_generic_cpu32_safe",true);
+                    result.addProperty("indirect_adjacent_program_read_only",true);
                 } else if("call-context".equals(ga18Mode) ||
                         "joint-source".equals(ga18Mode)) {
                     boolean jointSource="joint-source".equals(ga18Mode);
