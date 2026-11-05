@@ -3,6 +3,19 @@
 Status: **IN PROGRESS — integrated baseline 2026-11-04**. Scope source: user-approved 2026-10-28 requirements (A–H, additional features 13.1–13.7, PDF/RAG, testing and Codex Supervisor integration).
 
 
+## GA-02/03 — kandydat 2026-11-05: wspólny budżet CALL i memoizacja
+
+Nowa, niezależna gałąź po scalonym #148: memoizacja odczytowych podsumowań
+konkretnego celu CALL w obrębie jednego przebiegu oraz wspólny limit
+**16 384 zaplanowanych adresów** obejmujący także nieznane cele. Wyniki
+po wyczerpaniu budżetu pozostają jawnie `LIMITED/UNKNOWN`; nie są
+negatywnym dowodem braku SIMCR/MM ani zgodą Review/Apply. Przewidziane
+regresje Java21: współdzielone cele, dwa duże grafy z nieznanymi
+krawędziami, utrata budżetu przed znanym MM, porządek deterministyczny,
+niepoprawni callerzy. Wymagany odrębny PASS CI i pełna kompilacja
+Ghidry 12.1.4 PUBLIC / Java25 na dokładnym SHA. Bez testów lokalnych
+Wyse/Precision i zatrzymanego Supervisora.
+
 ## GA-13 — aktualizacja 2026-11-04 po scaleniu PR #146
 
 Chroniony `master` po [PR #146](https://github.com/bogkom/GhidrAssist/pull/146):
