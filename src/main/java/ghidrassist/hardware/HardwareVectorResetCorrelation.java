@@ -192,6 +192,10 @@ public final class HardwareVectorResetCorrelation {
                     target.functionEntry(), relation,
                     effect(effects != null && effects.possibleMemoryStore(), effects),
                     effect(effects != null && effects.possibleVbrWrite(), effects),
+                    // A closed LOCAL callee subtree cannot make a vector's
+                    // relation to RESET certain when the RESET root or its
+                    // observed direct-call graph is itself incomplete.
+                    !resetRootRecognized || resetGraphIncomplete ||
                     effects == null || effects.unresolved() || effects.truncated()));
         }
         return new Summary(relocatedSource,sourceBase,
