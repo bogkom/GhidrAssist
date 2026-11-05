@@ -46,6 +46,29 @@ public final class HardwareIndexedAddressSelfTest {
             "invalid scale rejected");
         ok(HardwareIndexedAddress.parse("4(A0,D0.W,D1.W)")==null,
             "complex alias unresolved");
+        var highUnsigned=HardwareIndexedAddress.parse(
+            "(0xffffffff,A1,D1w*0x1)");
+        ok(highUnsigned!=null &&
+            highUnsigned.displacement()==0xffffffffL,
+            "full 32-bit unsigned CPU32 displacement stays representable");
+        var lowSigned=HardwareIndexedAddress.parse(
+            "(-0x80000000,A1,D1w*0x1)");
+        ok(lowSigned!=null &&
+            lowSigned.displacement()==-0x80000000L,
+            "negative signed 32-bit boundary remains representable");
+        ok(HardwareIndexedAddress.parse("(0x100000000,A1,D1w*0x1)")==null &&
+            HardwareIndexedAddress.parse("(-0x80000001,A1,D1w*0x1)")==null &&
+            HardwareIndexedAddress.parse("(4294967296,A1,D1w*0x1)")==null &&
+            HardwareIndexedAddress.parse("(-2147483649,A1,D1w*0x1)")==null,
+            "impossible CPU32 >32-bit extension must never wrap to MMIO");
+        ok(HardwareIndexedAddress.parse(
+                "(18446744073709551616,A1,D1w*0x1)")==null &&
+            HardwareIndexedAddress.parse(
+                " ".repeat(HardwareIndexedAddress.MAX_OPERAND_CHARS+1)+
+                    "(0x1,A1,D1w*0x1)")==null,
+            "oversized operand text and overflow are safely unresolved");
+        ok(HardwareIndexedAddress.parse("(0x1,A1,D1w*0x1)")!=null,
+            "original real Ghidra 12.1.4 indexed operand remains recognized");
         System.out.println("HardwareIndexedAddressSelfTest OK");
     }
 }
