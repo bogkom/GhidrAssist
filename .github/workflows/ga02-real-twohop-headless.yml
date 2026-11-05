@@ -4,6 +4,7 @@ on:
     paths:
       - 'tests/ga11_headless/**'
       - '.github/workflows/ga02-real-twohop-headless.yml'
+      - 'tools/ci/ghidra-gradle-ci-network.sh'
       - 'src/main/java/ghidrassist/hardware/**'
   workflow_dispatch:
 permissions:
@@ -34,6 +35,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # Only SHA-verified, isolated Ghidra wrapper network properties.
+          bash tools/ci/ghidra-gradle-ci-network.sh "$GHIDRA_INSTALL_DIR"
           "$GHIDRA_INSTALL_DIR/support/gradle/gradlew" --no-daemon buildExtension
           shopt -s nullglob
           zips=(dist/ghidra_12.1.4_PUBLIC_*_GhidrAssist.zip)

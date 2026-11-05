@@ -11,7 +11,7 @@ mkdir -p "$(dirname "$props")"
 cat > "$props" <<'EOF'
 distributionBase=GRADLE_USER_HOME
 distributionUrl=https\://services.gradle.org/distributions/gradle-9.7.1-bin.zip
-distributionSha256Sum=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+distributionSha256Sum=acd53f1edaf02f1a8ff99879f8a34b302661a057d9b063ae9e35b552f804d20a
 networkTimeout=10000
 retries=0
 retryBackOffMs=500
@@ -22,7 +22,7 @@ grep -Fxq 'networkTimeout=120000' "$props"
 grep -Fxq 'retries=2' "$props"
 grep -Fxq 'retryBackOffMs=1000' "$props"
 grep -Fxq 'distributionUrl=https\://services.gradle.org/distributions/gradle-9.7.1-bin.zip' "$props"
-grep -Fxq 'distributionSha256Sum=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' "$props"
+grep -Fxq 'distributionSha256Sum=acd53f1edaf02f1a8ff99879f8a34b302661a057d9b063ae9e35b552f804d20a' "$props"
 grep -Fxq 'validateDistributionUrl=true' "$props"
 [[ "$(grep -c '^networkTimeout=' "$props")" == 1 ]]
 [[ "$(grep -c '^retries=' "$props")" == 1 ]]
@@ -33,6 +33,34 @@ sha_before="$(sha256sum "$props" | cut -d' ' -f1)"
 bash "$helper" "$root"
 sha_after="$(sha256sum "$props" | cut -d' ' -f1)"
 [[ "$sha_before" == "$sha_after" ]]
+
+# Missing checksum in the upstream 12.1.4 wrapper must be supplied by
+# the isolated bootstrap and verified by Gradle on actual ZIP download.
+sed -i '/^distributionSha256Sum=/d' "$props"
+bash "$helper" "$root"
+grep -Fxq 'distributionSha256Sum=acd53f1edaf02f1a8ff99879f8a34b302661a057d9b063ae9e35b552f804d20a' "$props"
+[[ "$(grep -c '^distributionSha256Sum=' "$props")" == 1 ]]
+sha_before="$(sha256sum "$props" | cut -d' ' -f1)"
+bash "$helper" "$root"
+[[ "$(sha256sum "$props" | cut -d' ' -f1)" == "$sha_before" ]]
+
+# An existing different checksum or duplicate checksum is not overwritten.
+sed -i 's/acd53f1edaf02f1a8ff99879f8a34b302661a057d9b063ae9e35b552f804d20a/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/' "$props"
+refused_sha="$(sha256sum "$props" | cut -d' ' -f1)"
+if bash "$helper" "$root"; then
+  echo "Unexpected Gradle digest must fail closed" >&2
+  exit 1
+fi
+[[ "$(sha256sum "$props" | cut -d' ' -f1)" == "$refused_sha" ]]
+sed -i 's/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/acd53f1edaf02f1a8ff99879f8a34b302661a057d9b063ae9e35b552f804d20a/' "$props"
+printf 'distributionSha256Sum=acd53f1edaf02f1a8ff99879f8a34b302661a057d9b063ae9e35b552f804d20a\n' >> "$props"
+refused_sha="$(sha256sum "$props" | cut -d' ' -f1)"
+if bash "$helper" "$root"; then
+  echo "Duplicate Gradle checksum must fail closed" >&2
+  exit 1
+fi
+[[ "$(sha256sum "$props" | cut -d' ' -f1)" == "$refused_sha" ]]
+sed -i '$d' "$props"
 
 # A future Ghidra release or unexpected URL must require a new review.
 sed -i 's/gradle-9.7.1-bin.zip/gradle-9.8.0-bin.zip/' "$props"

@@ -42,3 +42,30 @@ selected genuine synthetic Ghidra suites verify the pilot on the
 exact PR SHA. Expanding the policy to other workflows should follow
 successful evidence and a scoped review, not a blind repository-wide
 change. No Wyse/Precision/legacy Supervisor or original ECU411 data.
+
+## 2026-11-05 — GA-02/03 real-headless rollout and Gradle ZIP pin
+
+The initial pilot passed both the full extension and two real synthetic
+Ghidra suites on exact SHA `674ad8cd57c446b35ac8ef5cff9bd470c3989785`,
+then merged as PR #163. The next bounded rollout reuses the identical,
+isolated wrapper policy in **four** additional real headless GA-02/03
+workflows: direct-call argument provenance, branch-convergent returns,
+strict leaf returns and two-hop direct CALL register flow.
+
+The **Gradle 9.7.1 -bin ZIP SHA-256** is now additionally pinned to
+`acd53f1edaf02f1a8ff99879f8a34b302661a057d9b063ae9e35b552f804d20a`
+(official source: https://gradle.org/release-checksums/).
+If the Ghidra wrapper already contains this checksum, it is preserved;
+if it is absent, the CI-only extracted copy receives it. A different,
+duplicate, or ambiguous checksum refuses execution. The distribution
+version, canonical URL, wrapper JAR and previously pinned Ghidra
+PUBLIC ZIP SHA-256 are unchanged. Actual download checksum enforcement
+belongs to the Gradle Wrapper and is exercised by the full real
+Ghidra/Java25 CI build.
+
+The shell regression covers official pin retention, insertion into
+unpinned properties, idempotence, wrong pin, duplicated pin and all
+earlier path/symlink/version checks. This is a security/reliability
+improvement for **isolated GitHub Actions only**, not a production
+firmware, MCU or user-environment change. All new tests must pass on the
+exact PR commit before integration.

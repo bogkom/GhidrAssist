@@ -919,3 +919,14 @@ PUBLIC, helper sprawdza stały adres dystrybucji Gradle i zmienia
 Nie zmienia wersji Gradle ani binariów. Osobna regresja shellowa
 sprawdza pin, idempotencję, odrzucenie symlinków i obcych ścieżek.
 Pełny CI na dokładnym SHA jest wymagany; nie wznawiamy Supervisora.
+
+## GA-17/18 + GA-02/03 — kandydat 2026-11-05: SHA Gradle i kolejne testy
+
+Po przetestowanym i scalonym pilotażu #163, kontrolowany bootstrap
+Gradle w Actions obejmuje cztery dodatkowe regresje rzeczywistej
+syntetycznej Ghidry (CALL-argument, branch-convergent return, leaf
+return, two-hop CALL). Dodatkowo wymaga sprawdzonego oficjalnego
+`distributionSha256Sum` dla Gradle 9.7.1 -bin, odrzucając niezgodne
+lub zdublowane sumy. Stała wersja Gradle, niezmienione archiwum Ghidry,
+izolacja `RUNNER_TEMP` i wyłączony Supervisor. Wymagany dokładny
+PASS GitHub Actions na SHA nowego PR.

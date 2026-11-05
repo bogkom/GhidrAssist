@@ -30,11 +30,32 @@ case "$url" in
   *) echo "Unexpected Ghidra 12.1.4 Gradle distribution" >&2; exit 2 ;;
 esac
 
-tmp="$props.ga18-ci.$$"
+# Official Gradle 9.7.1 -bin checksum (https://gradle.org/release-checksums/).
+# Never replace a conflicting checksum supplied by another producer.
+pin="acd53f1edaf02f1a8ff99879f8a34b302661a057d9b063ae9e35b552f804d20a"
+pin_count="$(grep -c '^distributionSha256Sum=' "$props" || true)"
+if [[ "$pin_count" -gt 1 ]]; then
+  echo "Ambiguous preexisting Gradle distribution checksum" >&2
+  exit 2
+fi
+existing_pin="$(grep '^distributionSha256Sum=' "$props" || true)"
+if [[ -n "$existing_pin" && "$existing_pin" != "distributionSha256Sum=$pin" ]]; then
+  echo "Gradle distribution checksum differs from pinned release" >&2
+  exit 2
+fi
+
+tmp="$props.ga18-ci.$"
 trap 'rm -f "$tmp"' EXIT
 # Replace the first timeout stanza in place, or append once if missing.
 # Never grow the file with an extra blank line on a second invocation.
-awk '
+awk -v pin="$pin" '
+  /^distributionSha256Sum=/ {
+    if (!pinned) {
+      print "distributionSha256Sum=" pin
+      pinned=1
+    }
+    next
+  }
   /^networkTimeout=/ {
     if (!emitted) {
       print "networkTimeout=120000"
@@ -47,6 +68,7 @@ awk '
   /^retries=/ || /^retryBackOffMs=/ { next }
   { print }
   END {
+    if (!pinned) print "distributionSha256Sum=" pin
     if (!emitted) {
       print "networkTimeout=120000"
       print "retries=2"
@@ -55,4 +77,4 @@ awk '
   }
 ' "$props" > "$tmp"
 mv -f "$tmp" "$props"
-echo "Ghidra 12.1.4 isolated Gradle wrapper: timeout=120000ms retries=2 (URL/version unchanged)"
+echo "Ghidra 12.1.4 isolated Gradle wrapper: timeout=120000ms retries=2 (URL/version unchanged, Gradle 9.7.1 SHA-256 pinned)"
