@@ -122,10 +122,26 @@ public final class HardwareFunctionNamingReview {
         return List.copyOf(out);
     }
 
-    /** Rows only: append to the existing register preview CSV header. */
+    /** Rows only: append to the existing seven-column review CSV header.
+     * This read-only export NEVER authorizes an automatic Ghidra rename.
+     * A truncated proposal list must not look like complete review evidence. */
+    public static final int MAX_CSV_ROWS=5_000;
     public static String toCsvRows(List<Proposal> proposals) {
+        if(proposals==null || proposals.contains(null))
+            throw new IllegalArgumentException("Missing function-review proposals");
         StringBuilder b=new StringBuilder();
-        for(Proposal p:proposals)b.append(p.csv());
+        int retained=Math.min(MAX_CSV_ROWS,proposals.size());
+        for(int i=0;i<retained;i++)b.append(proposals.get(i).csv());
+        if(proposals.size()>retained) {
+            b.append(HardwareNamingReview.cell("")).append(',')
+                .append(HardwareNamingReview.cell(
+                    "OMITTED_ROWS="+(proposals.size()-retained))).append(',')
+                .append(HardwareNamingReview.cell("")).append(',')
+                .append(HardwareNamingReview.cell("")).append(',')
+                .append(HardwareNamingReview.cell("")).append(",0,")
+                .append(HardwareNamingReview.cell(
+                    "INCOMPLETE_EXPORT_NEVER_AUTO_APPLY")).append('\n');
+        }
         return b.toString();
     }
 }
