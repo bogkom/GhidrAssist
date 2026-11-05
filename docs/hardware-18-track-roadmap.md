@@ -1107,3 +1107,24 @@ kandydatów i brak wnioskowania z nieznanych celów.
 Wymagane SHA-pinned pełne CI na dokładnym HEAD PR. Nie oznacza
 wykonanego wywołania, zapisu SIMCR, aktywnego MM ani fizycznej
 mapy CS. GA-02/03 pozostają CZĘŚCIOWO.
+
+## GA-06/10/16 — kandydat 2026-11-05: SYNCR z MC68332UM D-6/D-7
+
+Po scaleniu #172, w oparciu o **oficjalny plik PDF NXP**
+`https://www.nxp.com/docs/en/user-guide/MC68332UM.pdf`,
+© Motorola 1995, Appendix D.2.3, drukowane D-6 i D-7
+(fizyczne strony PDF **220 i 221**), dodajemy źródłowe
+pola rejestru SYNCR: W, X, Y[5:0], EDIV, RSTEN, STSIM, STEXT.
+Pola statusowe SLIMP/SLOCK oraz zarezerwowane bity 6/5
+pozostają **UNINTERPRETED** przy analizie stałej zapisu.
+Nie zgadujemy wartości po RESET, bieżącego stanu zegara,
+ani uprawnień do automatycznej edycji.
+
+Wymagane regresje Java21: dokładne maski, 7 cytowań
+drukowana/fizyczna strona, wyłączenie statusów,
+brak automatycznego dziedziczenia przez ogólny CPU32
+i odrzucenie częściowych zapisów. Pełna kompilacja
+Ghidry 12.1.4 PUBLIC / Java25 oraz rzeczywista
+syntetyczna Ghidra mają przejść na dokładnym SHA PR.
+Weryfikacja strony PDF nie zastępuje podpisu,
+autentyczności wydania i lokalnego SHA pliku.

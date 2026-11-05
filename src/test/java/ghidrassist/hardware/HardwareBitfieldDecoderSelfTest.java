@@ -74,6 +74,66 @@ public final class HardwareBitfieldDecoderSelfTest {
         check(known.summary().contains("source-page-claimed MC68332") &&
             known.summary().contains("PDF edition/page claim UNVERIFIED"),
             "literal field decode cannot claim physical PDF identity proof");
+        // Verified against NXP-hosted MC68332UM © Motorola 1995,
+        // printed D-6/D-7 (physical PDF pages 220/221). Only modeled
+        // configuration bits from a complete source-side literal; STATUS
+        // SLIMP/SLOCK and reserved bits are intentionally not interpreted.
+        var syncr=HardwareBitfieldDecoder.decode(mc,"SYNCR",0xa5a5,16);
+        check(syncr.status()==HardwareBitfieldDecoder.Status.DECODED &&
+            syncr.fields().size()==7 &&
+            syncr.unspecifiedMask()==0x0078L,
+            "SYNCR 7 known configuration fields; two status and reserved bits UNKNOWN");
+        var syncrFields=new java.util.HashMap<String,HardwareBitfieldDecoder.FieldEvidence>();
+        for(var field:syncr.fields())
+            check(syncrFields.put(field.name(),field)==null,
+                "SYNCR sourced field names unique");
+        check(syncrFields.get("W").mask()==0x8000 &&
+            syncrFields.get("W").value()==1 &&
+            syncrFields.get("X").mask()==0x4000 &&
+            syncrFields.get("X").value()==0 &&
+            syncrFields.get("Y").mask()==0x3f00 &&
+            syncrFields.get("Y").value()==0x25,
+            "SYNCR W/X/Y fields must match MC68332UM D-6 bit positions");
+        check(syncrFields.get("EDIV").mask()==0x0080 &&
+            syncrFields.get("EDIV").value()==1 &&
+            syncrFields.get("RSTEN").mask()==0x0004 &&
+            syncrFields.get("RSTEN").value()==1 &&
+            syncrFields.get("STSIM").mask()==0x0002 &&
+            syncrFields.get("STSIM").value()==0 &&
+            syncrFields.get("STEXT").mask()==0x0001 &&
+            syncrFields.get("STEXT").value()==1,
+            "SYNCR clock-divider/reset/stop configuration bit positions");
+        check(syncrFields.keySet().stream().noneMatch(x->
+                x.equals("SLIMP")||x.equals("SLOCK")) &&
+            syncr.summary().contains("other bits UNINTERPRETED (mask 0x0078)") &&
+            syncr.summary().contains("not proven hardware state or write order"),
+            "read-only hardware lock/limp status is not inferred from a literal");
+        for(var field:syncr.fields()){
+            check(field.sourcePage().equals("D-6 (PDF page 220)") ||
+                field.sourcePage().equals("D-7 (PDF page 221)"),
+                "every SYNCR field must identify one exact printed/physical page");
+            check(!field.writeOnceAfterReset(),
+                "SYNCR fields must not acquire SIMCR MM write-once policy");
+        }
+        var syncrMetadata=mc.register("SYNCR");
+        check(syncrMetadata!=null &&
+            syncrMetadata.offset==0x0a04 &&
+            syncrMetadata.resetValue==null &&
+            syncrMetadata.sourcePage.equals("D-6/D-7 (PDF pages 220-221)") &&
+            syncrMetadata.source.contains("Motorola 1995"),
+            "SYNCR must keep exact address, claimed edition/page and UNKNOWN reset");
+        check(HardwareBitfieldDecoder.decode(cpu,"SYNCR",0xa5a5,16).status()
+                ==HardwareBitfieldDecoder.Status.DEVICE_NOT_SELECTED &&
+            HardwareBitfieldDecoder.decode(mc,"SYNCR",0xa5a5,8).status()
+                ==HardwareBitfieldDecoder.Status.WIDTH_MISMATCH &&
+            HardwareBitfieldDecoder.decode(mc,"SYNCR",null,16).status()
+                ==HardwareBitfieldDecoder.Status.VALUE_UNKNOWN,
+            "generic CPU32, byte partial writes and unknown SYNCR remain untyped");
+        var sourceZero=HardwareBitfieldDecoder.decode(mc,"SYNCR",0,16);
+        check(sourceZero.status()==HardwareBitfieldDecoder.Status.DECODED &&
+            sourceZero.fields().stream().allMatch(field->field.value()==0) &&
+            mc.register("SYNCR").resetValue==null,
+            "decoded zero value from a synthetic literal is NOT a reset assertion");
         System.out.println("HardwareBitfieldDecoderSelfTest OK");
     }
 }
