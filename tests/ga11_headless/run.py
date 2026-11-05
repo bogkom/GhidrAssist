@@ -94,7 +94,7 @@ def main():
                         "generic-profile","trambar-source","csbar-mm0-reject",
                         "mmio-read-reference","csbar-csor-conditional",
                         "simcr-mm0-literal","trambar-unknown","csor-alternatives",
-                        "branch-simcr","call-barrier","leaf-return","call-context","joint-source","two-hop","branch-leaf","branch-cache","cancel-incomplete",
+                        "branch-simcr","call-barrier","leaf-return","call-context","joint-source","two-hop","two-hop-indexed","branch-leaf","branch-cache","cancel-incomplete",
                         "function-stage-resume","function-rename","receipt-restart",
                         "apply-preserve","provenance-csv","movec-vbr","vbr-relocation"),
                         default="none",help="Run GA-07/12 or GA-02/03 genuine headless source-evidence checks")
