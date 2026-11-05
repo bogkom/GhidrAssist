@@ -92,6 +92,48 @@ public final class HardwareSimcrLocalFirstSelfTest {
         try{fork.literalCandidates().clear();}
         catch(UnsupportedOperationException e){immutable=true;}
         ok(immutable,"immutable local first-site candidates");
+        // A bounded number of source nodes is not enough to prevent
+        // hundreds of thousands of duplicate CFG successor references.
+        // At the exact edge limit, a real back-edge is still observed.
+        var edgeAtCap=new HardwareSimcrLocalFirst.Node(
+            0,java.util.Collections.nCopies(
+                HardwareSimcrLocalFirst.MAX_SOURCE_EDGES,0L),
+            none,null);
+        var atCap=HardwareSimcrLocalFirst.inspect(0,0,
+            List.of(edgeAtCap),false,5);
+        ok(atCap.visitedNodes()==1 &&
+            atCap.cyclesOrIncompleteEdges() &&
+            atCap.unknownFirstPossible() &&
+            !atCap.workLimitReached(),
+            "200k duplicate source-CFG references accepted without masking cycle");
+        boolean rejectedEdges=false;
+        try {
+            HardwareSimcrLocalFirst.inspect(0,0,List.of(
+                new HardwareSimcrLocalFirst.Node(0,
+                    java.util.Collections.nCopies(
+                        HardwareSimcrLocalFirst.MAX_SOURCE_EDGES+1,0L),
+                    none,null)),false,5);
+        }catch(IllegalArgumentException expected){rejectedEdges=true;}
+        ok(rejectedEdges,
+            "200001 source-CFG edges must fail before search, not truncate silently");
+        // The aggregate bound applies across several source nodes too.
+        rejectedEdges=false;
+        try {
+            HardwareSimcrLocalFirst.inspect(0,0,List.of(
+                new HardwareSimcrLocalFirst.Node(0,
+                    java.util.Collections.nCopies(
+                        HardwareSimcrLocalFirst.MAX_SOURCE_EDGES/2,1L),
+                    none,null),
+                new HardwareSimcrLocalFirst.Node(1,
+                    java.util.Collections.nCopies(
+                        HardwareSimcrLocalFirst.MAX_SOURCE_EDGES/2+1,0L),
+                    none,null)),false,5);
+        }catch(IllegalArgumentException expected){rejectedEdges=true;}
+        ok(rejectedEdges,
+            "source-CFG edge budget counts all nodes, not only the root");
+        ok(diamond.literalCandidates().size()==1 &&
+            !diamond.unknownFirstPossible(),
+            "rejected oversized graph never poisons independent first-SIMCR result");
         System.out.println("HardwareSimcrLocalFirstSelfTest OK");
     }
 }
