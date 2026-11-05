@@ -11,7 +11,7 @@ case "$root" in
   "${RUNNER_TEMP%/}"/ghidra/ghidra_12.1.4_PUBLIC*) ;;
   *) echo "Ghidra root is not a pinned isolated CI extraction" >&2; exit 2 ;;
 esac
-props="$root/support/gradle/gradle/wrapper/gradle-wrapper.properties"
+props="$root/support/gradle/gradle-wrapper.properties"
 if [[ ! -d "$root" || -L "$root" || ! -f "$props" || -L "$props" ]]; then
   echo "Missing or redirected isolated Ghidra Gradle wrapper properties" >&2
   exit 2
