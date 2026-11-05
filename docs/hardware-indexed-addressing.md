@@ -89,3 +89,32 @@ long inputs and unchanged Ghidra 12.1.4 CPU32
 CPU32 two-hop indexed test and full Ghidra 12.1.4 PUBLIC/Java25 build
 on the exact tested SHA. No assumption about active SIMCR MM or runtime
 execution follows from a decoded candidate.
+
+## 2026-11-05 — real scaled signed word index across 24-bit wrap
+
+The previous real Ghidra CPU32 two-hop JSR fixture proves
+`MOVE.W D0,1(A1,D1.W)` with `D1.W=-1`, but the sum never
+crosses the 24-bit address zero boundary. A new independent
+`two-hop-indexed-wrap` acceptance mode exercises the CPU32
+brief-extension `MOVE.W D0,(A1,D1.W*2)` encoded as
+`3380 1200` in an isolated binary. Its outer direct CALL
+sets `A0=0` and `D1=0x0000FD00`, so `D1.W=-768`
+sign-extends and scales to `-1536`, then wraps to
+`0x00FFFA00` on the 24-bit bus. A second distinct caller
+uses `D1=0x0000FD34` (`D1.W=-716`, scaled to `-1432`)
+to reach `0x00FFFA68`. A third caller lacks D1 and
+remains an unknown STORE alias, not a fabricated zero index.
+
+Java21 source regression also contrasts the *same* positive
+full-register D1 with a **long** index, which must NOT
+sign-extend low 16 bits and must NOT yield a SIMCR match.
+The real Ghidra 12.1.4 PUBLIC/Java25 headless test checks
+decoded scaled operands, exact two JSR edges, two separate
+static MMIO source candidates, unresolved third context,
+read-only revision, repeat determinism, explicit MC68332
+profile gate, and no Review/Apply promotion. It publishes a
+SHA-256-pinned extension and harness artifact on the PR's
+exact tested commit SHA.
+
+All addresses remain **modeled source bus candidates**, not
+physical chip-select decoding or MCU runtime execution.
