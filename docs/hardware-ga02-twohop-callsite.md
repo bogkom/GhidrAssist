@@ -149,3 +149,35 @@ Java21 regression for both widths.
 
 This is source-only uncertainty, not execution, an active SIMCR MM latch,
 a physical bus map, verified Ghidra Apply permission or a firmware edit.
+
+## 2026-11-05 — real CPU32 indexed STORE through two direct JSRs
+
+The existing real synthetic 12.1.4 headless `two-hop` fixture
+establishes two independent A0/D0 caller contexts through one
+ordinary bridge into a direct leaf `MOVE.W D0,(A1)`.
+It does not establish that `D1.W` is propagated as an index in the
+**Ghidra-decoded** leaf operand.
+
+A second isolated `two-hop-indexed` mode adds actual CPU32 bytecode
+for `MOVE.W D0,1(A1,D1.W)`. A direct outer caller seeds A0=SIMCR
+(or CSBAR) and D0 with a constant and D1.W=-1 using `MOVEQ`; the
+bridge copies A0 to A1 before its one direct JSR. The leaf's decoded
+operand must be accepted by the strict indexed-address parser and
+compute A1 + sign_extend(D1.W) + 1 under modulo-24-bit addressing.
+Two callers must produce separate context-specific 16-bit candidate
+rows. A third caller lacking D1 must yield an **unresolved alias**
+and no precise candidate. The same run also checks the nested
+JSR targets, exact CPU32 instruction encoding, output determinism
+after process-local GA-12 reuse, source-only/non-Apply classification,
+MC68332 profile gate, and unchanged Program revision.
+
+The deterministic pure-Java regression adds a bridge with a signed
+index, a missing index, disagreeing branch predecessors, and an
+unrelated non-MMIO address. The new Actions workflow performs a full
+Ghidra 12.1.4 PUBLIC/Java25 extension build from a checksum-verified
+release, then runs the test **inside real synthetic headless Ghidra**,
+saving the exact extension and harness SHA-256 in the artifact.
+No original ECU411 firmware or user project is used.
+
+These are **possible static MMIO source candidates**, never executed
+CALL traces, an active SIMCR MM bit or proof of the physical bus map.
