@@ -2,6 +2,7 @@ package ghidrassist.hardware;
 
 import java.io.*;
 import java.nio.file.*;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.PosixFilePermission;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -21,7 +22,7 @@ public final class HardwareDurableStageStore {
     private HardwareDurableStageStore(){}
     public static final String SCHEMA="GA12-CFG-DISK-1";
     public static final int MAX_PAYLOAD_BYTES=4*1024*1024;
-    private static final int MAX_FILE_BYTES=MAX_PAYLOAD_BYTES+4096;
+    static final int MAX_FILE_BYTES=MAX_PAYLOAD_BYTES+4096;
     private static final int MAX_HEADER_BYTES=2048;
     private static final int MAGIC=0x47413132;
 
@@ -99,17 +100,21 @@ public final class HardwareDurableStageStore {
             Files.deleteIfExists(temp);
         }
     }
-    /** Corrupt, stale, foreign or incomplete files are a cache miss. */
-    public static Optional<byte[]> load(Path directory,Key key){
-        if(key==null)return Optional.empty();
-        try{
-            checkDirectory(directory);
-            Path path=checkpointPath(directory,key);
-            if(!Files.isRegularFile(path,NOFOLLOW_LINKS) ||
-                    Files.size(path)>MAX_FILE_BYTES ||
-                    Files.size(path)<32+MAX_HEADER_BYTES/20)
+    /**
+     * Read a file opened by the caller with an absolute byte limit. This
+     * second bound is required even when an earlier file-size stat succeeded:
+     * an external writer can grow/replace the checkpoint between stat/open.
+     * The digest is a corruption check, not attacker authentication.
+     */
+    static Optional<byte[]> decodeBounded(InputStream source, Key key) {
+        if(source==null || key==null)return Optional.empty();
+        try {
+            // At most one byte beyond the limit is read, even if the input
+            // changes size during this operation or never reaches EOF.
+            byte[] bytes=source.readNBytes(MAX_FILE_BYTES+1);
+            if(bytes.length>MAX_FILE_BYTES ||
+                    bytes.length<32+MAX_HEADER_BYTES/20)
                 return Optional.empty();
-            byte[] bytes=Files.readAllBytes(path);
             byte[] body=Arrays.copyOf(bytes,bytes.length-32);
             if(!MessageDigest.isEqual(sha(body),
                     Arrays.copyOfRange(bytes,bytes.length-32,bytes.length)))
@@ -127,6 +132,27 @@ public final class HardwareDurableStageStore {
                 if(size<=0 || size>MAX_PAYLOAD_BYTES ||
                         size!=in.available())return Optional.empty();
                 return Optional.of(in.readNBytes(size));
+            }
+        }catch(IOException|RuntimeException bad){
+            return Optional.empty();
+        }
+    }
+
+    /** Corrupt, stale, foreign or incomplete files are a cache miss. */
+    public static Optional<byte[]> load(Path directory,Key key){
+        if(key==null)return Optional.empty();
+        try {
+            checkDirectory(directory);
+            Path path=checkpointPath(directory,key);
+            BasicFileAttributes attrs=Files.readAttributes(path,
+                BasicFileAttributes.class,NOFOLLOW_LINKS);
+            if(!attrs.isRegularFile() || attrs.size()>MAX_FILE_BYTES ||
+                    attrs.size()<32+MAX_HEADER_BYTES/20)
+                return Optional.empty();
+            // Refuse a symlink at the opened final file component even if
+            // the path has changed since the non-following attribute check.
+            try(InputStream input=Files.newInputStream(path,NOFOLLOW_LINKS)){
+                return decodeBounded(input,key);
             }
         }catch(IOException|RuntimeException bad){
             return Optional.empty();
