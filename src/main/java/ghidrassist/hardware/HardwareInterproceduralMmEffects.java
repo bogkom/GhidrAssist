@@ -36,7 +36,11 @@ public final class HardwareInterproceduralMmEffects {
                 .append("No caller/callee values propagated. An unresolved ")
                 .append("callee or alias is not evidence of no MM write.\n")
                 .append("- Rows: ").append(rows.size())
-                .append("; additional rows omitted: ").append(omitted).append(".\n");
+                .append("; additional rows omitted: ").append(omitted).append(".\n")
+                .append("Selected source callers receive computation and ")
+                .append("display priority within the shared finite budget; ")
+                .append("all visible rows remain sorted by caller/CALL PC/target. ")
+                .append("Dropped and uninspected source possibilities remain UNKNOWN.\n");
             for(Row row:rows){
                 CallSite site=row.call();Summary s=row.summary();
                 b.append("- caller ").append(hex(site.function()))
@@ -67,6 +71,8 @@ public final class HardwareInterproceduralMmEffects {
     }
     /** Maximum distinct scheduled CALL targets across one analysis batch. */
     public static final int MAX_BATCH_SCHEDULED=16_384;
+    /** Guard the source graph, not just the number of functions/CALL PCs. */
+    public static final int MAX_FUNCTION_EDGES=200_000;
     private static final class BatchBudget {
         int remaining=MAX_BATCH_SCHEDULED;
     }
@@ -158,9 +164,14 @@ public final class HardwareInterproceduralMmEffects {
                 calls.size()>200000)
             throw new IllegalArgumentException("Invalid bounded call graph");
         Map<Long,FunctionNode> graph=new HashMap<>();
-        for(FunctionNode n:functions)
+        long edges=0;
+        for(FunctionNode n:functions) {
             if(n==null || graph.putIfAbsent(n.entry(),n)!=null)
                 throw new IllegalArgumentException("Duplicate/null function");
+            edges+=n.calls().size();
+            if(edges>MAX_FUNCTION_EDGES)
+                throw new IllegalArgumentException("Unbounded source CALL edges");
+        }
         List<CallSite> sorted=new ArrayList<>(calls);
         if(sorted.contains(null))throw new IllegalArgumentException("Null call");
         sorted.sort(Comparator.comparingLong(CallSite::function)
@@ -173,19 +184,33 @@ public final class HardwareInterproceduralMmEffects {
             if(caller==null || caller<0)
                 throw new IllegalArgumentException("Invalid interesting caller");
         Set<Long> interesting=new HashSet<>(interestingCallers);
-        // A repeated exact target must reuse its first deterministic summary.
-        // A separate cap on total scheduled PCs prevents O(callSites * maxCount)
-        // work and retains explicit LIMITED/UNKNOWN for unseen targets.
+        // Reserve bounded computation and display for selected callers FIRST.
+        // An unrelated earlier CALL must not consume the entire shared budget
+        // (or report rowCap) before the user-selected analysis reaches its
+        // target. Still give every other CALL its own fail-closed summary.
+        // Source graph/call sort order is deterministic regardless of input
+        // collection ordering. Cache never persists or spans revisions.
         Map<Long,Summary> summaries=new HashMap<>();
         BatchBudget budget=new BatchBudget();
-        List<Row> rows=new ArrayList<>();int omitted=0;
-        for(CallSite site:sorted){
-            Summary s=summaries.computeIfAbsent(site.target(),
-                target->inspect(target,graph,maxDepth,maxCount,budget));
-            if(!interesting.contains(site.function()) && !s.uncertainOrMm())continue;
-            if(rows.size()<rowCap)rows.add(new Row(site,s));
-            else omitted++;
+        List<Row> rows=new ArrayList<>();
+        int omitted=0;
+        for(int priority=0;priority<2;priority++) {
+            for(CallSite site:sorted) {
+                boolean selected=interesting.contains(site.function());
+                if(selected!=(priority==0))continue;
+                Summary summary=summaries.computeIfAbsent(site.target(),
+                    target->inspect(target,graph,maxDepth,maxCount,budget));
+                if(!selected && !summary.uncertainOrMm())continue;
+                if(rows.size()<rowCap)rows.add(new Row(site,summary));
+                else omitted++;
+            }
         }
+        // Priority controls which rows survive a cap, never the visible
+        // CALL/PC/target ordering of the returned report.
+        rows.sort(Comparator.comparingLong((Row r)->r.call().function())
+            .thenComparingLong(r->r.call().pc())
+            .thenComparing(r->r.call().target(),
+                Comparator.nullsFirst(Long::compare)));
         return new Report(rows,omitted);
     }
 }
