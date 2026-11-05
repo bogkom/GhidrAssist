@@ -64,3 +64,28 @@ register and memory operands remain rejected. The shared strict
 register-operand Java21 regression tests both positive and negative
 forms. The diagnostic reflection was removed from the final harness.
 No global propagation or hardware execution is implied.
+
+## 2026-11-05 — 32-bit extension width and operand-input bounds
+
+The Motorola CPU32 indexed operand parser is source-only, so parsing an
+impossible extension constant must **not** be a way to manufacture a
+valid 24-bit register address. Previously the grammar accepted a positive
+64-bit displacement such as `0x100000000`. The downstream effective
+address was masked to 24 bits, making this unencodable displacement appear
+as a plausible MC68332 MMIO source.
+
+The strict indexed parser now bounds raw operands to 128 UTF-16 code units
+before normalization and restricts the full displacement to signed
+`-0x80000000` through unsigned `0xFFFFFFFF`, preserving hexadecimal
+32-bit renderings of otherwise negative offsets. Parsing an overrange,
+overflowing or excessively long expression returns UNKNOWN. The
+public source-level `HardwareDataflow.Step` indexed constructor enforces
+the same numeric limits and rejects malformed synthetic input before
+a solve can publish evidence.
+
+Java21 tests cover inclusive boundaries, signed/unsigned overflow,
+long inputs and unchanged Ghidra 12.1.4 CPU32
+`(0x1,A1,D1w*0x1)` syntax. CI must also pass the real isolated
+CPU32 two-hop indexed test and full Ghidra 12.1.4 PUBLIC/Java25 build
+on the exact tested SHA. No assumption about active SIMCR MM or runtime
+execution follows from a decoded candidate.

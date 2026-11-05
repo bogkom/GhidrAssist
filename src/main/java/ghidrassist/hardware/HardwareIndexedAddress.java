@@ -12,6 +12,13 @@ import java.util.regex.Pattern;
  */
 public final class HardwareIndexedAddress {
     private HardwareIndexedAddress() {}
+    /** A CPU32 indexed operand cannot carry an arbitrarily long literal. */
+    public static final int MAX_OPERAND_CHARS=128;
+    // Full 68k extension displacements are at most 32-bit. An unsigned
+    // rendering (0xFFFFFFFF) may denote the same bus-address offset as -1.
+    // Reject >32-bit numbers BEFORE modulo-24-bit effective-address math.
+    public static final long MIN_SIGNED_DISPLACEMENT=-0x80000000L;
+    public static final long MAX_UNSIGNED_DISPLACEMENT=0xffffffffL;
     private static final String NUMBER="(?:[-+]?(?:0X[0-9A-F]+|\\$[0-9A-F]+|[0-9]+))";
     // Ghidra 12.1.4 PUBLIC CPU32 renders the brief extension word as
     // (0x1,A1,D1w*0x1), while other listing renderers use D1.W*1.
@@ -35,7 +42,8 @@ public final class HardwareIndexedAddress {
     }
 
     public static Expression parse(String operand) {
-        if (operand == null || operand.isBlank()) return null;
+        if (operand == null || operand.isBlank() ||
+                operand.length()>MAX_OPERAND_CHARS) return null;
         String s=operand.replace(" ","").toUpperCase(Locale.ROOT);
         if (s.contains("[") || s.contains("]") || s.contains("PC") ||
                 s.contains("@") || s.contains("#")) return null;
@@ -61,9 +69,14 @@ public final class HardwareIndexedAddress {
                 int sign=1;
                 if(digits.startsWith("-")){sign=-1;digits=digits.substring(1);}
                 else if(digits.startsWith("+"))digits=digits.substring(1);
-                if(digits.startsWith("$"))displacement=Long.parseLong(digits.substring(1),16)*sign;
-                else if(digits.startsWith("0X"))displacement=Long.parseLong(digits.substring(2),16)*sign;
-                else displacement=Long.parseLong(digits)*sign;
+                long magnitude;
+                if(digits.startsWith("$"))magnitude=Long.parseLong(digits.substring(1),16);
+                else if(digits.startsWith("0X"))magnitude=Long.parseLong(digits.substring(2),16);
+                else magnitude=Long.parseLong(digits);
+                if(magnitude<0 || magnitude>(sign<0?
+                        -MIN_SIGNED_DISPLACEMENT:MAX_UNSIGNED_DISPLACEMENT))
+                    return null;
+                displacement=sign<0?-magnitude:magnitude;
             } catch (NumberFormatException invalid) {return null;}
         }
         return new Expression(base,index,bits,scale,displacement);

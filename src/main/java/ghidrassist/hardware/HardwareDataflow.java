@@ -83,7 +83,12 @@ public final class HardwareDataflow {
                     indexRegister==null || !indexRegister.matches("[AD][0-7]") ||
                     (indexBits!=16 && indexBits!=32) ||
                     (indexScale!=1 && indexScale!=2 &&
-                     indexScale!=4 && indexScale!=8))
+                     indexScale!=4 && indexScale!=8) ||
+                    // Even synthetic/caller-supplied steps must not invent
+                    // a >32-bit extension displacement and then wrap it
+                    // into a plausible 24-bit MC68332 MMIO address.
+                    displacement< -0x80000000L ||
+                    displacement>0xffffffffL)
                 throw new IllegalArgumentException("Invalid indexed STORE");
             this.indexRegister=indexRegister;
             this.indexBits=indexBits;this.indexScale=indexScale;
