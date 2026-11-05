@@ -6,7 +6,7 @@ scratch="$(mktemp -d)"
 trap 'rm -rf "$scratch"' EXIT
 export GITHUB_ACTIONS=true RUNNER_TEMP="$scratch"
 root="$scratch/ghidra/ghidra_12.1.4_PUBLIC_20260921"
-props="$root/support/gradle/gradle/wrapper/gradle-wrapper.properties"
+props="$root/support/gradle/gradle-wrapper.properties"
 mkdir -p "$(dirname "$props")"
 cat > "$props" <<'EOF'
 distributionBase=GRADLE_USER_HOME
