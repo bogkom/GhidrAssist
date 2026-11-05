@@ -131,7 +131,13 @@ public final class HardwareProfileManifestPreview {
         Map<String,Long> usedMasks=new LinkedHashMap<>();
         int pageMissing=0,seen=0;
         for(int i=0;i<rows.length;i++){
-            String line=rows[i].replace("\r","").strip();
+            // Accept a standard CRLF terminator only, not embedded CR
+            // characters that could splice an untrusted URL or identifier.
+            String line=rows[i];
+            if(line.endsWith("\r"))line=line.substring(0,line.length()-1);
+            if(line.indexOf('\r')>=0)
+                throw fail(i+1,"embedded carriage return");
+            line=line.strip();
             if(line.isEmpty() || line.startsWith("#"))continue;
             seen++;
             String[] v=line.split("\t",-1);
