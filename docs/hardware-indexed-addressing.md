@@ -27,3 +27,20 @@ Results must be checked on the **exact synthetic Ghidra 12.1.4
 PUBLIC/Java25 workflow SHA**, not inferred from pure-Java tests
 alone. The test adds evidence of supported syntax only, not support
 for complex 68020 full-extension or memory-indirect addressing.
+
+### Confirmed parser gap from real 12.1.4 PUBLIC Ghidra CI
+
+The first run of the real `two-hop-indexed` harness on PR #168
+did not pass: the **actual Ghidra CodeBrowser/Listing operand was
+`(0x1,A1,D1w*0x1)`**, whereas `HardwareIndexedAddress.parse`
+understood only dotted index-width suffixes and decimal scales
+(e.g. `1(A1,D1.W*1)`). The test failure was evidence of a real
+production decoding gap rather than a fabricated test case.
+
+The strict decoder now additionally accepts Ghidra's undotted
+`D1w`/`A2l` and hexadecimal scale `*0x1/0x2/0x4/0x8`
+renderings, while still rejecting unsupported index sizes/scales,
+PC-relative, memory-indirect and malformed expressions. Dedicated
+Java21 source tests and the genuine synthetic two-hop Ghidra test
+must both pass on the same exact PR SHA. This is not a reason to
+infer unknown index registers or hardware activity.
