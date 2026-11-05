@@ -44,11 +44,11 @@ public final class HardwareProfileAudit {
     }
 
     public static boolean physicalPage(String provenance) {
-        if(provenance==null)return false;
-        String text=provenance.toLowerCase(Locale.ROOT);
-        // Page labels are not enough to guarantee correctness of PDF content.
-        return text.contains("pdf page") && !text.contains("to be verified") &&
-            !text.contains("unverified");
+        // The same fail-closed numeric physical-page syntax as external
+        // manifests and bitfield decoding: a mere "PDF page" substring is
+        // not a valid citation (e.g. page abc, page 0 or reversed range).
+        // This is only claim-shape validation, not independent PDF evidence.
+        return ManualPdfPageClaim.hasSingleConsistentClaim(provenance);
     }
 
     /** Pure collision validator supports synthetic vendor-import test vectors. */
