@@ -1,7 +1,57 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
-Status: **IN PROGRESS — integrated baseline 2026-11-04**. Scope source: user-approved 2026-10-28 requirements (A–H, additional features 13.1–13.7, PDF/RAG, testing and Codex Supervisor integration).
+Status: **IN PROGRESS — integrated baseline 2026-11-05 (PR #170)**. Scope source: user-approved 2026-10-28 requirements (A–H, additional features 13.1–13.7, PDF/RAG, testing and Codex Supervisor integration).
 
+
+## Obowiązujący checkpoint — 2026-11-05 (odczyt GitHuba)
+
+Chroniony `master`: `aca665f84144cdd9b057a3968a9d1867f52f701c`,
+po scaleniu [PR #170](https://github.com/bogkom/GhidrAssist/pull/170).
+**GA-01–GA-18 to 18 nadal rozwijanych obszarów**, nie lista
+zaliczonych pojedynczych przypadków; **GA-14 pozostaje ODŁOŻONE**.
+Starsze sekcje opisujące „kandydatów”, stan z 4.11 albo
+„otwarte PR-y” poniżej zachowano jako **historyczny zapis**,
+nie bieżący status tych gałęzi. Wszystkie wyniki odnoszą się do
+dokładnych SHA GitHuba, a nie do sesji Wyse/Precision.
+
+| Zmiana | Przetestowany HEAD PR | GitHub Actions na HEAD | Scalone do master |
+|---|---|---|---|
+| [#168](https://github.com/bogkom/GhidrAssist/pull/168) — prawdziwa CPU32 składnia `D1w*0x1` i `MOVEQ -0x1` w kontekście dwóch CALL | `11df091e886ea0f4a647772b85995b95da249ae2` | **47/47 SUCCESS** | `5e7c3fcbda89ef1e3ba78b53fbfcbf0676885d6b` |
+| [#169](https://github.com/bogkom/GhidrAssist/pull/169) — granice indeksowanego przesunięcia 32-bit przed maskowaniem MCU24 | `c58a1579fe7da500490dd141066ebe86eda7b3e7` | **34/34 SUCCESS** | `9e84d8e7208922dd9fb02ca163f000603b20cdf1` |
+| [#170](https://github.com/bogkom/GhidrAssist/pull/170) — real CPU32 `D1.W*2`, sign extension, zawijanie 24-bit po dwóch JSR | `6a5973f08566eec837484c7b7df5a17acba88e3b` | **23/23 SUCCESS** | `aca665f84144cdd9b057a3968a9d1867f52f701c` |
+
+Po scaleniu: na osobnych SHA `master` #168 **12/12 SUCCESS**,
+#169 **4/4 SUCCESS** i #170 **2/2 SUCCESS** (w każdym pełna
+kompilacja rozszerzenia Ghidry 12.1.4 PUBLIC/Java25; liczby dotyczą
+jedynie uruchomionych workflow danego merge SHA).
+PR-y zawierają trwałe checkpointy wyników i ograniczeń;
+nie należy zastępować ich pojedynczym syntetycznym PASS.
+
+**GA-02/03 (CZĘŚCIOWO):** statyczny indeksowany adres MCU24
+i przekazanie A0/D0/D1 przez dokładnie dwa bezpośrednie JSR
+przetestowano na rzeczywistej izolowanej Ghidrze. Niedostępny
+D1 to nieznany alias; adresy SIMCR/CSBAR pozostają tylko
+możliwymi źródłami STORE. Nie dowiedziono wykonanego RESET,
+write-once MM, aktywnego VBR/ISR, pośrednich celów CALL ani
+fizycznej mapy CS. Trwałe Review/Apply/Undo pozostaje
+odrębną, zatwierdzaną ścieżką.
+
+**GA-17/18 (CZĘŚCIOWO):** wyznacznikiem są regresje Java21,
+pełny build Ghidry 12.1.4 PUBLIC/Java25 oraz rzeczywista
+syntetyczna Ghidra headless/CI; Automation API v3 pozostaje
+zintegrowanym torem produktu. Historyczne testy
+Wyse/Precision/legacy Supervisor pozostają zatrzymane.
+Issue [#106](https://github.com/bogkom/GhidrAssist/issues/106)
+otwarte, bez nowych komentarzy produktu. Issue #98
+utrzymuje osobną lukę migracji starego CodeBrowsera.
+
+**Następne kryteria:** GA-01/02/03/11 — większe, bezpiecznie
+ograniczone statyczne ścieżki i pośrednie aliasy MMIO,
+wciąż bez twierdzeń o runtime. GA-06/10/16 —
+wydanie/strona dokumentacji sprzętowej. GA-08/12/13 —
+bezpieczna edycja i trwałość decyzji. GA-15 —
+długie przebiegi i kompletność dowodów. GA-17/18 —
+dalsze regresje w Actions i przez Automation API.
 
 ## GA-01/11 — kandydat 2026-11-05: niepewność RESET w korelacji wektorów
 
