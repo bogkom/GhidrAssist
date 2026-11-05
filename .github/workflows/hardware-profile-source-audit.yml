@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - 'src/main/java/ghidrassist/hardware/HardwareProfileAudit.java'
+      - 'src/main/java/ghidrassist/hardware/ManualPdfPageClaim.java'
       - 'src/main/java/ghidrassist/hardware/HardwareProfiles.java'
       - 'src/main/java/ghidrassist/hardware/HardwareInventoryService.java'
       - 'src/test/java/ghidrassist/hardware/HardwareProfileAuditSelfTest.java'
@@ -11,6 +12,7 @@ on:
   pull_request:
     paths:
       - 'src/main/java/ghidrassist/hardware/HardwareProfileAudit.java'
+      - 'src/main/java/ghidrassist/hardware/ManualPdfPageClaim.java'
       - 'src/main/java/ghidrassist/hardware/HardwareProfiles.java'
       - 'src/main/java/ghidrassist/hardware/HardwareInventoryService.java'
       - 'src/test/java/ghidrassist/hardware/HardwareProfileAuditSelfTest.java'
@@ -35,6 +37,7 @@ jobs:
           mkdir -p "$RUNNER_TEMP/ga06"
           javac --release 21 -d "$RUNNER_TEMP/ga06" \
             src/main/java/ghidrassist/hardware/HardwareProfiles.java \
+            src/main/java/ghidrassist/hardware/ManualPdfPageClaim.java \
             src/main/java/ghidrassist/hardware/HardwareProfileAudit.java \
             src/test/java/ghidrassist/hardware/HardwareProfileAuditSelfTest.java
       - name: Verify source gaps and overlap guard
