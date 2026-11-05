@@ -1,0 +1,61 @@
+name: GA-13 fail-closed rename receipt codec
+
+on:
+  pull_request:
+    paths:
+      - 'tests/ga13_receipt_failclosed/**'
+      - 'src/main/java/ghidrassist/hardware/HardwareFunctionRenameReceipt.java'
+      - '.github/workflows/ga13-receipt-failclosed.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  java21-codec-regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Compile isolated production receipt codec and regression
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/ga13-classes"
+          javac -encoding UTF-8 -d "$RUNNER_TEMP/ga13-classes" \
+            src/main/java/ghidrassist/hardware/HardwareFunctionRenameReceipt.java \
+            tests/ga13_receipt_failclosed/Ga13ReceiptFailClosedTest.java
+          java -ea -cp "$RUNNER_TEMP/ga13-classes" Ga13ReceiptFailClosedTest
+
+  ghidra-12-1-4-extension-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Fetch SHA-256 verified Ghidra 12.1.4 PUBLIC
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fLsS --retry 3 --connect-timeout 20 \
+            -o "$RUNNER_TEMP/ghidra.zip" \
+            "https://github.com/NationalSecurityAgency/ghidra/releases/download/Ghidra_12.1.4_build/ghidra_12.1.4_PUBLIC_20260921.zip"
+          echo "ddac49f903da9d5bac833e5cc79395098b9c33cfd3279be5f31bd00387d2d4db  $RUNNER_TEMP/ghidra.zip" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/ghidra"
+          unzip -q "$RUNNER_TEMP/ghidra.zip" -d "$RUNNER_TEMP/ghidra"
+          GHIDRA_DIR="$(find "$RUNNER_TEMP/ghidra" -mindepth 1 -maxdepth 1 -type d -name 'ghidra_*' -print -quit)"
+          test -n "$GHIDRA_DIR"
+          echo "GHIDRA_INSTALL_DIR=$GHIDRA_DIR" >> "$GITHUB_ENV"
+      - name: Build complete extension
+        run: |
+          set -euo pipefail
+          "$GHIDRA_INSTALL_DIR/support/gradle/gradlew" --no-daemon buildExtension
+          shopt -s nullglob
+          packages=(dist/ghidra_12.1.4_PUBLIC_*_GhidrAssist.zip)
+          test "${#packages[@]}" -eq 1
+          unzip -tq "${packages[0]}"
