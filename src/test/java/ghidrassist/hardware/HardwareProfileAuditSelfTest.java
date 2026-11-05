@@ -35,6 +35,27 @@ public final class HardwareProfileAuditSelfTest {
             !HardwareProfileAudit.physicalPage("Appendix D (page to be verified)") &&
             !HardwareProfileAudit.physicalPage(null),
             "citation parsing fails closed");
+        // A mere PDF-page substring must never inflate provenance
+        // coverage when the numeric claim is malformed or ambiguous.
+        for(String malformed : new String[]{
+                "D-6 (PDF page abc)", "D-6 (PDF page 0)",
+                "D-6 (PDF page 999999)",
+                "D-6 (PDF pages 220-219)",
+                "D-6 (PDF page 220/221)",
+                "D-6 (PDF page 220, PDF page 220)",
+                "D-6 (PDF page 220) UNVERIFIED",
+                "D-6 (PDF pages 220-0)",
+                "D-6 (PDF page 220-abc)",
+                "D-6 (PDF page 220-221-222)"}) {
+            ok(!HardwareProfileAudit.physicalPage(malformed),
+                "malformed numeric physical folio must not be counted: "+malformed);
+        }
+        ok(HardwareProfileAudit.physicalPage("D-6 (PDF page 220)") &&
+            HardwareProfileAudit.physicalPage("D-5/D-6 (PDF pages 219-220)"),
+            "well-formed numeric physical-page and range claims remain accepted");
+        ok(!HardwareProfileAudit.physicalPage(
+                "D-4/D-7 (PDF pages 218/221)"),
+            "noncontiguous slash folio references remain ambiguous for audit");
         var collisions=HardwareProfileAudit.overlaps(List.of(
             reg("SIM","SIMCR",0xa00,16),
             reg("SIM","SIM_OTHER",0xa01,8),
