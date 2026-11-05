@@ -14,6 +14,7 @@ public final class McpEvidenceGuard {
     private static final Pattern IMMEDIATE_WRITE = Pattern.compile(
         "(?im)^\\s*(?:ram:)?([0-9a-f]{6,8}):\\s*move\\.(b|w|l)\\s+" +
         "#(-?0x[0-9a-f]+)\\s*,\\s*\\(\\s*0x([0-9a-f]{6,8})\\s*\\)\\.l");
+    private static final int MAX_EVIDENCE_WRITES=80;
     private record Write(long pc, long address, long value, int width) {}
 
     public static String enrich(String toolName, String content) {
@@ -22,18 +23,35 @@ public final class McpEvidenceGuard {
         String raw=content.replace("\\n", "\n");
         Matcher m=IMMEDIATE_WRITE.matcher(raw);
         List<Write> writes=new ArrayList<>();
-        while(m.find() && writes.size()<80) {
+        boolean omitted=false, malformed=false;
+        while(m.find()) {
             int width=switch(m.group(2).toLowerCase(Locale.ROOT)) {
                 case "b" -> 8; case "w" -> 16; default -> 32;
             };
             long addr=Long.parseUnsignedLong(m.group(4),16);
             if (!inSimWindow(addr)) continue;
-            long num=Long.parseUnsignedLong(m.group(3).replace("-","").substring(2),16);
-            if (m.group(3).startsWith("-")) num=-num;
-            long value=num & (width==32?0xffffffffL:(1L<<width)-1);
-            writes.add(new Write(Long.parseUnsignedLong(m.group(1),16),addr,value,width));
+            // Check an additional source hit rather than silently treating
+            // the retained 80 entries as a complete disassembly sample.
+            if(writes.size()>=MAX_EVIDENCE_WRITES) {
+                omitted=true;
+                break;
+            }
+            try {
+                String immediate=m.group(3);
+                long num=Long.parseUnsignedLong(
+                    immediate.startsWith("-")?immediate.substring(3):
+                    immediate.substring(2),16);
+                if (immediate.startsWith("-")) num=-num;
+                long value=num & (width==32?0xffffffffL:(1L<<width)-1);
+                writes.add(new Write(Long.parseUnsignedLong(m.group(1),16),
+                    addr,value,width));
+            } catch(NumberFormatException invalidImmediate) {
+                // A matched but unrepresentable literal is unknown evidence,
+                // NOT a reason to abort the whole external-tool response.
+                malformed=true;
+            }
         }
-        if(writes.isEmpty())return content;
+        if(writes.isEmpty() && !malformed)return content;
         StringBuilder out=new StringBuilder(
             "<<<DETERMINISTIC_MCP_DISASSEMBLY_EVIDENCE>>>\n" +
             "Verified literal writes from THIS tool response; NOT proof of runtime execution or CPU model.\n");
@@ -57,6 +75,14 @@ public final class McpEvidenceGuard {
                     a,binary16(a),b,binary16(b),xor,binary16(xor),setBits(xor)));
             }
         }
+        if(omitted || malformed)
+            out.append("INCOMPLETE_EVIDENCE: ")
+               .append(omitted?"at least one additional matching SIM-window "+
+                   "literal was omitted after the 80-write cap. ":"")
+               .append(malformed?"At least one matching literal had an "+
+                   "unrepresentable numeric immediate. ":"")
+               .append("Do NOT use this sample as a complete inventory "+
+                   "or infer absence of other MMIO writes.\n");
         out.append("Consistency check: Do not claim that there are no DIRECT WRITES to listed " +
             "addresses. A register-name mapping or runtime path is a separate, conditional claim.\n" +
             "<<<END_DETERMINISTIC_MCP_DISASSEMBLY_EVIDENCE>>>\n\n");

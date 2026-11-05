@@ -18,6 +18,38 @@ public final class McpEvidenceGuardSelfTest {
         ok(McpEvidenceGuard.enrich("get_function_info",code).equals(code),"no other tools changed");
         ok(McpEvidenceGuard.enrich("get_disassembly","unrelated").equals("unrelated"),
            "no invented evidence");
+        // Retaining exactly 80 valid in-scope sources is complete only
+        // when no 81st matching source can be found.
+        StringBuilder eighty=new StringBuilder();
+        for(int i=0;i<80;i++)
+            eighty.append(String.format(java.util.Locale.ROOT,
+                "%08x: move.w #0x1234, (0x00fffa4e).l\\n",0x100+2*i));
+        String exactly80=McpEvidenceGuard.enrich("get_disassembly",
+            eighty.toString());
+        ok(!exactly80.contains("INCOMPLETE_EVIDENCE") &&
+            exactly80.contains("0x0000019E"),
+            "exactly 80 valid sources are retained without false truncation");
+        String over=McpEvidenceGuard.enrich("get_disassembly",
+            eighty+"000001a0: move.w #0x5678, (0x00fffa4e).l\\n");
+        ok(over.contains("INCOMPLETE_EVIDENCE") &&
+            over.contains("at least one additional matching") &&
+            !over.contains("- instruction 0x000001A0"),
+            "81st in-scope write is omitted with explicit incomplete marker");
+        String outside=McpEvidenceGuard.enrich("get_disassembly",
+            eighty+"000001a0: move.w #0x5678, (0x00001000).l\\n");
+        ok(!outside.contains("INCOMPLETE_EVIDENCE"),
+            "unrelated out-of-window write does not consume SIM evidence cap");
+        String malformed="00000100: move.w #0x10000000000000000, (0x00fffa4e).l\\n";
+        String unsafe=McpEvidenceGuard.enrich("get_disassembly",malformed);
+        ok(unsafe.contains("INCOMPLETE_EVIDENCE") &&
+            unsafe.contains("unrepresentable numeric immediate") &&
+            !unsafe.contains("- instruction 0x00000100"),
+            "unrepresentable 17-digit literal fails closed without throwing");
+        String mixed=McpEvidenceGuard.enrich("get_disassembly",
+            malformed+"00000102: move.w #0x40ca, (0x00fffa00).l\\n");
+        ok(mixed.contains("INCOMPLETE_EVIDENCE") &&
+            mixed.contains("- instruction 0x00000102"),
+            "malformed evidence does not discard later valid SIM source");
         System.out.println("McpEvidenceGuardSelfTest OK");
     }
 }
