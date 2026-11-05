@@ -20,6 +20,13 @@ regular nonsymlink file and an exact version-9.7.1
 `services.gradle.org` distribution URL. No developer Ghidra
 installation, repository's Gradle wrapper or original ZIP is altered.
 
+The actual Ghidra 12.1.4 PUBLIC release uses the **flat**
+`support/gradle/gradle-wrapper.properties` layout (not a conventional
+`gradle/wrapper/` subdirectory). An early version of this pilot's
+self-test used the wrong fixture layout: its shell test passed while all
+three real CI jobs failed **before running Gradle**. The fixture and
+helper were corrected together, retaining the failed job histories.
+
 The isolated CI wrapper network policy is **120,000 ms timeout,
 2 retries and 1,000 ms exponential initial backoff**. Existing
 distribution URL, version, checksums, wrapper JAR and Ghidra build
