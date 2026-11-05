@@ -15,6 +15,7 @@ import ghidra.program.model.address.AddressSet;
 import ghidra.program.model.listing.Function;
 import ghidra.program.model.listing.Program;
 import ghidra.program.model.data.WordDataType;
+import ghidra.program.model.symbol.RefType;
 import ghidra.program.model.symbol.SourceType;
 import ghidra.util.task.TaskMonitor;
 import ghidra.util.exception.CancelledException;
@@ -1440,7 +1441,7 @@ public final class Ga11VectorHeadlessMain {
                     try {
                         var xref=full.getReferenceManager().addMemoryReference(
                             address(full,0x680L),address(full,0x700L),
-                            ghidra.program.model.symbol.RefType.COMPUTED_CALL,
+                            RefType.COMPUTED_CALL,
                             SourceType.USER_DEFINED,0);
                         check(xref!=null &&
                             xref.getReferenceType().isCall() &&
