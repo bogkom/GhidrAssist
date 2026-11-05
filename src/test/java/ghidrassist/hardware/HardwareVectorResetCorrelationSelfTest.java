@@ -166,6 +166,52 @@ public final class HardwareVectorResetCorrelationSelfTest {
         try { report.rows().clear(); }
         catch (UnsupportedOperationException expected) { immutable = true; }
         check(immutable, "result is immutable");
+        // Multiple numbered vectors may point to one exact handler. They
+        // share a read-only transitive subtree analysis only within this
+        // report; vector-specific labels and counts must stay independent.
+        var duplicateHandlerSlots=List.of(
+            new HardwareVectorResetCorrelation.Target(42,0x130,0x130,true),
+            new HardwareVectorResetCorrelation.Target(41,0x130,0x130,true));
+        var sharedHandler=HardwareVectorResetCorrelation.inspect(
+            true,false,reset.visitedEntries(),duplicateHandlerSlots,graph,16);
+        check(sharedHandler.exactEntries()==2 &&
+            sharedHandler.recognizedTargets()==2 &&
+            sharedHandler.sharedResetSubset()==2 &&
+            sharedHandler.rows().get(0).vectorNumber()==41 &&
+            sharedHandler.rows().get(1).vectorNumber()==42 &&
+            sharedHandler.rows().get(0).memoryStoreEffect().equals(
+                sharedHandler.rows().get(1).memoryStoreEffect()) &&
+            sharedHandler.rows().get(0).vbrEffect().equals(
+                sharedHandler.rows().get(1).vbrEffect()) &&
+            sharedHandler.rows().get(0).flowUncertain()==
+                sharedHandler.rows().get(1).flowUncertain(),
+            "distinct vector slots sharing one handler preserve identical static effect evidence");
+        check(sharedHandler.equals(HardwareVectorResetCorrelation.inspect(
+                true,false,reset.visitedEntries(),
+                List.of(duplicateHandlerSlots.get(1),duplicateHandlerSlots.get(0)),
+                graph,16)),
+            "vector report deterministic regardless of source input order");
+        bad(() -> HardwareVectorResetCorrelation.inspect(
+            true,false,reset.visitedEntries(),
+            java.util.Arrays.asList((HardwareVectorResetCorrelation.Target)null),
+            graph,16),"null candidate rejected before sorting");
+        bad(() -> HardwareVectorResetCorrelation.inspect(
+            true,false,reset.visitedEntries(),
+            java.util.Collections.nCopies(255,duplicateHandlerSlots.get(0)),
+            graph,16),"more than 254 recognized vector slots rejected");
+        var invalidResetEntries=new java.util.HashSet<Long>();
+        invalidResetEntries.add(null);
+        bad(() -> HardwareVectorResetCorrelation.inspect(
+            true,false,invalidResetEntries,targets,graph,16),
+            "null RESET path address cannot be silently accepted");
+        bad(() -> HardwareVectorResetCorrelation.inspect(
+            true,false,Set.of(-1L),targets,graph,16),
+            "negative RESET address fails closed");
+        bad(() -> HardwareVectorResetCorrelation.inspect(
+            true,false,reset.visitedEntries(),targets,
+            java.util.Collections.nCopies(
+                HardwareCallEffects.MAX_SOURCE_FUNCTIONS+1,graph.get(0)),16),
+            "unbounded transitive effect graph refused before per-handler analysis");
         System.out.println("HardwareVectorResetCorrelationSelfTest PASS: assertions="+assertions);
     }
 }
