@@ -3,6 +3,17 @@
 Status: **IN PROGRESS — integrated baseline 2026-11-04**. Scope source: user-approved 2026-10-28 requirements (A–H, additional features 13.1–13.7, PDF/RAG, testing and Codex Supervisor integration).
 
 
+## GA-12 — kandydat 2026-11-05: tożsamość właściciela epoki CFG
+
+Odczytowe generacje unieważniania checkpointów mają być izolowane na
+**konkretny obiekt Ghidra Program**, nie przez `equals()` współdzielony
+przez dwa odrębne obiekty. `WeakHashMap` zastąpiono słabymi kluczami
+identyczności z `ReferenceQueue`. Java21 testuje kolidujące `equals`,
+niezależne unieważnienia oraz niezarejestrowanego właściciela. Czas życia
+programu i wersja analizy nadal są weryfikowane osobno. CI i pełny
+build Ghidry 12.1.4 wymagają odrębnego PASS na SHA PR. Nie oznacza
+to wznowienia obliczeń między różnymi Program/JVM.
+
 ## GA-06 — kandydat 2026-11-05: źródła HTTPS w manifestach
 
 Ograniczenie strukturalnego podglądu zewnętrznych profilów: zewnętrzny
