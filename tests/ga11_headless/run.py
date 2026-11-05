@@ -94,7 +94,7 @@ def main():
                         "generic-profile","trambar-source","csbar-mm0-reject",
                         "mmio-read-reference","csbar-csor-conditional",
                         "simcr-mm0-literal","trambar-unknown","csor-alternatives",
-                        "branch-simcr","call-barrier","leaf-return","call-context","joint-source","two-hop","two-hop-indexed","two-hop-indexed-wrap","branch-leaf","branch-cache","cancel-incomplete",
+                        "branch-simcr","call-barrier","leaf-return","call-context","joint-source","two-hop","two-hop-indexed","two-hop-indexed-wrap","indirect-adjacent","branch-leaf","branch-cache","cancel-incomplete",
                         "function-stage-resume","function-rename","receipt-restart",
                         "apply-preserve","provenance-csv","movec-vbr","vbr-relocation"),
                         default="none",help="Run GA-07/12 or GA-02/03 genuine headless source-evidence checks")
@@ -334,6 +334,17 @@ def main():
                         "twohop_wrap_replay_deterministic",
                         "twohop_wrap_generic_cpu32_conservative",
                         "twohop_wrap_program_read_only"),
+                    "indirect-adjacent":(
+                        "indirect_adjacent_real_jsr",
+                        "indirect_adjacent_shared_api_proof",
+                        "indirect_adjacent_exact_function",
+                        "indirect_adjacent_three_unknowns",
+                        "indirect_adjacent_not_direct_cfg",
+                        "indirect_adjacent_not_review_apply",
+                        "indirect_adjacent_static_only",
+                        "indirect_adjacent_repeat_deterministic",
+                        "indirect_adjacent_generic_cpu32_safe",
+                        "indirect_adjacent_program_read_only"),
                     "joint-source":(
                         "arg_direct_call_real_ghidra",
                         "arg_independent_call_sites",
