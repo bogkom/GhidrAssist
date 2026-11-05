@@ -1194,6 +1194,63 @@ public final class Ga11VectorHeadlessMain {
                         moveq.getMnemonicString().toUpperCase(Locale.ROOT)
                             .startsWith("MOVEQ"),
                         "Ghidra did not decode signed MOVEQ #-1,D1");
+                    // Diagnostic traces on this isolated synthetic
+                    // Program identify whether a known indexed D1 value
+                    // vanished in the caller, bridge or leaf translation.
+                    // Read-only and never persisted as product evidence.
+                    var translate=GhidraHardwareFlowService.class
+                        .getDeclaredMethod("translate",
+                            ghidra.program.model.listing.Instruction.class,
+                            Function.class);
+                    translate.setAccessible(true);
+                    for(long entry:new long[]{0x600L,0x640L,0x700L}) {
+                        var fn=full.getFunctionManager().getFunctionAt(
+                            address(full,entry));
+                        var translated=new ArrayList<
+                            ghidrassist.hardware.HardwareDataflow.Step>();
+                        var iter=full.getListing().getInstructions(
+                            fn.getBody(),true);
+                        while(iter.hasNext()){
+                            var insn=iter.next();
+                            var step=(ghidrassist.hardware.HardwareDataflow.Step)
+                                translate.invoke(null,insn,fn);
+                            translated.add(step);
+                            System.out.println("GA02 INDEXED TRACE: "+Long.toHexString(
+                                step.address)+" "+insn.getMnemonicString()+
+                                " op0="+insn.getDefaultOperandRepresentation(0)+
+                                " op1="+(insn.getNumOperands()>1?
+                                    insn.getDefaultOperandRepresentation(1):"-")+
+                                " kind="+step.kind+" reg="+step.register+
+                                " source="+step.sourceRegister+
+                                " index="+step.indexRegister+
+                                " scale="+step.indexScale+
+                                " bits="+step.indexBits+
+                                " displacement="+step.displacement+
+                                " operand="+step.operand);
+                        }
+                        var track=Set.of(0xfffa00L,0xfffa68L);
+                        if(entry==0x600L){
+                            var resultDiag=ghidrassist.hardware.HardwareDataflow.analyze(
+                                entry,translated,track,500);
+                            System.out.println("GA02 INDEXED TRACE: outer caller "+
+                                resultDiag.knownPointersAtEntry.get(0x60eL));
+                        }else if(entry==0x640L){
+                            var resultDiag=ghidrassist.hardware.HardwareDataflow
+                                .analyzeWithEntryRegisters(entry,translated,track,500,
+                                    Map.of("A0",0xfffa00L,"D0",0x40caL,
+                                        "D1",0xffffffL));
+                            System.out.println("GA02 INDEXED TRACE: bridge "+
+                                resultDiag.knownPointersAtEntry.get(0x642L));
+                        }else{
+                            var resultDiag=ghidrassist.hardware.HardwareDataflow
+                                .analyzeWithEntryRegisters(entry,translated,track,500,
+                                    Map.of("A1",0xfffa00L,"D0",0x40caL,
+                                        "D1",0xffffffL));
+                            for(var hit:resultDiag.snapshots)
+                                System.out.println("GA02 INDEXED TRACE: leaf "+
+                                    hit.effectiveAddress+" width="+hit.writeBits);
+                        }
+                    }
                     long revision=full.getModificationNumber();
                     var report=new GhidraHardwareFlowService().analyze(
                         full,TaskMonitor.DUMMY,true);
