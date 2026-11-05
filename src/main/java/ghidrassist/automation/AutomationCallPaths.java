@@ -172,10 +172,16 @@ public final class AutomationCallPaths {
                 // never suppress unresolved_calls or imply complete=true.
                 // Computed CALLs are resolved ONLY by the narrow, existing,
                 // byte-verified MOVEA immediate/JSR (An) source patterns.
-                boolean computedCall=ins.getFlowType().isCall() &&
+                boolean callInstruction=ins.getFlowType().isCall();
+                boolean computedCall=callInstruction &&
                     ins.getFlowType().isComputed();
                 for(Reference ref:ins.getReferencesFrom()) {
-                    if(ref.getReferenceType().isCall() && !computedCall) {
+                    // A USER_DEFINED CALL reference on a NOP/MOVE/JMP
+                    // does not change the decoded opcode into a CALL.
+                    // Only a genuinely direct CALL instruction may
+                    // consume a Ghidra reference as static reachability.
+                    if(callInstruction && !computedCall &&
+                            ref.getReferenceType().isCall()) {
                         Function target=program.getFunctionManager().getFunctionAt(ref.getToAddress());
                         if(target!=null) {
                             calls.add(new Edge(ins.getAddress(),target.getEntryPoint(),"ghidra_call_reference"));

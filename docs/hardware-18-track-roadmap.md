@@ -1168,3 +1168,22 @@ do funkcji MMIO. Oczekuje `unresolved_calls=1`,
 zachowania prawidłowego byte-proven `JSR (A0)`.
 Wymagane pełne CI i dokładny SHA PR; statyczne krawędzie
 nie stanowią dowodu przebiegu firmware ani aktywnego MM.
+
+## GA-02/03/18 — kandydat 2026-11-05: fałszywe CALL-XREF na zwykłym NOP
+
+Po scaleniach #174 i #175 wykryto pokrewną lukę:
+`AutomationCallPaths.index` uznawał referencję typu CALL nawet
+z instrukcji, która według Ghidry **nie jest CALL**.
+Ręcznie dodany `COMPUTED_CALL` przy prawdziwym CPU32 `NOP`
+mógł stworzyć fałszywie osiągalną funkcję zapisującą MMIO.
+
+Nowy warunek wymaga prawdziwego `FlowType.isCall` oraz
+braku `isComputed` przed wykorzystaniem referencji.
+Oddzielny rzeczywisty test syntetycznej Ghidry 12.1.4
+PUBLIC/Java25 dodaje do `NOP` testowy USER_DEFINED XREF
+prowadzący do funkcji MMIO i wymaga **0 ścieżek**,
+braku 0x700 w osiągalnych, `complete=true`.
+Poprawny JSR (A0) nadal ma precyzyjny byte-proven target,
+a nieznany JSR (A1) pozostaje INCOMPLETE. Wymagane
+pełne GitHub Actions na dokładnym SHA, bez lokalnych
+testów Wyse/Precision, zmian Apply ani twierdzeń o runtime.

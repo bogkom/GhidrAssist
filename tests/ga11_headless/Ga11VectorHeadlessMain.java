@@ -1393,6 +1393,8 @@ public final class Ga11VectorHeadlessMain {
                         full.getMemory().setBytes(address(full,0x6c0L),
                             java.util.HexFormat.of().parseHex(
                                 "207c000007204e904e75"));
+                        full.getMemory().setBytes(address(full,0x6e0L),
+                            java.util.HexFormat.of().parseHex("4e714e75"));
                         full.getMemory().setBytes(address(full,0x700L),
                             java.util.HexFormat.of().parseHex(
                                 "33fc40ca00fffa004e75"));
@@ -1407,6 +1409,8 @@ public final class Ga11VectorHeadlessMain {
                         "ga02_indirect_wrong_register");
                     defineFixtureFunction(full,0x6c0L,10,
                         "ga02_indirect_missing_exact_function");
+                    defineFixtureFunction(full,0x6e0L,4,
+                        "ga02_noncall_nop_with_untrusted_call_xref");
                     var computed=full.getListing().getInstructionAt(
                         address(full,0x606L));
                     check(computed!=null &&
@@ -1466,6 +1470,39 @@ public final class Ga11VectorHeadlessMain {
                         "Manual computed-CALL reference must NOT make a "+
                         "JSR (A1) path complete or spuriously reachable: "+
                         unknownPaths);
+                    // A user-defined CALL reference on an instruction that
+                    // is physically NOT a CALL (here actual CPU32 NOP)
+                    // must never invent traversable CALL reachability.
+                    int txNopRef=full.startTransaction(
+                        "GA02 synthetic CALL XREF on genuine CPU32 NOP");
+                    try {
+                        var injected=full.getReferenceManager().addMemoryReference(
+                            address(full,0x6e0L),address(full,0x700L),
+                            RefType.COMPUTED_CALL,
+                            SourceType.USER_DEFINED,0);
+                        check(injected!=null &&
+                            injected.getReferenceType().isCall() &&
+                            injected.getToAddress().equals(address(full,0x700L)),
+                            "Synthetic misleading CALL XREF on NOP not created");
+                    }finally {full.endTransaction(txNopRef,true);}
+                    var nop=full.getListing().getInstructionAt(
+                        address(full,0x6e0L));
+                    check(nop!=null &&
+                        "NOP".equalsIgnoreCase(nop.getMnemonicString()) &&
+                        !nop.getFlowType().isCall() &&
+                        nop.getReferencesFrom().length>0,
+                        "Ghidra must keep NOP non-CALL despite user XREF");
+                    var fakeNopPaths=ghidrassist.automation.AutomationCallPaths.query(
+                        full,"entry","000006E0",8,0,10);
+                    check(fakeNopPaths.get("total_paths").getAsInt()==0 &&
+                        fakeNopPaths.get("unresolved_calls").getAsInt()==0 &&
+                        fakeNopPaths.get("complete").getAsBoolean() &&
+                        fakeNopPaths.getAsJsonArray("unreachable_entries")
+                            .toString().contains("00000700") &&
+                        !fakeNopPaths.getAsJsonArray("reachable_entries")
+                            .toString().contains("00000700"),
+                        "CALL XREF from a genuine NOP invented a "+
+                        "reachable MMIO function: "+fakeNopPaths);
                     var exactPaths=ghidrassist.automation.AutomationCallPaths.query(
                         full,"entry","00000600",8,0,10);
                     check(exactPaths.get("unresolved_calls").getAsInt()==0 &&
@@ -1518,6 +1555,7 @@ public final class Ga11VectorHeadlessMain {
                             "| 0x00000600 | 0x00000600 | 0x00000606 |") &&
                         full.getModificationNumber()==revision,
                         "Generic CPU32 got MCU-specific indirect call proof");
+                    result.addProperty("indirect_adjacent_nop_call_xref_denied",true);
                     result.addProperty("indirect_adjacent_real_jsr",true);
                     result.addProperty("indirect_adjacent_shared_api_proof",true);
                     result.addProperty("indirect_adjacent_exact_function",true);

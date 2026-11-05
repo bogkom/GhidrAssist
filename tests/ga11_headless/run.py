@@ -335,6 +335,7 @@ def main():
                         "twohop_wrap_generic_cpu32_conservative",
                         "twohop_wrap_program_read_only"),
                     "indirect-adjacent":(
+                        "indirect_adjacent_nop_call_xref_denied",
                         "indirect_adjacent_real_jsr",
                         "indirect_adjacent_shared_api_proof",
                         "indirect_adjacent_exact_function",
