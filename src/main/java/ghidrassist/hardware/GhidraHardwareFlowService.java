@@ -108,7 +108,11 @@ public final class GhidraHardwareFlowService {
         return 0;
     }
     private static Long immediate(Instruction i,int slot){
-        if(!op(i,slot).startsWith("#"))return null;
+        // Ghidra renders CPU32 MOVEQ #-1,D1 as "-0x1" (no '#').
+        // Its encoded signed 8-bit immediate is unambiguous; for all
+        // other instructions retain the original explicit marker gate.
+        if(!HardwareRegisterOperand.isImmediateToken(
+                op(i,slot),i.getMnemonicString()))return null;
         Scalar s=i.getScalar(slot);
         return s==null?null:s.getUnsignedValue();
     }
