@@ -252,6 +252,63 @@ public final class HardwareTwoHopRegisterFlowSelfTest {
             spanningTwoHop.rows().get(0).bits()==32 &&
             spanningTwoHop.rows().get(0).writtenWord()==null,
             "known 32-bit two-hop write may overlap adjacent SIMCR MM byte");
+        // GA-02/03: indexed MMIO address must be computed from the
+        // distinct A/D constants at the OUTER caller, passed through the
+        // exact bridge JSR, and rejoined at the final leaf STORE site.
+        // D1.W=-1 sign extends before the displacement +1, so A1 is
+        // the candidate write address; no caller state can leak.
+        var indexedLeaf=new HardwareCallsiteRegisterFlow.Callee(
+            0x700,List.of(new HardwareDataflow.Step(
+                0x700,"A1","D0","D1",16,1,1,null,16,
+                List.of(0x704L),"MOVE.W"),ret(0x704)),true);
+        var indexedSimcr=new HardwareCallsiteRegisterFlow.Call(
+            0xb00,0xb0e,0x640L,
+            Map.of("A0",simcr,"D0",0x40caL,"D1",0xffffffL),false);
+        var indexedCs=new HardwareCallsiteRegisterFlow.Call(
+            0xb40,0xb4e,0x640L,
+            Map.of("A0",cs,"D0",0x4848L,"D1",0xffffffL),false);
+        var indexedSummary=scan(List.of(indexedCs,indexedSimcr),
+            List.of(bridge),List.of(indexedLeaf),48);
+        ok(indexedSummary.possibleStores()==2 &&
+            indexedSummary.unknownAliases()==0 &&
+            indexedSummary.rows().size()==2 &&
+            indexedSummary.rows().get(0).effectiveAddress()==simcr &&
+            indexedSummary.rows().get(0).writtenWord()==0x40ca &&
+            indexedSummary.rows().get(0).knownInnerRegisters()==4 &&
+            indexedSummary.rows().get(1).effectiveAddress()==cs &&
+            indexedSummary.rows().get(1).writtenWord()==0x4848,
+            "indexed .W signed index across 2 CALL boundaries uses own context");
+        var missingIndex=new HardwareCallsiteRegisterFlow.Call(
+            0xb80,0xb8c,0x640L,
+            Map.of("A0",simcr,"D0",0x40caL),false);
+        var unresolvedIndexed=scan(List.of(missingIndex),
+            List.of(bridge),List.of(indexedLeaf),48);
+        ok(unresolvedIndexed.possibleStores()==0 &&
+            unresolvedIndexed.unknownAliases()==1 &&
+            unresolvedIndexed.rows().isEmpty(),
+            "unknown CALL-propagated index stays an unresolved MMIO alias");
+        var mismatchedBranches=new HardwareTwoHopRegisterFlow.Bridge(
+            0x640,List.of(
+                step(0x640,OTHER,null,null,0,"BNE",0x642L,0x644L),
+                step(0x642,SET_POINTER,"D1",null,0,"MOVE.L",0x646L),
+                step(0x644,SET_POINTER,"D1",null,2,"MOVE.L",0x646L),
+                step(0x646,COPY_POINTER,"A1","A0",0,"MOVEA.L",0x648L),
+                jsr(0x648,0x64eL),ret(0x64eL)),
+            0x648L,0x700L,true);
+        var branchIndex=scan(List.of(indexedSimcr),
+            List.of(mismatchedBranches),List.of(indexedLeaf),48);
+        ok(branchIndex.rows().isEmpty() &&
+            branchIndex.unknownAliases()==1,
+            "conflicting branch D1 values must not resolve indexed alias");
+        // A known offset that misses SIMCR remains a negative for that
+        // *modeled* CALL, never proof of no other hardware write.
+        var unrelatedIndex=new HardwareCallsiteRegisterFlow.Call(
+            0xbc0,0xbce,0x640L,
+            Map.of("A0",0x1000L,"D0",0x40caL,"D1",0xffffffL),false);
+        var elsewhere=scan(List.of(unrelatedIndex),
+            List.of(bridge),List.of(indexedLeaf),48);
+        ok(elsewhere.possibleStores()==0 && elsewhere.unknownAliases()==0,
+            "known indexed non-MMIO address does not fabricate MMIO candidate");
         System.out.println("HardwareTwoHopRegisterFlowSelfTest PASS: assertions="+checks);
     }
 }
