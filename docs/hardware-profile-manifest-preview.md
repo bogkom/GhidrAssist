@@ -50,3 +50,14 @@ count rather than being promoted to a numbered citation. Structural
 validation remains preview-only and cannot register MCU profiles or
 mutate Ghidra. Numeric page syntax still is **unverified metadata**:
 it proves neither the document edition nor any register meaning.
+
+## 2026-11-05 — untrusted source URL hygiene (GA-06)
+
+The claimed `DOCUMENT` source must be a syntactically valid **HTTPS URI**
+with a recognized host, no embedded userinfo/credentials and no invisible,
+non-ASCII or non-printable characters. Printable percent-encoded paths and
+query strings remain accepted; none are decoded, resolved or fetched by the
+preview. Unexpected carriage returns **inside** TSV records are rejected;
+standard CRLF line endings remain supported. This prevents misleading host
+labels in UI reports and silent record splicing, not validation of a PDF
+edition, checksum or page contents. No profile is imported into Ghidra.
