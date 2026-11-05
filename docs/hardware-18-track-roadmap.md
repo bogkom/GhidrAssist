@@ -841,3 +841,12 @@ candidate rows and emits an explicit seven-column omitted-row sentinel
 remain formula-safe and bounded. No Review/Apply permission or actual
 function name is changed; full Ghidra 12.1.4 PUBLIC/Java25 and Java21
 regressions require a fresh PASS on the exact candidate SHA.
+
+## GA-08/13 — kandydat 2026-11-05: sprzeczne nazwy funkcji
+
+`HardwareFunctionNamingReview` wykrywa teraz obserwacje jednego adresu
+funkcji z różnymi bieżącymi nazwami, a nie wybiera ostatniej nazwy
+z kolejności źródeł. Taki przypadek ma `EVIDENCE_TOO_WEAK`, pustą
+propozycję i znacznik `CONFLICTING_SOURCE_NAMES`. Nie modyfikuje
+Review/Apply/Undo ani Program. Wymagany odrębny CI PASS Java21 i
+pełnej Ghidry 12.1.4 PUBLIC / Java25 na dokładnym SHA.
