@@ -994,3 +994,15 @@ Dodano osobny test Java21 parsera i rzeczywisty test indeksu
 przekazywanego przez dwa CALL; konflikt D1 lub brak D1
 pozostaje nieznanym aliasem, a nie potwierdzonym zapisem.
 Wymagany pełny CI na dokładnym SHA i checkpoint.
+
+### 2026-11-05 — GA-02/03/18 MOVEQ: rozpoznanie natychmiastowej stałej
+
+Rzeczywista syntetyczna Ghidra 12.1.4 pokazała
+`moveq -0x1,D1` bez prefiksu `#`; poprzedni dekoder
+odrzucał wartość D1 jeszcze przed zewnętrznym JSR.
+`HardwareRegisterOperand.isImmediateToken` uznaje
+ściśle numeryczny argument bez `#` wyłącznie dla `MOVEQ`,
+a kod Ghidry wymaga ponadto rzeczywistego `Scalar`.
+Dodano niezależny test Java21 i ponowiono rzeczywisty
+dwupoziomowy test indeksowanego MMIO. Inne instrukcje
+oraz nieznane indeksy pozostają konserwatywne.
