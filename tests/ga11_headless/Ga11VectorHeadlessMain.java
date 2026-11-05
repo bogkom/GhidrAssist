@@ -1203,9 +1203,9 @@ public final class Ga11VectorHeadlessMain {
                             ghidra.program.model.listing.Instruction.class,
                             Function.class);
                     translate.setAccessible(true);
-                    for(long entry:new long[]{0x600L,0x640L,0x700L}) {
+                    for(long fixturePc:new long[]{0x600L,0x640L,0x700L}) {
                         var fn=full.getFunctionManager().getFunctionAt(
-                            address(full,entry));
+                            address(full,fixturePc));
                         var translated=new ArrayList<
                             ghidrassist.hardware.HardwareDataflow.Step>();
                         var iter=full.getListing().getInstructions(
@@ -1229,21 +1229,21 @@ public final class Ga11VectorHeadlessMain {
                                 " operand="+step.operand);
                         }
                         var track=Set.of(0xfffa00L,0xfffa68L);
-                        if(entry==0x600L){
+                        if(fixturePc==0x600L){
                             var resultDiag=ghidrassist.hardware.HardwareDataflow.analyze(
-                                entry,translated,track,500);
+                                fixturePc,translated,track,500);
                             System.out.println("GA02 INDEXED TRACE: outer caller "+
                                 resultDiag.knownPointersAtEntry.get(0x60eL));
-                        }else if(entry==0x640L){
+                        }else if(fixturePc==0x640L){
                             var resultDiag=ghidrassist.hardware.HardwareDataflow
-                                .analyzeWithEntryRegisters(entry,translated,track,500,
+                                .analyzeWithEntryRegisters(fixturePc,translated,track,500,
                                     Map.of("A0",0xfffa00L,"D0",0x40caL,
                                         "D1",0xffffffL));
                             System.out.println("GA02 INDEXED TRACE: bridge "+
                                 resultDiag.knownPointersAtEntry.get(0x642L));
                         }else{
                             var resultDiag=ghidrassist.hardware.HardwareDataflow
-                                .analyzeWithEntryRegisters(entry,translated,track,500,
+                                .analyzeWithEntryRegisters(fixturePc,translated,track,500,
                                     Map.of("A1",0xfffa00L,"D0",0x40caL,
                                         "D1",0xffffffL));
                             for(var hit:resultDiag.snapshots)
