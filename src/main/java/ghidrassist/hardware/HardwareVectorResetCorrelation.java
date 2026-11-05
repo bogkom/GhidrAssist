@@ -3,9 +3,11 @@ package ghidrassist.hardware;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -15,6 +17,7 @@ import java.util.Set;
  */
 public final class HardwareVectorResetCorrelation {
     private HardwareVectorResetCorrelation() {}
+    public static final int MAX_RECOGNIZED_VECTOR_TARGETS=254;
 
     public enum Relation {
         IN_RESET_STATIC_CALL_SUBSET,
@@ -156,8 +159,17 @@ public final class HardwareVectorResetCorrelation {
             Set<Long> resetVisited,List<Target> resolvedVectors,
             Collection<HardwareCallEffects.FunctionNode> graph,int maxRows) {
         if (resetVisited == null || resolvedVectors == null || graph == null ||
-                maxRows < 1 || maxRows > 64)
-            throw new IllegalArgumentException("Invalid vector/reset correlation input");
+                maxRows < 1 || maxRows > 64 ||
+                resolvedVectors.size()>MAX_RECOGNIZED_VECTOR_TARGETS ||
+                resetVisited.size()>HardwareCallEffects.MAX_SOURCE_FUNCTIONS ||
+                graph.size()>HardwareCallEffects.MAX_SOURCE_FUNCTIONS)
+            throw new IllegalArgumentException("Invalid bounded vector/reset correlation input");
+        for(Long id:resetVisited)
+            if(id==null || id<0)
+                throw new IllegalArgumentException("Invalid RESET source entry");
+        for(Target target:resolvedVectors)
+            if(target==null)
+                throw new IllegalArgumentException("Null vector candidate");
         List<Target> sorted = new ArrayList<>(resolvedVectors);
         sorted.sort(Comparator.comparingInt(Target::vectorNumber));
         Set<Integer> slots = new HashSet<>();
@@ -166,6 +178,10 @@ public final class HardwareVectorResetCorrelation {
                 throw new IllegalArgumentException("Duplicate or null vector target");
         }
         int exact = 0, shared = 0, outside = 0, interior = 0;
+        // Multiple vector slots may point to the same exact handler. The
+        // transitive STORE/VBR effect is read-only and depends on the target,
+        // not on the candidate vector number. Cache only in this call.
+        Map<Long,HardwareCallEffects.Summary> effectsByEntry=new HashMap<>();
         List<Row> rows = new ArrayList<>();
         for (Target target : sorted) {
             Relation relation;
@@ -184,8 +200,8 @@ public final class HardwareVectorResetCorrelation {
                     relation = Relation.OUTSIDE_OBSERVED_RESET_SUBSET;
                     outside++;
                 }
-                effects = HardwareCallEffects.summarize(
-                    target.functionEntry(), graph, 4, 100);
+                effects=effectsByEntry.computeIfAbsent(target.functionEntry(),
+                    entry->HardwareCallEffects.summarize(entry,graph,4,100));
             }
             if (rows.size() < maxRows)
                 rows.add(new Row(target.vectorNumber(), target.pointer(),
