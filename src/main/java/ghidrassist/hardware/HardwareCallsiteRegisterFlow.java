@@ -190,7 +190,15 @@ public final class HardwareCallsiteRegisterFlow {
             for(HardwareDataflow.Snapshot hit:result.snapshots) {
                 if(hit.kind!=HardwareDataflow.Kind.STORE_DIRECT &&
                         hit.kind!=HardwareDataflow.Kind.STORE_INDIRECT)continue;
-                if(hit.effectiveAddress==null) {aliases++;continue;}
+                // A known 24-bit start address with an unknown P-code
+                // STORE width is NOT a known non-overlap: an unmodeled
+                // long/word write could span the SIMCR MM byte even when
+                // its start address is not one of the tracked registers.
+                // Preserve an explicit UNKNOWN alias, never fabricate a
+                // precise tracked STORE candidate or a known 16-bit word.
+                if(hit.effectiveAddress==null ||
+                        (hit.writeBits!=8 && hit.writeBits!=16 &&
+                         hit.writeBits!=32)) {aliases++;continue;}
                 if(!tracked.contains(hit.effectiveAddress) &&
                         !HardwareDataflow.mayTouchSimcrMmLowByte(
                             hit.effectiveAddress,hit.writeBits))continue;
