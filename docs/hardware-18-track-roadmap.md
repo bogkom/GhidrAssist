@@ -892,3 +892,17 @@ znacznik `SOURCE_TRUNCATED`, ochronę par zastępczych oraz sprawdzanie
 formuł ukrytych po Unicode Cf i białych znakach. Format 14 kolumn,
 limity wierszy, ostrożność CPU32 i zakaz Apply pozostają bez zmian.
 Wymagany pełny CI Java21 i Ghidra 12.1.4 PUBLIC/Java25 na SHA PR.
+
+## GA-02/03 + GA-17/18 — kandydat 2026-11-05: priorytet CALL i kontrola krawędzi
+
+W analizatorze `HardwareInterproceduralMmEffects` wspólny budżet
+16 384 adresów był konsumowany przez wszystkie wywołania w kolejności
+adresów, zanim dotarto do funkcji wybranych do raportu. Dwufazowa,
+deterministyczna ocena priorytetyzuje `interestingCallers` także przy
+limicie wyświetlanych wierszy, pozostawiając `LIMITED/UNKNOWN` dla
+nieprzebadanych, pozostałych wywołań. Źródłowy graf ograniczono do
+200 000 krawędzi CALL (oprócz wcześniejszego limitu węzłów).
+Regresja Java21 obejmuje 16 384 zamkniętych obcych celów, wybrany
+kandydat MM za nimi, permutację kolejności i 200 001 krawędzi.
+Wymagane testy GitHub Actions / Ghidra 12.1.4 PUBLIC / Java25 na
+dokładnym SHA. Nie jest to dowód wykonania ani aktywnego MM.
