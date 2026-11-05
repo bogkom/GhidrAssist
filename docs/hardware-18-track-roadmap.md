@@ -983,3 +983,14 @@ projektu i zakaz awansu do Apply. Java21 testuje też
 niezgodne wartości indeksu na zbieżnych ścieżkach. Wymagany
 pełny build Ghidra 12.1.4 PUBLIC / Java25 i rzeczywisty
 syntetyczny headless PASS na dokładnym SHA PR.
+
+### 2026-11-05 — GA-02/03/18 CPU32 indeks: luka rzeczywistej składni
+
+Nowa syntetyczna Ghidra ujawniła konkretny brak dekodera:
+rzeczywisty operand `(0x1,A1,D1w*0x1)` nie pasował do
+`D1.W*1`. Zmieniono wyłącznie ścisłą gramatykę indeksu,
+akceptując oba warianty i skalowanie `0x1/2/4/8`.
+Dodano osobny test Java21 parsera i rzeczywisty test indeksu
+przekazywanego przez dwa CALL; konflikt D1 lub brak D1
+pozostaje nieznanym aliasem, a nie potwierdzonym zapisem.
+Wymagany pełny CI na dokładnym SHA i checkpoint.
