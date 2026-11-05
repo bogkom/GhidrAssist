@@ -82,7 +82,7 @@ public final class Ga11VectorHeadlessMain {
             "generic-profile","trambar-source","csbar-mm0-reject",
             "mmio-read-reference","csbar-csor-conditional",
             "simcr-mm0-literal","trambar-unknown","csor-alternatives",
-            "branch-simcr","call-barrier","leaf-return","call-context","joint-source","two-hop","two-hop-indexed","two-hop-indexed-wrap","indirect-adjacent","branch-leaf","branch-cache","cancel-incomplete",
+            "branch-simcr","call-barrier","leaf-return","call-context","joint-source","two-hop","two-hop-indexed","two-hop-indexed-wrap","indirect-adjacent","indirect-bounded","branch-leaf","branch-cache","cancel-incomplete",
             "function-stage-resume","function-rename","receipt-restart-write",
             "receipt-restart-read","apply-preserve","provenance-csv",
             "movec-vbr","vbr-relocation").contains(ga18Mode),
@@ -1442,7 +1442,7 @@ public final class Ga11VectorHeadlessMain {
                     check(evidence.contains(
                         "| 0x00000600 | 0x00000600 | 0x00000606 | "+
                         "0x00000700 | adjacent_movea_immediate |") &&
-                        evidence.contains("Exact adjacent candidates displayed: 1") &&
+                        evidence.contains("Exact bounded source candidates displayed: 1") &&
                         evidence.contains("unresolved computed calls: 3"),
                         "Proven exact indirect JSR vs 3 UNKNOWN wrong forms: "+
                         evidence.substring(0,Math.min(2500,evidence.length())));
@@ -1484,6 +1484,140 @@ public final class Ga11VectorHeadlessMain {
                     result.addProperty("indirect_adjacent_repeat_deterministic",true);
                     result.addProperty("indirect_adjacent_generic_cpu32_safe",true);
                     result.addProperty("indirect_adjacent_program_read_only",true);
+                } else if("indirect-bounded".equals(ga18Mode)) {
+                    // Actual CPU32 bytes: one source A0 immediate, followed
+                    // by NOP + MOVEQ then JSR (A0); second uses NOP alone.
+                    // A CLR.L D0, register mismatch and missing exact target
+                    // MUST remain UNKNOWN, not inferred direct CALL edges.
+                    int txChain=full.startTransaction(
+                        "GA02 isolated bounded CPU32 register indirect JSR");
+                    try {
+                        full.getMemory().setBytes(address(full,0x600L),
+                            java.util.HexFormat.of().parseHex(
+                                "207c000007004e7170ff4e904e75"));
+                        full.getMemory().setBytes(address(full,0x680L),
+                            java.util.HexFormat.of().parseHex(
+                                "207c000007004e714e904e75"));
+                        full.getMemory().setBytes(address(full,0x6a0L),
+                            java.util.HexFormat.of().parseHex(
+                                "207c0000070042804e904e75"));
+                        full.getMemory().setBytes(address(full,0x6c0L),
+                            java.util.HexFormat.of().parseHex(
+                                "227c000007004e714e904e75"));
+                        full.getMemory().setBytes(address(full,0x6e0L),
+                            java.util.HexFormat.of().parseHex(
+                                "207c000007204e714e904e75"));
+                        full.getMemory().setBytes(address(full,0x700L),
+                            java.util.HexFormat.of().parseHex(
+                                "33fc40ca00fffa004e75"));
+                    }finally {full.endTransaction(txChain,true);}
+                    defineFixtureFunction(full,0x700L,10,
+                        "ga02_bounded_exact_target_simcr");
+                    defineFixtureFunction(full,0x600L,14,
+                        "ga02_bounded_nop_moveq_jsr");
+                    defineFixtureFunction(full,0x680L,12,
+                        "ga02_bounded_nop_jsr");
+                    defineFixtureFunction(full,0x6a0L,12,
+                        "ga02_bounded_unsupported_clr");
+                    defineFixtureFunction(full,0x6c0L,12,
+                        "ga02_bounded_mismatched_a1");
+                    defineFixtureFunction(full,0x6e0L,12,
+                        "ga02_bounded_missing_entry");
+                    var api=ghidrassist.automation.AutomationCallPaths.class;
+                    var safe=full.getListing().getInstructionAt(
+                        address(full,0x60aL));
+                    var nop=full.getListing().getInstructionAt(
+                        address(full,0x688L));
+                    check(safe!=null && nop!=null &&
+                        safe.getFlowType().isComputed() &&
+                        safe.getFlowType().isCall() &&
+                        nop.getFlowType().isComputed() &&
+                        nop.getFlowType().isCall(),
+                        "Real CPU32 bounded JSR(A0) not decoded computed");
+                    var safeSource=api.boundedConstantRegisterSource(
+                        full,safe,full.getFunctionManager().getFunctionAt(
+                            address(full,0x600L)));
+                    var nopSource=api.boundedConstantRegisterSource(
+                        full,nop,full.getFunctionManager().getFunctionAt(
+                            address(full,0x680L)));
+                    check(safeSource!=null &&
+                        safeSource.movePc().equals(address(full,0x600L)) &&
+                        safeSource.target().equals(address(full,0x700L)) &&
+                        "bounded_movea_safe_chain".equals(
+                            safeSource.evidence()) &&
+                        nopSource!=null &&
+                        nopSource.movePc().equals(address(full,0x680L)) &&
+                        "bounded_movea_nop_chain".equals(nopSource.evidence()),
+                        "Shared Automation verifier lost short CPU32 witness");
+                    for(long unknownPc:new long[]{0x6a8L,0x6c8L,0x6e8L}){
+                        var unknown=full.getListing().getInstructionAt(
+                            address(full,unknownPc));
+                        check(unknown!=null &&
+                            unknown.getFlowType().isCall() &&
+                            unknown.getFlowType().isComputed() &&
+                            api.boundedConstantRegisterSource(full,unknown,
+                                full.getFunctionManager().getFunctionContaining(
+                                    unknown.getAddress()))==null,
+                            "Unsupported/mismatched/missing indirect target "+
+                                Long.toHexString(unknownPc)+" not UNKNOWN");
+                    }
+                    long revision=full.getModificationNumber();
+                    var report=new GhidraHardwareFlowService().analyze(
+                        full,TaskMonitor.DUMMY,true);
+                    int section=report.markdown.indexOf(
+                        "## CPU32 adjacent-immediate indirect JSR "+
+                        "source candidates (GA-02/03)");
+                    check(section>=0,"Bounded computed JSR report absent");
+                    String evidence=report.markdown.substring(section);
+                    check(evidence.contains(
+                        "| 0x00000600 | 0x00000600 | 0x0000060A | "+
+                        "0x00000700 | bounded_movea_safe_chain |") &&
+                        evidence.contains(
+                        "| 0x00000680 | 0x00000680 | 0x00000688 | "+
+                        "0x00000700 | bounded_movea_nop_chain |") &&
+                        evidence.contains(
+                            "Exact bounded source candidates displayed: 2") &&
+                        evidence.contains("unresolved computed calls: 3"),
+                        "Real short source-only JSR provenance not isolated: "+
+                        evidence.substring(0,Math.min(2900,evidence.length())));
+                    check(!evidence.contains("| 0x000006A0 |") &&
+                        !evidence.contains("| 0x000006C0 |") &&
+                        !evidence.contains("| 0x000006E0 |") &&
+                        evidence.contains("NOT EXECUTION") &&
+                        evidence.contains("Review/Apply") &&
+                        evidence.contains("No branch"),
+                        "Unsupported chains must not become executed/Apply");
+                    check(report.rawCfgMmioSites.stream().noneMatch(hit->
+                        hit.pc()==0x60aL || hit.pc()==0x688L),
+                        "Bounded computed JSR wrongly became Review/Apply");
+                    check(full.getModificationNumber()==revision,
+                        "Bounded computed JSR audit modified Ghidra Program");
+                    var repeated=new GhidraHardwareFlowService().analyze(
+                        full,TaskMonitor.DUMMY,true);
+                    String again=repeated.markdown.substring(
+                        repeated.markdown.indexOf(
+                            "## CPU32 adjacent-immediate indirect JSR "));
+                    check(evidence.equals(again) &&
+                        full.getModificationNumber()==revision,
+                        "GA-12 cache replay changed bounded indirect evidence");
+                    var generic=new GhidraHardwareFlowService().analyze(
+                        full,TaskMonitor.DUMMY,false);
+                    check(generic.markdown.contains(
+                            "Not evaluated: explicit MC68332 profile required") &&
+                        !generic.markdown.contains(
+                            "| 0x00000600 | 0x00000600 | 0x0000060A |") &&
+                        full.getModificationNumber()==revision,
+                        "Generic CPU32 inherited MC68332 indirect sources");
+                    result.addProperty("indirect_bounded_real_cpu32_jsrs",true);
+                    result.addProperty("indirect_bounded_shared_api_bytes",true);
+                    result.addProperty("indirect_bounded_nop_moveq",true);
+                    result.addProperty("indirect_bounded_nop_only",true);
+                    result.addProperty("indirect_bounded_three_unknowns",true);
+                    result.addProperty("indirect_bounded_not_direct_cfg",true);
+                    result.addProperty("indirect_bounded_not_review_apply",true);
+                    result.addProperty("indirect_bounded_replay_deterministic",true);
+                    result.addProperty("indirect_bounded_generic_cpu32_safe",true);
+                    result.addProperty("indirect_bounded_program_read_only",true);
                 } else if("call-context".equals(ga18Mode) ||
                         "joint-source".equals(ga18Mode)) {
                     boolean jointSource="joint-source".equals(ga18Mode);
