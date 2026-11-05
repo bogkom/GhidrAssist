@@ -1086,3 +1086,24 @@ Listing CPU32, dwa JSR, deterministyczny raport
 MAY-only, niezmienioną rewizję Program i profil MC68332.
 Pełny build Ghidra 12.1.4 PUBLIC/Java25 oraz wynik
 GitHub Actions na dokładnym SHA są obowiązkowe.
+
+## GA-02/03 + GA-17/18 — kandydat 2026-11-05: źródłowy cel pośredniego JSR
+
+Po integracji #168–#171 istniejący mechanizm Automation API weryfikuje
+ściśle sąsiadujące instrukcje CPU32 `MOVEA.L #entry,An; JSR (An)`
+według rzeczywistych bajtów i zdefiniowanego, dokładnego wejścia
+funkcji. Główny raport sprzętowy dotychczas nie pokazywał tego
+wąskiego dowodu. Nowa sekcja `HardwareIndirectCallEvidence` ponownie
+wykorzystuje **tę samą** weryfikację, rejestruje źródłowe
+`adjacent_movea_immediate` oraz jawne nieznane i pominięte cele.
+Nie dołącza dowodu do grafu RESET, nie promuje go do trwałego
+checkpointu ani Review/Apply.
+
+Osobny rzeczywisty syntetyczny test Ghidry 12.1.4 PUBLIC/Java25
+weryfikuje dokładny JSR (A0), nierozpoznany JSR (A1),
+niezgodny rejestr MOVEA/JSR i nieistniejący dokładny Function
+target. Java21 testuje deterministyczną prezentację, limit 96
+kandydatów i brak wnioskowania z nieznanych celów.
+Wymagane SHA-pinned pełne CI na dokładnym HEAD PR. Nie oznacza
+wykonanego wywołania, zapisu SIMCR, aktywnego MM ani fizycznej
+mapy CS. GA-02/03 pozostają CZĘŚCIOWO.

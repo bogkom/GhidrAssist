@@ -1,5 +1,6 @@
 package ghidrassist.hardware;
 
+import ghidrassist.automation.AutomationCallPaths;
 import ghidra.program.model.address.Address;
 import ghidra.program.model.lang.Register;
 import ghidra.program.model.listing.Function;
@@ -640,6 +641,9 @@ public final class GhidraHardwareFlowService {
         List<HardwareCallsiteRegisterFlow.Call> callerContexts=
             new ArrayList<>();
         int callerContextsOmitted=0;
+        List<HardwareIndirectCallEvidence.Site> indirectCandidates=
+            new ArrayList<>();
+        int indirectUnknownCalls=0,indirectCandidatesOmitted=0;
         int provenLeafCallSites=0;
         List<Long> evidencedFunctions=new ArrayList<>();
         HardwareEvidenceBudget<HardwarePointerRoleReview.Site> pointerSites=
@@ -680,6 +684,41 @@ public final class GhidraHardwareFlowService {
                     localVbr=true;
                 if(insn.getFlowType().isComputed())
                     uncertainFlow=true;
+                if(mc68332Selected && insn.getFlowType().isCall() &&
+                        insn.getFlowType().isComputed()) {
+                    // This is a SEPARATE, source-only provenance display.
+                    // The existing Automation API verifier checks exact
+                    // CPU32 MOVEA immediate/JSR register bytes and exact
+                    // Ghidra function entry. Never turn this into a direct
+                    // call in RESET, CALL-effects, context, or Review/Apply.
+                    Address candidate=null;
+                    Instruction previous=program.getListing()
+                        .getInstructionBefore(insn.getAddress());
+                    if(previous!=null && fun.getBody().contains(
+                            previous.getAddress())) {
+                        try {
+                            candidate=AutomationCallPaths
+                                .adjacentConstantRegisterCall(program,insn);
+                        } catch(MemoryAccessException unavailable) {
+                            // Invalid/incomplete Listing is UNKNOWN.
+                        }
+                    }
+                    long pc=insn.getAddress().getOffset();
+                    if(candidate!=null &&
+                            fun.getEntryPoint().getOffset()<=
+                                HardwareDataflow.MASK24 &&
+                            pc<=HardwareDataflow.MASK24 &&
+                            candidate.getOffset()<=HardwareDataflow.MASK24) {
+                        if(indirectCandidates.size()<
+                                HardwareIndirectCallEvidence.MAX_SITES)
+                            indirectCandidates.add(
+                                new HardwareIndirectCallEvidence.Site(
+                                    fun.getEntryPoint().getOffset(),
+                                    previous.getAddress().getOffset(),
+                                    pc,candidate.getOffset()));
+                        else indirectCandidatesOmitted++;
+                    }else indirectUnknownCalls++;
+                }
                 if(insn.getFlowType().isJump()) {
                     // A direct tail-jump outside the current Function can
                     // behave like a call to other code without a CALL opcode.
@@ -1189,6 +1228,13 @@ public final class GhidraHardwareFlowService {
                 "Generic CPU32 does not imply MCU MMIO.\n\n";
         }
 
+        String indirectCallEvidence=mc68332Selected?
+            HardwareIndirectCallEvidence.markdown(indirectCandidates,
+                indirectUnknownCalls,indirectCandidatesOmitted):
+            "## CPU32 adjacent-immediate indirect JSR source candidates (GA-02/03)\n\n"+
+            "Not evaluated: explicit MC68332 profile required. "+
+            "Generic CPU32 has no verified MCU-specific MMIO mapping.\n\n";
+
         String interproceduralMm=mc68332Selected?
             HardwareInterproceduralMmEffects.analyze(
                 mmEffectNodes,mmCallSites,evidencedFunctions,4,100,80).markdown():
@@ -1241,6 +1287,7 @@ public final class GhidraHardwareFlowService {
                reset.recognized(),reset.incomplete(),reset.visited(),staticCalls))
            .append(relocatedVbr)
            .append(detail).append(effects).append(interproceduralMm)
+           .append(indirectCallEvidence)
            .append(callsiteRegisters).append(twoHopRegisters);
         if(shown>=350)out.append("\n[Detailed report bounded at 350 sites.]\n");
         boolean cfgSourcesComplete=cfgMmioSites.safeAsComplete(!limited);

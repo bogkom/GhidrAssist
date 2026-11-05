@@ -41,9 +41,16 @@ public final class AutomationCallPaths {
                Long.compareUnsigned(off, MMIO_HIGH)<=0;
     }
 
-    // Only the adjacent CPU32 MOVEA.L #absolute,An ; JSR (An) pattern is
-    // resolved. No intervening instruction, no dataflow guess, no execution claim.
-    private static Address adjacentConstantRegisterCall(Program program, Instruction call)
+    /**
+     * Reusable, strictly byte-validated source provenance for the adjacent
+     * CPU32 MOVEA.L #absolute,An ; JSR (An) pattern ONLY. The exact Ghidra
+     * Function entry must already exist. No source CFG propagation, guessed
+     * reference, execution, runtime MM latch or transitive trust is implied.
+     *
+     * The hardware-report caller may display the static candidate separately,
+     * but must NEVER insert it into the direct CALL graph/Review/Apply.
+     */
+    public static Address adjacentConstantRegisterCall(Program program, Instruction call)
             throws ghidra.program.model.mem.MemoryAccessException {
         if(!"68000:BE:32:CPU32".equals(program.getLanguageID().toString())) return null;
         byte[] callBytes=call.getBytes();
