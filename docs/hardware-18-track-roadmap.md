@@ -930,3 +930,17 @@ return, two-hop CALL). Dodatkowo wymaga sprawdzonego oficjalnego
 lub zdublowane sumy. Stała wersja Gradle, niezmienione archiwum Ghidry,
 izolacja `RUNNER_TEMP` i wyłączony Supervisor. Wymagany dokładny
 PASS GitHub Actions na SHA nowego PR.
+
+## GA-02/03 — kandydat 2026-11-05: nieznana szerokość zapisu przez CALL
+
+Jedno- i dwupoziomowy analizator kontekstowy odrzucał zapisy z
+ustalonym adresem, ale **nieznaną szerokością** (0/64 bitów),
+jeżeli adres początkowy nie należał bezpośrednio do indeksu MMIO.
+Przy zapisie zaczynającym się tuż przed SIMCR taki wynik nie
+wyklucza objęcia jego bajtu MM. Wyróżniamy teraz nieznany alias
+STORE zamiast deklarować brak kandydatów; tylko szerokości 8/16/32
+mogą otrzymać precyzyjny kandydat. Java21 obejmuje kontrolę
+zapisu sąsiedniego 8/32-bit, dwóch poziomów CALL i brak
+niesłusznego awansu nieznanej wartości do zatwierdzenia.
+Wymagane dokładne SHA CI Ghidry 12.1.4 PUBLIC / Java25 oraz
+rzeczywiste syntetyczne przypadki Ghidry. Brak dowodu wykonania.
