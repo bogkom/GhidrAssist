@@ -325,6 +325,42 @@ public final class HardwareDataflowSelfTest {
             "propagated varnode remains known");
         ok(HardwareDataflow.pcodeInputValue(true,0x12345678L,null)==0x12345678L,
             "literal constant remains known");
+        // Worklist iteration caps alone do not bound source adjacency.
+        // A single decoded node can contain far more successors than the
+        // solver will ever visit. Refuse 200001 references before processing.
+        var cappedFanout=new HardwareDataflow.Step(0,OTHER,
+            null,0,0,null,0,java.util.Collections.nCopies(
+                HardwareDataflow.MAX_SOURCE_EDGES,0L),"BRA");
+        var cappedSource=HardwareDataflow.analyze(0,
+            List.of(cappedFanout),Set.of(simcr),10);
+        ok(!cappedSource.truncated && cappedSource.reachedNodes==1 &&
+            cappedSource.snapshots.isEmpty(),
+            "exact 200k duplicated successors remain bounded valid input");
+        boolean tooManyEdges=false;
+        try{
+            HardwareDataflow.analyze(0,List.of(
+                new HardwareDataflow.Step(0,OTHER,null,0,0,null,0,
+                    java.util.Collections.nCopies(
+                        HardwareDataflow.MAX_SOURCE_EDGES+1,0L),"BRA")),
+                Set.of(simcr),10);
+        }catch(IllegalArgumentException expected){tooManyEdges=true;}
+        ok(tooManyEdges,
+            "200001 source successor edges rejected before a fixed point");
+        tooManyEdges=false;
+        try{
+            HardwareDataflow.analyze(0,List.of(
+                new HardwareDataflow.Step(0,OTHER,null,0,0,null,0,
+                    java.util.Collections.nCopies(
+                        HardwareDataflow.MAX_SOURCE_EDGES/2,2L),"BRA"),
+                new HardwareDataflow.Step(2,OTHER,null,0,0,null,0,
+                    java.util.Collections.nCopies(
+                        HardwareDataflow.MAX_SOURCE_EDGES/2+1,0L),"BRA")),
+                Set.of(simcr),10);
+        }catch(IllegalArgumentException expected){tooManyEdges=true;}
+        ok(tooManyEdges,
+            "aggregate source CFG edge count applies across all steps");
+        ok(straightforward.snapshots.get(0).effectiveAddress==simcr,
+            "rejected oversized CFG does not modify prior MMIO evidence");
         System.out.println("HardwareDataflowSelfTest OK");
     }
 }
