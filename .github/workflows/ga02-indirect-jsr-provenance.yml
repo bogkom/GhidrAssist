@@ -1,0 +1,41 @@
+name: GA-02 indirect JSR static provenance safety
+on:
+  pull_request:
+    paths:
+      - 'src/main/java/ghidrassist/hardware/HardwareIndirectCallEvidence.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareIndirectCallEvidenceSelfTest.java'
+      - '.github/workflows/ga02-indirect-jsr-provenance.yml'
+  push:
+    branches: [master]
+    paths:
+      - 'src/main/java/ghidrassist/hardware/HardwareIndirectCallEvidence.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareIndirectCallEvidenceSelfTest.java'
+      - '.github/workflows/ga02-indirect-jsr-provenance.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  java21-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Compile pure-Java bounded indirect-call report
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/ga02-indirect-source"
+          javac --release 21 -d "$RUNNER_TEMP/ga02-indirect-source" \
+            src/main/java/ghidrassist/hardware/HardwareDataflow.java \
+            src/main/java/ghidrassist/hardware/HardwareIndirectCallEvidence.java \
+            src/test/java/ghidrassist/hardware/HardwareIndirectCallEvidenceSelfTest.java
+      - name: Assert deterministic provenance and fail-closed bounds
+        shell: bash
+        run: |
+          set -euo pipefail
+          java -cp "$RUNNER_TEMP/ga02-indirect-source" \
+            ghidrassist.hardware.HardwareIndirectCallEvidenceSelfTest
