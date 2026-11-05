@@ -944,3 +944,16 @@ zapisu sąsiedniego 8/32-bit, dwóch poziomów CALL i brak
 niesłusznego awansu nieznanej wartości do zatwierdzenia.
 Wymagane dokładne SHA CI Ghidry 12.1.4 PUBLIC / Java25 oraz
 rzeczywiste syntetyczne przypadki Ghidry. Brak dowodu wykonania.
+
+## GA-01/02/03 + GA-17 — kandydat 2026-11-05: limit krawędzi lokalnego SIMCR
+
+Graf możliwych pierwszych źródeł zapisu SIMCR miał limit liczby
+węzłów (50 000), ale nie sumy następców CFG. Rozbudowany zbiór
+zdublowanych krawędzi mógł niepotrzebnie obciążać analizę mimo
+małego budżetu odwiedzin. `HardwareSimcrLocalFirst.inspect`
+odrzuca teraz ponad 200 000 krawędzi przed DFS, bez raportu
+sugerującego kompletną analizę. Java21 regresje obejmują
+dokładny próg, przekroczenie progu w jednym i dwóch węzłach,
+prawdziwy cykl oraz niezmienność dotychczasowych wyników.
+Wymagane CI Ghidra 12.1.4 PUBLIC / Java25 na SHA PR;
+wynik pozostaje statyczny i nie dowodzi pierwszego wykonania.
