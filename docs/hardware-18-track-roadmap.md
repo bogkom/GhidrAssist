@@ -3,6 +3,15 @@
 Status: **IN PROGRESS — integrated baseline 2026-11-04**. Scope source: user-approved 2026-10-28 requirements (A–H, additional features 13.1–13.7, PDF/RAG, testing and Codex Supervisor integration).
 
 
+## GA-06 — kandydat 2026-11-05: źródła HTTPS w manifestach
+
+Ograniczenie strukturalnego podglądu zewnętrznych profilów: zewnętrzny
+`DOCUMENT` wymaga jednoznacznego URI HTTPS z hostem, bez userinfo,
+Unicode bidi/niewidocznych znaków i osadzonych CR. Standardowy CRLF,
+ścieżki kodowane procentowo i zapytania są zachowane. Nie jest to
+weryfikacja źródła PDF ani wydania i nie wykonuje importu. Wymagane
+Java21 regresje parsera i pełny build Ghidry 12.1.4 na własnym SHA.
+
 ## GA-02/03 — kandydat 2026-11-05: wspólny budżet CALL i memoizacja
 
 Nowa, niezależna gałąź po scalonym #148: memoizacja odczytowych podsumowań
