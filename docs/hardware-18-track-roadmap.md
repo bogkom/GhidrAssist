@@ -841,3 +841,14 @@ candidate rows and emits an explicit seven-column omitted-row sentinel
 remain formula-safe and bounded. No Review/Apply permission or actual
 function name is changed; full Ghidra 12.1.4 PUBLIC/Java25 and Java21
 regressions require a fresh PASS on the exact candidate SHA.
+
+## GA-02/03/11 — candidate 2026-11-05: separate transitive effect frontier
+
+The generic `HardwareCallEffects` memory STORE/MOVEC inventory now bounds
+**scheduled** function PCs (not just examined functions), with an explicit
+`TRUNCATED/UNKNOWN` marker after a distinct-call budget overflow. This is
+separate from the previously integrated GA-02/03 SIMCR callsite budget.
+Deterministic Java21 fixtures cover 12,000 distinct and duplicate edges,
+unknown targets, budget validation, and preserve existing shortest-path /
+cycle semantics. Full Ghidra 12.1.4 PUBLIC/Java25 CI required on exact PR
+SHA. Read-only source evidence, not runtime vector/RESET activation.
