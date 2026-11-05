@@ -882,3 +882,13 @@ między stat a odczytem. Przekroczony limit to cache miss, nie dowód
 przeciw analizie. Java21 regresja obejmuje nieskończony strumień,
 podzielone odczyty, plik o rozmiarze ponad limit i stare testy symlinków.
 Wymagany pełny build Ghidry 12.1.4 PUBLIC / Java25 na SHA PR.
+
+## GA-13 — kandydat 2026-11-05: bezpieczne komórki CSV dowodów CFG
+
+`HardwareConfigurationEvidenceCsv` dotychczas rozpoznawał formuły
+arkusza tylko przy pierwszym znaku `=+-@` i bez limitu długości pola.
+Kodowanie pojedynczych komórek ma teraz limit 512 znaków UTF-16,
+znacznik `SOURCE_TRUNCATED`, ochronę par zastępczych oraz sprawdzanie
+formuł ukrytych po Unicode Cf i białych znakach. Format 14 kolumn,
+limity wierszy, ostrożność CPU32 i zakaz Apply pozostają bez zmian.
+Wymagany pełny CI Java21 i Ghidra 12.1.4 PUBLIC/Java25 na SHA PR.
