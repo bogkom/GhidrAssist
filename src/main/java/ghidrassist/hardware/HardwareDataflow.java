@@ -25,6 +25,8 @@ import java.util.Set;
 public final class HardwareDataflow {
     private HardwareDataflow() {}
     public static final long MASK24=0xffffffL;
+    /** Maximum total CFG successor references in one source-level solve. */
+    public static final int MAX_SOURCE_EDGES=200_000;
 
     public enum Kind {
         OTHER, SET_POINTER, COPY_POINTER, ADJUST_POINTER, CLOBBER_POINTER,
@@ -586,9 +588,18 @@ public final class HardwareDataflow {
                     !initialRegisters.isEmpty()))
             throw new IllegalArgumentException("Invalid CFG work budget");
         Map<Long,Step> graph=new LinkedHashMap<>();
-        for(Step s:steps)
+        long edgeCount=0;
+        for(Step s:steps) {
             if(s==null || graph.putIfAbsent(s.address,s)!=null)
                 throw new IllegalArgumentException("Null or duplicate CFG PC");
+            // An iteration cap bounds solver updates, not the number of
+            // successor references examined on each update. Refuse an
+            // oversized source inventory before cold OR resumed traversal,
+            // rather than publishing a misleading partial MMIO snapshot.
+            edgeCount+=s.successors.size();
+            if(edgeCount>MAX_SOURCE_EDGES)
+                throw new IllegalArgumentException("Unbounded source CFG edges");
+        }
         Set<Long> targets=new LinkedHashSet<>(peripherals);
         Map<Long,State> input=new HashMap<>();
         ArrayDeque<Long> queue=new ArrayDeque<>();

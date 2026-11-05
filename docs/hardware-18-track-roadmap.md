@@ -957,3 +957,17 @@ dokładny próg, przekroczenie progu w jednym i dwóch węzłach,
 prawdziwy cykl oraz niezmienność dotychczasowych wyników.
 Wymagane CI Ghidra 12.1.4 PUBLIC / Java25 na SHA PR;
 wynik pozostaje statyczny i nie dowodzi pierwszego wykonania.
+
+## GA-02/03/12 + GA-17 — kandydat 2026-11-05: limit krawędzi solvera CFG
+
+Rdzeniowy `HardwareDataflow.analyzeSlice`, wykorzystywany przez
+analizę pośrednich STORE, przekazywanie rejestrów w CALL oraz wznowienie
+checkpointów, limitował iteracje, ale nie sumę wszystkich referencji
+następców CFG. Zbyt wiele zdublowanych krawędzi mogło obciążyć
+każdą iterację mimo małego budżetu. Silnik odrzuca teraz ponad
+200 000 krawędzi zanim rozpocznie analizę zimną lub wznowioną.
+Regresje Java21 obejmują próg, 200 001 krawędzi, łączny
+próg z dwóch węzłów, odmowę wznowienia niezgodnego grafu
+i niezmienność wcześniej zamkniętych dowodów.
+Wymagany pełny PASS Ghidry 12.1.4 PUBLIC / Java25 na SHA PR.
+Wynik jest statycznym MAY/UNKNOWN, bez uruchamiania firmware.

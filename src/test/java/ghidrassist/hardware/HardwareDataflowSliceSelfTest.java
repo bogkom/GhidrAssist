@@ -73,6 +73,28 @@ public final class HardwareDataflowSliceSelfTest {
         check(capped.complete()!=null && capped.complete().truncated &&
             capped.complete().snapshots.isEmpty() && capped.progress()==null,
             "exhausted iteration budget never leaks partial source evidence");
+        // A persisted/partial CFG worklist cannot bypass the same
+        // total source edge limit that protects cold analysis. The
+        // candidate graph is rejected BEFORE resuming any state updates.
+        var pending=HardwareDataflow.analyzeSlice(
+            0x100,steps,targets,1000,null,1).progress();
+        check(pending!=null,"synthetic first quantum has resumable state");
+        var unsafeSteps=new ArrayList<>(steps);
+        unsafeSteps.add(new HardwareDataflow.Step(0x900L,OTHER,
+            null,0,0,null,0,java.util.Collections.nCopies(
+                HardwareDataflow.MAX_SOURCE_EDGES+1,0x900L),"BRA"));
+        boolean deniedOversizedResume=false;
+        try{
+            HardwareDataflow.analyzeSlice(0x100,unsafeSteps,
+                targets,1000,pending,1);
+        }catch(IllegalArgumentException expected){
+            deniedOversizedResume=true;
+        }
+        check(deniedOversizedResume,
+            "resumed worklist also rejects overlarge source adjacency");
+        check(!cold.truncated && cold.snapshots.size()==1 &&
+            cold.snapshots.get(0).effectiveAddress==0xfffa00L,
+            "oversized candidate input does not poison completed cold result");
         Path privateDir=Files.createTempDirectory("ga12-progress-test-");
         try{
             var identity=new HardwareDurableStageStore.Key(

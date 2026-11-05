@@ -135,3 +135,30 @@ SHA-256 here detects accidental corruption; it is not an authenticity
 signature against someone who can write the private checkpoint directory.
 Never point it at untrusted/shared locations. No partial *within-function*
 iteration checkpoints, and no firmware execution proof, are implemented.
+
+## 2026-11-05 — bound source-CFG adjacency for cold and resumed fixed points
+
+The central `HardwareDataflow.analyzeSlice` accepts an explicit graph of
+steps and incoming edge references. It is shared by the local MMIO/indirect
+STORE solver, context-seeded direct and two-hop CALLs, and GA-12 checkpoint
+resume. Although `maxIterations` caps abstract-state updates, a single
+instruction node with hundreds of thousands of duplicate successor entries
+could force excessive edge processing on each update.
+
+A strict **200,000 total successor-reference** limit is now applied to the
+complete source graph before either cold or resumed evaluation. The limit
+includes duplicated edges: they still take CPU time. At exactly 200,000
+edges the graph remains valid; 200,001 within one node or across multiple
+nodes fails with a bounded input error. A stale resumed worklist cannot
+bypass the same input guard. No incomplete partial state or unverified
+hardware effect is promoted to a completed checkpoint.
+
+Java21 deterministic regressions cover cold analysis and in-progress CFG
+resume at the boundary, alongside original pointer/MC68332 MMIO and
+revision-aware persistence checks. A real Ghidra 12.1.4 PUBLIC / Java25
+extension build plus existing isolated synthetic headless integration must
+pass on the exact PR SHA.
+
+Source-only evidence remains MAY/UNKNOWN: it does not prove execution,
+RESET timing, active SIMCR MM/IRQ or authorization for Apply/Undo. No private
+ECU411 firmware or local Wyse/Precision/Supervisor tests are involved.
