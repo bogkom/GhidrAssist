@@ -1,0 +1,23 @@
+name: GA-17/18 isolated Gradle wrapper network policy
+on:
+  pull_request:
+    paths:
+      - 'tools/ci/ghidra-gradle-ci-network.sh'
+      - 'tests/ci/ghidra-gradle-ci-network-selftest.sh'
+      - '.github/workflows/ga18-gradle-bootstrap.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  wrapper-network-fixture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify SHA-preserving pinned Gradle wrapper network policy
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n tools/ci/ghidra-gradle-ci-network.sh
+          bash -n tests/ci/ghidra-gradle-ci-network-selftest.sh
+          bash tests/ci/ghidra-gradle-ci-network-selftest.sh

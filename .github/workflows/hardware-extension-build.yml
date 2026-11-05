@@ -24,6 +24,7 @@ on:
       - 'src/main/java/ghidrassist/apiprovider/OpenAIOAuthProvider.java'
       - 'src/test/java/ghidrassist/hardware/**'
       - '.github/workflows/hardware-extension-build.yml'
+      - 'tools/ci/ghidra-gradle-ci-network.sh'
   pull_request:
     paths:
       - 'src/main/java/ghidrassist/hardware/**'
@@ -40,6 +41,7 @@ on:
       - 'src/main/java/ghidrassist/services/QueryService.java'
       - 'src/main/java/ghidrassist/apiprovider/OpenAIOAuthProvider.java'
       - '.github/workflows/hardware-extension-build.yml'
+      - 'tools/ci/ghidra-gradle-ci-network.sh'
 
 jobs:
   build:
@@ -70,6 +72,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # Ghidra ZIP SHA was checked before extraction; only the ephemeral
+          # CI Gradle wrapper network policy is changed, not Java/plugin code.
+          bash tools/ci/ghidra-gradle-ci-network.sh "$GHIDRA_INSTALL_DIR"
           "$GHIDRA_INSTALL_DIR/support/gradle/gradlew" \
             --no-daemon --stacktrace buildExtension
       - name: Verify production interprocedural traversal in real Ghidra 12.1.4 (synthetic only)
