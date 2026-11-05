@@ -15,6 +15,9 @@ import java.util.Set;
  */
 public final class HardwareCallEffects {
     private HardwareCallEffects() {}
+    public static final int MAX_SOURCE_FUNCTIONS=50_000;
+    public static final int MAX_SOURCE_EDGES=200_000;
+    public static final int MAX_REQUESTED_FUNCTIONS=50_000;
 
     public record FunctionNode(long entry,boolean memoryStore,boolean vbrWrite,
             boolean unresolvedFlow,List<Long> directCallees) {
@@ -50,12 +53,19 @@ public final class HardwareCallEffects {
      */
     public static Summary summarize(long root,Collection<FunctionNode> nodes,
             int maxDepth,int maxFunctions) {
-        if(nodes==null || maxDepth<0 || maxFunctions<1)
-            throw new IllegalArgumentException("Bad call graph limits");
+        if(root<0 || nodes==null || nodes.size()>MAX_SOURCE_FUNCTIONS ||
+                maxDepth<0 || maxDepth>MAX_SOURCE_FUNCTIONS ||
+                maxFunctions<1 || maxFunctions>MAX_REQUESTED_FUNCTIONS)
+            throw new IllegalArgumentException("Bad bounded call graph limits");
         Map<Long,FunctionNode> graph=new HashMap<>();
-        for(FunctionNode n:nodes)
+        long sourceEdges=0;
+        for(FunctionNode n:nodes) {
             if(n==null || graph.putIfAbsent(n.entry(),n)!=null)
                 throw new IllegalArgumentException("Duplicate/bad function entry");
+            sourceEdges+=n.directCallees().size();
+            if(sourceEdges>MAX_SOURCE_EDGES)
+                throw new IllegalArgumentException("Unbounded source-call edges");
+        }
         Acc out=new Acc();
         java.util.ArrayDeque<Layer> queue=new java.util.ArrayDeque<>();
         Set<Long> discovered=new HashSet<>();
@@ -89,8 +99,17 @@ public final class HardwareCallEffects {
                     }
                     continue;
                 }
-                if(discovered.add(callee))
-                    queue.addLast(new Layer(callee,current.depth()+1));
+                if(!discovered.contains(callee)) {
+                    // Bound the QUEUED frontier, not just completed visits.
+                    // Omitted callees could contain MMIO/VBR source sites:
+                    // truncation must retain explicit uncertainty.
+                    if(discovered.size()>=maxFunctions) {
+                        out.cap=true;out.unknown=true;
+                    } else {
+                        discovered.add(callee);
+                        queue.addLast(new Layer(callee,current.depth()+1));
+                    }
+                }
             }
         }
         if(!queue.isEmpty()) {
