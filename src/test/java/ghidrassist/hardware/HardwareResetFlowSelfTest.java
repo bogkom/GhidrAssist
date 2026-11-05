@@ -90,6 +90,66 @@ public final class HardwareResetFlowSelfTest {
             List.of(),8,50,20);}
         catch(IllegalArgumentException expected){rejected=true;}
         ok(rejected,"duplicate function identifiers rejected");
+        // A wide fan-in of duplicate CALL destinations must not allocate a
+        // queued path for every edge or consume unique-node capacity.
+        var duplicateCalls=HardwareResetFlow.trace(0,List.of(
+            new HardwareCallEffects.FunctionNode(0,false,false,false,
+                java.util.Collections.nCopies(12_000,1L)),
+            fn(1,true,false,false)),List.of(1L),2,2,2);
+        ok(duplicateCalls.visitedFunctions()==2 &&
+            duplicateCalls.evidence().size()==1 &&
+            !duplicateCalls.truncated() && !duplicateCalls.unresolved(),
+            "12k duplicate direct CALL targets cannot overwhelm BFS queue");
+
+        // Distinct unscheduled destinations beyond budget must become UNKNOWN,
+        // never a misleading negative inference of absent hardware effects.
+        var fanout=new java.util.ArrayList<Long>();
+        var broad=new java.util.ArrayList<HardwareCallEffects.FunctionNode>();
+        for(int i=1;i<=5000;i++) {
+            fanout.add((long)i);
+            broad.add(fn(i,i==5000,false,false));
+        }
+        broad.add(new HardwareCallEffects.FunctionNode(
+            0,false,false,false,fanout));
+        var capped=HardwareResetFlow.trace(
+            0,broad,List.of(5000L),2,3,3);
+        ok(capped.visitedFunctions()==3 && capped.evidence().isEmpty() &&
+            capped.truncated() && capped.unresolved(),
+            "wide unknown horizon explicitly limited before late STORE");
+        // The selected shortest-path BFS tree contains no backedge here,
+        // but source CALL edges 1 <-> 2 form real static recursion.
+        var crossCycle=HardwareResetFlow.trace(0,List.of(
+            fn(0,false,false,false,1L,2L),
+            fn(1,false,false,false,2L),
+            fn(2,false,false,false,1L)),
+            List.of(),3,4,2);
+        ok(crossCycle.recursive() && crossCycle.unresolved() &&
+            !crossCycle.truncated() && crossCycle.visitedFunctions()==3,
+            "cross-edge recursion detected independently of shortest BFS paths");
+        // Duplicate edges in a DAG cannot masquerade as a cycle.
+        var noCycle=HardwareResetFlow.trace(0,List.of(
+            fn(0,false,false,false,1L,1L,2L),
+            fn(1,false,false,false,2L),
+            fn(2,false,false,false)),
+            List.of(),3,4,2);
+        ok(!noCycle.recursive() && !noCycle.unresolved() &&
+            noCycle.visitedFunctions()==3,
+            "convergence and repeated edges alone are not recursion");
+        boolean badLimit=false;
+        try{HardwareResetFlow.trace(0,List.of(fn(0,false,false,false)),
+            List.of(),HardwareResetFlow.MAX_DEPTH+1,1,1);}
+        catch(IllegalArgumentException expected){badLimit=true;}
+        ok(badLimit,"reject unbounded RESET path depth");
+        badLimit=false;
+        try{HardwareResetFlow.trace(0,List.of(fn(0,false,false,false)),
+            List.of(),1,HardwareResetFlow.MAX_NODES+1,1);}
+        catch(IllegalArgumentException expected){badLimit=true;}
+        ok(badLimit,"reject unbounded distinct-node budget");
+        badLimit=false;
+        try{HardwareResetFlow.trace(0,List.of(fn(0,false,false,false)),
+            java.util.Arrays.asList((Long)null),1,3,1);}
+        catch(IllegalArgumentException expected){badLimit=true;}
+        ok(badLimit,"reject null source evidence function");
         System.out.println("HardwareResetFlowSelfTest OK");
     }
 }
