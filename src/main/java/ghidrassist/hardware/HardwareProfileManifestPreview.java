@@ -1,5 +1,7 @@
 package ghidrassist.hardware;
 
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -82,6 +84,26 @@ public final class HardwareProfileManifestPreview {
             throw fail(line,"invalid identifier");
         return s;
     }
+    /** Read-only source URL gate: no Unicode disguises or embedded credentials. */
+    private static String documentUrl(String raw,int line) {
+        if(raw==null || raw.length()<9 || raw.length()>308)
+            throw fail(line,"invalid HTTPS documentation URL length");
+        for(int i=0;i<raw.length();i++){
+            char ch=raw.charAt(i);
+            if(ch<0x21 || ch>0x7e || ch=='<' || ch=='>')
+                throw fail(line,"documentation URL contains non-printable or non-ASCII text");
+        }
+        try {
+            URI url=new URI(raw);
+            if(!"https".equalsIgnoreCase(url.getScheme()) ||
+                    url.getHost()==null || url.getHost().isBlank() ||
+                    url.getRawUserInfo()!=null)
+                throw fail(line,"documentation URL must have HTTPS host without credentials");
+            return raw;
+        } catch(URISyntaxException invalid) {
+            throw fail(line,"invalid HTTPS documentation URL syntax");
+        }
+    }
     private static String page(String s,int line){
         if(s==null || !s.matches("[A-Za-z0-9 .()/_-]{1,96}"))
             throw fail(line,"invalid source-page label");
@@ -109,7 +131,13 @@ public final class HardwareProfileManifestPreview {
         Map<String,Long> usedMasks=new LinkedHashMap<>();
         int pageMissing=0,seen=0;
         for(int i=0;i<rows.length;i++){
-            String line=rows[i].replace("\r","").strip();
+            // Accept a standard CRLF terminator only, not embedded CR
+            // characters that could splice an untrusted URL or identifier.
+            String line=rows[i];
+            if(line.endsWith("\r"))line=line.substring(0,line.length()-1);
+            if(line.indexOf('\r')>=0)
+                throw fail(i+1,"embedded carriage return");
+            line=line.strip();
             if(line.isEmpty() || line.startsWith("#"))continue;
             seen++;
             String[] v=line.split("\t",-1);
@@ -126,13 +154,12 @@ public final class HardwareProfileManifestPreview {
                             !registers.isEmpty() || !fields.isEmpty())
                         throw fail(ln,"exactly one DOCUMENT must precede definitions");
                     String dev=id(v[1],ln),manual=id(v[2],ln);
-                    if(!v[3].matches("https://[^\\s<>]{1,300}"))
-                        throw fail(ln,"documentation URL must use HTTPS");
+                    String url=documentUrl(v[3],ln);
                     if(!v[4].matches("[A-Za-z0-9 ._/-]{1,64}"))
                         throw fail(ln,"invalid document edition");
                     if(!("UNKNOWN".equals(v[5]) || v[5].matches("[a-fA-F0-9]{64}")))
                         throw fail(ln,"SHA-256 must be 64 hex characters or UNKNOWN");
-                    src=new Source(dev,manual,v[3],v[4],v[5]);
+                    src=new Source(dev,manual,url,v[4],v[5]);
                 }
                 case "MODULE" -> {
                     if(src==null || v.length!=5)

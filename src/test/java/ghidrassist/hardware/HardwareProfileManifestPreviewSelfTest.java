@@ -38,6 +38,35 @@ public final class HardwareProfileManifestPreviewSelfTest {
             "reject unsupported future schema");
         bad(SAMPLE.replace("https://www.nxp.com","http://www.nxp.com"),
             "reject untrusted HTTP manual references");
+        // Manifest URLs are claimed provenance, never fetched, but cannot
+        // masquerade as another host through userinfo or Unicode controls.
+        for(String untrusted:new String[]{
+                "https://user:secret@www.nxp.com/docs/MC68332UM.pdf",
+                "https://www.nxp.com@other.invalid/docs/MC68332UM.pdf",
+                "https://www.nxp.com/docs/" + ((char)0x202e) + "MC68332UM.pdf",
+                "https://www.nxp.com/docs/" + ((char)0x200b) + "MC68332UM.pdf",
+                "https://www.nxp.com/docs/" + ((char)0x7f) + "MC68332UM.pdf",
+                "https://www.nxp.com/%GG.pdf",
+                "https:///docs/no-host.pdf",
+                "https://bad host.invalid/docs/MC68332UM.pdf",
+                "https://[unclosed-ipv6/docs/MC68332UM.pdf"}) {
+            bad(SAMPLE.replace(
+                    "https://www.nxp.com/docs/en/user-guide/MC68332UM.pdf",
+                    untrusted),
+                "fail-closed deceptive DOCUMENT URL: "+untrusted);
+        }
+        var encodedUrl=HardwareProfileManifestPreview.parse(
+            SAMPLE.replace("https://www.nxp.com/docs/en/user-guide/MC68332UM.pdf",
+                "https://www.nxp.com/docs/en/user-guide/MC68332%20UM.pdf?x=1#page=215"));
+        check(encodedUrl.source().url().contains("%20UM.pdf"),
+            "valid printable percent-encoded HTTPS PDF path preserved verbatim");
+        bad(SAMPLE.replace("https://www.nxp.com/docs",
+                "https://www.\rnxp.com/docs"),
+            "embedded carriage return cannot silently rewrite URL");
+        var crlf=HardwareProfileManifestPreview.parse(
+            SAMPLE.replace("\n","\r\n"));
+        check(crlf.modules().size()==2 && crlf.registers().size()==3,
+            "ordinary CRLF record terminators remain accepted");
         bad(SAMPLE.replace("UNKNOWN\tUNKNOWN","UNKNOWN\t1234"),
             "reject malformed claimed PDF checksum");
         bad(SAMPLE.replace("MODULE\tQSM\t0x0C00","MODULE\tQSM\t0x0A40"),
