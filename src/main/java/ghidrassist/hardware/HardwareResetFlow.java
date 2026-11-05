@@ -18,6 +18,11 @@ import java.util.Set;
  */
 public final class HardwareResetFlow {
     private HardwareResetFlow() {}
+    public static final int MAX_DEPTH=32;
+    public static final int MAX_NODES=10_000;
+    public static final int MAX_EVIDENCE=1_000;
+    public static final int MAX_INPUT_NODES=50_000;
+    public static final int MAX_INPUT_EDGES=200_000;
 
     public record Vector(long initialSp, long resetPc, boolean valid, String reason) {
         public Vector {
@@ -95,6 +100,36 @@ public final class HardwareResetFlow {
     }
 
     /**
+     * Cycle detection is independent of the BFS shortest-path tree. A
+     * convergent diamond is not a cycle, while cross-edges between already
+     * scheduled functions may form real source-level recursion. Kahn's
+     * algorithm works on the bounded observed subgraph without Java recursion.
+     */
+    private static boolean observedCycle(Map<Long,HardwareCallEffects.FunctionNode> graph,
+            Set<Long> visited) {
+        Map<Long,Integer> indegree=new HashMap<>();
+        for(long pc:visited)indegree.put(pc,0);
+        for(long pc:visited)
+            for(long callee:graph.get(pc).directCallees())
+                if(indegree.containsKey(callee))
+                    indegree.put(callee,indegree.get(callee)+1);
+        ArrayDeque<Long> ready=new ArrayDeque<>();
+        for(var entry:indegree.entrySet())
+            if(entry.getValue()==0)ready.addLast(entry.getKey());
+        int removed=0;
+        while(!ready.isEmpty()) {
+            long pc=ready.removeFirst();removed++;
+            for(long callee:graph.get(pc).directCallees())
+                if(indegree.containsKey(callee)) {
+                    int remaining=indegree.get(callee)-1;
+                    indegree.put(callee,remaining);
+                    if(remaining==0)ready.addLast(callee);
+                }
+        }
+        return removed<visited.size();
+    }
+
+    /**
      * Evidence IDs are functions with independently observed MMIO/VBR sites.
      * This method does not infer reachability via gaps or indirect branches.
      * Cycles, missing direct targets and budget ceilings remain explicit.
@@ -102,18 +137,32 @@ public final class HardwareResetFlow {
     public static Summary trace(long root,Collection<HardwareCallEffects.FunctionNode> nodes,
             Collection<Long> evidenceFunctions,int maxDepth,int maxNodes,int maxEvidence) {
         if(root<0 || nodes==null || evidenceFunctions==null ||
-                maxDepth<0 || maxNodes<1 || maxEvidence<1)
-            throw new IllegalArgumentException("Invalid reset graph input/limits");
+                maxDepth<0 || maxDepth>MAX_DEPTH ||
+                maxNodes<1 || maxNodes>MAX_NODES ||
+                maxEvidence<1 || maxEvidence>MAX_EVIDENCE ||
+                nodes.size()>MAX_INPUT_NODES ||
+                evidenceFunctions.size()>MAX_INPUT_NODES)
+            throw new IllegalArgumentException("Invalid bounded reset graph input");
         Map<Long,HardwareCallEffects.FunctionNode> graph=new HashMap<>();
-        for(HardwareCallEffects.FunctionNode n:nodes)
+        long edges=0;
+        for(HardwareCallEffects.FunctionNode n:nodes) {
             if(n==null || graph.putIfAbsent(n.entry(),n)!=null)
                 throw new IllegalArgumentException("Duplicate/bad function entry");
+            edges+=n.directCallees().size();
+            if(edges>MAX_INPUT_EDGES)
+                throw new IllegalArgumentException("Unbounded direct-call edges");
+        }
+        for(Long id:evidenceFunctions)
+            if(id==null || id<0)
+                throw new IllegalArgumentException("Invalid evidence function");
         if(!graph.containsKey(root))
             return new Summary(false,0,true,false,false,List.of(),Set.of());
         Set<Long> evidenceIds=new HashSet<>(evidenceFunctions);
         Set<Long> visited=new HashSet<>();
+        Set<Long> scheduled=new HashSet<>();
         ArrayDeque<QueueEntry> queue=new ArrayDeque<>();
         queue.add(new QueueEntry(root,List.of(root),0));
+        scheduled.add(root);
         List<Evidence> matched=new ArrayList<>();
         boolean unresolved=false,recursive=false,truncated=false;
         while(!queue.isEmpty()){
@@ -136,14 +185,23 @@ public final class HardwareResetFlow {
             }
             for(long id:node.directCallees()){
                 if(id<0 || !graph.containsKey(id)){unresolved=true;continue;}
-                if(current.path().contains(id)){recursive=true;unresolved=true;continue;}
-                if(!visited.contains(id)){
+                if(!scheduled.contains(id)) {
+                    // Count queued targets as well as examined functions.
+                    // A wide graph cannot enqueue unbounded alternate paths
+                    // before the visited-node budget becomes effective.
+                    if(scheduled.size()>=maxNodes) {
+                        truncated=true;unresolved=true;
+                        continue;
+                    }
+                    scheduled.add(id);
                     List<Long> extended=new ArrayList<>(current.path());
                     extended.add(id);
                     queue.addLast(new QueueEntry(id,List.copyOf(extended),current.depth()+1));
                 }
             }
         }
+        recursive=observedCycle(graph,visited);
+        if(recursive)unresolved=true;
         return new Summary(true,visited.size(),unresolved,recursive,truncated,matched,visited);
     }
 }
