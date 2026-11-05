@@ -313,6 +313,16 @@ def main():
                         "twohop_repeat_deterministic",
                         "twohop_generic_profile_conservative",
                         "twohop_read_only"),
+                    "two-hop-indexed":(
+                        "twohop_indexed_real_cpu32_decoded",
+                        "twohop_indexed_real_nested_jsr",
+                        "twohop_indexed_signed_word",
+                        "twohop_indexed_context_isolation",
+                        "twohop_indexed_unknown_d1",
+                        "twohop_indexed_not_review_apply",
+                        "twohop_indexed_repeat_deterministic",
+                        "twohop_indexed_generic_cpu32_safe",
+                        "twohop_indexed_read_only"),
                     "joint-source":(
                         "arg_direct_call_real_ghidra",
                         "arg_independent_call_sites",
