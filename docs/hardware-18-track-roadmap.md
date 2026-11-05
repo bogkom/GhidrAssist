@@ -3,6 +3,17 @@
 Status: **IN PROGRESS — integrated baseline 2026-11-04**. Scope source: user-approved 2026-10-28 requirements (A–H, additional features 13.1–13.7, PDF/RAG, testing and Codex Supervisor integration).
 
 
+## GA-01 — kandydat 2026-11-05: kolejka RESET i cykle CALL
+
+Statyczny graf wywołań RESET ma odrzucać eksplozję powtórzonych ścieżek:
+kolejka BFS harmonogramuje każdy bezpośredni cel tylko raz i pozostaje
+ograniczona liczbą węzłów. Wykrywanie cykli jest niezależne od drzewa
+najkrótszych ścieżek (Kahn); zbieżność ani zdublowana krawędź nie oznacza
+rekurencji. Przekroczenie rozmiaru grafu lub kolejki oznacza
+`TRUNCATED/UNKNOWN`, nie dowód braku SIMCR/VBR. Java21 i pełny build
+Ghidry 12.1.4 PUBLIC / Java25 wymagają osobnego PASS na SHA PR.
+Nie oznacza to wykonania RESET ani aktywnych przerwań.
+
 ## GA-12 — kandydat 2026-11-05: tożsamość właściciela epoki CFG
 
 Odczytowe generacje unieważniania checkpointów mają być izolowane na
