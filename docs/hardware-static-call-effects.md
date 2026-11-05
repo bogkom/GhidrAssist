@@ -130,3 +130,30 @@ is inferred. No result is used as a Review/Apply/Undo authorization,
 a provenance receipt or an upgraded GA-12 cache. No original ECU411
 files, user profiles, OAuth or stopped Wyse/Precision/Supervisor
 testing are touched.
+
+## GA-02/03 — shared CALL-root memoization and per-batch budget (2026-11-05)
+
+A single Hardware Analysis report may contain multiple CALL PCs reaching the
+same direct callee. The transitive SIMCR/MM candidate analyzer now memoizes
+one source-only `Summary` for each exact target (including an unresolved
+`null` target) within **this single analysis invocation**. Results are
+not written to Program/GA-12 checkpoints and never shared between revisions.
+
+The traversal now bounds the **aggregate number of distinct scheduled PCs**
+(including unresolved destinations) over the entire batch to **16,384**.
+Individual CALL roots retain their own existing depth and node caps. Once the
+batch budget is exhausted, previously unseen roots and edges are explicitly
+`unknownControl=true, limited=true` rather than being marked pure or free of
+SIMCR/MM writes. Earlier cached summaries retain their first complete (or
+locally limited) result and cannot degrade when a later CALL consumes the
+budget. Roots are deterministically prioritized by caller entry, CALL PC and
+nullable callee target; input ordering cannot change the report. Invalid
+interesting callers are rejected rather than silently discarded.
+
+Pure Java 21 tests cover distinct wide unresolved roots exhausting the shared
+budget, a later known MM leaf omitted as UNKNOWN/LIMITED, repeated targets,
+input reordering, equal-PC ties, and null/negative caller rejection. The
+normal Ghidra 12.1.4 PUBLIC/Java25 extension build and synthetic regressions
+are required on the **exact PR SHA** before integration. This is conservative
+static source evidence, **not** executed CALL ordering, a physical MMIO map,
+latched MM, a proven global negative, or a Review/Apply authorization.
