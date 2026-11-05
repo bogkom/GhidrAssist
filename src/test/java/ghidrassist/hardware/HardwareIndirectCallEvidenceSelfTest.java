@@ -29,7 +29,7 @@ public final class HardwareIndirectCallEvidenceSelfTest {
             "source provenance deterministic regardless input collection order");
         check(source.contains("unresolved computed calls: 3") &&
             source.contains("NOT EXECUTION") &&
-            source.contains("No other computed CALL target") &&
+            source.contains("Other computed CALL targets remain UNKNOWN") &&
             source.contains("Review/Apply"),
             "unresolved remains unknown, NEVER promoted to execution/Apply");
         check(HardwareIndirectCallEvidence.markdown(List.of(),7,0)
