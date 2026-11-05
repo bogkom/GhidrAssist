@@ -82,7 +82,7 @@ public final class McpEvidenceGuard {
                .append(malformed?"At least one matching literal had an "+
                    "unrepresentable numeric immediate. ":"")
                .append("Do NOT use this sample as a complete inventory "+
-                   "or infer absence of other MMIO writes.\\n");
+                   "or infer absence of other MMIO writes.\n");
         out.append("Consistency check: Do not claim that there are no DIRECT WRITES to listed " +
             "addresses. A register-name mapping or runtime path is a separate, conditional claim.\n" +
             "<<<END_DETERMINISTIC_MCP_DISASSEMBLY_EVIDENCE>>>\n\n");
