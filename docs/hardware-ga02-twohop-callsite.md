@@ -205,3 +205,21 @@ Strict Java21 negative tests ensure that ordinary memory/register
 operands are not upgraded to full register constants.
 The final real fixture asserts both the decoded signed MOVEQ
 operand and two independent indexed MMIO candidate rows.
+
+## 2026-11-05 — indexed scale/sign and MCU24 wrap through two real CALLs
+
+An independent genuine synthetic Ghidra acceptance mode
+`two-hop-indexed-wrap` extends the existing proof beyond
+index scale 1 and non-wrapping offsets. The decoded leaf is
+`MOVE.W D0,(A1,D1.W*2)` and two independent caller
+contexts use `A0=0`, a fully known positive `D1.L`
+with negative low word, and distinct D0 values. Sign
+extension of `D1.W`, multiplication by 2, and modulo-24
+bus arithmetic yield possible SIMCR and CSBAR sources.
+A missing D1 stays an explicit unknown alias; the
+equivalent `D1.L` source does not accidentally inherit
+the .W negative interpretation.
+
+This is strictly read-only Ghidra 12.1.4 PUBLIC/Java25
+synthetic headless evidence on exact CI SHA, not an
+executed two-CALL trace or physical memory-map proof.

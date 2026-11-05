@@ -1020,3 +1020,19 @@ parsera. Regresje Java21 obejmują obie granice i odrzucanie
 przepełnień, zachowując składnię Ghidry 12.1.4 PUBLIC.
 Wymagane pełne CI oraz rzeczywista syntetyczna Ghidra na SHA PR;
 to dowody źródłowe, nie fizyczna mapa magistrali ani aktywny MM.
+
+### GA-02/03 + GA-17/18 — 2026-11-05: indeks skalowany i zawijanie MCU24
+
+Po PR #168 i #169 rozszerzamy rzeczywistą syntetyczną
+Ghidrę o osobny tryb `two-hop-indexed-wrap`. Dwa
+wywołania przekazują A0=0, D0 i dodatnie wartości D1.L
+z ujemnym dolnym słowem: indeks `D1.W` po sign extension
+i skalowaniu *2 zawija 24-bitowy adres do SIMCR
+`0xFFFA00` albo `0xFFFA68`. Trzeciemu wywołaniu
+brakuje D1 — wynik musi pozostać UNKNOWN. Java21
+porównuje również indeks `D1.L`, który nie może dać
+sztucznego trafienia do SIMCR. Test łączy rzeczywisty
+Listing CPU32, dwa JSR, deterministyczny raport
+MAY-only, niezmienioną rewizję Program i profil MC68332.
+Pełny build Ghidra 12.1.4 PUBLIC/Java25 oraz wynik
+GitHub Actions na dokładnym SHA są obowiązkowe.

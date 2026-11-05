@@ -94,7 +94,7 @@ def main():
                         "generic-profile","trambar-source","csbar-mm0-reject",
                         "mmio-read-reference","csbar-csor-conditional",
                         "simcr-mm0-literal","trambar-unknown","csor-alternatives",
-                        "branch-simcr","call-barrier","leaf-return","call-context","joint-source","two-hop","two-hop-indexed","branch-leaf","branch-cache","cancel-incomplete",
+                        "branch-simcr","call-barrier","leaf-return","call-context","joint-source","two-hop","two-hop-indexed","two-hop-indexed-wrap","branch-leaf","branch-cache","cancel-incomplete",
                         "function-stage-resume","function-rename","receipt-restart",
                         "apply-preserve","provenance-csv","movec-vbr","vbr-relocation"),
                         default="none",help="Run GA-07/12 or GA-02/03 genuine headless source-evidence checks")
@@ -323,6 +323,17 @@ def main():
                         "twohop_indexed_repeat_deterministic",
                         "twohop_indexed_generic_cpu32_safe",
                         "twohop_indexed_read_only"),
+                    "two-hop-indexed-wrap":(
+                        "twohop_wrap_cpu32_index_scaled2",
+                        "twohop_wrap_real_two_jsrs",
+                        "twohop_wrap_signed_word_not_long",
+                        "twohop_wrap_simcr_bus24",
+                        "twohop_wrap_csbar_context_isolated",
+                        "twohop_wrap_unknown_d1",
+                        "twohop_wrap_never_review_apply",
+                        "twohop_wrap_replay_deterministic",
+                        "twohop_wrap_generic_cpu32_conservative",
+                        "twohop_wrap_program_read_only"),
                     "joint-source":(
                         "arg_direct_call_real_ghidra",
                         "arg_independent_call_sites",

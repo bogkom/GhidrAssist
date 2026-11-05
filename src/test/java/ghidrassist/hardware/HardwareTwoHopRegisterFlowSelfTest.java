@@ -309,6 +309,63 @@ public final class HardwareTwoHopRegisterFlowSelfTest {
             List.of(bridge),List.of(indexedLeaf),48);
         ok(elsewhere.possibleStores()==0 && elsewhere.unknownAliases()==0,
             "known indexed non-MMIO address does not fabricate MMIO candidate");
+        // A real CPU32 .W index sign-extends BEFORE scale and bus masking.
+        // A0=0, D1=0x0000FD00 has word value -768; -768*2 on the
+        // 24-bit CPU32 bus yields 0xFFFA00, NOT the positive .L-index
+        // value 0x0001FA00. The second caller has word index -716.
+        var wrapSteps=List.of(
+            step(0xc00,SET_POINTER,"A0",null,0,"MOVEA.L",0xc06L),
+            step(0xc06,SET_POINTER,"D0",null,0x40ca,"MOVE.L",0xc0cL),
+            step(0xc0c,SET_POINTER,"D1",null,0x0000fd00L,
+                "MOVE.L",0xc12L),
+            jsr(0xc12,0xc18L),ret(0xc18L));
+        var wrapCaller=HardwareDataflow.analyze(0xc00,wrapSteps,
+            Set.of(simcr,cs),500);
+        ok(!wrapCaller.truncated &&
+            wrapCaller.knownPointersAtEntry.get(0xc12L).size()==3 &&
+            wrapCaller.knownPointersAtEntry.get(0xc12L).get("D1")==
+                0x0000fd00L,
+            "cold caller establishes full D1 with unsigned upper word 0");
+        var wrapFirst=new HardwareCallsiteRegisterFlow.Call(
+            0xc00,0xc12,0x640L,
+            wrapCaller.knownPointersAtEntry.get(0xc12L),false);
+        var wrapSecond=new HardwareCallsiteRegisterFlow.Call(
+            0xc40,0xc52,0x640L,
+            Map.of("A0",0L,"D0",0x4848L,"D1",0x0000fd34L),false);
+        var wrapUnknown=new HardwareCallsiteRegisterFlow.Call(
+            0xc80,0xc8c,0x640L,
+            Map.of("A0",0L,"D0",0x40caL),false);
+        var wrapLeaf=new HardwareCallsiteRegisterFlow.Callee(
+            0x700,List.of(new HardwareDataflow.Step(0x700,
+                "A1","D0","D1",16,2,0,null,16,
+                List.of(0x704L),"MOVE.W"),ret(0x704)),true);
+        var wrappedTwoHop=scan(List.of(wrapUnknown,wrapSecond,wrapFirst),
+            List.of(bridge),List.of(wrapLeaf),48);
+        ok(wrappedTwoHop.sampled()==3 &&
+            wrappedTwoHop.possibleStores()==2 &&
+            wrappedTwoHop.unknownAliases()==1 &&
+            wrappedTwoHop.rows().size()==2,
+            "signed scaled .W indexes across two calls hit MCU24 MMIO");
+        ok(wrappedTwoHop.rows().get(0).effectiveAddress()==simcr &&
+            wrappedTwoHop.rows().get(0).writtenWord()==0x40ca &&
+            wrappedTwoHop.rows().get(0).knownInnerRegisters()==4 &&
+            wrappedTwoHop.rows().get(1).effectiveAddress()==cs &&
+            wrappedTwoHop.rows().get(1).writtenWord()==0x4848,
+            "MC68332 24-bit wrap preserves distinct SIMCR/CS candidate sources");
+        var wrapLongLeaf=new HardwareCallsiteRegisterFlow.Callee(
+            0x700,List.of(new HardwareDataflow.Step(0x700,
+                "A1","D0","D1",32,2,0,null,16,
+                List.of(0x704L),"MOVE.W"),ret(0x704)),true);
+        var unsignedLongControl=scan(List.of(wrapFirst),
+            List.of(bridge),List.of(wrapLongLeaf),48);
+        ok(unsignedLongControl.possibleStores()==0 &&
+            unsignedLongControl.unknownAliases()==0 &&
+            unsignedLongControl.rows().isEmpty(),
+            "same D1 as .L must not inherit signed .W MMIO alias");
+        ok(wrappedTwoHop.markdown().contains("NOT EXECUTION") &&
+            wrappedTwoHop.markdown().contains("Review/Apply") &&
+            wrappedTwoHop.markdown().contains("unknown STORE alias: 1"),
+            "24-bit wrap stays source-only MAY with explicit missing index");
         System.out.println("HardwareTwoHopRegisterFlowSelfTest PASS: assertions="+checks);
     }
 }

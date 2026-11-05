@@ -82,7 +82,7 @@ public final class Ga11VectorHeadlessMain {
             "generic-profile","trambar-source","csbar-mm0-reject",
             "mmio-read-reference","csbar-csor-conditional",
             "simcr-mm0-literal","trambar-unknown","csor-alternatives",
-            "branch-simcr","call-barrier","leaf-return","call-context","joint-source","two-hop","two-hop-indexed","branch-leaf","branch-cache","cancel-incomplete",
+            "branch-simcr","call-barrier","leaf-return","call-context","joint-source","two-hop","two-hop-indexed","two-hop-indexed-wrap","branch-leaf","branch-cache","cancel-incomplete",
             "function-stage-resume","function-rename","receipt-restart-write",
             "receipt-restart-read","apply-preserve","provenance-csv",
             "movec-vbr","vbr-relocation").contains(ga18Mode),
@@ -1254,6 +1254,125 @@ public final class Ga11VectorHeadlessMain {
                     result.addProperty("twohop_indexed_repeat_deterministic",true);
                     result.addProperty("twohop_indexed_generic_cpu32_safe",true);
                     result.addProperty("twohop_indexed_read_only",true);
+                } else if("two-hop-indexed-wrap".equals(ga18Mode)) {
+                    // Raw CPU32: A0=0, D1=0xFD00; D1.W=-768 so
+                    // -768*2 wraps to SIMCR on the 24-bit bus.
+                    // D1=0xFD34 similarly reaches CSBAR. A third
+                    // caller never assigns D1 and must stay UNKNOWN.
+                    int txWrap=full.startTransaction(
+                        "GA02 synthetic two-hop scaled signed index wrap");
+                    try {
+                        full.getMemory().setBytes(address(full,0x700L),
+                            java.util.HexFormat.of().parseHex("338012004e75"));
+                        full.getMemory().setBytes(address(full,0x640L),
+                            java.util.HexFormat.of().parseHex(
+                                "22484eb9000007004e75"));
+                        full.getMemory().setBytes(address(full,0x600L),
+                            java.util.HexFormat.of().parseHex(
+                                "207c00000000203c000040ca223c0000fd00"+
+                                "4eb9000006404e75"));
+                        full.getMemory().setBytes(address(full,0x680L),
+                            java.util.HexFormat.of().parseHex(
+                                "207c00000000203c00004848223c0000fd34"+
+                                "4eb9000006404e75"));
+                        full.getMemory().setBytes(address(full,0x6a0L),
+                            java.util.HexFormat.of().parseHex(
+                                "207c00000000203c000040ca"+
+                                "4eb9000006404e75"));
+                    }finally{full.endTransaction(txWrap,true);}
+                    defineFixtureFunction(full,0x700L,6,
+                        "ga02_wrap_indexed_leaf_move_w");
+                    defineFixtureFunction(full,0x640L,10,
+                        "ga02_wrap_indexed_bridge");
+                    defineFixtureFunction(full,0x600L,26,
+                        "ga02_wrap_simcr_caller");
+                    defineFixtureFunction(full,0x680L,26,
+                        "ga02_wrap_csbar_caller");
+                    defineFixtureFunction(full,0x6a0L,20,
+                        "ga02_wrap_missing_d1_caller");
+                    var wrapInsn=full.getListing().getInstructionAt(
+                        address(full,0x700L));
+                    check(wrapInsn!=null && wrapInsn.getNumOperands()==2,
+                        "Actual CPU32 scaled .W indexed leaf missing");
+                    var parsed=HardwareIndexedAddress.parse(
+                        wrapInsn.getDefaultOperandRepresentation(1));
+                    check(parsed!=null && "A1".equals(parsed.base()) &&
+                        "D1".equals(parsed.index()) &&
+                        parsed.indexBits()==16 && parsed.scale()==2 &&
+                        parsed.displacement()==0,
+                        "Real CPU32 scaled operand mismatch: "+
+                        wrapInsn.getDefaultOperandRepresentation(1));
+                    var nested=full.getListing().getInstructionAt(
+                        address(full,0x642L));
+                    var outer=full.getListing().getInstructionAt(
+                        address(full,0x612L));
+                    check(nested!=null && nested.getFlowType().isCall() &&
+                        nested.getFlows().length==1 &&
+                        nested.getFlows()[0].equals(address(full,0x700L)) &&
+                        outer!=null && outer.getFlowType().isCall() &&
+                        outer.getFlows().length==1 &&
+                        outer.getFlows()[0].equals(address(full,0x640L)),
+                        "Two genuine direct CPU32 JSRs not resolved");
+                    var d1Literal=full.getListing().getInstructionAt(
+                        address(full,0x60cL));
+                    check(d1Literal!=null &&
+                        d1Literal.getScalar(0)!=null &&
+                        d1Literal.getScalar(0).getUnsignedValue()==0xfd00L,
+                        "Ghidra did not decode known upper-zero D1 input");
+                    long revision=full.getModificationNumber();
+                    var report=new GhidraHardwareFlowService().analyze(
+                        full,TaskMonitor.DUMMY,true);
+                    int index=report.markdown.indexOf(
+                        "## Bounded two-hop CALL argument/MMIO "+
+                        "source candidates (GA-02/03)");
+                    check(index>=0,"Two-hop scaled-wrap section missing");
+                    String evidence=report.markdown.substring(index);
+                    check(evidence.contains(
+                        "| 0x00000600 | 0x00000612 | 0x00000640 | "+
+                        "0x00000642 | 0x00000700 | 0x00000700 | "+
+                        "0x00FFFA00 | 0x000040CA | 16 |") &&
+                        evidence.contains(
+                        "| 0x00000680 | 0x00000692 | 0x00000640 | "+
+                        "0x00000642 | 0x00000700 | 0x00000700 | "+
+                        "0x00FFFA68 | 0x00004848 | 16 |"),
+                        "Signed D1.W*2 or MCU24 bus wrap lost: "+
+                        evidence.substring(0,Math.min(3700,evidence.length())));
+                    check(!evidence.contains("| 0x000006A0 |") &&
+                        evidence.contains("unknown STORE alias: 1"),
+                        "Missing D1 promoted into precise MMIO evidence");
+                    check(evidence.contains("SOURCE-ONLY MAY-CANDIDATES") &&
+                        evidence.contains("NOT EXECUTION") &&
+                        evidence.contains("Review/Apply") &&
+                        report.rawCfgMmioSites.stream().noneMatch(site->
+                            site.pc()==0x700L && site.address()==0xfffa00L),
+                        "Scaled wrap incorrectly became executable Apply");
+                    check(full.getModificationNumber()==revision,
+                        "Read-only scaled-wrap analysis changed Ghidra Program");
+                    var repeated=new GhidraHardwareFlowService().analyze(
+                        full,TaskMonitor.DUMMY,true);
+                    check(evidence.equals(repeated.markdown.substring(
+                        repeated.markdown.indexOf(
+                            "## Bounded two-hop CALL argument/MMIO "))) &&
+                        full.getModificationNumber()==revision,
+                        "GA-12 source replay polluted scaled CALL contexts");
+                    var generic=new GhidraHardwareFlowService().analyze(
+                        full,TaskMonitor.DUMMY,false);
+                    check(generic.markdown.contains(
+                        "Not evaluated: explicit MC68332 profile required") &&
+                        !generic.markdown.contains(
+                            "| 0x00000600 | 0x00000612 |") &&
+                        full.getModificationNumber()==revision,
+                        "Generic CPU32 inherited MC68332 scaled MMIO map");
+                    result.addProperty("twohop_wrap_cpu32_index_scaled2",true);
+                    result.addProperty("twohop_wrap_real_two_jsrs",true);
+                    result.addProperty("twohop_wrap_signed_word_not_long",true);
+                    result.addProperty("twohop_wrap_simcr_bus24",true);
+                    result.addProperty("twohop_wrap_csbar_context_isolated",true);
+                    result.addProperty("twohop_wrap_unknown_d1",true);
+                    result.addProperty("twohop_wrap_never_review_apply",true);
+                    result.addProperty("twohop_wrap_replay_deterministic",true);
+                    result.addProperty("twohop_wrap_generic_cpu32_conservative",true);
+                    result.addProperty("twohop_wrap_program_read_only",true);
                 } else if("call-context".equals(ga18Mode) ||
                         "joint-source".equals(ga18Mode)) {
                     boolean jointSource="joint-source".equals(ga18Mode);
