@@ -46,3 +46,27 @@ true post-join back-edge and the original branch/alias/limit cases.
 This corrective candidate is independently stacked on PR #76 and
 requires green exact-SHA Ghidra 12.1.4 Actions build and genuine
 isolated Ghidra acceptance prior to integration.
+
+## 2026-11-05 — bounded local SIMCR source-CFG edges
+
+The possible-first-SIMCR source analysis already refused more than 50,000
+CFG nodes, but had **no total successor-edge cap**. A single synthetically
+large node could contain hundreds of thousands of duplicate successors,
+performing unbounded iteration even with `visitBudget=1`. This is a source
+input-volume gap, not evidence of any real MCU execution.
+
+`HardwareSimcrLocalFirst.inspect` now refuses more than **200,000 total
+source-CFG successor references**, accumulated over all submitted nodes,
+before traversal begins. Crossing the limit is an explicit invalid-input
+error: it does not silently produce a partial or false negative first-write
+report. The exact limit remains accepted; a backedge in a 200,000-edge
+input is still detected and classified `unknownFirstPossible=true`.
+
+Deterministic Java21 regression tests exercise the inclusive cap,
+200,001 edges within one node, aggregate overflow across two nodes and
+non-poisoning of an independent diamond/first-write result. The full
+Ghidra 12.1.4 PUBLIC/Java25 extension build and real isolated synthetic
+Ghidra headless integration remain required on exact PR SHA.
+
+No original ECU411, user project, MM-latch activation or hardware RESET
+execution is inferred from this bounded source-only graph.
