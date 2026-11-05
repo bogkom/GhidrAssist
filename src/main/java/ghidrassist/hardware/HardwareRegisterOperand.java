@@ -6,6 +6,20 @@ import java.util.Locale;
 public final class HardwareRegisterOperand {
     private HardwareRegisterOperand(){}
     /**
+     * Exact CPU32 immediate-token gate. Ghidra 12.1.4 PUBLIC prints the
+     * short signed MOVEQ immediate as -0x1 WITHOUT '#', unlike MOVE.L.
+     * Only MOVEQ has this fixed encoding; every other opcode still
+     * requires its explicit '#' marker. Ghidra must ALSO provide a
+     * real Scalar for the operand before the value is considered known.
+     */
+    public static boolean isImmediateToken(String operand,String mnemonic){
+        if(operand==null || mnemonic==null)return false;
+        String token=operand.toUpperCase(Locale.ROOT).trim();
+        if(token.startsWith("#"))return true;
+        return "MOVEQ".equals(mnemonic.toUpperCase(Locale.ROOT)) &&
+            token.matches("[-+]?(?:0X[0-9A-F]+|[0-9]+)");
+    }
+    /**
      * Ghidra 12.1.4 CPU32 renders some size-qualified register operands as
      * D0w/D1b/D2l. Only accept that suffix if the instruction spelling has
      * the same width. A destination MOVE.W still remains a PARTIAL Dn write
