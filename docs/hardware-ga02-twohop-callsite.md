@@ -193,3 +193,15 @@ only scales 1/2/4/8 and word/long index widths. A dedicated
 Java21 parser regression accompanies the real integration test;
 this is a source parser compatibility fix, not a new general
 interprocedural solver or a claim of MMIO execution.
+
+### Confirmed MOVEQ caller-input issue in the indexed acceptance test
+
+The actual `MOVEQ #-1,D1` instruction printed as `moveq -0x1,D1`
+in Ghidra 12.1.4. Previously, the immediate detector required a
+literal `#`, classified D1 as clobbered, and lost the signed index
+before the **outer** JSR. The new source gate accepts this numeric
+form only for `MOVEQ`, with Ghidra's own `Scalar` required.
+Strict Java21 negative tests ensure that ordinary memory/register
+operands are not upgraded to full register constants.
+The final real fixture asserts both the decoded signed MOVEQ
+operand and two independent indexed MMIO candidate rows.
