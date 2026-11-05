@@ -1523,7 +1523,6 @@ public final class Ga11VectorHeadlessMain {
                         "ga02_bounded_mismatched_a1");
                     defineFixtureFunction(full,0x6e0L,12,
                         "ga02_bounded_missing_entry");
-                    var api=ghidrassist.automation.AutomationCallPaths.class;
                     var safe=full.getListing().getInstructionAt(
                         address(full,0x60aL));
                     var nop=full.getListing().getInstructionAt(
@@ -1534,10 +1533,10 @@ public final class Ga11VectorHeadlessMain {
                         nop.getFlowType().isComputed() &&
                         nop.getFlowType().isCall(),
                         "Real CPU32 bounded JSR(A0) not decoded computed");
-                    var safeSource=api.boundedConstantRegisterSource(
+                    var safeSource=ghidrassist.automation.AutomationCallPaths.boundedConstantRegisterSource(
                         full,safe,full.getFunctionManager().getFunctionAt(
                             address(full,0x600L)));
-                    var nopSource=api.boundedConstantRegisterSource(
+                    var nopSource=ghidrassist.automation.AutomationCallPaths.boundedConstantRegisterSource(
                         full,nop,full.getFunctionManager().getFunctionAt(
                             address(full,0x680L)));
                     check(safeSource!=null &&
@@ -1555,7 +1554,7 @@ public final class Ga11VectorHeadlessMain {
                         check(unknown!=null &&
                             unknown.getFlowType().isCall() &&
                             unknown.getFlowType().isComputed() &&
-                            api.boundedConstantRegisterSource(full,unknown,
+                            ghidrassist.automation.AutomationCallPaths.boundedConstantRegisterSource(full,unknown,
                                 full.getFunctionManager().getFunctionContaining(
                                     unknown.getAddress()))==null,
                             "Unsupported/mismatched/missing indirect target "+
