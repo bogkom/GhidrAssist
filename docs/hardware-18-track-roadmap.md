@@ -782,3 +782,13 @@ Full MCU/peripheral emulation, physical CS electrical simulation, generic automa
   exact-commit real-Ghidra tests and positive Supervisor reports.
   In particular, a PR #55 success does not verify later source
   combinations or permission for unreviewed production merges.
+
+## GA-06/10 — candidate 2026-11-05: strict physical PDF page claim audit
+
+The read-only profile coverage counter previously accepted any `PDF page`
+substring, including invalid, reversed and non-contiguous numbers.
+`HardwareProfileAudit.physicalPage` now uses the existing shared
+`ManualPdfPageClaim.hasSingleConsistentClaim` to reject misleading
+labels. This validates **claim syntax only**, not PDF bytes, editions,
+register facts or physical hardware. Needs Java21 and full Ghidra
+12.1.4 PUBLIC/Java25 PASS on exact PR SHA. No user firmware or projects.
