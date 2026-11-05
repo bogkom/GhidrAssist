@@ -871,3 +871,14 @@ cache or execution claim is introduced. Fail closed on more than 254
 vector candidates, overlarge graph/RESET subsets, null targets and
 invalid RESET addresses. Requires Java21, full Ghidra 12.1.4 PUBLIC /
 Java25 and synthetic headless CI on the exact new SHA.
+
+## GA-12 — kandydat 2026-11-05: ograniczony strumieniowy odczyt checkpointu
+
+Trwały magazyn etapów używa teraz `BasicFileAttributes` bez śledzenia
+linków i otwarcia docelowego pliku przez `NOFOLLOW_LINKS`. Po sprawdzeniu
+rozmiaru dodatkowy niezależny limit `MAX_FILE_BYTES+1` zapobiega
+nieograniczonemu `readAllBytes`, gdy plik urośnie lub zostanie podmieniony
+między stat a odczytem. Przekroczony limit to cache miss, nie dowód
+przeciw analizie. Java21 regresja obejmuje nieskończony strumień,
+podzielone odczyty, plik o rozmiarze ponad limit i stare testy symlinków.
+Wymagany pełny build Ghidry 12.1.4 PUBLIC / Java25 na SHA PR.
