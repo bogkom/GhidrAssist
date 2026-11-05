@@ -971,3 +971,15 @@ próg z dwóch węzłów, odmowę wznowienia niezgodnego grafu
 i niezmienność wcześniej zamkniętych dowodów.
 Wymagany pełny PASS Ghidry 12.1.4 PUBLIC / Java25 na SHA PR.
 Wynik jest statycznym MAY/UNKNOWN, bez uruchamiania firmware.
+
+## GA-02/03 + GA-17/18 — candidate 2026-11-05: indexed MMIO po dwóch CALL
+
+Istniejący test headless potwierdzał dwa CALL i zapis `(A1)`,
+lecz nie indeks `(A1,D1.W)` dekodowany przez rzeczywistą Ghidrę.
+Osobny syntetyczny tryb `two-hop-indexed` weryfikuje 24-bitowe
+adresowanie i indeks D1.W=-1, dwa niezależne konteksty A0/D0/D1,
+brak sztucznej wartości D1 w trzecim kontekście, niezmienność
+projektu i zakaz awansu do Apply. Java21 testuje też
+niezgodne wartości indeksu na zbieżnych ścieżkach. Wymagany
+pełny build Ghidra 12.1.4 PUBLIC / Java25 i rzeczywisty
+syntetyczny headless PASS na dokładnym SHA PR.
