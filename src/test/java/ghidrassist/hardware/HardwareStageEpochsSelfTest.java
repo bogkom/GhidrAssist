@@ -12,6 +12,16 @@ public final class HardwareStageEpochsSelfTest {
         if(!ok)throw new AssertionError(why);
     }
 
+    /** Deliberately hostile value equality; not the same Program identity. */
+    private static final class EqualOwner {
+        final int id;
+        EqualOwner(int id){this.id=id;}
+        @Override public boolean equals(Object other){
+            return other instanceof EqualOwner;
+        }
+        @Override public int hashCode(){return 7;}
+    }
+
     public static void main(String[] args)throws Exception{
         var epochs=new HardwareStageEpochs<Object>();
         Object projectA=new Object(),projectB=new Object();
@@ -65,6 +75,32 @@ public final class HardwareStageEpochsSelfTest {
         epochs.invalidate(initial);
         check(!epochs.current(initial,initialToken),
             "clear before first completed stage also blocks late publish");
+        // Equal-by-value Program proxies are still different Ghidra owners.
+        // WeakHashMap would merge these keys and cancel the wrong Program.
+        var byIdentity=new HardwareStageEpochs<EqualOwner>();
+        var equalA=new EqualOwner(1);
+        var equalB=new EqualOwner(2);
+        check(equalA!=equalB && equalA.equals(equalB) &&
+            equalA.hashCode()==equalB.hashCode(),
+            "fixture simulates equal but distinct Ghidra owner objects");
+        check(byIdentity.begin(equalA)==0 && byIdentity.begin(equalB)==0 &&
+            byIdentity.current(equalA,0) && byIdentity.current(equalB,0),
+            "independent owners start with independent zero generations");
+        byIdentity.invalidate(equalA);
+        check(byIdentity.begin(equalA)==1 && byIdentity.begin(equalB)==0 &&
+            byIdentity.current(equalA,1) && !byIdentity.current(equalA,0) &&
+            byIdentity.current(equalB,0) && !byIdentity.current(equalB,1),
+            "invalidating A cannot prematurely invalidate equal-but-distinct B");
+        byIdentity.invalidate(equalB);
+        byIdentity.invalidate(equalA);
+        check(byIdentity.current(equalB,1) &&
+            !byIdentity.current(equalB,2) && byIdentity.current(equalA,2),
+            "repeated invalidations stay exact-owner scoped");
+        // An unregistered equal owner must not inherit existing epoch.
+        var equalC=new EqualOwner(3);
+        check(!byIdentity.current(equalC,0) &&
+            !byIdentity.current(equalC,1) && byIdentity.begin(equalC)==0,
+            "previously unseen equal owner cannot reuse another checkpoint generation");
         System.out.println("HardwareStageEpochsSelfTest OK");
     }
 }
