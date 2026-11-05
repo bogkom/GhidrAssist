@@ -224,6 +224,34 @@ public final class HardwareTwoHopRegisterFlowSelfTest {
             "4097 targets cannot silently truncate two-hop alias scope");
         ok(pair.rows().size()==2 && pair.possibleStores()==2,
             "rejected two-hop inputs never mutate previously shown evidence");
+        // The one-hop unknown-width alias barrier must survive an outer
+        // CALL -> exact bridge -> direct leaf, without upgrading an
+        // unmodeled memory mutation to an accurate word or no-MM proof.
+        var nearMm=outer(0xa00,0x640,0xfff9feL,0x40caL);
+        var unknownWidthLeaf=new HardwareCallsiteRegisterFlow.Callee(
+            0x700,List.of(new HardwareDataflow.Step(
+                0x700,STORE_INDIRECT,"A1","D0",0,0,null,0,
+                List.of(0x702L),"MOVE.UNKNOWN"),ret(0x702)),true);
+        var unknownTwoHop=scan(List.of(nearMm),List.of(bridge),
+            List.of(unknownWidthLeaf),48);
+        ok(unknownTwoHop.possibleStores()==0 &&
+            unknownTwoHop.rows().isEmpty() &&
+            unknownTwoHop.unknownAliases()==1 &&
+            unknownTwoHop.markdown().contains("unknown STORE alias: 1"),
+            "two-hop contextual unknown-width STORE is explicitly unresolved");
+        var spanningLeaf=new HardwareCallsiteRegisterFlow.Callee(
+            0x700,List.of(new HardwareDataflow.Step(
+                0x700,STORE_INDIRECT,"A1","D0",0,0,null,32,
+                List.of(0x702L),"MOVE.L"),ret(0x702)),true);
+        var spanningTwoHop=scan(List.of(nearMm),List.of(bridge),
+            List.of(spanningLeaf),48);
+        ok(spanningTwoHop.possibleStores()==1 &&
+            spanningTwoHop.unknownAliases()==0 &&
+            spanningTwoHop.rows().size()==1 &&
+            spanningTwoHop.rows().get(0).effectiveAddress()==0xfff9feL &&
+            spanningTwoHop.rows().get(0).bits()==32 &&
+            spanningTwoHop.rows().get(0).writtenWord()==null,
+            "known 32-bit two-hop write may overlap adjacent SIMCR MM byte");
         System.out.println("HardwareTwoHopRegisterFlowSelfTest PASS: assertions="+checks);
     }
 }
