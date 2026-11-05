@@ -58,3 +58,34 @@ ECU411 firmware are touched.
 
 This does not extend indirect dataflow analysis to branch-dependent,
 loaded-memory or nonadjacent register sources; these remain UNKNOWN.
+
+## 2026-11-05 — forged CALL XREF on a non-CALL instruction
+
+The earlier PR #175 correctly excluded user-defined CALL references
+from **computed** `JSR (An)` reachability. Auditing the same index
+showed a second related failure: the loop accepted a Ghidra CALL-type
+reference on *any instruction* whose decoded flow was not computed
+CALL. A manually attached `COMPUTED_CALL` XREF on an ordinary CPU32
+`NOP` could therefore invent a reachable MMIO-writing Function,
+despite no CALL instruction at that source PC.
+
+The reference branch now requires **both** `FlowType.isCall()==true`
+and `FlowType.isComputed()==false` before admitting an exact
+Ghidra reference as a direct CALL edge. All other reference types
+retain existing handling, and strict byte-proven adjacent/safe-chain
+computed JSR evidence remains unchanged.
+
+The real isolated Ghidra 12.1.4 PUBLIC/Java25
+`indirect-adjacent` fixture injects a USER_DEFINED
+`RefType.COMPUTED_CALL` from a genuine decoded `NOP` at 0x6E0
+to an existing 0x700 MMIO-writing Function. Deterministic
+`AutomationCallPaths.query(entry=0x6E0)` must report
+`total_paths=0`, `unresolved_calls=0`, `complete=true`,
+and exclude 0x700 from reachable entries. A true byte-proven
+`JSR (A0)` remains resolved and an unproven `JSR (A1)`
+remains incomplete. The harness reports a mandatory separate
+evidence flag and uses an isolated synthetic Program.
+
+This is source-only static provenance; a Ghidra reference can be
+user-edited and is never proof of MCU runtime execution, physical
+CS mapping, or latched SIMCR MM. No Review/Apply permission changes.
