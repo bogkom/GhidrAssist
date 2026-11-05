@@ -193,7 +193,33 @@ public final class HardwareProfiles {
         r.add(new Register("SIM", "SIMCR", 0x0a00, 16, simcrFields, source,
             "D-4/D-5/D-6 (PDF pages 218-220)", Access.SUPERVISOR,
             WritePolicy.READ_WRITE, null));
-        r.add(reg("SIM", "SYNCR", 0x0a04, 16, source));
+        // MC68332UM © Motorola 1995, Appendix D.2.3, printed D-6/D-7
+        // (physical PDF pages 220/221). Only fields describing controllable
+        // clock/sleep configuration are interpreted from a complete literal
+        // write. SLIMP/SLOCK are hardware STATUS, not proof of their runtime
+        // values from a source-side constant, and remain uninterpreted.
+        // Reserved bits 6/5 also remain untyped. No reset state is inferred.
+        List<BitField> syncrFields=List.of(
+            new BitField("W",0x8000,"Frequency control: VCO base or x4",
+                null,"D-6 (PDF page 220)",false),
+            new BitField("X",0x4000,"VCO prescale selection",
+                null,"D-6 (PDF page 220)",false),
+            new BitField("Y",0x3f00,"Six-bit synthesizer feedback counter modulus",
+                null,"D-6 (PDF page 220)",false),
+            new BitField("EDIV",0x0080,"ECLK system-clock divider selection",
+                null,"D-6 (PDF page 220)",false),
+            new BitField("RSTEN",0x0004,"Loss of reference reset enable",
+                null,"D-7 (PDF page 221)",false),
+            new BitField("STSIM",0x0002,
+                "SIM clock source control during low-power stop",
+                null,"D-7 (PDF page 221)",false),
+            new BitField("STEXT",0x0001,
+                "External CLKOUT selection during low-power stop",
+                null,"D-7 (PDF page 221)",false));
+        r.add(new Register("SIM","SYNCR",0x0a04,16,syncrFields,
+            source+" ; MC68332UM (Motorola 1995)",
+            "D-6/D-7 (PDF pages 220-221)",
+            Access.UNKNOWN,WritePolicy.UNKNOWN,null));
         r.add(reg("SIM", "SIMTR", 0x0a02, 16, source));
         r.add(reg("SIM", "SIMTRE", 0x0a08, 16, source));
         r.add(reg("SIM", "TSTMSRA", 0x0a30, 16, source));
