@@ -12,3 +12,18 @@ This increment resolves a supported subset of Motorola/Ghidra memory operands:
 The bridge translates parsed operands to `HardwareDataflow`, which computes the address and integrates it with existing CS/SIM candidates. Synthetic regressions exercise word signed arithmetic, long indexes, different branch predecessors, and an unknown index.
 
 **Remaining:** global value tracking beyond calls, alias analysis, loops with large path combinations, exception/reset-origin CFGs, dynamic RAM maps and physical chip-select wiring. Do not use this output to infer flash programming addresses.
+
+## 2026-11-05 — contextual indexed operands and source integrity
+
+The indexed address model is now exercised with a genuinely decoded
+CPU32 `MOVE.W D0,1(A1,D1.W)` after two direct CALLs. The accepted
+predicate requires predecessor-agreed constants for both base and
+index at that exact STORE PC, with sign extension of D1.W and a
+24-bit effective-address mask. Conflicting or absent D1 remains
+an unresolved alias; it does not become zero and does not authorize
+a Register Review/Apply proposal.
+
+Results must be checked on the **exact synthetic Ghidra 12.1.4
+PUBLIC/Java25 workflow SHA**, not inferred from pure-Java tests
+alone. The test adds evidence of supported syntax only, not support
+for complex 68020 full-extension or memory-indirect addressing.
