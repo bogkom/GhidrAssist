@@ -20,6 +20,7 @@ import ghidra.util.task.TaskMonitor;
 import ghidra.util.exception.CancelledException;
 import ghidrassist.hardware.GhidraInterruptVectorService;
 import ghidrassist.hardware.GhidraHardwareFlowService;
+import ghidrassist.hardware.HardwareIndexedAddress;
 import ghidrassist.hardware.HardwareInventoryService;
 import ghidrassist.hardware.HardwareFlowStageCache;
 import ghidrassist.hardware.HardwareAnalysisRevision;
