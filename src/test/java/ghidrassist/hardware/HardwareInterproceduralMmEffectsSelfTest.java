@@ -220,6 +220,53 @@ public final class HardwareInterproceduralMmEffectsSelfTest {
                 List.of(calls.get(0)), List.of(-1L),2,20,20);
         } catch(IllegalArgumentException expected){fail=true;}
         ok(fail,"negative interesting caller is rejected");
+        // Allocation order must respect explicitly selected callers.
+        // With 16,384 earlier unrelated closed CALL targets, the one
+        // later interesting source used to be classified UNKNOWN/LIMITED
+        // solely because the shared budget was already exhausted.
+        var uninterestingGraph=new java.util.ArrayList<
+            HardwareInterproceduralMmEffects.FunctionNode>();
+        var uninterestingCalls=new java.util.ArrayList<
+            HardwareInterproceduralMmEffects.CallSite>();
+        for(int i=0;i<HardwareInterproceduralMmEffects.MAX_BATCH_SCHEDULED;i++){
+            long entry=0x40000L+i;
+            uninterestingGraph.add(node(entry,false,false,false));
+            uninterestingCalls.add(call(0x1L,0x10000L+i,entry));
+        }
+        uninterestingGraph.add(node(0x130L,true,false,false));
+        var selectedSite=call(0x9000L,0x9001L,0x130L);
+        uninterestingCalls.add(selectedSite);
+        var prioritized=HardwareInterproceduralMmEffects.analyze(
+            uninterestingGraph,uninterestingCalls,List.of(0x9000L),
+            0,1,1);
+        ok(prioritized.rows().size()==1 &&
+            prioritized.rows().get(0).call().equals(selectedSite) &&
+            prioritized.rows().get(0).summary().mayMm() &&
+            prioritized.rows().get(0).summary().visited()==1 &&
+            !prioritized.rows().get(0).summary().limited() &&
+            prioritized.omitted()==1,
+            "selected late SIMCR/MM candidate retains analysis AND report row "
+                +"when 16k unrelated earlier sources exhaust finite budget");
+        var reversedCalls=new java.util.ArrayList<>(uninterestingCalls);
+        java.util.Collections.reverse(reversedCalls);
+        ok(HardwareInterproceduralMmEffects.analyze(
+                uninterestingGraph,reversedCalls,List.of(0x9000L),
+                0,1,1).equals(prioritized),
+            "selected priority result deterministic across reversed CALL inputs");
+        // Even a valid source graph count may hide an unbounded edge set.
+        var tooManyEdges=List.of(new HardwareInterproceduralMmEffects.FunctionNode(
+            0x130L,false,false,false,
+            java.util.Collections.nCopies(
+                HardwareInterproceduralMmEffects.MAX_FUNCTION_EDGES+1,0x160L)));
+        fail=false;
+        try {
+            HardwareInterproceduralMmEffects.analyze(tooManyEdges,
+                List.of(calls.get(0)),List.of(0x100L),2,20,20);
+        }catch(IllegalArgumentException expected){fail=true;}
+        ok(fail,"oversized direct-call adjacency list rejected before traversal");
+        ok(prioritized.markdown().contains("Selected source callers receive") &&
+            prioritized.markdown().contains("UNKNOWN"),
+            "human-facing evidence declares priority, incomplete horizon and scope");
         System.out.println("HardwareInterproceduralMmEffectsSelfTest OK");
     }
 }

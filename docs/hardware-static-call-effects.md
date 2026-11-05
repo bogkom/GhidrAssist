@@ -157,3 +157,35 @@ normal Ghidra 12.1.4 PUBLIC/Java25 extension build and synthetic regressions
 are required on the **exact PR SHA** before integration. This is conservative
 static source evidence, **not** executed CALL ordering, a physical MMIO map,
 latched MM, a proven global negative, or a Review/Apply authorization.
+
+## GA-02/03 — selected CALL-source budget priority (2026-11-05)
+
+A finite 16,384-PC aggregate budget previously processed **all** CALL sites
+in caller/PC order. A very large closed negative subgraph from unselected
+callers could consume the budget *before* the selected functions were
+inspected. Their real candidate sites were then reported
+`LIMITED/UNKNOWN` even when they fit a small budget on their own.
+
+The report now performs two deterministic passes: first selected
+`interestingCallers`, then all other caller sites. Exact callee summaries
+remain memoized within the report, and **selected rows also receive display
+priority under `rowCap`**. Surviving rows are sorted by
+caller/CALL-PC/nullable-target regardless of input order; omitted rows are
+counted. Nonselected paths that run out of the budget explicitly stay
+`LIMITED/UNKNOWN`. This improves relevance and bounded precision, not
+execution feasibility, physical MM mapping, or permission to Apply.
+
+The source CALL graph also enforces **200,000 total adjacency edges**
+in addition to its earlier function and callsite bounds, preventing very
+large per-function CALL lists from escaping global input limits.
+
+The Java21 regression deliberately supplies 16,384 unrelated closed
+callee roots *before* one selected SIMCR/MM root, then checks that the
+selected root receives complete evidence and a visible row even when
+`rowCap=1`. A reversed input order must produce the same report. A
+200,001-edge graph is rejected before any traversal. Full Ghidra 12.1.4
+PUBLIC/Java25 extension and isolated real synthetic-Ghidra CI must pass
+on the **exact PR HEAD**.
+
+This is static **source-only MAY evidence**; unknown other callers and
+unvisited paths are never proof of the absence of writes.
