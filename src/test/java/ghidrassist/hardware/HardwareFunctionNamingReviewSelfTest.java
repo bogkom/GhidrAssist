@@ -107,6 +107,36 @@ public final class HardwareFunctionNamingReviewSelfTest {
             java.util.Arrays.asList((HardwareFunctionNamingReview.Proposal)null)); }
         catch(IllegalArgumentException expected){invalidCsv=true;}
         ok(invalidCsv,"null row never treated as complete review evidence");
+        // Contradictory function names at the same entry reflect stale or
+        // mixed source snapshots, never a review-ready rename. Input order
+        // must not decide which name wins.
+        var conflicting=List.of(
+            obs(0x5500,0x5500,"CSPAR1",true,"FUN_00005500"),
+            obs(0x5500,0x5502,"CSBAR7",true,"user_changed_name"),
+            obs(0x5500,0x5504,"CSOR7",true,"FUN_00005500"));
+        var mixed=HardwareFunctionNamingReview.propose(true,conflicting,List.of());
+        ok(mixed.size()==1 &&
+            mixed.get(0).status==HardwareNamingReview.Status.EVIDENCE_TOO_WEAK &&
+            mixed.get(0).proposedName.isEmpty() &&
+            mixed.get(0).currentName.equals("[CONFLICTING_SOURCE_NAMES]") &&
+            mixed.get(0).writeSites==3,
+            "different names for same Ghidra function fail closed");
+        var reversed=new java.util.ArrayList<>(conflicting);
+        java.util.Collections.reverse(reversed);
+        var mixedReversed=HardwareFunctionNamingReview.propose(
+            true,reversed,List.of());
+        ok(mixedReversed.get(0).status==HardwareNamingReview.Status.EVIDENCE_TOO_WEAK &&
+            mixedReversed.get(0).currentName.equals("[CONFLICTING_SOURCE_NAMES]") &&
+            mixedReversed.get(0).proposedName.isEmpty(),
+            "conflicting source-name rejection is iteration-order independent");
+        ok(HardwareFunctionNamingReview.toCsvRows(mixed).contains(
+                "CONFLICTING_SOURCE_NAMES") &&
+            !HardwareFunctionNamingReview.toCsvRows(mixed).contains(
+                "REVIEW_REQUIRED"),
+            "CSV preserves conflict marker but never exports an approved candidate");
+        ok(HardwareFunctionNamingReview.propose(false,conflicting,List.of())
+            .get(0).status==HardwareNamingReview.Status.FAMILY_UNCERTAIN,
+            "generic CPU32 cannot promote even conflicting MC68332 evidence");
         System.out.println("HardwareFunctionNamingReviewSelfTest OK");
     }
 }
