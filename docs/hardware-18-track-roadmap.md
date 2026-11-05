@@ -1146,3 +1146,25 @@ Wymagany rzeczywisty izolowany test Ghidry 12.1.4 PUBLIC/Java25
 z syntetycznym CPU32, test Java21, pełny build rozszerzenia
 i PASS na dokładnym SHA. Historia #172 pozostaje zachowana;
 GA-02/03 nie stają się z tego powodu ukończone.
+
+## GA-02/03/18 — kandydat 2026-11-05: obcy XREF nie domyka pośredniego JSR
+
+`AutomationCallPaths.index` ufał dowolnemu Ghidra
+`ReferenceType.isCall()` do istniejącej funkcji jako
+rozstrzygniętej krawędzi, także dla `JSR (An)`.
+Tym samym ręcznie dodany odsyłacz `COMPUTED_CALL`
+mógł tłumić `unresolved_calls` i raportować
+`complete=true` bez dowodu wartości rejestru.
+Poprawka ogranicza awans takich krawędzi do istniejącego
+ścisłego dekodera CPU32 `MOVEA.L #entry,An` i dopuszczonych,
+krótkich łańcuchów `NOP/MOVEQ`; pozostałe wywołania
+obliczane są UNKNOWN, niezależnie od przypisanego XREF.
+Nie ogranicza odsyłaczy dla bezpośrednich CALL.
+
+Regresja w rzeczywistej syntetycznej Ghidrze 12.1.4
+PUBLIC wstawia ręczny `COMPUTED_CALL` z `JSR (A1)`
+do funkcji MMIO. Oczekuje `unresolved_calls=1`,
+`complete=false`, braku pozornych ścieżek oraz
+zachowania prawidłowego byte-proven `JSR (A0)`.
+Wymagane pełne CI i dokładny SHA PR; statyczne krawędzie
+nie stanowią dowodu przebiegu firmware ani aktywnego MM.
