@@ -129,3 +129,23 @@ Nowe Java21 regresje sprawdzają 24-bitową granicę, `null`,
 niezmienne. Ghidra 12.1.4 PUBLIC / Java25 i rzeczywiste
 syntetyczne Ghidra headless wymagają odrębnego CI PASS na
 końcowym SHA; testy lokalne Wyse/Precision pozostają zatrzymane.
+
+## 2026-11-05 — Unknown-width STORE alias safety through CALL
+
+A direct, context-seeded CALL can prove the start address of an indirect
+memory write without proving its access width. For instance, an unknown
+write at `0xFFF9FE` can span the `0xFFFA01` SIMCR MM low byte if it is
+at least four bytes wide. Filtering such a write as non-MMIO simply because
+its **start** is absent from the tracked MC68332 register set is unsound.
+
+Unknown/unmodeled STORE widths (anything other than 8, 16 or 32 bits) now
+increment the read-only `unresolvedAliases` counter, even when the
+instruction's effective address is known. They do not become precise
+`Candidate` rows or a known written word. A proved 32-bit write crossing
+`0xFFFA01` remains a possible MMIO source, while an 8-bit write at the
+same start is excluded. The two-hop analyzer inherits this fail-closed
+behavior through its existing direct-leaf CALL solver, with a separate
+Java21 regression for both widths.
+
+This is source-only uncertainty, not execution, an active SIMCR MM latch,
+a physical bus map, verified Ghidra Apply permission or a firmware edit.

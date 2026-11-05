@@ -190,6 +190,55 @@ public final class HardwareCallsiteRegisterFlowSelfTest {
         ok(results.candidates().size()==2 &&
             results.candidates().get(0).address()==simcr,
             "invalid external inputs never mutate previously returned rows");
+        // A byte count missing from p-code at a known A0 start address
+        // cannot prove the write misses SIMCR. The start is not a tracked
+        // register, but an unknown-sized write may span the MM low byte.
+        var unmodeledWidth=new HardwareCallsiteRegisterFlow.Callee(
+            0x640,List.of(new HardwareDataflow.Step(
+                0x640,STORE_INDIRECT,"A0","D0",0,0,null,0,
+                List.of(0x642L),"MOVE.UNKNOWN"),ret(0x642)),true);
+        var nearMm=new HardwareCallsiteRegisterFlow.Call(
+            0xa00,0xa0c,0x640L,
+            Map.of("A0",0xfff9feL,"D0",0x40caL),false);
+        var unknownWidth=HardwareCallsiteRegisterFlow.analyze(
+            List.of(nearMm),List.of(unmodeledWidth),Set.of(simcr),8);
+        ok(unknownWidth.unresolvedAliases()==1 &&
+            unknownWidth.possibleStoreSites()==0 &&
+            unknownWidth.candidates().isEmpty() &&
+            unknownWidth.markdown().contains("unknown STORE aliases: 1"),
+            "unknown-width contextual STORE outside tracked start stays UNKNOWN");
+        var impossibleWidth=new HardwareCallsiteRegisterFlow.Callee(
+            0x640,List.of(new HardwareDataflow.Step(
+                0x640,STORE_INDIRECT,"A0","D0",0,0,null,64,
+                List.of(0x642L),"MOVE.UNMODELED"),ret(0x642)),true);
+        var unknown64=HardwareCallsiteRegisterFlow.analyze(
+            List.of(nearMm),List.of(impossibleWidth),Set.of(simcr),8);
+        ok(unknown64.unresolvedAliases()==1 &&
+            unknown64.candidates().isEmpty(),
+            "unmodeled 64-bit p-code STORE cannot become a negative MMIO claim");
+        var spanningLong=new HardwareCallsiteRegisterFlow.Callee(
+            0x640,List.of(new HardwareDataflow.Step(
+                0x640,STORE_INDIRECT,"A0","D0",0,0,null,32,
+                List.of(0x642L),"MOVE.L"),ret(0x642)),true);
+        var longWrite=HardwareCallsiteRegisterFlow.analyze(
+            List.of(nearMm),List.of(spanningLong),Set.of(simcr),8);
+        ok(longWrite.unresolvedAliases()==0 &&
+            longWrite.possibleStoreSites()==1 &&
+            longWrite.candidates().size()==1 &&
+            longWrite.candidates().get(0).address()==0xfff9feL &&
+            longWrite.candidates().get(0).writeBits()==32 &&
+            longWrite.candidates().get(0).writtenWord()==null,
+            "known 32-bit STORE spanning SIMCR MM byte is a possible source");
+        var narrowByte=new HardwareCallsiteRegisterFlow.Callee(
+            0x640,List.of(new HardwareDataflow.Step(
+                0x640,STORE_INDIRECT,"A0","D0",0,0,null,8,
+                List.of(0x642L),"MOVE.B"),ret(0x642)),true);
+        var byteWrite=HardwareCallsiteRegisterFlow.analyze(
+            List.of(nearMm),List.of(narrowByte),Set.of(simcr),8);
+        ok(byteWrite.unresolvedAliases()==0 &&
+            byteWrite.possibleStoreSites()==0 &&
+            byteWrite.candidates().isEmpty(),
+            "known 8-bit STORE not spanning MM remains excluded");
         System.out.println("HardwareCallsiteRegisterFlowSelfTest PASS: assertions="+assertions);
     }
 }
