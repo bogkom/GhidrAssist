@@ -72,6 +72,49 @@ public final class HardwareCallEffectsSelfTest {
             List.of(n(0,false,false,false,1L),n(1,false,false,false)),5,10);
         ok(!noWrites.possibleMemoryStore() && !noWrites.unresolved(),
             "observed closed call graph without decoded STORE");
+        // A root with many DISTINCT resolved callees must not enqueue
+        // an unbounded frontier before the maxFunctions cap is checked.
+        java.util.List<HardwareCallEffects.FunctionNode> wide=
+            new java.util.ArrayList<>();
+        java.util.List<Long> wideTargets=new java.util.ArrayList<>();
+        for(int i=1;i<=12_000;i++) {
+            wideTargets.add((long)i);
+            wide.add(n(i,i==12_000,false,false));
+        }
+        wide.add(new HardwareCallEffects.FunctionNode(
+            0,false,false,false,wideTargets));
+        var cappedWide=HardwareCallEffects.summarize(0,wide,2,3);
+        ok(cappedWide.visited()==3 && cappedWide.truncated() &&
+            cappedWide.unresolved() && !cappedWide.possibleMemoryStore(),
+            "12k unique CALL destinations must respect scheduled-node budget "
+                +"and leave later STORE effect UNKNOWN");
+        // 12k duplicate edges to one known leaf are only two unique nodes.
+        var duplicate=HardwareCallEffects.summarize(0,List.of(
+            new HardwareCallEffects.FunctionNode(0,false,false,false,
+                java.util.Collections.nCopies(12_000,1L)),
+            n(1,true,false,false)),2,2);
+        ok(duplicate.visited()==2 && duplicate.possibleMemoryStore() &&
+            !duplicate.truncated() && !duplicate.unresolved(),
+            "duplicate fan-in does not trigger false cap");
+        var missingWide=new java.util.ArrayList<Long>();
+        for(int i=0;i<12000;i++)missingWide.add(0x100000L+i);
+        var unknownFrontier=HardwareCallEffects.summarize(0,List.of(
+            new HardwareCallEffects.FunctionNode(0,false,false,false,
+                missingWide)),2,2);
+        ok(unknownFrontier.visited()==1 && unknownFrontier.unresolved() &&
+            !unknownFrontier.truncated(),
+            "unresolved missing targets remain UNKNOWN without fake scheduled nodes");
+        boolean invalidLimit=false;
+        try {
+            HardwareCallEffects.summarize(0,List.of(n(0,false,false,false)),
+                2,HardwareCallEffects.MAX_REQUESTED_FUNCTIONS+1);
+        } catch(IllegalArgumentException expected) {invalidLimit=true;}
+        ok(invalidLimit,"reject unbounded requested call graph node budget");
+        invalidLimit=false;
+        try {
+            HardwareCallEffects.summarize(-1,List.of(n(0,false,false,false)),2,2);
+        } catch(IllegalArgumentException expected) {invalidLimit=true;}
+        ok(invalidLimit,"reject negative CALL root");
         System.out.println("HardwareCallEffectsSelfTest OK");
     }
 }
