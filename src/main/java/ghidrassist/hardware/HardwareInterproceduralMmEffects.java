@@ -167,8 +167,11 @@ public final class HardwareInterproceduralMmEffects {
             .thenComparingLong(CallSite::pc)
             .thenComparing(CallSite::target,
                 Comparator.nullsFirst(Long::compare)));
-        if(interestingCallers.size()>50000 || interestingCallers.contains(null))
-            throw new IllegalArgumentException("Invalid interesting caller set");
+        if(interestingCallers.size()>50000)
+            throw new IllegalArgumentException("Unbounded interesting caller set");
+        for(Long caller:interestingCallers)
+            if(caller==null || caller<0)
+                throw new IllegalArgumentException("Invalid interesting caller");
         Set<Long> interesting=new HashSet<>(interestingCallers);
         // A repeated exact target must reuse its first deterministic summary.
         // A separate cap on total scheduled PCs prevents O(callSites * maxCount)
