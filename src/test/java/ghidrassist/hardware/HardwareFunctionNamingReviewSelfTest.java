@@ -80,6 +80,33 @@ public final class HardwareFunctionNamingReviewSelfTest {
             "oversized function symbol cannot produce an unbounded CSV cell");
         ok(HardwareFunctionNamingReview.toCsvRows(proposals).equals(csv),
             "normal register/function review rows remain byte-identical");
+        // Third legacy naming export must not emit unlimited review rows.
+        String atCap=HardwareFunctionNamingReview.toCsvRows(
+            java.util.Collections.nCopies(
+                HardwareFunctionNamingReview.MAX_CSV_ROWS,p));
+        ok(atCap.lines().count()==HardwareFunctionNamingReview.MAX_CSV_ROWS &&
+            !atCap.contains("INCOMPLETE_EXPORT_NEVER_AUTO_APPLY") &&
+            !atCap.contains("OMITTED_ROWS="),
+            "exactly 5000 valid rows are exported without false incompleteness");
+        String omitted=HardwareFunctionNamingReview.toCsvRows(
+            java.util.Collections.nCopies(
+                HardwareFunctionNamingReview.MAX_CSV_ROWS+3,p));
+        String last=omitted.lines().reduce((a,b)->b).orElse("");
+        ok(omitted.lines().count()==HardwareFunctionNamingReview.MAX_CSV_ROWS+1 &&
+            omitted.contains("OMITTED_ROWS=3") &&
+            last.contains("INCOMPLETE_EXPORT_NEVER_AUTO_APPLY") &&
+            last.split(",",-1).length==7 &&
+            omitted.length()<2_500_000,
+            "additional proposals capped with one seven-column incomplete row");
+        boolean invalidCsv=false;
+        try { HardwareFunctionNamingReview.toCsvRows(null); }
+        catch(IllegalArgumentException expected){invalidCsv=true;}
+        ok(invalidCsv,"null function CSV input rejected");
+        invalidCsv=false;
+        try { HardwareFunctionNamingReview.toCsvRows(
+            java.util.Arrays.asList((HardwareFunctionNamingReview.Proposal)null)); }
+        catch(IllegalArgumentException expected){invalidCsv=true;}
+        ok(invalidCsv,"null row never treated as complete review evidence");
         System.out.println("HardwareFunctionNamingReviewSelfTest OK");
     }
 }
