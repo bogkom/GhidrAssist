@@ -906,3 +906,16 @@ Regresja Java21 obejmuje 16 384 zamkniętych obcych celów, wybrany
 kandydat MM za nimi, permutację kolejności i 200 001 krawędzi.
 Wymagane testy GitHub Actions / Ghidra 12.1.4 PUBLIC / Java25 na
 dokładnym SHA. Nie jest to dowód wykonania ani aktywnego MM.
+
+## GA-17/18 — kandydat 2026-11-05: kontrolowany bootstrap Gradle w Actions
+
+Po próbach PR #159 stwierdzono niezależne błędy sieciowego pobierania
+Gradle 9.7.1 (timeout 10 s / HTTP 504), **przed testami produktu**.
+Pilotaż obejmuje trzy workflow: pełny build rozszerzenia, GA-18 pakiet A
+i siedem testów bezpieczeństwa syntetycznej Ghidry. W izolowanym
+`RUNNER_TEMP`, po weryfikacji SHA oryginalnego ZIP Ghidry 12.1.4
+PUBLIC, helper sprawdza stały adres dystrybucji Gradle i zmienia
+**wyłącznie tymczasowy** timeout na 120 s, dwa ponowienia i backoff.
+Nie zmienia wersji Gradle ani binariów. Osobna regresja shellowa
+sprawdza pin, idempotencję, odrzucenie symlinków i obcych ścieżek.
+Pełny CI na dokładnym SHA jest wymagany; nie wznawiamy Supervisora.
