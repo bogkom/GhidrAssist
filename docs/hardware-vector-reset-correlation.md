@@ -51,3 +51,20 @@ remain explicit. The worklist prevents stack overflow on deep call
 chains. No state is propagated between functions: this is only
 possible-source-effect collection, never runtime order or physical
 MCU behavior.
+
+## 2026-11-05 — RESET completeness propagated into vector rows
+
+The vector/RESET correlation has **two independent evidence horizons**:
+(1) whether RESET itself and its bounded call graph are established, and
+(2) whether an individual vector target's transitive STORE/VBR subtree
+contains unknown calls, recursion or caps. An independently closed
+per-vector subtree cannot establish a reliable RESET relationship if the
+RESET root is missing or its own graph is truncated.
+
+For this reason, `Row.flowUncertain` is now true whenever either
+`resetRootRecognized=false` or `resetGraphIncomplete=true`, even if the
+vector's local effect summary has no unknowns. Static relation labels,
+vector counts and candidate STORE/VBR effects are unchanged; this flag is
+not an execution trace or an ISR activation result. Deterministic Java21
+regressions cover both image-zero and relocated candidate tables, a
+missing RESET root, and retained local effects/counters.

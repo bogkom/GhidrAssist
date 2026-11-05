@@ -3,6 +3,15 @@
 Status: **IN PROGRESS — integrated baseline 2026-11-04**. Scope source: user-approved 2026-10-28 requirements (A–H, additional features 13.1–13.7, PDF/RAG, testing and Codex Supervisor integration).
 
 
+## GA-01/11 — kandydat 2026-11-05: niepewność RESET w korelacji wektorów
+
+W `HardwareVectorResetCorrelation` istniejące `flowUncertain` musi
+uwzględniać również brak rozpoznanego korzenia RESET lub niekompletny
+graf połączeń, nawet gdy lokalne poddrzewo wektora jest domknięte.
+Zachowujemy adresy, relacje statyczne i niezależne kandydaty STORE/VBR.
+Java21 i pełny build Ghidry 12.1.4 PUBLIC / Java25 wymagają PASS na
+dokładnym SHA. Nie jest to dowód wykonania RESET/ISR.
+
 ## GA-01 — kandydat 2026-11-05: kolejka RESET i cykle CALL
 
 Statyczny graf wywołań RESET ma odrzucać eksplozję powtórzonych ścieżek:

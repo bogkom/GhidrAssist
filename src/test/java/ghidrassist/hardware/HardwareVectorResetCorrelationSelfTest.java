@@ -94,6 +94,30 @@ public final class HardwareVectorResetCorrelationSelfTest {
             !relocatedText.contains("| Vector | Image-zero pointer |") &&
             relocatedText.contains("runtime VBR and IRQ activation UNKNOWN"),
             "relocated VBR vector words must not be mislabeled image-zero");
+        var incompleteRelocated=HardwareVectorResetCorrelation.inspectRelocated(
+            0x800L,true,true,reset.visitedEntries(),targets,graph,32);
+        check(incompleteRelocated.rows().stream().allMatch(
+                HardwareVectorResetCorrelation.Row::flowUncertain) &&
+            incompleteRelocated.recognizedTargets()==report.recognizedTargets() &&
+            incompleteRelocated.sharedResetSubset()==report.sharedResetSubset() &&
+            incompleteRelocated.rows().get(1).memoryStoreEffect().equals(
+                "NOT_OBSERVED_IN_BOUNDED_GRAPH"),
+            "incomplete RESET graph poisons every row's relation confidence"
+                +" without inventing a STORE or changing observed counts");
+        var incompleteImageZero=HardwareVectorResetCorrelation.inspect(
+            true,true,reset.visitedEntries(),targets,graph,32);
+        check(incompleteImageZero.rows().stream().allMatch(
+                HardwareVectorResetCorrelation.Row::flowUncertain),
+            "image-zero source rows receive the same RESET incompleteness gate");
+        var completeRelocated=HardwareVectorResetCorrelation.inspectRelocated(
+            0x800L,true,false,reset.visitedEntries(),targets,graph,32);
+        check(!completeRelocated.rows().get(1).flowUncertain() &&
+            incompleteRelocated.rows().get(1).flowUncertain() &&
+            completeRelocated.rows().get(1).relation()==
+                incompleteRelocated.rows().get(1).relation() &&
+            completeRelocated.rows().get(1).memoryStoreEffect().equals(
+                incompleteRelocated.rows().get(1).memoryStoreEffect()),
+            "row confidence changes with RESET horizon, not static local effect");
         var emptyRelocated=HardwareVectorResetCorrelation.inspectRelocated(
             0x800L,true,false,Set.of(),List.of(),graph,32);
         check(emptyRelocated.rows().isEmpty() &&
@@ -117,6 +141,9 @@ public final class HardwareVectorResetCorrelationSelfTest {
             missingRoot.rows().get(0).relation() ==
                 HardwareVectorResetCorrelation.Relation.RESET_ROOT_UNKNOWN,
             "unknown reset forbids false graph relation");
+        check(missingRoot.rows().stream().allMatch(
+                HardwareVectorResetCorrelation.Row::flowUncertain),
+            "unrecognized RESET root must poison row-level flow confidence");
         var unknownCall = HardwareVectorResetCorrelation.inspect(
             true, true, Set.of(), List.of(
                 new HardwareVectorResetCorrelation.Target(40, 0x500, 0x500, true)),
