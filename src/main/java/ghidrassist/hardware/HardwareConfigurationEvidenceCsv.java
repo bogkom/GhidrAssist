@@ -11,12 +11,40 @@ public final class HardwareConfigurationEvidenceCsv {
     public static final String HEADER="record_type,function,source_pc,register_candidate,address_candidate,"+
         "access,width_bits,word_literal_candidate,prior_simcr_candidate,mm_literal_bit,"+
         "other_pc,graph_relation,unknown_alias_or_flow,interpretation\n";
+    public static final int MAX_CSV_CELL_CHARS=512;
+    private static final String CELL_TRUNCATION=" [SOURCE_TRUNCATED]";
+    /** 
+     * Source-site register labels may originate from untrusted imported
+     * symbols. Quoting CSV alone does not stop spreadsheet formula parsing.
+     * Apply the same bounded Unicode Cf-aware escape policy as the read-only
+     * function/register Review CSV; no result authorizes a Program edit.
+     */
     private static String cell(String value){
         if(value==null)value="";
-        value=value.replace("\r"," ").replace("\n"," ").replace("\u0000"," ");
-        // Spreadsheet files must not evaluate imported symbol names as formulas.
-        if(!value.isEmpty() && "=+-@\t".indexOf(value.charAt(0))>=0)value="'"+value;
-        return "\""+value.replace("\"","\"\"")+"\"";
+        if(value.length()>MAX_CSV_CELL_CHARS) {
+            int cut=MAX_CSV_CELL_CHARS-CELL_TRUNCATION.length();
+            // Never clip between UTF-16 halves of one code point.
+            if(Character.isHighSurrogate(value.charAt(cut-1)) &&
+                    Character.isLowSurrogate(value.charAt(cut)))cut--;
+            value=value.substring(0,cut)+CELL_TRUNCATION;
+        }
+        String normalized=value.replace("\r"," ").replace("\n"," ")
+            .replace("\u0000"," ").replace("\u2028"," ")
+            .replace("\u2029"," ");
+        int pos=0;
+        while(pos<normalized.length()){
+            int cp=normalized.codePointAt(pos);
+            if(!Character.isWhitespace(cp) &&
+                    !Character.isSpaceChar(cp) &&
+                    Character.getType(cp)!=Character.FORMAT)break;
+            pos+=Character.charCount(cp);
+        }
+        if(pos<normalized.length() &&
+                "=+-@".indexOf(normalized.charAt(pos))>=0)
+            normalized="'"+normalized;
+        else if(normalized.startsWith("\t"))
+            normalized="'"+normalized;
+        return "\""+normalized.replace("\"","\"\"")+"\"";
     }
     private static String hex(long value){
         return String.format(Locale.ROOT,"0x%08X",value);
