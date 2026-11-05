@@ -832,3 +832,12 @@ substring, including invalid, reversed and non-contiguous numbers.
 labels. This validates **claim syntax only**, not PDF bytes, editions,
 register facts or physical hardware. Needs Java21 and full Ghidra
 12.1.4 PUBLIC/Java25 PASS on exact PR SHA. No user firmware or projects.
+
+## GA-08/13 — candidate 2026-11-05: bounded function naming CSV export
+
+The read-only legacy function-role naming CSV now retains at most 5,000
+candidate rows and emits an explicit seven-column omitted-row sentinel
+(`OMITTED_ROWS`, `INCOMPLETE_EXPORT_NEVER_AUTO_APPLY`). Untrusted cells
+remain formula-safe and bounded. No Review/Apply permission or actual
+function name is changed; full Ghidra 12.1.4 PUBLIC/Java25 and Java21
+regressions require a fresh PASS on the exact candidate SHA.
