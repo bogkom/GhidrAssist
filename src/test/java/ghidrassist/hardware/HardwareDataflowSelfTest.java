@@ -361,6 +361,31 @@ public final class HardwareDataflowSelfTest {
             "aggregate source CFG edge count applies across all steps");
         ok(straightforward.snapshots.get(0).effectiveAddress==simcr,
             "rejected oversized CFG does not modify prior MMIO evidence");
+        // A caller-supplied indexed Step must obey the same CPU32
+        // 32-bit extension limit as parsed actual Ghidra operands.
+        // Otherwise 0x100000000 silently wraps on the 24-bit bus and
+        // could masquerade as a precise MC68332 SIMCR source.
+        var edgePositive=new HardwareDataflow.Step(0,"A1","D0",
+            "D1",16,1,0xffffffffL,null,16,List.of(),"MOVE.W");
+        var edgeNegative=new HardwareDataflow.Step(0,"A1","D0",
+            "D1",16,1,-0x80000000L,null,16,List.of(),"MOVE.W");
+        ok(edgePositive.displacement==0xffffffffL &&
+            edgeNegative.displacement==-0x80000000L,
+            "valid signed/unsigned 32-bit extension bounds unchanged");
+        boolean deniedLongDisplacement=false;
+        try {
+            new HardwareDataflow.Step(0,"A1","D0","D1",16,1,
+                0x100000000L,null,16,List.of(),"MOVE.W");
+        }catch(IllegalArgumentException expected){deniedLongDisplacement=true;}
+        ok(deniedLongDisplacement,
+            "synthetic >32-bit displacement cannot become 24-bit MMIO");
+        deniedLongDisplacement=false;
+        try {
+            new HardwareDataflow.Step(0,"A1","D0","D1",16,1,
+                -0x80000001L,null,16,List.of(),"MOVE.W");
+        }catch(IllegalArgumentException expected){deniedLongDisplacement=true;}
+        ok(deniedLongDisplacement,
+            "negative below signed 32-bit displacement also fails closed");
         System.out.println("HardwareDataflowSelfTest OK");
     }
 }
