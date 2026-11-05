@@ -1006,3 +1006,17 @@ a kod Ghidry wymaga ponadto rzeczywistego `Scalar`.
 Dodano niezależny test Java21 i ponowiono rzeczywisty
 dwupoziomowy test indeksowanego MMIO. Inne instrukcje
 oraz nieznane indeksy pozostają konserwatywne.
+
+### GA-02/03 + GA-17/18 — 2026-11-05: granica szerokości indeksu MCU24
+
+`HardwareIndexedAddress` dopuszczał przesunięcia >32 bity,
+które maskowanie do 24-bitowej przestrzeni MCU mogło zamienić
+w pozornie prawidłowy adres MMIO. Gramatyka odrzuca teraz
+za długi operand (>128 znaków UTF-16) i przesunięcia spoza
+przedziału `-0x80000000..0xFFFFFFFF`. Kontrola działa
+również w publicznym konstruktorze indeksowanego
+`HardwareDataflow.Step`, aby syntetyczny graf nie ominął
+parsera. Regresje Java21 obejmują obie granice i odrzucanie
+przepełnień, zachowując składnię Ghidry 12.1.4 PUBLIC.
+Wymagane pełne CI oraz rzeczywista syntetyczna Ghidra na SHA PR;
+to dowody źródłowe, nie fizyczna mapa magistrali ani aktywny MM.
