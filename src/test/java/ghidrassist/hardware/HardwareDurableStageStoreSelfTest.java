@@ -9,6 +9,18 @@ import static ghidrassist.hardware.HardwareDurableStageStore.*;
 public final class HardwareDurableStageStoreSelfTest {
     private HardwareDurableStageStoreSelfTest(){}
     private static void ok(boolean b,String why){if(!b)throw new AssertionError(why);}
+    /** Synthetic source can grow forever after an optimistic size check. */
+    private static final class EndlessSource extends java.io.InputStream {
+        int consumed;
+        @Override public int read() {
+            consumed++;return 0;
+        }
+        @Override public int read(byte[] bytes,int offset,int length) {
+            Arrays.fill(bytes,offset,offset+length,(byte)0);
+            consumed+=length;
+            return length;
+        }
+    }
     public static void main(String[] args)throws Exception {
         Path dir=Files.createTempDirectory("ga12-durable-synthetic-");
         try{
@@ -24,6 +36,27 @@ public final class HardwareDurableStageStoreSelfTest {
             save(dir,identity,data);
             ok(Arrays.equals(load(dir,identity).orElseThrow(),data),
                 "durable checkpoint survives independent disk load");
+            ok(Arrays.equals(decodeBounded(
+                    new java.io.ByteArrayInputStream(Files.readAllBytes(
+                        checkpointPath(dir,identity))),identity).orElseThrow(),data),
+                "bounded stream decode preserves exact existing checkpoint content");
+            // Tiny read chunks still form a valid record; no readAllBytes needed.
+            byte[] exact=Files.readAllBytes(checkpointPath(dir,identity));
+            var chunked=new java.io.ByteArrayInputStream(exact){
+                @Override public synchronized int read(byte[] bytes,int off,int len){
+                    return super.read(bytes,off,Math.min(7,len));
+                }
+            };
+            ok(Arrays.equals(decodeBounded(chunked,identity).orElseThrow(),data),
+                "partial InputStream reads do not corrupt checkpoint decode");
+            var endless=new EndlessSource();
+            ok(decodeBounded(endless,identity).isEmpty() &&
+                endless.consumed==MAX_FILE_BYTES+1,
+                "file growth after stat cannot cause an unbounded read");
+            ok(decodeBounded(null,identity).isEmpty() &&
+                decodeBounded(new java.io.ByteArrayInputStream(exact),null).isEmpty(),
+                "missing stream/key must remain a cache miss");
+
             ok(load(dir,new Key(project,original,
                 hash("same-import-but-modified-ghidra-listing"),code,
                 "68000:BE:32:CPU32",true)).isEmpty(),
@@ -58,6 +91,17 @@ public final class HardwareDurableStageStoreSelfTest {
             try{new Key(project,original,original,code,"",true);}
             catch(IllegalArgumentException e){refused=true;}
             ok(refused,"empty analysis language rejected");
+            // Sparse oversized file: metadata guard rejects it before
+            // allocating its apparent length. Restoring exact bytes works.
+            try(java.io.RandomAccessFile oversized=
+                    new java.io.RandomAccessFile(file.toFile(),"rw")){
+                oversized.setLength(MAX_FILE_BYTES+100L);
+            }
+            ok(load(dir,identity).isEmpty(),
+                "oversized on-disk checkpoint refuses to load");
+            Files.write(file,correct);
+            ok(Arrays.equals(load(dir,identity).orElseThrow(),data),
+                "oversized rejection cannot poison future valid loads");
             // A hostile redirect cannot trick checkpoint writes.
             Files.delete(file);
             Path outside=Files.createTempFile("ga12-other",".bin");
