@@ -69,45 +69,84 @@ public final class AutomationCallPaths {
         Function f=program.getFunctionManager().getFunctionAt(target);
         return f==null?null:f.getEntryPoint();
     }
-    // Bounded straight-line proof only. Backtrack up to four decoded
-    // instructions. Only CPU32 NOP and MOVEQ #imm,Dn are permitted between
-    // the constant assignment and JSR (An). Both preserve all address registers;
-    // any branch, unknown instruction, or register overwrite stops the proof.
-    private static Edge boundedConstantRegisterCall(Program program, Instruction call)
+    /**
+     * Read-only source witness for a CPU32 register-indirect CALL. The movePc
+     * is an actual decoded MOVEA.L #absolute,An instruction. Only a maximum
+     * of three intervening NOP / MOVEQ instructions is supported; these
+     * cannot write An. This is a possible straight-line source, never an
+     * execution or unique-CFG-path assertion.
+     */
+    public record BoundedCallSource(Address target,Address movePc,
+                                    String evidence) {}
+
+    /**
+     * Strictly byte-proven short register-indirect chain. When a caller owner
+     * is provided, EVERY decoded instruction in the chain must belong to
+     * that same Function body. This avoids borrowing a source from a
+     * neighboring function during the hardware evidence pass. The original
+     * Automation call-path verifier may use null for its historical scope.
+     */
+    public static BoundedCallSource boundedConstantRegisterSource(
+            Program program,Instruction call,Function requiredOwner)
             throws ghidra.program.model.mem.MemoryAccessException {
-        if(!"68000:BE:32:CPU32".equals(program.getLanguageID().toString())) return null;
+        if(program==null || call==null ||
+                !"68000:BE:32:CPU32".equals(
+                    program.getLanguageID().toString()))return null;
+        if(requiredOwner!=null &&
+                !requiredOwner.getBody().contains(call.getAddress()))return null;
         byte[] callBytes=call.getBytes();
-        if(callBytes.length!=2) return null;
+        if(callBytes.length!=2)return null;
         int callOp=((callBytes[0]&255)<<8)|(callBytes[1]&255);
-        if((callOp&0xfff8)!=0x4e90) return null;
+        if((callOp&0xfff8)!=0x4e90)return null; // JSR (An)
         Instruction cursor=call;
         boolean sawMoveq=false;
         for(int distance=0;distance<4;distance++) {
-            Instruction prev=program.getListing().getInstructionBefore(cursor.getAddress());
+            Instruction prev=program.getListing()
+                .getInstructionBefore(cursor.getAddress());
             if(prev==null || prev.getMaxAddress().next()==null ||
-               !prev.getMaxAddress().next().equals(cursor.getAddress())) return null;
+                    !prev.getMaxAddress().next().equals(cursor.getAddress()) ||
+                    requiredOwner!=null && !requiredOwner.getBody()
+                        .contains(prev.getAddress()))return null;
             byte[] data=prev.getBytes();
             if(data.length==2) {
                 int middle=((data[0]&255)<<8)|(data[1]&255);
-                // MOVEQ #signed8,Dn modifies a data register and CCR only,
-                // never an address register; unlike branch opcodes it falls through.
+                // MOVEQ #signed8,Dn modifies data/CCR, never An; no
+                // branch or register/stack/memory effect is allowed.
                 if(middle==0x4e71 || (middle&0xf100)==0x7000) {
-                    if((middle&0xf100)==0x7000) sawMoveq=true;
+                    if((middle&0xf100)==0x7000)sawMoveq=true;
                     cursor=prev;
                     continue;
                 }
             }
-            if(data.length!=6) return null;
+            if(data.length!=6)return null;
             int op=((data[0]&255)<<8)|(data[1]&255);
-            if(op!=(0x207c|((callOp&7)<<9))) return null;
-            long address=((long)(data[2]&255)<<24)|((long)(data[3]&255)<<16)|
-                         ((long)(data[4]&255)<<8)|(data[5]&255);
-            Address target=program.getAddressFactory().getDefaultAddressSpace().getAddress(address);
-            Function f=program.getFunctionManager().getFunctionAt(target);
-            return f==null?null:new Edge(call.getAddress(),f.getEntryPoint(),
-                sawMoveq ? "bounded_movea_safe_chain" : "bounded_movea_nop_chain");
+            if(op!=(0x207c|((callOp&7)<<9)))return null;
+            long address=((long)(data[2]&255)<<24)|
+                ((long)(data[3]&255)<<16)|
+                ((long)(data[4]&255)<<8)|(data[5]&255);
+            Address target=program.getAddressFactory().getDefaultAddressSpace()
+                .getAddress(address);
+            Function function=program.getFunctionManager()
+                .getFunctionAt(target);
+            if(function==null)return null;
+            String evidence=distance==0?"adjacent_movea_immediate":
+                sawMoveq?"bounded_movea_safe_chain":
+                    "bounded_movea_nop_chain";
+            return new BoundedCallSource(function.getEntryPoint(),
+                prev.getAddress(),evidence);
         }
         return null;
+    }
+
+    // Preserve Automation API's historic short-chain semantics; it still
+    // reports exact provenance per CALL and requires a defined target.
+    private static Edge boundedConstantRegisterCall(Program program,
+            Instruction call)
+            throws ghidra.program.model.mem.MemoryAccessException {
+        BoundedCallSource witness=boundedConstantRegisterSource(
+            program,call,null);
+        return witness==null?null:new Edge(
+            call.getAddress(),witness.target(),witness.evidence());
     }
     private static Map<Address,Node> index(Program program)
             throws ghidra.program.model.mem.MemoryAccessException {
