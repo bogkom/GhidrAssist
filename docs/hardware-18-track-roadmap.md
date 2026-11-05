@@ -971,3 +971,38 @@ próg z dwóch węzłów, odmowę wznowienia niezgodnego grafu
 i niezmienność wcześniej zamkniętych dowodów.
 Wymagany pełny PASS Ghidry 12.1.4 PUBLIC / Java25 na SHA PR.
 Wynik jest statycznym MAY/UNKNOWN, bez uruchamiania firmware.
+
+## GA-02/03 + GA-17/18 — candidate 2026-11-05: indexed MMIO po dwóch CALL
+
+Istniejący test headless potwierdzał dwa CALL i zapis `(A1)`,
+lecz nie indeks `(A1,D1.W)` dekodowany przez rzeczywistą Ghidrę.
+Osobny syntetyczny tryb `two-hop-indexed` weryfikuje 24-bitowe
+adresowanie i indeks D1.W=-1, dwa niezależne konteksty A0/D0/D1,
+brak sztucznej wartości D1 w trzecim kontekście, niezmienność
+projektu i zakaz awansu do Apply. Java21 testuje też
+niezgodne wartości indeksu na zbieżnych ścieżkach. Wymagany
+pełny build Ghidra 12.1.4 PUBLIC / Java25 i rzeczywisty
+syntetyczny headless PASS na dokładnym SHA PR.
+
+### 2026-11-05 — GA-02/03/18 CPU32 indeks: luka rzeczywistej składni
+
+Nowa syntetyczna Ghidra ujawniła konkretny brak dekodera:
+rzeczywisty operand `(0x1,A1,D1w*0x1)` nie pasował do
+`D1.W*1`. Zmieniono wyłącznie ścisłą gramatykę indeksu,
+akceptując oba warianty i skalowanie `0x1/2/4/8`.
+Dodano osobny test Java21 parsera i rzeczywisty test indeksu
+przekazywanego przez dwa CALL; konflikt D1 lub brak D1
+pozostaje nieznanym aliasem, a nie potwierdzonym zapisem.
+Wymagany pełny CI na dokładnym SHA i checkpoint.
+
+### 2026-11-05 — GA-02/03/18 MOVEQ: rozpoznanie natychmiastowej stałej
+
+Rzeczywista syntetyczna Ghidra 12.1.4 pokazała
+`moveq -0x1,D1` bez prefiksu `#`; poprzedni dekoder
+odrzucał wartość D1 jeszcze przed zewnętrznym JSR.
+`HardwareRegisterOperand.isImmediateToken` uznaje
+ściśle numeryczny argument bez `#` wyłącznie dla `MOVEQ`,
+a kod Ghidry wymaga ponadto rzeczywistego `Scalar`.
+Dodano niezależny test Java21 i ponowiono rzeczywisty
+dwupoziomowy test indeksowanego MMIO. Inne instrukcje
+oraz nieznane indeksy pozostają konserwatywne.

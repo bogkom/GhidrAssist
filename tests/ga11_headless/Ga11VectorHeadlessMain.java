@@ -20,6 +20,7 @@ import ghidra.util.task.TaskMonitor;
 import ghidra.util.exception.CancelledException;
 import ghidrassist.hardware.GhidraInterruptVectorService;
 import ghidrassist.hardware.GhidraHardwareFlowService;
+import ghidrassist.hardware.HardwareIndexedAddress;
 import ghidrassist.hardware.HardwareInventoryService;
 import ghidrassist.hardware.HardwareFlowStageCache;
 import ghidrassist.hardware.HardwareAnalysisRevision;
@@ -81,7 +82,7 @@ public final class Ga11VectorHeadlessMain {
             "generic-profile","trambar-source","csbar-mm0-reject",
             "mmio-read-reference","csbar-csor-conditional",
             "simcr-mm0-literal","trambar-unknown","csor-alternatives",
-            "branch-simcr","call-barrier","leaf-return","call-context","joint-source","two-hop","branch-leaf","branch-cache","cancel-incomplete",
+            "branch-simcr","call-barrier","leaf-return","call-context","joint-source","two-hop","two-hop-indexed","branch-leaf","branch-cache","cancel-incomplete",
             "function-stage-resume","function-rename","receipt-restart-write",
             "receipt-restart-read","apply-preserve","provenance-csv",
             "movec-vbr","vbr-relocation").contains(ga18Mode),
@@ -1121,6 +1122,138 @@ public final class Ga11VectorHeadlessMain {
                     result.addProperty("twohop_repeat_deterministic",true);
                     result.addProperty("twohop_generic_profile_conservative",true);
                     result.addProperty("twohop_read_only",true);
+                } else if("two-hop-indexed".equals(ga18Mode)) {
+                    // Actual CPU32 disassembly: outer caller passes
+                    // A0, D0, D1.W=-1 to a direct JSR bridge.
+                    // The bridge copies A0 to A1, then JSR leaf performs
+                    // MOVE.W D0,1(A1,D1.W). This must resolve the
+                    // 24-bit candidate to A1 without inventing execution.
+                    // A separate caller without D1 must remain UNKNOWN.
+                    int txIndexed=full.startTransaction(
+                        "GA02 isolated two-hop indexed STORE fixture");
+                    try {
+                        full.getMemory().setBytes(address(full,0x700L),
+                            java.util.HexFormat.of().parseHex("338010014e75"));
+                        full.getMemory().setBytes(address(full,0x640L),
+                            java.util.HexFormat.of().parseHex(
+                                "22484eb9000007004e75"));
+                        full.getMemory().setBytes(address(full,0x600L),
+                            java.util.HexFormat.of().parseHex(
+                                "207c00fffa00203c000040ca72ff"+
+                                "4eb9000006404e75"));
+                        full.getMemory().setBytes(address(full,0x680L),
+                            java.util.HexFormat.of().parseHex(
+                                "207c00fffa68203c0000484872ff"+
+                                "4eb9000006404e75"));
+                        full.getMemory().setBytes(address(full,0x6a0L),
+                            java.util.HexFormat.of().parseHex(
+                                "207c00fffa00203c000040ca"+
+                                "4eb9000006404e75"));
+                    } finally { full.endTransaction(txIndexed,true); }
+                    defineFixtureFunction(full,0x700L,6,
+                        "ga02_indexed_leaf_move_w_d0_displ_a1_d1w");
+                    defineFixtureFunction(full,0x640L,10,
+                        "ga02_indexed_bridge_movea_and_jsr");
+                    defineFixtureFunction(full,0x600L,22,
+                        "ga02_indexed_simcr_caller");
+                    defineFixtureFunction(full,0x680L,22,
+                        "ga02_indexed_csbar_caller");
+                    defineFixtureFunction(full,0x6a0L,20,
+                        "ga02_indexed_unknown_d1_caller");
+                    var indexedInsn=full.getListing().getInstructionAt(
+                        address(full,0x700L));
+                    check(indexedInsn!=null &&
+                        indexedInsn.getNumOperands()==2 &&
+                        indexedInsn.getMnemonicString().toUpperCase(
+                            Locale.ROOT).startsWith("MOVE"),
+                        "Ghidra failed to disassemble CPU32 indexed STORE");
+                    String indexedOperand=indexedInsn
+                        .getDefaultOperandRepresentation(1);
+                    var indexed=HardwareIndexedAddress.parse(indexedOperand);
+                    check(indexed!=null &&
+                        "A1".equals(indexed.base()) &&
+                        "D1".equals(indexed.index()) &&
+                        indexed.indexBits()==16 &&
+                        indexed.scale()==1 && indexed.displacement()==1,
+                        "Ghidra actual CPU32 indexed operand was not modeled: "+
+                            indexedOperand);
+                    var nested=full.getListing().getInstructionAt(
+                        address(full,0x642L));
+                    var outer=full.getListing().getInstructionAt(
+                        address(full,0x60eL));
+                    check(nested!=null && nested.getFlowType().isCall() &&
+                        nested.getFlows().length==1 &&
+                        nested.getFlows()[0].equals(address(full,0x700L)) &&
+                        outer!=null && outer.getFlowType().isCall() &&
+                        outer.getFlows().length==1 &&
+                        outer.getFlows()[0].equals(address(full,0x640L)),
+                        "Ghidra actual two direct JSR edges were not decoded");
+                    var moveq=full.getListing().getInstructionAt(
+                        address(full,0x60cL));
+                    check(moveq!=null &&
+                        moveq.getMnemonicString().toUpperCase(Locale.ROOT)
+                            .startsWith("MOVEQ"),
+                        "Ghidra did not decode signed MOVEQ #-1,D1");
+                    check(ghidrassist.hardware.HardwareRegisterOperand
+                            .isImmediateToken(
+                                moveq.getDefaultOperandRepresentation(0),
+                                moveq.getMnemonicString()) &&
+                            moveq.getScalar(0)!=null,
+                        "CPU32 real MOVEQ signed scalar lacked source evidence");
+                    long revision=full.getModificationNumber();
+                    var report=new GhidraHardwareFlowService().analyze(
+                        full,TaskMonitor.DUMMY,true);
+                    String md=report.markdown;
+                    int section=md.indexOf(
+                        "## Bounded two-hop CALL argument/MMIO "+
+                        "source candidates (GA-02/03)");
+                    check(section>=0,"Two-hop indexed source report missing");
+                    String source=md.substring(section);
+                    check(source.contains(
+                        "| 0x00000600 | 0x0000060E | 0x00000640 | "+
+                        "0x00000642 | 0x00000700 | 0x00000700 | "+
+                        "0x00FFFA00 | 0x000040CA | 16 |") &&
+                        source.contains(
+                        "| 0x00000680 | 0x0000068E | 0x00000640 | "+
+                        "0x00000642 | 0x00000700 | 0x00000700 | "+
+                        "0x00FFFA68 | 0x00004848 | 16 |"),
+                        "CPU32 indexed address candidate or signed D1.W "+
+                        "was lost across direct JSRs: "+
+                        source.substring(0,Math.min(4500,source.length())));
+                    check(!source.contains("| 0x000006A0 |") &&
+                        source.contains("unknown STORE alias: 1"),
+                        "Missing D1 incorrectly became a precise MMIO site: "+
+                        source.substring(0,Math.min(2200,source.length())));
+                    check(report.rawCfgMmioSites.stream().noneMatch(s->
+                        s.pc()==0x700L && s.address()==0xfffa00L),
+                        "Indexed nested source leaked into Apply-eligible CFG");
+                    check(full.getModificationNumber()==revision,
+                        "Indexed source analysis changed the Ghidra Program");
+                    var again=new GhidraHardwareFlowService().analyze(
+                        full,TaskMonitor.DUMMY,true);
+                    String second=again.markdown.substring(
+                        again.markdown.indexOf(
+                            "## Bounded two-hop CALL argument/MMIO "));
+                    check(second.equals(source) &&
+                        full.getModificationNumber()==revision,
+                        "Process-local GA-12 replay mixed indexed CALL contexts");
+                    var generic=new GhidraHardwareFlowService().analyze(
+                        full,TaskMonitor.DUMMY,false);
+                    check(generic.markdown.contains(
+                        "Not evaluated: explicit MC68332 profile required") &&
+                        !generic.markdown.contains(
+                            "| 0x00000600 | 0x0000060E | 0x00000640 |") &&
+                        full.getModificationNumber()==revision,
+                        "Generic CPU32 inherited MCU-specific indexed MMIO");
+                    result.addProperty("twohop_indexed_real_cpu32_decoded",true);
+                    result.addProperty("twohop_indexed_real_nested_jsr",true);
+                    result.addProperty("twohop_indexed_signed_word",true);
+                    result.addProperty("twohop_indexed_context_isolation",true);
+                    result.addProperty("twohop_indexed_unknown_d1",true);
+                    result.addProperty("twohop_indexed_not_review_apply",true);
+                    result.addProperty("twohop_indexed_repeat_deterministic",true);
+                    result.addProperty("twohop_indexed_generic_cpu32_safe",true);
+                    result.addProperty("twohop_indexed_read_only",true);
                 } else if("call-context".equals(ga18Mode) ||
                         "joint-source".equals(ga18Mode)) {
                     boolean jointSource="joint-source".equals(ga18Mode);

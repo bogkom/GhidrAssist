@@ -12,3 +12,55 @@ This increment resolves a supported subset of Motorola/Ghidra memory operands:
 The bridge translates parsed operands to `HardwareDataflow`, which computes the address and integrates it with existing CS/SIM candidates. Synthetic regressions exercise word signed arithmetic, long indexes, different branch predecessors, and an unknown index.
 
 **Remaining:** global value tracking beyond calls, alias analysis, loops with large path combinations, exception/reset-origin CFGs, dynamic RAM maps and physical chip-select wiring. Do not use this output to infer flash programming addresses.
+
+## 2026-11-05 — contextual indexed operands and source integrity
+
+The indexed address model is now exercised with a genuinely decoded
+CPU32 `MOVE.W D0,1(A1,D1.W)` after two direct CALLs. The accepted
+predicate requires predecessor-agreed constants for both base and
+index at that exact STORE PC, with sign extension of D1.W and a
+24-bit effective-address mask. Conflicting or absent D1 remains
+an unresolved alias; it does not become zero and does not authorize
+a Register Review/Apply proposal.
+
+Results must be checked on the **exact synthetic Ghidra 12.1.4
+PUBLIC/Java25 workflow SHA**, not inferred from pure-Java tests
+alone. The test adds evidence of supported syntax only, not support
+for complex 68020 full-extension or memory-indirect addressing.
+
+### Confirmed parser gap from real 12.1.4 PUBLIC Ghidra CI
+
+The first run of the real `two-hop-indexed` harness on PR #168
+did not pass: the **actual Ghidra CodeBrowser/Listing operand was
+`(0x1,A1,D1w*0x1)`**, whereas `HardwareIndexedAddress.parse`
+understood only dotted index-width suffixes and decimal scales
+(e.g. `1(A1,D1.W*1)`). The test failure was evidence of a real
+production decoding gap rather than a fabricated test case.
+
+The strict decoder now additionally accepts Ghidra's undotted
+`D1w`/`A2l` and hexadecimal scale `*0x1/0x2/0x4/0x8`
+renderings, while still rejecting unsupported index sizes/scales,
+PC-relative, memory-indirect and malformed expressions. Dedicated
+Java21 source tests and the genuine synthetic two-hop Ghidra test
+must both pass on the same exact PR SHA. This is not a reason to
+infer unknown index registers or hardware activity.
+
+### Confirmed second real CPU32 decode gap: MOVEQ signed literal
+
+The same headless fixture showed another exact Ghidra 12.1.4 PUBLIC
+spelling difference: `moveq -0x1,D1` has operand representation
+`-0x1` **without a leading `#`**. The existing
+`GhidraHardwareFlowService.immediate` refused it; the translated
+instruction became `CLOBBER_POINTER(D1)`. The outer caller entered
+the first JSR without D1, so both otherwise distinct indexed MMIO
+candidates remained unresolved. When a validated D1=-1 constant was
+manually seeded in a test-only diagnostic, the same real decoded
+leaf produced the expected modulo-24-bit address `0xFFFA00`.
+
+The production gate now permits a bare signed numeric immediate
+**only when the opcode is `MOVEQ`** and Ghidra supplies a real
+`Scalar`. All other numeric operands still require `#`; plain
+register and memory operands remain rejected. The shared strict
+register-operand Java21 regression tests both positive and negative
+forms. The diagnostic reflection was removed from the final harness.
+No global propagation or hardware execution is implied.

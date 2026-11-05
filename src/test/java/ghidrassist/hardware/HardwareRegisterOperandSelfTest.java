@@ -26,6 +26,21 @@ public final class HardwareRegisterOperandSelfTest {
             "only exact register operands are allowed");
         check(HardwareRegisterOperand.sourceOrDestination(
             "A7w","MOVE.W")==null,"A7 stack partial view not inferred");
+        check(HardwareRegisterOperand.isImmediateToken("-0x1","moveq") &&
+            HardwareRegisterOperand.isImmediateToken("0x7f","MOVEQ") &&
+            HardwareRegisterOperand.isImmediateToken("#-0x1","MOVEQ"),
+            "actual Ghidra signed MOVEQ operand is immediate without '#'");
+        check(!HardwareRegisterOperand.isImmediateToken("-0x1","MOVE.W") &&
+            !HardwareRegisterOperand.isImmediateToken("0x7f","MOVE.L") &&
+            !HardwareRegisterOperand.isImmediateToken("-0x1","MOVEC"),
+            "unsuffixed numeric non-MOVEQ operand is not an immediate");
+        check(!HardwareRegisterOperand.isImmediateToken("D1","MOVEQ") &&
+            !HardwareRegisterOperand.isImmediateToken("(A0)","MOVEQ") &&
+            !HardwareRegisterOperand.isImmediateToken("-0x1(A0)","MOVEQ") &&
+            !HardwareRegisterOperand.isImmediateToken(null,"MOVEQ"),
+            "registers, memory and missing values cannot become MOVEQ constants");
+        check(HardwareRegisterOperand.isImmediateToken("#0x40ca","MOVE.W"),
+            "original explicit immediate marker remains supported");
         System.out.println("HardwareRegisterOperandSelfTest OK");
     }
 }

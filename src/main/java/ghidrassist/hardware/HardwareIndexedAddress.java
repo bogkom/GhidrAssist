@@ -13,10 +13,15 @@ import java.util.regex.Pattern;
 public final class HardwareIndexedAddress {
     private HardwareIndexedAddress() {}
     private static final String NUMBER="(?:[-+]?(?:0X[0-9A-F]+|\\$[0-9A-F]+|[0-9]+))";
+    // Ghidra 12.1.4 PUBLIC CPU32 renders the brief extension word as
+    // (0x1,A1,D1w*0x1), while other listing renderers use D1.W*1.
+    // Accept only these equivalent unambiguous width/scale spellings.
+    private static final String INDEX=
+        "([AD][0-7])\\.?([WL])(?:\\*((?:[1248]|0X[1248])))?";
     private static final Pattern OUTSIDE=Pattern.compile(
-        "^("+NUMBER+")?\\(([AD][0-7]),([AD][0-7])\\.(W|L)(?:\\*([1248]))?\\)$");
+        "^("+NUMBER+")?\\(([AD][0-7]),"+INDEX+"\\)$");
     private static final Pattern INSIDE=Pattern.compile(
-        "^\\(("+NUMBER+"),([AD][0-7]),([AD][0-7])\\.(W|L)(?:\\*([1248]))?\\)$");
+        "^\\(("+NUMBER+"),([AD][0-7]),"+INDEX+"\\)$");
 
     public record Expression(String base, String index, int indexBits,
             int scale, long displacement) {
@@ -44,7 +49,11 @@ public final class HardwareIndexedAddress {
         String displacementText=m.group(1);
         String base=m.group(2),index=m.group(3);
         int bits=m.group(4).equals("W")?16:32;
-        int scale=m.group(5)==null?1:Integer.parseInt(m.group(5));
+        String scaleText=m.group(5);
+        int scale=scaleText==null?1:
+            scaleText.startsWith("0X")?
+                Integer.parseInt(scaleText.substring(2),16):
+                Integer.parseInt(scaleText);
         long displacement=0;
         if (displacementText!=null) {
             try {
