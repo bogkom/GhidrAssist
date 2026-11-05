@@ -65,6 +65,11 @@ public final class HardwareInterproceduralMmEffects {
         return effectiveAddress==null ||
             (widthBits!=8 && widthBits!=16 && widthBits!=32);
     }
+    /** Maximum distinct scheduled CALL targets across one analysis batch. */
+    public static final int MAX_BATCH_SCHEDULED=16_384;
+    private static final class BatchBudget {
+        int remaining=MAX_BATCH_SCHEDULED;
+    }
     private record Work(long pc,int depth){}
     private record DfsFrame(long pc,Iterator<Long> remaining){}
 
@@ -102,8 +107,11 @@ public final class HardwareInterproceduralMmEffects {
         return false;
     }
     private static Summary inspect(Long target,Map<Long,FunctionNode> graph,
-            int maxDepth,int maxCount){
+            int maxDepth,int maxCount,BatchBudget budget){
         if(target==null)return new Summary(false,false,true,false,false,0);
+        // Exhaustion is UNKNOWN, never a closed negative MM conclusion.
+        if(budget.remaining==0)return new Summary(false,false,true,false,true,0);
+        budget.remaining--;
         Set<Long> seen=new HashSet<>();
         // One queue entry per distinct PC, including missing targets.
         // Previously a many-to-one call graph could enqueue unbounded
@@ -128,10 +136,11 @@ public final class HardwareInterproceduralMmEffects {
                     // An omitted node may contain a STORE or unknown
                     // control flow. Preserve the cap as uncertainty; never
                     // publish a negative MM conclusion from a truncated set.
-                    if(scheduled.size()>=maxCount){
+                    if(scheduled.size()>=maxCount || budget.remaining==0){
                         limit=true;unknown=true;
                     }else{
                         scheduled.add(callee);
+                        budget.remaining--;
                         queue.addLast(new Work(callee,w.depth()+1));
                     }
                 }
@@ -155,11 +164,21 @@ public final class HardwareInterproceduralMmEffects {
         List<CallSite> sorted=new ArrayList<>(calls);
         if(sorted.contains(null))throw new IllegalArgumentException("Null call");
         sorted.sort(Comparator.comparingLong(CallSite::function)
-            .thenComparingLong(CallSite::pc));
+            .thenComparingLong(CallSite::pc)
+            .thenComparing(CallSite::target,
+                Comparator.nullsFirst(Long::compare)));
+        if(interestingCallers.size()>50000 || interestingCallers.contains(null))
+            throw new IllegalArgumentException("Invalid interesting caller set");
         Set<Long> interesting=new HashSet<>(interestingCallers);
+        // A repeated exact target must reuse its first deterministic summary.
+        // A separate cap on total scheduled PCs prevents O(callSites * maxCount)
+        // work and retains explicit LIMITED/UNKNOWN for unseen targets.
+        Map<Long,Summary> summaries=new HashMap<>();
+        BatchBudget budget=new BatchBudget();
         List<Row> rows=new ArrayList<>();int omitted=0;
         for(CallSite site:sorted){
-            Summary s=inspect(site.target(),graph,maxDepth,maxCount);
+            Summary s=summaries.computeIfAbsent(site.target(),
+                target->inspect(target,graph,maxDepth,maxCount,budget));
             if(!interesting.contains(site.function()) && !s.uncertainOrMm())continue;
             if(rows.size()<rowCap)rows.add(new Row(site,s));
             else omitted++;
