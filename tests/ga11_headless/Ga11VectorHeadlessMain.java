@@ -79,7 +79,7 @@ public final class Ga11VectorHeadlessMain {
         String ga18Mode=args.length>4?args[4]:"none";
         check(Set.of("none","overview","cache","startup","csbar","revision","simcr-alternatives","csbar-width",
             "csbar-independent","csbar-identical","csbar-unknown-word",
-            "simcr-partial","vector-edit-undo","cache-program-isolation",
+            "simcr-partial","vector-edit-undo","reset-interior","cache-program-isolation",
             "generic-profile","trambar-source","csbar-mm0-reject",
             "mmio-read-reference","csbar-csor-conditional",
             "simcr-mm0-literal","trambar-unknown","csor-alternatives",
@@ -209,7 +209,83 @@ public final class Ga11VectorHeadlessMain {
                     } finally { full.endTransaction(writeTx,true); }
                 }
                 long hwBefore=full.getModificationNumber();
-                if("overview".equals(ga18Mode)){
+                if("reset-interior".equals(ga18Mode)){
+                    // Real synthetic CPU32: JSR at 0x620 and RTS at 0x626
+                    // belong to ONE function. RESET at 0x626 must NOT
+                    // "inherit" the earlier JSR to SIMCR source at 0x500.
+                    int fixtureTx=full.startTransaction(
+                        "GA01 isolated RESET/CALL prefix fixture");
+                    try {
+                        full.getMemory().setBytes(address(full,0x620L),
+                            java.util.HexFormat.of().parseHex(
+                                "4eb9000005004e75"));
+                    } finally {full.endTransaction(fixtureTx,true);}
+                    defineFixtureFunction(full,0x620L,8,
+                        "ga01_reset_prefix_jsr_then_rts");
+                    var callBeforeReset=full.getListing().getInstructionAt(
+                        address(full,0x620L));
+                    check(callBeforeReset!=null &&
+                        callBeforeReset.getFlowType().isCall() &&
+                        callBeforeReset.getFlows().length==1 &&
+                        callBeforeReset.getFlows()[0].equals(
+                            address(full,0x500L)),
+                        "Real decoded CPU32 JSR before vector PC not proven");
+                    check(full.getFunctionManager().getFunctionContaining(
+                        address(full,0x626L))!=null &&
+                        full.getFunctionManager().getFunctionAt(
+                            address(full,0x626L))==null,
+                        "Real Ghidra function body is not an exact RESET entry");
+                    int exactTx=full.startTransaction(
+                        "GA01 test-only exact RESET entry vector");
+                    try {
+                        full.getMemory().setBytes(address(full,4L),
+                            java.util.HexFormat.of().parseHex("00000620"));
+                    } finally {full.endTransaction(exactTx,true);}
+                    long exactRevision=full.getModificationNumber();
+                    var exactReport=new GhidraHardwareFlowService().analyze(
+                        full,TaskMonitor.DUMMY,true);
+                    check(exactReport.resetCandidateRecognized &&
+                        exactReport.resetCandidateFunctions.contains(0x620L) &&
+                        exactReport.resetCandidateFunctions.contains(0x500L) &&
+                        exactReport.markdown.contains(
+                            "candidate chain 0x00000620 -> 0x00000500") &&
+                        full.getModificationNumber()==exactRevision,
+                        "Exact Ghidra RESET entry must retain direct JSR "+
+                        "to synthetic MMIO leaf as static source evidence");
+                    int interiorTx=full.startTransaction(
+                        "GA01 test-only interior RESET vector");
+                    try {
+                        full.getMemory().setBytes(address(full,4L),
+                            java.util.HexFormat.of().parseHex("00000626"));
+                    } finally {full.endTransaction(interiorTx,true);}
+                    long interiorRevision=full.getModificationNumber();
+                    var interiorReport=new GhidraHardwareFlowService().analyze(
+                        full,TaskMonitor.DUMMY,true);
+                    check(!interiorReport.resetCandidateRecognized &&
+                        interiorReport.resetGraphIncomplete &&
+                        interiorReport.resetCandidateFunctions.isEmpty() &&
+                        interiorReport.markdown.contains(
+                            "UNKNOWN RESET ROOT — INTERIOR FUNCTION POINTER") &&
+                        interiorReport.markdown.contains("RESET_ROOT_UNKNOWN") &&
+                        !interiorReport.markdown.contains(
+                            "candidate chain 0x00000620 -> 0x00000500") &&
+                        full.getModificationNumber()==interiorRevision,
+                        "Interior RESET source must NOT turn preceding CALL "+
+                        "into reachable MMIO/ISR evidence");
+                    var replay=new GhidraHardwareFlowService().analyze(
+                        full,TaskMonitor.DUMMY,true);
+                    check(replay.resetCandidateFunctions.isEmpty() &&
+                        !replay.resetCandidateRecognized &&
+                        replay.markdown.equals(interiorReport.markdown) &&
+                        full.getModificationNumber()==interiorRevision,
+                        "Same-revision replay cannot restore stale exact-entry "+
+                        "RESET graph from previous source-vector revision");
+                    result.addProperty("reset_exact_entry_real_jsr_visible",true);
+                    result.addProperty("reset_interior_real_function_not_entry",true);
+                    result.addProperty("reset_interior_no_false_mmio_reachability",true);
+                    result.addProperty("reset_interior_revision_cache_conservative",true);
+                    result.addProperty("reset_interior_read_only",true);
+                } else if("overview".equals(ga18Mode)){
                     HardwareInventoryService inventoryService=
                         new HardwareInventoryService();
                     HardwareInventoryService.Report mc=
