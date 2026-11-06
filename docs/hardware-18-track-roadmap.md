@@ -3,6 +3,46 @@
 Status: **IN PROGRESS — integrated baseline 2026-11-06 (PR #198)**. Scope source: user-approved 2026-10-28 requirements (A–H, additional features 13.1–13.7, PDF/RAG, testing and Codex Supervisor integration).
 
 
+## GA-06 + GA-11 — jawna tożsamość MC68332 przy relokowanych wektorach (2026-11-06)
+
+**Baza:** PR #200 scalony do `master`
+`352af8aa742ebfcae7a37b13526438ef2fd991b8` z **45/45
+GitHub Actions SUCCESS** na HEAD `16f1900f1d1e047a166ada4dfcf7d8f181980a76`.
+GA-05/08 pozostają PARTIAL poza bezpiecznym nazewnictwem istniejących
+typowanych wskaźników.
+
+**GA-06 — PARTIAL, kontrola źródła urządzenia:** funkcja odczytu
+relokowanych tablic VBR ma teraz **obowiązkowy argument profilu**
+`HardwareProfiles.Profile` i odmawia bez jawnie wybranego, konkretnego
+MC68332. Ogólna `CPU32` nie dziedziczy ograniczenia adresów MCU24
+ani etykiet źródeł MC68332. Raport źródłowy wskazuje
+`MC68332UM` (Motorola 1995), przypięty SHA-256 oryginalnego PDF
+NXP `02c2cb99738dd45a785798bba3e7dcc34bb0d54fb5fba42900e6ecb8356bf28a`
+i wyraźną granicę: lokalna kopia RAG nie jest uwierzytelniona.
+Nie utożsamia to źródła z wykonaniem instrukcji lub fizycznym MCU.
+
+**GA-11 — PARTIAL, klasyfikacja statycznych źródeł ISR:** w
+odczytowych, jawnie wybranych tablicach MOVEC-to-VBR rozróżnia się
+`OUTSIDE_SELECTED_MCU24_RANGE` i `UNMAPPED_TARGET`.
+Wartości 32-bitowe poza `0x000000..0xFFFFFF` nie stają się
+kandydatami funkcji/ISR, ale w generycznej tablicy CPU32
+pozostają danymi 32-bitowymi. Nie zmieniono interpretacji obrazowej
+tablicy spod adresu zero. Raport zachowuje liczniki adresów spoza
+MCU24 oraz `runtime VBR UNKNOWN`.
+
+**Bramki odbioru:** Java21 rozdzielone liczniki/negatywne przypadki;
+pełny build Ghidra 12.1.4 PUBLIC / Java25; rzeczywisty
+syntetyczny program w Ghidrze z `MOVEC D0,VBR`, tablicą pod
+`0x800`, wskaźnikiem poza MCU24 `0x01000000`,
+odmową dla `cpu32Family()`, rozpoznaniem exact-entry,
+interior i odd, bez modyfikacji bazy podczas raportowania;
+pełne GitHub Actions przypisane do dokładnego SHA. Brak
+dowodu wykonania MOVEC, aktywnej tablicy VBR/IRQ, działania ISR,
+zatrzaśniętego MM czy fizycznej mapy magistrali.
+Nie uruchamiać lokalnych testów Wyse/Precision i Supervisora.
+GA-06/11 pozostają PARTIAL do czasu dalszej walidacji profili,
+pośrednich celów ISR i ścieżek rozruchowych.
+
 ## GA-05 / GA-08 — istniejące wskaźniki w rzeczywistej Ghidrze (2026-11-06)
 
 **Baza:** scalony [PR #199](https://github.com/bogkom/GhidrAssist/pull/199)
