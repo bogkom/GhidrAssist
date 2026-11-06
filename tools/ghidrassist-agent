@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """GhidrAssist local Automation API v3 client; standard library only."""
 import argparse
+import hashlib
+import tempfile
 import json
 import os
 from pathlib import Path
@@ -30,16 +32,92 @@ def rpc(session, method, params=None):
         return json.loads(answer.read(1048576))
 
 
+def capture_agentic_checkpoint(session, output, page_size=100):
+    """Explicit local read-only evidence export; never a resumable AI session."""
+    if not 1 <= page_size <= 100:
+        raise ValueError("Agentic checkpoint page size must be 1..100")
+    first = rpc(session, "agentic.findings.page", {"offset": 0, "limit": page_size})["agentic"]
+    expected = (first["run"], first["programRevision"], first["importSha256"],
+                first["state"], first["findings"]["revision"],
+                first["findings"]["retainedCount"],first["findings"]["acceptedCount"],
+                first["findings"]["evictedCount"],first["findings"]["sourceIncomplete"])
+    if expected[5] > 1000 or expected[5] < 0:
+        raise ValueError("Unbounded Agentic evidence count")
+    rows = list(first["findings"]["rows"])
+    if len(rows) > page_size or len(rows) > expected[5]:
+        raise ValueError("Inconsistent first Agentic page")
+    current = first
+    while current["findings"]["hasMore"]:
+        offset = len(rows)
+        if offset >= expected[5] or len(rows) >= 1000:
+            raise ValueError("Agentic pagination made no bounded progress")
+        current = rpc(session, "agentic.findings.page", {
+            "offset": offset, "limit": page_size,
+            "expected_run": expected[0],
+            "expected_program_revision": expected[1],
+            "expected_findings_revision": expected[4],
+        })["agentic"]
+        now = (current["run"],current["programRevision"],current["importSha256"],
+               current["state"],current["findings"]["revision"],
+               current["findings"]["retainedCount"],current["findings"]["acceptedCount"],
+               current["findings"]["evictedCount"],current["findings"]["sourceIncomplete"])
+        if now != expected:
+            raise ValueError("Agentic findings changed during evidence checkpoint")
+        chunk = current["findings"]["rows"]
+        if not chunk or len(chunk)>page_size or len(rows)+len(chunk)>expected[5]:
+            raise ValueError("Agentic pagination inconsistent or stalled")
+        rows.extend(chunk)
+    if len(rows)!=expected[5]:
+        raise ValueError("Agentic checkpoint omitted retained rows")
+    complete = bool(current["complete"] and expected[3]=="SUCCESS" and
+                    expected[6]==expected[5] and expected[7]==0 and not expected[8])
+    payload = {
+        "schema": 1, "kind": "ghidrassist-agentic-retained-evidence",
+        "run": expected[0], "program_revision": expected[1],
+        "import_sha256": expected[2], "state": expected[3],
+        "findings_revision": expected[4], "retained_count": expected[5],
+        "accepted_count": expected[6], "evicted_count": expected[7],
+        "source_incomplete": expected[8], "complete": complete,
+        "rows": rows,
+        "notice": "Read-only retained evidence, NOT an AI session, approval, runtime ISR or exhaustive firmware proof",
+    }
+    canonical = json.dumps(payload,sort_keys=True,separators=(",",":"),ensure_ascii=False).encode("utf-8")
+    envelope = {"payload":payload,"payload_sha256":hashlib.sha256(canonical).hexdigest()}
+    data=(json.dumps(envelope,indent=2,ensure_ascii=False)+"\\n").encode("utf-8")
+    if len(data)>8*1024*1024:
+        raise ValueError("Agentic checkpoint exceeds local 8 MiB cap")
+    dest=Path(output).expanduser()
+    if not dest.parent.is_dir():
+        raise ValueError("Agentic checkpoint destination directory must exist")
+    temp=None
+    try:
+        fd,temp=tempfile.mkstemp(prefix=".ghidrassist-agentic-",dir=dest.parent)
+        with os.fdopen(fd,"wb") as fp:
+            fp.write(data)
+            fp.flush()
+            os.fsync(fp.fileno())
+        # Atomic create-no-overwrite; no truncating existing user reports.
+        os.link(temp,dest)
+    finally:
+        if temp is not None:
+            os.unlink(temp)
+    return {"saved":str(dest),"complete":complete,"retained_count":len(rows),
+            "payload_sha256":envelope["payload_sha256"]}
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--session", default=os.environ.get(
         "GHIDRASSIST_AGENT_SESSION", str(Path.home() / ".local/state/ghidrassist-agent/session.json")))
-    parser.add_argument("action", choices=("status", "snapshot", "analyze", "task", "mmio", "review-preview", "profile-select", "function", "xrefs", "function-xrefs-body", "decompile", "decompile-status", "bundle", "paths", "listing", "listing-range", "goto", "tab-select", "table-select", "program-open", "review-prepare", "review-apply", "review-undo", "cancel", "report", "export"))
+    parser.add_argument("action", choices=("status", "snapshot", "analyze", "task", "mmio", "review-preview", "profile-select", "function", "xrefs", "function-xrefs-body", "decompile", "decompile-status", "bundle", "paths", "listing", "listing-range", "goto", "tab-select", "table-select", "program-open", "review-prepare", "review-apply", "review-undo", "cancel", "report", "export", "agentic-findings", "agentic-checkpoint"))
     parser.add_argument("address", nargs="?")
     parser.add_argument("--filter", default="")
     parser.add_argument("--row", type=int, default=None)
     parser.add_argument("--token", default="")
     parser.add_argument("--task-id", default="")
+    parser.add_argument("--expected-run", default="")
+    parser.add_argument("--expected-findings-revision", type=int, default=None)
+    parser.add_argument("--output", default="")
     parser.add_argument("--expected-revision", type=int, default=None)
     parser.add_argument("--expected-entry", default="")
     parser.add_argument("--direction", choices=("incoming", "outgoing", "both"), default="both")
@@ -51,7 +129,17 @@ def main():
     parser.add_argument("--limit", type=int, default=100)
     args = parser.parse_args()
     session = load_session(args.session)
-    method = {"status": "session.status", "snapshot": "ui.snapshot",
+    if args.action=="agentic-checkpoint":
+        if not args.output:
+            parser.error("agentic-checkpoint requires explicit --output local file")
+        try:
+            result=capture_agentic_checkpoint(session,args.output,args.limit)
+            print(json.dumps(result,indent=2))
+            return 0
+        except (ValueError, OSError, HTTPError, KeyError) as error:
+            print("Agentic checkpoint refused: "+str(error),file=sys.stderr)
+            return 1
+    method = {"agentic-findings":"agentic.findings.page", "status": "session.status", "snapshot": "ui.snapshot",
               "analyze": "hardware.analyze", "task": "hardware.task",
               "mmio": "hardware.mmio.rows", "review-preview": "hardware.review.preview", "profile-select": "hardware.profile.select", "function": "function.snapshot", "xrefs": "function.xrefs", "function-xrefs-body": "function.xrefs.body", "decompile": "decompiler.start", "decompile-status": "decompiler.status", "bundle": "analysis.bundle", "paths": "analysis.paths", "listing": "listing.snapshot", "listing-range": "listing.range",
               "goto": "listing.goto", "tab-select": "ui.tab.select", "table-select": "ui.table.select", "program-open": "project.program.open", "review-prepare": "hardware.review.prepare", "review-apply": "hardware.review.apply", "review-undo": "hardware.review.undo", "cancel": "hardware.cancel", "report": "analysis.report", "export": "analysis.export"}[args.action]
@@ -65,8 +153,12 @@ def main():
         parser.error("program-open requires project-relative /path")
     if method == "hardware.review.prepare" and (args.row is None or args.row<0):
         parser.error("review-prepare requires --row nonnegative-index")
-    if args.expected_revision is not None and method not in ("listing.range", "function.xrefs.body"):
-        parser.error("--expected-revision is only valid with listing-range or function-xrefs-body")
+    if args.expected_revision is not None and method not in ("listing.range", "function.xrefs.body","agentic.findings.page"):
+        parser.error("--expected-revision is only valid with listing-range, function-xrefs-body or agentic-findings")
+    if (args.expected_run or args.expected_findings_revision is not None) and method!="agentic.findings.page":
+        parser.error("--expected-run and --expected-findings-revision require agentic-findings")
+    if method=="agentic.findings.page" and args.offset>0 and (not args.expected_run or args.expected_findings_revision is None or args.expected_revision is None):
+        parser.error("nonzero Agentic offset requires expected run, findings revision and Program revision")
     if args.expected_entry and method != "function.xrefs.body":
         parser.error("--expected-entry is only valid with function-xrefs-body")
     if args.task_id and method != "decompiler.status":
@@ -91,6 +183,11 @@ def main():
                    **({"expected_revision":args.expected_revision} if args.expected_revision is not None else {})}
                   if method=="function.xrefs.body" else
                   {"format":args.format, "offset":args.offset, "limit":args.limit} if method in ("analysis.report","analysis.export") else
+                  {"offset":args.offset, "limit":args.limit,
+                   **({"expected_run":args.expected_run} if args.expected_run else {}),
+                   **({"expected_findings_revision":args.expected_findings_revision} if args.expected_findings_revision is not None else {}),
+                   **({"expected_program_revision":args.expected_revision} if args.expected_revision is not None else {})}
+                  if method=="agentic.findings.page" else
                   {"origin": args.origin, "entry": args.address or "", "max_depth": args.max_depth, "offset": args.offset, "limit": args.limit} if method == "analysis.paths" else
                   {"profile": args.address} if method == "hardware.profile.select" else
                   {"address": args.address} if args.address else
