@@ -1,7 +1,51 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
-Status: **IN PROGRESS — integrated baseline 2026-11-06 (PR #197)**. Scope source: user-approved 2026-10-28 requirements (A–H, additional features 13.1–13.7, PDF/RAG, testing and Codex Supervisor integration).
+Status: **IN PROGRESS — integrated baseline 2026-11-06 (PR #198)**. Scope source: user-approved 2026-10-28 requirements (A–H, additional features 13.1–13.7, PDF/RAG, testing and Codex Supervisor integration).
 
+
+## GA-13 — przegląd i audyt potwierdzonych operacji (2026-11-06)
+
+**Baza:** scalenie [PR #198](https://github.com/bogkom/GhidrAssist/pull/198)
+do chronionego `master` `b66d0b33b0611a29ea895385b713831a0db2728b`.
+Dokładny HEAD PR #198 `7d3721aea072a76b3fa49fa4b7dad658daca024e`
+zaliczył **41/41 GitHub Actions SUCCESS**, w tym
+Ghidra 12.1.4 PUBLIC / Java25, rzeczywistego syntetycznego
+CodeBrowsera i niezależny oficjalny MC68332UM PDF SHA-256.
+GA-10/16 pozostają PARTIAL poza statycznym SIMCR/SYNCR
+oraz autentycznością kopii z NXP.
+
+**GA-13 — zakres pakietu do zatwierdzenia w CI:** zbiorczy,
+w pełni odczytowy audyt wszystkich dotychczas zapamiętanych
+wersjonowanych rekordów zatwierdzonego Rename, bez importu/
+edycji firmware. Rekordy Ghidra Program Options są korelowane
+z aktualnymi Function, Name, SourceType, oryginalnym SHA
+i rewizją Program. Wynik wprost odróżnia
+`CURRENT_APPROVED_NAME`, `NAME_CHANGED_AFTER_APPROVAL`,
+`FUNCTION_MISSING`, `SOURCE_CHANGED`, `SOURCE_UNVERIFIED`
+oraz `SOURCE_TYPE_CHANGED`.
+Uszkodzony lub nierozpoznany rekord, duplikat albo nadmiar
+nie mogą tworzyć pozornego kompletnego audytu.
+GUI dodaje `Rename audit CSV...` niezależnie od Analyze;
+po dialogu Save/Overwrite następuje ponowna kontrola
+Program i całej migawki. CSV ma ochronę formuł Unicode
+i ograniczenia rozmiaru zgodne z istniejącym GA-13.
+
+**Kryteria CI:** Java21 kodek potwierdzeń i eksport CSV,
+pełny build Ghidra **12.1.4 PUBLIC / Java25**,
+rzeczywisty syntetyczny test dwóch FunctionManager nazw
+i źródeł w ramach jednej transakcji Apply/Undo/Redo,
+oraz dwuprocesowy restart Ghidry (zapis/odczyt Options)
+z asercjami audytu i braku zmiany rewizji podczas odczytu.
+Dokładne HEAD SHA, ci PASS/FAILED i ograniczenia publikować
+w jednym PR. Nie wykonywać testów Wyse/Precision ani
+zatrzymanego Supervisora. Ochrona Review/Apply/Undo bez zmian.
+
+**GA-13 — nadal PARTIAL:** odczyt zatwierdzonych wpisów
+nie jest niezależną, nieusuwalną historią odrzuconych
+propozycji, operacji Undo ani autorstwa człowieka/AI.
+Zwykłe Ghidra Undo usuwa także rekord; bez osobnego
+mechanizmu autoryzowanego journalingu nie można twierdzić
+inaczej. Nowy CSV nie jest wejściem do Apply.
 
 ## Obowiązujący checkpoint — GA-10/16 źródłowe SIMCR/SYNCR i PDF (2026-11-06)
 
