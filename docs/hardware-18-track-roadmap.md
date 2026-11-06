@@ -23,13 +23,16 @@ D-5=219, D-6=220, D-7=221 są identyfikowane jawnie.
 
 **GA-16 — PARTIAL:** `HardwareBitfieldSourceLedger` zawiera
 15 ograniczonych wierszy *claim-only* rejestr/pole/maska/strona,
-z URL dokumentu, deklaracją wydania Motorola 1995 i granicą
-`PDF BYTES UNVERIFIED`; wiersze są częścią Full Evidence,
-Markdown eksportu i aktualnego kontekstu RAG, który paginuje/oznacza
-pominięte odsyłacze. Osobny workflow GitHub Actions powinien
-pobrać oryginalny PDF NXP i porównać **ręcznie zatwierdzony SHA-256**,
-liczbę stron i tekst trzech folio. Sam parser etykiet nie uwierzytelnia
-bajtów PDF. Pełny import i ekstrakcja innych tabel nie są gotowe.
+z URL dokumentu, deklaracją wydania Motorola 1995, przypiętym
+SHA-256 oficjalnego PDF (`02c2cb99738dd45a785798bba3e7dcc34bb0d54fb5fba42900e6ecb8356bf28a`)
+i wyraźną granicą **niezweryfikowanej lokalnej kopii RAG**.
+Wiersze są częścią Full Evidence, Markdown eksportu i aktualnego
+kontekstu RAG, który oznacza pominięte odsyłacze. Dedykowana
+[bramka PDF Actions #42233819507](https://github.com/bogkom/GhidrAssist/actions/runs/42233819507)
+przeszła porównanie SHA-256 bajtów z NXP, 265 stron i ekstrakcję
+D-5/D-6/D-7 (fizyczne 219/220/221) na publicznym runnerze.
+Sam parser etykiet nadal nie uwierzytelnia dowolnego lokalnego PDF;
+pełny import i ekstrakcja innych tabel nie są gotowe.
 
 **Kryteria odbioru pakietu:** Java21 regresje masek/UNKNOWN,
 physical-range parser, stały field ledger i RAG; rzeczywisty
