@@ -47,6 +47,10 @@ public final class AgenticEvidenceRegistry<K> {
                                       FindingsCache findings) {
         if(owner==null || revision<0 || findings==null)
             throw new IllegalArgumentException("Missing evidence Program or revision");
+        Bound<K> existing=programs.get(owner);
+        if(existing!=null && existing.owner.get()!=owner)
+            throw new IllegalStateException(
+                "Equal-but-distinct Program cannot share Agentic evidence");
         Bound<K> bound=new Bound<>(owner,revision,
             importSha==null?"UNKNOWN":importSha,findings);
         programs.put(owner,bound);
