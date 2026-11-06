@@ -25,6 +25,8 @@ import ghidrassist.hardware.HardwareIndexedAddress;
 import ghidrassist.hardware.HardwareInventoryService;
 import ghidrassist.hardware.HardwareFlowStageCache;
 import ghidrassist.hardware.HardwareAnalysisRevision;
+import ghidrassist.hardware.HardwareProfiles;
+import ghidrassist.hardware.HardwareBitfieldSourceLedger;
 import java.awt.GraphicsEnvironment;
 import java.nio.file.*;
 import java.util.*;
