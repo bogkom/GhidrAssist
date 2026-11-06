@@ -87,7 +87,7 @@ def capture_agentic_checkpoint(session, output, page_size=100):
     }
     canonical = json.dumps(payload,sort_keys=True,separators=(",",":"),ensure_ascii=False).encode("utf-8")
     envelope = {"payload":payload,"payload_sha256":hashlib.sha256(canonical).hexdigest()}
-    data=(json.dumps(envelope,indent=2,ensure_ascii=False)+"\\n").encode("utf-8")
+    data=(json.dumps(envelope,indent=2,ensure_ascii=False)+"\n").encode("utf-8")
     if len(data)>8*1024*1024:
         raise ValueError("Agentic checkpoint exceeds local 8 MiB cap")
     dest=Path(output).expanduser()
