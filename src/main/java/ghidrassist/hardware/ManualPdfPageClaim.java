@@ -23,12 +23,34 @@ public final class ManualPdfPageClaim {
         Pattern.CASE_INSENSITIVE);
 
     /**
+     * Source-page claims are single-line display metadata. Even if a numeric
+     * claim parses, C0/C1 controls, bidi/zero-width format code points and
+     * nonstandard invisible separators can disguise its apparent contents.
+     * Keep visible Unicode punctuation (for example an en dash in a range).
+     */
+    private static boolean hiddenClaimCharacters(String value) {
+        for(int i=0;i<value.length();) {
+            int codePoint=value.codePointAt(i);
+            int type=Character.getType(codePoint);
+            if(Character.isISOControl(codePoint) ||
+                    type==Character.FORMAT ||
+                    type==Character.LINE_SEPARATOR ||
+                    type==Character.PARAGRAPH_SEPARATOR ||
+                    (type==Character.SPACE_SEPARATOR && codePoint!=' '))
+                return true;
+            i+=Character.charCount(codePoint);
+        }
+        return false;
+    }
+
+    /**
      * A unique, ascending, bounded physical page number/range claim is
      * *eligible for display as a claim*, not verified provenance.
      */
     public static boolean hasSingleConsistentClaim(String text) {
         if(text==null || text.isBlank() || text.length()>256 ||
-                text.indexOf('?')>=0)return false;
+                text.indexOf('?')>=0 || hiddenClaimCharacters(text))
+            return false;
         String upper=text.toUpperCase(Locale.ROOT);
         for(String unknown:new String[]{
                 "UNKNOWN","UNVERIFIED","AMBIGUOUS",
