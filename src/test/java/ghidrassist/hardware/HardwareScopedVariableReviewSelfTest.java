@@ -93,10 +93,7 @@ public final class HardwareScopedVariableReviewSelfTest {
         rejects(()->row(HardwareScopedVariableReview.Kind.LOCAL,0,
             "local_4","",true,false,false),
             "unidentified storage blocks");
-        rejects(()->row(HardwareScopedVariableReview.Kind.LOCAL,0,
-            "local_4","stack:x",true,false,false).functionEntry()<0 ?
-            HardwareScopedVariableReview.propose(List.of()) :
-            new HardwareScopedVariableReview.Observation(0x1000000L,
+        rejects(()->new HardwareScopedVariableReview.Observation(0x1000000L,
                 "local_4",HardwareScopedVariableReview.Kind.LOCAL,0,
                 "stack:x",true,false,false),
             "outside MCU24 address blocks");
