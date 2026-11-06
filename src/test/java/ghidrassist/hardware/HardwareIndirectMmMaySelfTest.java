@@ -123,6 +123,26 @@ public final class HardwareIndirectMmMaySelfTest {
             List.of(site),List.of(node(0x700,false,false,false),
                 node(0x700,true,false,false)),16),
             "duplicate functions not silently reconciled");
+        // Reports can also be constructed by consumers; reject incomplete
+        // evidence before Markdown rendering instead of a late NPE.
+        reject(()->new HardwareIndirectMmMay.Report(1,0,null),
+            "null report rows rejected");
+        reject(()->new HardwareIndirectMmMay.Report(1,0,
+                java.util.Arrays.asList((HardwareIndirectMmMay.Row)null)),
+            "null report row rejected");
+        reject(()->new HardwareIndirectMmMay.Report(1,0,
+                List.of(new HardwareIndirectMmMay.Row(null,yes.rows().get(0).source()))),
+            "missing byte witness rejected");
+        reject(()->new HardwareIndirectMmMay.Report(1,0,
+                List.of(new HardwareIndirectMmMay.Row(site,null))),
+            "missing MM source summary rejected");
+        reject(()->new HardwareIndirectMmMay.Report(1,0,
+                List.of(new HardwareIndirectMmMay.Row(site,
+                    new HardwareInterproceduralMmEffects.Summary(
+                        false,false,false,false,false,-1)))),
+            "negative examined-node count rejected");
+        reject(()->new HardwareIndirectMmMay.Report(0,0,yes.rows()),
+            "inconsistent omission/count rejected");
         boolean immutable=false;
         try {many.rows().clear();}
         catch(UnsupportedOperationException expected){immutable=true;}
