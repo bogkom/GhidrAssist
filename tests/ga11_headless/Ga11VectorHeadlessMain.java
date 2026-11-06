@@ -2338,6 +2338,94 @@ public final class Ga11VectorHeadlessMain {
                     result.addProperty("function_stage_explicit_clear_invalidated",true);
                     result.addProperty("function_stage_no_partial_rag_or_edits",true);
 
+                } else if("scoped-variable".equals(ga18Mode)) {
+                    // GA-05/08: real Ghidra Function DB variables, not decompiler
+                    // temporary HighVariables or A-register aliases.
+                    byte[] code=java.util.HexFormat.of().parseHex(
+                        "33fc387c00fffa4c33fc7c3000fffa4e" +
+                        "33fc2f7f00fffa444e75");
+                    int setup=full.startTransaction("GA-05/08 isolated pointer fixtures");
+                    try {
+                        full.getMemory().setBytes(address(full,0x5a0L),code);
+                    } finally {full.endTransaction(setup,true);}
+                    defineFixtureFunction(full,0x5a0L,26,"FUN_000005A0");
+                    Function fn=full.getFunctionManager().getFunctionAt(
+                        address(full,0x5a0L));
+                    check(fn!=null,"No real Ghidra test Function");
+                    var ptr=new ghidra.program.model.data.PointerDataType();
+                    int vars=full.startTransaction("GA-05/08 test-only typed pointer variables");
+                    try {
+                        fn.addParameter(new ghidra.program.model.listing.ParameterImpl(
+                            "param_1",ptr,8,full,SourceType.DEFAULT),SourceType.DEFAULT);
+                        fn.addLocalVariable(new ghidra.program.model.listing.LocalVariableImpl(
+                            "local_8",ptr,-8,full,SourceType.DEFAULT),SourceType.DEFAULT);
+                    } finally {full.endTransaction(vars,true);}
+                    var candidates=ghidrassist.hardware.HardwareScopedVariableService
+                        .preview(fn);
+                    check(candidates.size()==2 &&
+                          candidates.stream().allMatch(p->p.decision() ==
+                            ghidrassist.hardware.HardwareScopedVariableReview
+                                .Decision.READY),
+                        "Real pointer parameter/local preview must be READY: "+
+                            candidates.toString());
+                    var reviewed=HardwareAnalysisRevision.capture(
+                        full,full.getModificationNumber(),
+                        full.getLanguageID().toString(),
+                        full.getExecutableSHA256(),true);
+                    // Deliberately corrupt the second selected identity.
+                    var second=candidates.get(1);
+                    var orig=second.original();
+                    var fake=new ghidrassist.hardware.HardwareScopedVariableReview
+                        .Observation(orig.functionEntry(),orig.currentName(),
+                            orig.kind(),orig.ordinal(),orig.storage()+"_other",
+                            orig.pointerType(),orig.userDefined(),
+                            orig.autoParameter());
+                    var invalid=new ghidrassist.hardware.HardwareScopedVariableReview
+                        .Proposal(fake,second.proposedName(),second.decision());
+                    boolean refused=false;
+                    try {
+                        ghidrassist.hardware.HardwareScopedVariableService.apply(
+                            full,List.of(candidates.get(0),invalid),reviewed);
+                    } catch(IllegalStateException expected){refused=true;}
+                    check(refused && ghidrassist.hardware.HardwareScopedVariableService
+                            .preview(fn).stream().allMatch(p->p.decision() ==
+                                ghidrassist.hardware.HardwareScopedVariableReview
+                                    .Decision.READY),
+                        "Ghidra failed identity in second row must roll back all names");
+                    var out=ghidrassist.hardware.HardwareScopedVariableService.apply(
+                        full,candidates,reviewed);
+                    check(out.renamed()==2,
+                        "Explicit approved Ghidra pointer variable batch must rename both");
+                    var after=ghidrassist.hardware.HardwareScopedVariableService.preview(fn);
+                    check(after.size()==2 && after.stream().allMatch(
+                        p->p.decision()==ghidrassist.hardware.HardwareScopedVariableReview
+                            .Decision.USER_NAMED),
+                        "Renamed pointer types must protect existing user names");
+                    check(full.canUndo(),"Native Ghidra Undo missing after pointer Apply");
+                    full.undo();
+                    check(ghidrassist.hardware.HardwareScopedVariableService.preview(fn)
+                            .stream().allMatch(p->p.decision()==
+                                ghidrassist.hardware.HardwareScopedVariableReview
+                                    .Decision.READY),
+                        "Native Undo must restore original argument/local names");
+                    check(full.canRedo(),"Native Ghidra Redo missing after pointer Undo");
+                    full.redo();
+                    check(ghidrassist.hardware.HardwareScopedVariableService.preview(fn)
+                            .stream().allMatch(p->p.decision()==
+                                ghidrassist.hardware.HardwareScopedVariableReview
+                                    .Decision.USER_NAMED),
+                        "Native Redo must restore both explicitly approved names");
+                    boolean stale=false;
+                    try {
+                        ghidrassist.hardware.HardwareScopedVariableService.apply(
+                            full,candidates,reviewed);
+                    }catch(IllegalStateException expected){stale=true;}
+                    check(stale,"Replay after Ghidra Undo/Redo must reject old approval");
+                    result.addProperty("scoped_real_pointer_param_local",true);
+                    result.addProperty("scoped_atomic_rejection",true);
+                    result.addProperty("scoped_explicit_apply",true);
+                    result.addProperty("scoped_native_undo_redo",true);
+                    result.addProperty("scoped_stale_revision_rejected",true);
                 } else if("function-rename".equals(ga18Mode)) {
                     // Two genuine FunctionManager objects, three decoded
                     // register writes each. Collision must roll back a
