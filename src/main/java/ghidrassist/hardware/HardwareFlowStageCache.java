@@ -119,7 +119,9 @@ public final class HardwareFlowStageCache {
             if(durableKey!=null){
                 var loaded=HardwareDurableStageStore.load(directory,durableKey)
                     .flatMap(HardwareDurableCfgReport::decode);
-                if(loaded.isPresent()){
+                if(loaded.isPresent() &&
+                        HardwareDurableCfgReport.eligibleForCompletedRestore(
+                            loaded.get())){
                     try {
                         GhidraHardwareFlowService.Report restored=report(loaded.get());
                         monitor.checkCancelled();
@@ -165,8 +167,9 @@ public final class HardwareFlowStageCache {
             }
             // Store only complete evidence: never turn a limited/unfinished
             // CFG capture into an apparently complete restart checkpoint.
-            if(directory!=null && calculated.cfgReviewComplete &&
-                    !calculated.limited){
+            if(directory!=null &&
+                    HardwareDurableCfgReport.eligibleForCompletedRestore(
+                        snapshot(calculated))){
                 try{
                     var beforeWrite=HardwareGhidraInputFingerprint.capture(
                         program,monitor,started.mc68332Selected()).orElse(null);
