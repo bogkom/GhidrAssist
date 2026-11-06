@@ -1159,7 +1159,12 @@ public final class GhidraHardwareFlowService {
             }
             var contextual=HardwareCallsiteRegisterFlow.analyze(
                 callerContexts,contextualCallees,targets.keySet(),80);
-            callsiteRegisters=contextual.markdown();
+            callsiteRegisters=contextual.markdown()+
+                HardwareRegisterByteCoverage.analyze(p,
+                    contextual.candidates().stream()
+                        .map(c->new HardwareRegisterByteCoverage.Store(
+                            c.callPc(),c.storePc(),c.address(),c.writeBits()))
+                        .toList()).markdown("one-hop");
             if(callerContextsOmitted>0)
                 callsiteRegisters+="- **INCOMPLETE INPUT:** "+
                     callerContextsOmitted+
@@ -1213,7 +1218,13 @@ public final class GhidraHardwareFlowService {
             var twoHop=HardwareTwoHopRegisterFlow.analyze(
                 twoHopInputs,bridgeByEntry.values(),leafByEntry.values(),
                 targets.keySet(),40);
-            twoHopRegisters=twoHop.markdown();
+            twoHopRegisters=twoHop.markdown()+
+                HardwareRegisterByteCoverage.analyze(p,
+                    twoHop.rows().stream()
+                        .map(c->new HardwareRegisterByteCoverage.Store(
+                            c.outerCallPc(),c.storePc(),
+                            c.effectiveAddress(),c.bits()))
+                        .toList()).markdown("two-hop");
             if(twoHopInputsOmitted>0)
                 twoHopRegisters+="- **INCOMPLETE INPUT:** "+
                     twoHopInputsOmitted+" CALL sites beyond the combined "+
