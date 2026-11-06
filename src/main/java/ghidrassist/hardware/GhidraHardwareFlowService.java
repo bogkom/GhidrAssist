@@ -751,7 +751,16 @@ public final class GhidraHardwareFlowService {
                 Long callTarget=null;
                 if(insn.getFlowType().isCall()){
                     Address[] destinations=insn.getFlows();
-                    if(destinations==null || destinations.length!=1)
+                    // Ghidra's getFlows() may contain ONE manually added
+                    // COMPUTED_CALL reference for JSR (An). It does not
+                    // make that instruction a direct CALL. Only decoded
+                    // non-computed CALLs with a single exact Function
+                    // entry may populate static RESET/CALL/MMIO/ISR edges.
+                    // The separate bounded indirect byte witness is
+                    // display-only and NEVER upgrades graph reachability.
+                    if(!HardwareDirectCallGate.directCandidate(
+                            true,insn.getFlowType().isComputed(),
+                            destinations==null?0:destinations.length))
                         uncertainFlow=true;
                     else {
                         Function callee=program.getFunctionManager()
