@@ -386,29 +386,26 @@ public final class HardwareAnalysisTab extends JPanel {
                 site.pc.getOffset(),site.registerAddress,site.register,site.function,
                 site.asm,site.write,site.literal));
         var rows=ghidrassist.hardware.HardwareMmioExplorer.rows(raw,latestConcrete);
+        var page=ghidrassist.hardware.HardwareMmioExplorer.page(
+            rows,filter,offset,limit);
         com.google.gson.JsonArray entries=new com.google.gson.JsonArray();
-        int matching=0;
-        for (var row:rows) {
-            if (!row.matches(filter)) continue;
-            if (matching>=offset && matching-offset<limit) {
-                com.google.gson.JsonObject item=new com.google.gson.JsonObject();
-                item.addProperty("pc",row.pcHex());
-                item.addProperty("register",row.register());
-                item.addProperty("address",row.addressHex());
-                item.addProperty("access",row.access());
-                item.addProperty("value",row.value());
-                item.addProperty("evidence",row.evidence());
-                item.addProperty("function",row.function());
-                item.addProperty("instruction",row.instruction());
-                item.addProperty("scope",row.deviceScope());
-                entries.add(item);
-            }
-            matching++;
+        for (var row:page.rows()) {
+            com.google.gson.JsonObject item=new com.google.gson.JsonObject();
+            item.addProperty("pc",row.pcHex());
+            item.addProperty("register",row.register());
+            item.addProperty("address",row.addressHex());
+            item.addProperty("access",row.access());
+            item.addProperty("value",row.value());
+            item.addProperty("evidence",row.evidence());
+            item.addProperty("function",row.function());
+            item.addProperty("instruction",row.instruction());
+            item.addProperty("scope",row.deviceScope());
+            entries.add(item);
         }
         com.google.gson.JsonObject result=new com.google.gson.JsonObject();
-        result.addProperty("total",matching);
-        result.addProperty("offset",offset);
-        result.addProperty("limit",limit);
+        result.addProperty("total",page.total());
+        result.addProperty("offset",page.offset());
+        result.addProperty("limit",page.limit());
         result.addProperty("revision",latestRevision.toString());
         result.add("rows",entries);
         return result;
@@ -798,6 +795,9 @@ public final class HardwareAnalysisTab extends JPanel {
             @Override public boolean isCellEditable(int row,int column){return false;}
         };
         JTable table=new JTable(model);
+        // Sort the visible table only. Always convert the selected view
+        // index back to the immutable evidence row before Go To Listing.
+        table.setAutoCreateRowSorter(true);
         table.setSelectionMode(javax.swing.ListSelectionModel.SINGLE_SELECTION);
         table.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
         table.setRowHeight(Math.max(25,table.getFont().getSize()+8));
@@ -809,8 +809,8 @@ public final class HardwareAnalysisTab extends JPanel {
         Runnable refill=()->{
             visible.clear();
             model.setRowCount(0);
-            for(var candidate:rows){
-                if(!candidate.matches(search.getText()))continue;
+            for(var candidate:ghidrassist.hardware.HardwareMmioExplorer.filter(
+                    rows,search.getText())){
                 visible.add(candidate);
                 model.addRow(new Object[]{candidate.pcHex(),candidate.register(),
                     candidate.addressHex(),candidate.access(),candidate.value(),
@@ -848,11 +848,16 @@ public final class HardwareAnalysisTab extends JPanel {
                 return;
             }
             int selected=table.getSelectedRow();
-            if(selected<0 || selected>=visible.size()){
+            if(selected<0){
                 count.setText("Select an instruction before navigation.");
                 return;
             }
-            long pc=visible.get(selected).pc();
+            int modelRow=table.convertRowIndexToModel(selected);
+            if(modelRow<0 || modelRow>=visible.size()){
+                count.setText("Selection changed; select the instruction again.");
+                return;
+            }
+            long pc=visible.get(modelRow).pc();
             try{
                 Address address=program.getAddressFactory().getDefaultAddressSpace()
                     .getAddress(pc);
@@ -1027,6 +1032,13 @@ public final class HardwareAnalysisTab extends JPanel {
                 "Replace existing file?\n"+selected.getAbsolutePath(),
                 "Confirm export",JOptionPane.YES_NO_OPTION)!=JOptionPane.YES_OPTION)
             return;
+        // The file picker and replace confirmation are modal and can outlive
+        // the Ghidra Program/MCU revision. Never export yesterday's report.
+        if(!currentScan() || latestMarkdown==null){
+            export.setEnabled(false);
+            status.setText("Program changed before Markdown export; no stale evidence saved.");
+            return;
+        }
         try{
             Files.writeString(selected.toPath(),latestMarkdown,StandardCharsets.UTF_8);
             status.setText("Markdown saved; import manually in GhidrAssist > RAG > Add Documents.");
