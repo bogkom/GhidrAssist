@@ -1,0 +1,51 @@
+name: GA-02/03/11 bounded computed CALL transitive MAY evidence
+
+on:
+  pull_request:
+    paths:
+      - 'src/main/java/ghidrassist/hardware/HardwareIndirectMayEffects.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareIndirectCallEvidence.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareCallEffects.java'
+      - 'src/main/java/ghidrassist/hardware/GhidraHardwareFlowService.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareIndirectMayEffectsSelfTest.java'
+      - 'tests/ga11_headless/**'
+      - '.github/workflows/ga02-indirect-may-effects.yml'
+  push:
+    paths:
+      - 'src/main/java/ghidrassist/hardware/HardwareIndirectMayEffects.java'
+      - 'src/main/java/ghidrassist/hardware/GhidraHardwareFlowService.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareIndirectMayEffectsSelfTest.java'
+      - 'tests/ga11_headless/**'
+      - '.github/workflows/ga02-indirect-may-effects.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+jobs:
+  source-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Compile deterministic bounded indirect MAY effect report
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/ga02-may-effects"
+          javac --release 21 -d "$RUNNER_TEMP/ga02-may-effects" \
+            src/main/java/ghidrassist/hardware/HardwareDataflow.java \
+            src/main/java/ghidrassist/hardware/HardwareCallEffects.java \
+            src/main/java/ghidrassist/hardware/HardwareResetFlow.java \
+            src/main/java/ghidrassist/hardware/HardwareIndirectCallEvidence.java \
+            src/main/java/ghidrassist/hardware/HardwareIndirectMayEffects.java \
+            src/test/java/ghidrassist/hardware/HardwareIndirectMayEffectsSelfTest.java
+      - name: Verify MAY STORE/VBR, UNKNOWN/caps, no direct RESET graph
+        shell: bash
+        run: |
+          set -euo pipefail
+          java -cp "$RUNNER_TEMP/ga02-may-effects" \
+            ghidrassist.hardware.HardwareIndirectMayEffectsSelfTest
