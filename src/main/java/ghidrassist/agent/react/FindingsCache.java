@@ -47,13 +47,20 @@ public class FindingsCache {
         private final String toolUsed;
         private final long timestamp;
         private int relevance;  // Mutable - can be updated
+        /** Cache-owned findings invalidate page revisions on public score edits. */
+        private final Runnable onRelevanceChange;
 
         public Finding(String fact, String evidence, String toolUsed, int relevance) {
+            this(fact,evidence,toolUsed,relevance,null);
+        }
+        private Finding(String fact,String evidence,String toolUsed,
+                int relevance,Runnable onRelevanceChange) {
             this.fact = fact;
             this.evidence = evidence;
             this.toolUsed = toolUsed;
             this.relevance = relevance;
             this.timestamp = System.currentTimeMillis();
+            this.onRelevanceChange=onRelevanceChange;
         }
 
         public String getFact() { return fact; }
@@ -62,7 +69,12 @@ public class FindingsCache {
         public int getRelevance() { return relevance; }
         public long getTimestamp() { return timestamp; }
 
-        public void setRelevance(int relevance) { this.relevance = relevance; }
+        public void setRelevance(int relevance) {
+            if(this.relevance!=relevance) {
+                this.relevance=relevance;
+                if(onRelevanceChange!=null)onRelevanceChange.run();
+            }
+        }
     }
 
     public static final int MAX_FINDINGS_LIMIT = 1000;
@@ -164,7 +176,7 @@ public class FindingsCache {
         findingsRevision++;
         findings.add(new Finding(bounded(fact,MAX_FACT_CHARS),
             bounded(evidence,MAX_EVIDENCE_CHARS),bounded(toolUsed,128),
-            Math.max(0,Math.min(10,relevance))));
+            Math.max(0,Math.min(10,relevance)),()->findingsRevision++));
 
         // Prune old low-relevance findings if we exceed max
         if (findings.size() > maxFindings) {
