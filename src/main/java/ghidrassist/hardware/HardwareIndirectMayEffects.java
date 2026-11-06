@@ -31,7 +31,18 @@ public final class HardwareIndirectMayEffects {
 
     public record Report(int sourceSites,int examinedSites,int omittedSites,
                          List<Row> rows) {
-        public Report {rows=List.copyOf(rows);}
+        public Report {
+            if(rows==null || sourceSites<0 || examinedSites<0 ||
+                    omittedSites<0 || examinedSites>MAX_ROWS ||
+                    sourceSites!=examinedSites+omittedSites ||
+                    rows.size()!=examinedSites ||
+                    rows.stream().anyMatch(row ->
+                        row==null || row.source()==null ||
+                        row.effects()==null || row.effects().visited()<0))
+                throw new IllegalArgumentException(
+                    "Invalid bounded indirect STORE/VBR MAY evidence");
+            rows=List.copyOf(rows);
+        }
         private static String hex(long n) {
             return String.format(Locale.ROOT,"0x%08X",n);
         }
