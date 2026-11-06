@@ -115,6 +115,34 @@ public final class HardwareCallEffectsSelfTest {
             HardwareCallEffects.summarize(-1,List.of(n(0,false,false,false)),2,2);
         } catch(IllegalArgumentException expected) {invalidLimit=true;}
         ok(invalidLimit,"reject negative CALL root");
+        // Reject malformed source edges before graph traversal. A valid
+        // nonnegative but unrecognized function remains UNKNOWN instead.
+        boolean invalidCallee=false;
+        try {
+            n(0,false,false,false,-1L);
+        } catch(IllegalArgumentException expected) {invalidCallee=true;}
+        ok(invalidCallee,"negative direct CALL target rejected at source");
+        invalidCallee=false;
+        try {
+            new HardwareCallEffects.FunctionNode(0,false,false,false,
+                java.util.Arrays.asList(1L,null));
+        } catch(IllegalArgumentException expected) {invalidCallee=true;}
+        ok(invalidCallee,"null direct CALL target rejected consistently");
+        invalidCallee=false;
+        try {
+            n(-1,false,false,false);
+        } catch(IllegalArgumentException expected) {invalidCallee=true;}
+        ok(invalidCallee,"negative function entry remains invalid");
+        var unknownPositive=HardwareCallEffects.summarize(0,
+            List.of(n(0,false,false,false,0x1000L)),2,10);
+        ok(unknownPositive.unresolved() && !unknownPositive.truncated()
+                && unknownPositive.visited()==1,
+            "valid unresolved positive CALL target stays UNKNOWN");
+        var immutableCallees=n(0,false,false,false,1L);
+        boolean immutableSource=false;
+        try {immutableCallees.directCallees().clear();}
+        catch(UnsupportedOperationException expected){immutableSource=true;}
+        ok(immutableSource,"validated source callee list remains immutable");
         System.out.println("HardwareCallEffectsSelfTest OK");
     }
 }
