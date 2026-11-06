@@ -2399,9 +2399,9 @@ public final class Ga11VectorHeadlessMain {
                         full,full.getModificationNumber(),
                         full.getLanguageID().toString(),
                         full.getExecutableSHA256(),true);
-                    var out=ghidrassist.hardware.HardwareScopedVariableService.apply(
+                    var scopedOutcome=ghidrassist.hardware.HardwareScopedVariableService.apply(
                         full,candidates,cleanRevision);
-                    check(out.renamed()==2,
+                    check(scopedOutcome.renamed()==2,
                         "Explicit approved Ghidra pointer variable batch must rename both");
                     var after=ghidrassist.hardware.HardwareScopedVariableService.preview(fn);
                     check(after.size()==2 && after.stream().allMatch(
