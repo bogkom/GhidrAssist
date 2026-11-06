@@ -274,9 +274,16 @@ public final class Ga11VectorHeadlessMain {
                         "into reachable MMIO/ISR evidence");
                     var replay=new GhidraHardwareFlowService().analyze(
                         full,TaskMonitor.DUMMY,true);
+                    // Process-local stage counters may change on replay:
+                    // compare persistent RESET relations, not whole Markdown.
                     check(replay.resetCandidateFunctions.isEmpty() &&
                         !replay.resetCandidateRecognized &&
-                        replay.markdown.equals(interiorReport.markdown) &&
+                        replay.resetGraphIncomplete &&
+                        replay.markdown.contains(
+                            "UNKNOWN RESET ROOT — INTERIOR FUNCTION POINTER") &&
+                        replay.markdown.contains("RESET_ROOT_UNKNOWN") &&
+                        !replay.markdown.contains(
+                            "candidate chain 0x00000620 -> 0x00000500") &&
                         full.getModificationNumber()==interiorRevision,
                         "Same-revision replay cannot restore stale exact-entry "+
                         "RESET graph from previous source-vector revision");
