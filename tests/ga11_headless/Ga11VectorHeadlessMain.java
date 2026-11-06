@@ -83,7 +83,7 @@ public final class Ga11VectorHeadlessMain {
             "generic-profile","trambar-source","csbar-mm0-reject",
             "mmio-read-reference","csbar-csor-conditional",
             "simcr-mm0-literal","trambar-unknown","csor-alternatives",
-            "branch-simcr","call-barrier","leaf-return","call-context","joint-source","two-hop","two-hop-indexed","two-hop-indexed-wrap","indirect-adjacent","indirect-bounded","branch-leaf","branch-cache","cancel-incomplete",
+            "branch-simcr","call-barrier","leaf-return","call-context","joint-source","two-hop","two-hop-indexed","two-hop-indexed-wrap","indirect-adjacent","indirect-bounded","indirect-reset-xref","branch-leaf","branch-cache","cancel-incomplete",
             "function-stage-resume","function-rename","receipt-restart-write",
             "receipt-restart-read","apply-preserve","provenance-csv",
             "movec-vbr","vbr-relocation").contains(ga18Mode),
@@ -1466,6 +1466,144 @@ public final class Ga11VectorHeadlessMain {
                     result.addProperty("twohop_wrap_replay_deterministic",true);
                     result.addProperty("twohop_wrap_generic_cpu32_conservative",true);
                     result.addProperty("twohop_wrap_program_read_only",true);
+                } else if("indirect-reset-xref".equals(ga18Mode)) {
+                    // Real Ghidra CPU32 Listing and user-defined computed
+                    // CALL reference. An unproven JSR (A1) cannot become
+                    // direct RESET -> SIMCR/MMIO/ISR graph reachability.
+                    // Genuine direct JSR (absolute).L remains the control.
+                    int txCpu=full.startTransaction(
+                        "GA02 test-only computed ref vs RESET CALL");
+                    try {
+                        full.getMemory().setBytes(address(full,0x600L),
+                            java.util.HexFormat.of().parseHex(
+                                "4eb9000007004e75"));
+                        full.getMemory().setBytes(address(full,0x680L),
+                            java.util.HexFormat.of().parseHex("4e914e75"));
+                        full.getMemory().setBytes(address(full,0x700L),
+                            java.util.HexFormat.of().parseHex(
+                                "33fc40ca00fffa004e75"));
+                        // Vector #26 points to the MMIO leaf. This is a
+                        // static vector pointer only, never an active ISR.
+                        full.getMemory().setBytes(address(full,26L*4),
+                            java.util.HexFormat.of().parseHex("00000700"));
+                    } finally {full.endTransaction(txCpu,true);}
+                    defineFixtureFunction(full,0x700L,10,
+                        "ga02_reset_indirect_may_mmio_leaf");
+                    defineFixtureFunction(full,0x600L,8,
+                        "ga02_reset_real_direct_jsr");
+                    defineFixtureFunction(full,0x680L,4,
+                        "ga02_reset_computed_jsr_a1");
+                    var computed=full.getListing().getInstructionAt(
+                        address(full,0x680L));
+                    var direct=full.getListing().getInstructionAt(
+                        address(full,0x600L));
+                    check(computed!=null && direct!=null &&
+                        computed.getFlowType().isCall() &&
+                        computed.getFlowType().isComputed() &&
+                        direct.getFlowType().isCall() &&
+                        !direct.getFlowType().isComputed(),
+                        "Ghidra 12.1.4 must decode JSR (A1) as computed "+
+                        "and JSR absolute as direct");
+                    int txRef=full.startTransaction(
+                        "GA02 test-only false computed CALL xref");
+                    try {
+                        var reference=full.getReferenceManager().addMemoryReference(
+                            address(full,0x680L),address(full,0x700L),
+                            RefType.COMPUTED_CALL,SourceType.USER_DEFINED,0);
+                        check(reference!=null &&
+                            reference.getReferenceType().isCall() &&
+                            reference.getToAddress().equals(address(full,0x700L)),
+                            "Synthetic computed CALL reference was not created");
+                    } finally {full.endTransaction(txRef,true);}
+                    var ambiguous=full.getListing().getInstructionAt(
+                        address(full,0x680L));
+                    check(ambiguous.getReferencesFrom().length>0 &&
+                        ambiguous.getFlowType().isComputed() &&
+                        ambiguous.getFlowType().isCall(),
+                        "Computed CPU32 JSR lost the untrusted CALL ref");
+                    // Any returned reference count remains subordinate to
+                    // the decoded COMPUTED_CALL bit. When getFlows()
+                    // exposes that single injected destination, the old
+                    // product would have accepted it as direct CALL.
+                    check(!ghidrassist.hardware.HardwareDirectCallGate
+                            .directCandidate(true,true,
+                                ambiguous.getFlows().length),
+                        "Synthetic computed XREF must be ineligible "+
+                        "regardless of Ghidra getFlows reference count");
+                    check(ghidrassist.hardware.HardwareDirectCallGate
+                            .directCandidate(true,false,direct.getFlows().length),
+                        "One genuine CPU32 direct JSR still eligible");
+                    int txVector=full.startTransaction(
+                        "GA02 test-only exact RESET to direct JSR");
+                    try {
+                        full.getMemory().setBytes(address(full,4L),
+                            java.util.HexFormat.of().parseHex("00000600"));
+                    } finally {full.endTransaction(txVector,true);}
+                    long directRevision=full.getModificationNumber();
+                    var exact=new GhidraHardwareFlowService().analyze(
+                        full,TaskMonitor.DUMMY,true);
+                    check(exact.resetCandidateRecognized &&
+                        exact.resetCandidateFunctions.contains(0x600L) &&
+                        exact.resetCandidateFunctions.contains(0x700L) &&
+                        exact.markdown.contains(
+                            "candidate chain 0x00000600 -> 0x00000700") &&
+                        exact.markdown.contains(
+                            "| 26 | 0x00000700 | 0x00000700 | "+
+                            "IN_RESET_STATIC_CALL_SUBSET") &&
+                        full.getModificationNumber()==directRevision,
+                        "Real direct JSR must remain a static RESET/ISR "+
+                        "candidate without any project mutation");
+                    int txComputed=full.startTransaction(
+                        "GA02 test-only RESET to unproven computed JSR");
+                    try {
+                        full.getMemory().setBytes(address(full,4L),
+                            java.util.HexFormat.of().parseHex("00000680"));
+                    } finally {full.endTransaction(txComputed,true);}
+                    long computedRevision=full.getModificationNumber();
+                    var uncertain=new GhidraHardwareFlowService().analyze(
+                        full,TaskMonitor.DUMMY,true);
+                    check(uncertain.resetCandidateRecognized &&
+                        uncertain.resetGraphIncomplete &&
+                        uncertain.resetCandidateFunctions.equals(
+                            java.util.Set.of(0x680L)) &&
+                        !uncertain.resetCandidateFunctions.contains(0x700L) &&
+                        uncertain.markdown.contains(
+                            "unresolved call/control-flow: true") &&
+                        !uncertain.markdown.contains(
+                            "candidate chain 0x00000680 -> 0x00000700") &&
+                        uncertain.markdown.contains(
+                            "| 26 | 0x00000700 | 0x00000700 | "+
+                            "OUTSIDE_OBSERVED_RESET_SUBSET") &&
+                        full.getModificationNumber()==computedRevision,
+                        "Untrusted computed-CALL reference promoted to "+
+                        "reachable RESET/MMIO/ISR source candidates");
+                    check(uncertain.markdown.contains(
+                            "caller 0x00000680 PC 0x00000680 -> UNKNOWN") &&
+                        uncertain.markdown.contains(
+                            "unknown callee/flow=true") &&
+                        !uncertain.markdown.contains(
+                            "caller 0x00000680 PC 0x00000680 -> 0x00000700"),
+                        "Computed CALL ref must remain UNKNOWN in "+
+                        "interprocedural SIMCR/MM source report");
+                    var replay=new GhidraHardwareFlowService().analyze(
+                        full,TaskMonitor.DUMMY,true);
+                    check(replay.resetCandidateFunctions.equals(
+                            java.util.Set.of(0x680L)) &&
+                        replay.resetGraphIncomplete &&
+                        replay.markdown.contains(
+                            "caller 0x00000680 PC 0x00000680 -> UNKNOWN") &&
+                        !replay.markdown.contains(
+                            "candidate chain 0x00000680 -> 0x00000700") &&
+                        full.getModificationNumber()==computedRevision,
+                        "GA-12 cache replay must retain unknown computed "+
+                        "RESET edge on the identical Program revision");
+                    result.addProperty("indirect_reset_real_cpu32_computed",true);
+                    result.addProperty("indirect_reset_untrusted_user_xref",true);
+                    result.addProperty("indirect_reset_direct_positive_control",true);
+                    result.addProperty("indirect_reset_no_false_mmio_isr",true);
+                    result.addProperty("indirect_reset_mmio_unknown_propagated",true);
+                    result.addProperty("indirect_reset_revision_cache_safe",true);
+                    result.addProperty("indirect_reset_read_only_analysis",true);
                 } else if("indirect-adjacent".equals(ga18Mode)) {
                     // REAL CPU32: MOVEA.L #0x700,A0 immediately followed
                     // by JSR (A0), never a decoded direct JSR edge.

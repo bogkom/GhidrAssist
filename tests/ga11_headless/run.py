@@ -94,7 +94,7 @@ def main():
                         "generic-profile","trambar-source","csbar-mm0-reject",
                         "mmio-read-reference","csbar-csor-conditional",
                         "simcr-mm0-literal","trambar-unknown","csor-alternatives",
-                        "branch-simcr","call-barrier","leaf-return","call-context","joint-source","two-hop","two-hop-indexed","two-hop-indexed-wrap","indirect-adjacent","indirect-bounded","branch-leaf","branch-cache","cancel-incomplete",
+                        "branch-simcr","call-barrier","leaf-return","call-context","joint-source","two-hop","two-hop-indexed","two-hop-indexed-wrap","indirect-adjacent","indirect-bounded","indirect-reset-xref","branch-leaf","branch-cache","cancel-incomplete",
                         "function-stage-resume","function-rename","receipt-restart",
                         "apply-preserve","provenance-csv","movec-vbr","vbr-relocation"),
                         default="none",help="Run GA-07/12 or GA-02/03 genuine headless source-evidence checks")
@@ -354,6 +354,14 @@ def main():
                         "indirect_adjacent_untrusted_xref_unknown",
                         "indirect_adjacent_byte_proof_preserved",
                         "indirect_adjacent_program_read_only"),
+                    "indirect-reset-xref":(
+                        "indirect_reset_real_cpu32_computed",
+                        "indirect_reset_untrusted_user_xref",
+                        "indirect_reset_direct_positive_control",
+                        "indirect_reset_no_false_mmio_isr",
+                        "indirect_reset_mmio_unknown_propagated",
+                        "indirect_reset_revision_cache_safe",
+                        "indirect_reset_read_only_analysis"),
                     "indirect-bounded":(
                         "indirect_bounded_real_cpu32_jsrs",
                         "indirect_bounded_shared_api_bytes",
