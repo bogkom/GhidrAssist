@@ -23,6 +23,17 @@ CANCELLED, ERROR, MAX_ITERATIONS i MAX_TOOLS nie dają potwierdzenia
 ukończonej analizy. API jest lokalne, Bearer-authenticated i
 `read_only`; nie uruchamia LLM ani Apply.
 
+**Ochrona zmiany aktywnego Program (GA-12/15):** przełączenie
+CodeBrowser na inny Program unieważnia wcześniejsze strony
+Agentic. Nawet ponowne otwarcie pierwotnego Program z tym samym
+SHA i rewizją nie przywraca starych wyników; konieczne jest
+rozpoczęcie nowego przebiegu analizy. Obejmuje to również
+zwalnianie wtyczki. Aktywny proces ReAct nie jest tym
+mechanizmem przerywany, a jedynie przestaje być źródłem
+dostępnych przez API dowodów dla starego Program.
+Regresja powinna korzystać z rzeczywistego CodeBrowser/Xvfb
+z dwoma izolowanymi syntetycznymi programami Ghidry.
+
 **GA-12 — PARTIAL:** polecenie
 `ghidrassist-agent agentic-checkpoint --output ...` pobiera
 spójny komplet *zachowanych* stron rzeczywistego Agentic i
