@@ -1,7 +1,65 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
-Status: **IN PROGRESS — integrated baseline 2026-11-06 (PR #185)**. Scope source: user-approved 2026-10-28 requirements (A–H, additional features 13.1–13.7, PDF/RAG, testing and Codex Supervisor integration).
+Status: **IN PROGRESS — integrated baseline 2026-11-06 (PR #188)**. Scope source: user-approved 2026-10-28 requirements (A–H, additional features 13.1–13.7, PDF/RAG, testing and Codex Supervisor integration).
 
+
+## Obowiązujący checkpoint — 2026-11-06 (GA-02/03/11 computed JSR MAY)
+
+**Chroniony `master`:**
+[`ff7f831f8576794ad89d14047b81cda3a939a371`](https://github.com/bogkom/GhidrAssist/commit/ff7f831f8576794ad89d14047b81cda3a939a371).
+Poprzednie wpisy są historycznymi checkpointami, nie bieżącym HEAD.
+
+**GA-02/03/11 (CZĘŚCIOWO):** Po zintegrowanych #185 i
+[#187](https://github.com/bogkom/GhidrAssist/pull/187)
+potwierdzone instrukcjami CPU32 pośrednie `MOVEA.L #imm,An`
++ `JSR (An)` nie są bezpośrednimi krawędziami grafu
+RESET/ISR. #187 pokazuje oddzielnie ogólne możliwe skutki
+pamięci/VBR dla celu takiego wywołania, zachowując
+`UNKNOWN` i limit źródeł.
+
+**Zweryfikowana integracja #187:** HEAD
+`c908bab9c673166c0ac2b619aad2af3e23fa72f6`,
+**52/52 GitHub Actions SUCCESS**; merge
+`8fcf2abeddf11b9982061bed8f957d466df45033`,
+**15/15 SUCCESS**, identyczne drzewo
+`77ea168b8479d6e0f69f80dc3638239e50378b60`.
+Oba commity przeszły pełną kompilację
+Ghidry **12.1.4 PUBLIC / Java25**; HEAD również realną
+syntetyczną Ghidrę CPU32 i Java21.
+
+**Nowa integracja [#188](https://github.com/bogkom/GhidrAssist/pull/188):**
+odróżnia ogólny P-code/Listing `STORE` od osobnego
+`STATIC_MAY_MM_LOW_BYTE`, `UNKNOWN` lub
+`NOT_OBSERVED_IN_BOUNDED_SOURCE` w ścieżce
+bajtowo potwierdzonego pośredniego JSR do MC68332.
+Ponownie wykorzystuje istniejący transytywny,
+ograniczony graf `HardwareInterproceduralMmEffects`.
+Brak przypisania wykonania, aktywnego `MM`,
+bezpośredniego CALL, RESET/ISR, VBR, fizycznej mapy CS
+czy praw do Review/Apply/Undo. Limit 16 źródeł
+jest jawny, pominięcia i niepewność zachowane.
+
+**Dokładny HEAD #188:**
+`2aba6d4d1542a843cfd7e6c303e532badd1a0d3a`,
+**66/66 GitHub Actions SUCCESS**, Java21, pełny build
+Ghidry 12.1.4 PUBLIC/Java25 i rzeczywiste izolowane
+testy `indirect-adjacent` i `indirect-bounded`.
+**Merge SHA:** `ff7f831f8576794ad89d14047b81cda3a939a371`,
+**16/16 GitHub Actions SUCCESS**, w tym pełna kompilacja
+oraz testy CPU32, RESET i computed CALL. Drzewo Git
+HEAD/merge **identyczne**:
+`640be531ae7bae27d0ec90603b8cbf197174c659`.
+
+Issue [#106](https://github.com/bogkom/GhidrAssist/issues/106)
+pozostaje OPEN (0 nowych wpisów), #98 osobno.
+Nie wznowiono Wyse/Precision, starego Supervisora/timerów,
+nie używano prywatnego firmware/projektów ECU411.
+**Wszystkie GA-01–GA-18 nadal W ROZWOJU; GA-14 ODŁOŻONE.**
+Kolejne: GA-01/02/03/11 — konserwatywne dowody
+RESET/VBR/ISR przy nieznanych CALL; GA-06/10/16 —
+weryfikowalne wydanie, digest i fizyczna strona
+konkretnej kopii PDF; GA-12/15 — trwałość
+i kompletność źródeł; GA-17/18 — dalszy CI.
 
 ## Obowiązujący checkpoint — 2026-11-06 (GA-01/02/03/11 computed CALL XREF)
 
