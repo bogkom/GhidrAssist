@@ -72,6 +72,46 @@ public class FindingsCache {
     public static final int MAX_ITERATION_SUMMARIES = 100;
     public static final int MAX_ITERATION_SUMMARY_CHARS = 2048;
     private long totalIterationSummaries;
+    private long acceptedFindings;
+    private long evictedFindings;
+    public static final int MAX_PAGE_SIZE=100;
+
+    /** Immutable evidence copies, not mutable references to cache Findings. */
+    public record FindingView(String fact,String evidence,String toolUsed,
+                              int relevance,long timestamp) {}
+    public record FindingsPage(int offset,int limit,int retainedCount,
+                               long acceptedCount,long evictedCount,
+                               boolean sourceIncomplete,boolean hasMore,
+                               boolean complete,List<FindingView> rows) {
+        public FindingsPage { rows=List.copyOf(rows); }
+    }
+
+    /**
+     * GA-15 deterministic relevance-ranked pagination of the RETAINED
+     * evidence. Explicitly labels all omitted findings and source truncation.
+     * Page coordinates do not imply stable snapshot identity across updates:
+     * the caller must not stitch pages from different cache revisions.
+     */
+    public FindingsPage page(int offset,int limit) {
+        if(offset<0 || limit<1 || limit>MAX_PAGE_SIZE)
+            throw new IllegalArgumentException("Invalid bounded findings page");
+        List<Finding> ordered=new ArrayList<>(findings);
+        ordered.sort(Comparator.comparingInt(Finding::getRelevance).reversed());
+        int start=Math.min(offset,ordered.size());
+        int end=(int)Math.min((long)ordered.size(),(long)start+limit);
+        List<FindingView> views=new ArrayList<>();
+        for(Finding finding:ordered.subList(start,end))
+            views.add(new FindingView(finding.getFact(),
+                finding.getEvidence(),finding.getToolUsed(),
+                finding.getRelevance(),finding.getTimestamp()));
+        boolean more=end<ordered.size();
+        return new FindingsPage(offset,limit,ordered.size(),
+            acceptedFindings,evictedFindings,sourceIncomplete,more,
+            offset==0 && !more && !sourceIncomplete &&
+                evictedFindings==0,
+            views);
+    }
+
 
     // Persist structural source truncation independently of ranked findings.
     // A 1-item findings budget may evict even a score-10 warning when another
@@ -109,6 +149,7 @@ public class FindingsCache {
      */
     public void addFinding(String fact, String evidence, String toolUsed, int relevance) {
         if(fact==null || fact.isBlank())return;
+        acceptedFindings++;
         findings.add(new Finding(bounded(fact,MAX_FACT_CHARS),
             bounded(evidence,MAX_EVIDENCE_CHARS),bounded(toolUsed,128),
             Math.max(0,Math.min(10,relevance))));
@@ -211,6 +252,7 @@ public class FindingsCache {
         // Remove lowest relevance findings
         while (findings.size() > maxFindings) {
             findings.remove(findings.size() - 1);
+            evictedFindings++;
         }
     }
 
@@ -362,6 +404,8 @@ public class FindingsCache {
         findings.clear();
         iterationSummaries.clear();
         totalIterationSummaries=0;
+        acceptedFindings=0;
+        evictedFindings=0;
         sourceIncomplete=false;
     }
 
