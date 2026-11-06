@@ -3,6 +3,45 @@
 Status: **IN PROGRESS — integrated baseline 2026-11-06 (PR #198)**. Scope source: user-approved 2026-10-28 requirements (A–H, additional features 13.1–13.7, PDF/RAG, testing and Codex Supervisor integration).
 
 
+## GA-05 / GA-08 — istniejące wskaźniki w rzeczywistej Ghidrze (2026-11-06)
+
+**Baza:** scalony [PR #199](https://github.com/bogkom/GhidrAssist/pull/199)
+na `master` `a820736ce660a96208b0860fb8fdb6ff12cef9d7`,
+po 43/43 GitHub Actions PASS na HEAD
+`fd818241ba13c9e93d34094dc4c1a67e384dbe71`. GA-13
+nadal PARTIAL (odczytowy audyt rekordów Apply, bez pełnej
+historii decyzji i autora).
+
+**GA-05 — rozszerzony zakres Review/Apply/Undo, PARTIAL:**
+oddzielny `Review pointers...` wyświetla wyłącznie rzeczywiste
+`Function.getParameters` i `getLocalVariables` Ghidry; każda
+pozycja domyślnie *niezaznaczona*, dwa jawne potwierdzenia.
+Apply dopuszczalny tylko przy spójnej rewizji, tożsamości Program
+i wybranym MC68332; rewaliduje komplet listy i adres/ordinal/storage
+pola w jednej transakcji z możliwością Undo/Redo. Konflikty
+i zmiana/zanik zmiennej powodują pełny rollback.
+
+**GA-08 — rozszerzony zakres, PARTIAL:** niezależnie od
+czysto statycznych ról rejestrów A0–A7 możliwe są neutralne,
+tylko typowane podpowiedzi dla **istniejących** zmiennych
+wskaźnikowych i argumentów, o nazwach domyślnych Ghidry.
+Nie są to dowody semantyki MMIO ani automatycznie utworzone
+Decompiler HighVariable; nazwy ręczne, nieznane storage,
+auto-parametry i typy niewskaźnikowe pozostają nietknięte.
+Nadal brakuje analizy zakresów życia wskaźników, ustalenia
+HighVariable identity, semantycznych nazw parametrów i
+zmiennych bez pewnego typu.
+
+**Bramki CI:** Java21 deterministyczna polityka,
+pełny build Ghidra 12.1.4 PUBLIC/Java25 i rzeczywisty
+syntetyczny Function DB z dwiema zmiennymi wskaźnikowymi,
+zatwierdzony Apply, Undo, Redo oraz odmowa przy nieaktualnej
+rewizji, błędnym storage i kolizjach. Test ma działać wyłącznie
+w GitHub Actions na izolowanych projektach; bez Wyse/Precision
+i zatrzymanego Supervisora. Wyniki przypiąć do dokładnego HEAD
+jednego PR. **Nie oznaczać GA-05 ani GA-08 jako DONE**
+przed domknięciem ich pełnych wymagań.
+
 ## GA-13 — przegląd i audyt potwierdzonych operacji (2026-11-06)
 
 **Baza:** scalenie [PR #198](https://github.com/bogkom/GhidrAssist/pull/198)
