@@ -84,7 +84,7 @@ public final class Ga11VectorHeadlessMain {
             "mmio-read-reference","csbar-csor-conditional",
             "simcr-mm0-literal","trambar-unknown","csor-alternatives",
             "branch-simcr","call-barrier","leaf-return","call-context","joint-source","two-hop","two-hop-indexed","two-hop-indexed-wrap","indirect-adjacent","indirect-bounded","indirect-reset-xref","branch-leaf","branch-cache","cancel-incomplete",
-            "function-stage-resume","function-rename","receipt-restart-write",
+            "function-stage-resume","function-rename","scoped-variable","receipt-restart-write",
             "receipt-restart-read","apply-preserve","provenance-csv",
             "movec-vbr","vbr-relocation").contains(ga18Mode),
             "Unknown GA-18 acceptance mode");
