@@ -141,6 +141,14 @@ public final class FindingsCacheBudgetSelfTest {
         yes(paged.page(Integer.MAX_VALUE,1).rows().isEmpty() &&
             !paged.page(Integer.MAX_VALUE,1).complete(),
             "out-of-range page is empty without integer overflow or false completeness");
+        // The pre-existing API exposes mutable relevance scores. Those
+        // edits must invalidate pagination even if no findings are added.
+        var beforeScoreEdit=paged.page(0,3);
+        paged.getAllFindings().get(0).setRelevance(8);
+        boolean scoreStale=false;
+        try{paged.page(0,3,beforeScoreEdit.revision());}
+        catch(IllegalStateException expected){scoreStale=true;}
+        yes(scoreStale,"public finding relevance edits invalidate page stitching");
         paged.clear();
         yes(paged.page(0,10).complete() &&
             paged.page(0,10).acceptedCount()==0 &&
