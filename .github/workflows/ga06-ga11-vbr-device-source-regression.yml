@@ -1,0 +1,33 @@
+name: GA-06/11 MC68332 profile-bound VBR pointer evidence
+on:
+  pull_request:
+    paths:
+      - 'src/main/java/ghidrassist/hardware/HardwareInterruptVectors.java'
+      - 'src/main/java/ghidrassist/hardware/GhidraInterruptVectorService.java'
+      - 'src/main/java/ghidrassist/hardware/GhidraHardwareFlowService.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareInterruptVectorsSelfTest.java'
+      - 'tests/ga11_headless/Ga11VectorHeadlessMain.java'
+      - '.github/workflows/ga06-ga11-vbr-device-source-regression.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  source-classification:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Compile vector model without Ghidra or private firmware
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/vector-source"
+          javac --release 21 -d "$RUNNER_TEMP/vector-source" \
+            src/main/java/ghidrassist/hardware/HardwareInterruptVectors.java \
+            src/test/java/ghidrassist/hardware/HardwareInterruptVectorsSelfTest.java
+      - name: Verify image-zero generic CPU32 versus selected MCU24 constraints
+        run: java -ea -cp "$RUNNER_TEMP/vector-source" ghidrassist.hardware.HardwareInterruptVectorsSelfTest

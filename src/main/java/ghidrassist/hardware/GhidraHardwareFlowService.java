@@ -1312,7 +1312,8 @@ public final class GhidraHardwareFlowService {
         ResetCandidates reset=resetStaticCandidates(program,staticCalls,evidencedFunctions);
         String relocatedVbr=mc68332Selected?
             GhidraInterruptVectorService.analyzeRelocatedSourceTables(
-                program,monitor,vbrSourceSites,vbrSourceSitesOmitted,
+                program,HardwareProfiles.mc68332(),monitor,
+                vbrSourceSites,vbrSourceSitesOmitted,
                 reset.recognized(),reset.incomplete(),reset.visited(),
                 staticCalls):
             "## Relocated VBR source-table candidates (GA-11)\n\n"+

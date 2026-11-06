@@ -48,6 +48,34 @@ public final class HardwareInterruptVectorsSelfTest {
             md.contains("pointers inside recognized function bodies") &&
             md.contains("INTERIOR_FUNCTION_POINTER_CANDIDATE"),
             "interior function pointers are not handler entries");
+        // A 32-bit value above MCU24 range is not the same as an
+        // unmapped/odd handler. Only the selected-device scan marks it.
+        var deviceOnly=HardwareInterruptVectors.inspect(0x800L,List.of(
+            new HardwareInterruptVectors.Observation(
+                29,0x01000000L,false,null,false,true),
+            new HardwareInterruptVectors.Observation(
+                30,0x01000000L,false,null,false)),8);
+        ok(deviceOnly.outsideMcu24()==1 && deviceOnly.unmapped()==1 &&
+            deviceOnly.displayed().get(0).classification()==
+                HardwareInterruptVectors.Classification.OUTSIDE_SELECTED_MCU24_RANGE &&
+            deviceOnly.displayed().get(1).classification()==
+                HardwareInterruptVectors.Classification.UNMAPPED_TARGET &&
+            deviceOnly.markdown().contains("outside explicitly selected MCU24 width: 1"),
+            "MC68332 cannot present a 32-bit out-of-range pointer as generic unmapped ISR");
+        boolean invalidDevice=false;
+        try {
+            HardwareInterruptVectors.inspect(0x800L,List.of(
+                new HardwareInterruptVectors.Observation(
+                    29,0x0000ff00L,false,null,false,true)),8);
+        } catch(IllegalArgumentException expected){invalidDevice=true;}
+        ok(invalidDevice,"24-bit address cannot be falsely marked out-of-range");
+        invalidDevice=false;
+        try {
+            HardwareInterruptVectors.inspect(0x800L,List.of(
+                new HardwareInterruptVectors.Observation(
+                    29,0x01000000L,true,"isr",true,true)),8);
+        } catch(IllegalArgumentException expected){invalidDevice=true;}
+        ok(invalidDevice,"out-of-range pointer cannot simultaneously be a recognized handler");
         var moved=HardwareInterruptVectors.inspect(0x800L,input,16);
         ok(moved.sampledSlots()==s.sampledSlots() &&
             moved.plausibleMapped()==s.plausibleMapped() &&

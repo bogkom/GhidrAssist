@@ -25,6 +25,8 @@ import ghidrassist.hardware.HardwareIndexedAddress;
 import ghidrassist.hardware.HardwareInventoryService;
 import ghidrassist.hardware.HardwareFlowStageCache;
 import ghidrassist.hardware.HardwareAnalysisRevision;
+import ghidrassist.hardware.HardwareProfiles;
+import ghidrassist.hardware.HardwareBitfieldSourceLedger;
 import java.awt.GraphicsEnvironment;
 import java.nio.file.*;
 import java.util.*;
@@ -2885,6 +2887,8 @@ public final class Ga11VectorHeadlessMain {
                             java.util.HexFormat.of().parseHex("00000402"));
                         full.getMemory().setBytes(address(full,0x870L),
                             java.util.HexFormat.of().parseHex("00000401"));
+                        full.getMemory().setBytes(address(full,0x874L),
+                            java.util.HexFormat.of().parseHex("01000000"));
                         full.getMemory().setBytes(address(full,0x5a0L),
                             java.util.HexFormat.of().parseHex(
                                 "203c000008004e7b08014e75"));
@@ -2897,6 +2901,16 @@ public final class Ga11VectorHeadlessMain {
                         movecInsn.toString().toUpperCase(Locale.ROOT)
                             .contains("VBR"),
                         "Ghidra CPU32 did not decode relocated MOVEC D0,VBR");
+                    boolean genericRefused=false;
+                    try {
+                        GhidraInterruptVectorService.analyzeRelocatedSourceTables(
+                            full,HardwareProfiles.cpu32Family(),TaskMonitor.DUMMY,
+                            List.of(),0,true,false,Set.of(),List.of());
+                    } catch(IllegalArgumentException expected) {
+                        genericRefused=true;
+                    }
+                    check(genericRefused,
+                        "Relocated service must refuse generic CPU32 without MC68332 profile");
                     long initialVbrRev=full.getModificationNumber();
                     var vbrReport=new GhidraHardwareFlowService().analyze(
                         full,TaskMonitor.DUMMY,true);
@@ -2920,10 +2934,18 @@ public final class Ga11VectorHeadlessMain {
                         relocated.contains(
                             "INTERIOR_FUNCTION_POINTER_CANDIDATE") &&
                         relocated.contains("ODD_POINTER") &&
+                        relocated.contains("OUTSIDE_SELECTED_MCU24_RANGE") &&
+                        relocated.contains("outside explicitly selected MCU24 width: 1") &&
+                        md.contains(HardwareBitfieldSourceLedger.MC68332_PUBLIC_PDF_SHA256) &&
                         relocated.contains("pointers inside recognized "+
                             "function bodies (NOT entries): 1"),
                         "Actual relocated table bytes or function entry "+
                         "classification missing");
+                    check(md.contains("Explicit device profile: MC68332") &&
+                        md.contains("local RAG copies, runtime VBR and ISR remain UNKNOWN"),
+                        "MC68332 source provenance must not authenticate local RAG files");
+                    result.addProperty("ga06_ga11_explicit_device_rejects_generic",true);
+                    result.addProperty("ga06_ga11_mcu24_out_of_range_source",true);
                     check(full.getModificationNumber()==initialVbrRev,
                         "Read-only VBR evidence analysis modified Program");
                     var genericVbr=new GhidraHardwareFlowService().analyze(

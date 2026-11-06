@@ -99,7 +99,8 @@ public final class GhidraInterruptVectorService {
      * Never create memory, disassemble or mutate a Program in this scan.
      */
     public static String analyzeRelocatedSourceTables(Program program,
-            TaskMonitor monitor,List<HardwareVbrRelocationEvidence.Site> sites,
+            HardwareProfiles.Profile selectedDevice,TaskMonitor monitor,
+            List<HardwareVbrRelocationEvidence.Site> sites,
             int sourceSitesOmitted,boolean resetRootRecognized,
             boolean resetGraphIncomplete,Set<Long> resetVisited,
             List<HardwareCallEffects.FunctionNode> callGraph)
@@ -107,10 +108,22 @@ public final class GhidraInterruptVectorService {
         if(program==null || sites==null || sourceSitesOmitted<0 ||
                 resetVisited==null || callGraph==null)
             throw new IllegalArgumentException("Invalid relocated VBR evidence");
+        // Do NOT rely on the caller's optional selected-MCU check. A
+        // generic CPU32 language alone never authorizes MCU24 constraints.
+        if(selectedDevice==null || !selectedDevice.concreteDevice ||
+                !"MC68332".equals(selectedDevice.id))
+            throw new IllegalArgumentException(
+                "Explicit MC68332 profile required for relocated VBR table interpretation");
         if(monitor==null)monitor=TaskMonitor.DUMMY;
         var plan=HardwareVbrRelocationEvidence.plan(
             sites,resetRootRecognized,resetGraphIncomplete,resetVisited,3,24);
         StringBuilder report=new StringBuilder(plan.markdown());
+        report.append("- Explicit device profile: MC68332; candidate source ")
+            .append("MC68332UM (Motorola 1995), publisher SHA-256 ")
+            .append(HardwareBitfieldSourceLedger.MC68332_PUBLIC_PDF_SHA256)
+            .append(". These provenance values authenticate ONLY the ")
+            .append("publisher-hosted PDF previously verified in CI; ")
+            .append("local RAG copies, runtime VBR and ISR remain UNKNOWN.\n\n");
         if(sourceSitesOmitted>0)
             report.append("- **INCOMPLETE INPUT:** ")
                 .append(sourceSitesOmitted)
@@ -174,7 +187,9 @@ public final class GhidraInterruptVectorService {
                     // UNKNOWN bytes, never a fabricated zero or a handler.
                 }
                 observations.add(new HardwareInterruptVectors.Observation(
-                    vector,pointer,mapped,function,exactEntry));
+                    vector,pointer,mapped,function,exactEntry,
+                    pointer!=null && pointer!=0xffffffffL &&
+                    pointer>HardwareVbrRelocationEvidence.MAX_24BIT));
             }
             report.append("### Relocated **source-image** table candidate at ")
                 .append(String.format(Locale.ROOT,"0x%08X",base))
