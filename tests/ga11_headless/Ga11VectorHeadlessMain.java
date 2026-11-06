@@ -1785,6 +1785,19 @@ public final class Ga11VectorHeadlessMain {
                         !mayEvidence.contains("| 0x000006C0 |"),
                         "Real indirect MAY STORE target must be separate "+
                         "from unverified computed XREFs and direct RESET edges");
+                    int mmSource=mayEvidence.indexOf(
+                        "## Byte-witnessed indirect JSR SIMCR/MM MAY effects");
+                    check(mmSource>=0 &&
+                        mayEvidence.substring(mmSource).contains(
+                            "| 0x00000600 | 0x00000606 | 0x00000700 | "+
+                            "STATIC_MAY_MM_LOW_BYTE") &&
+                        !mayEvidence.substring(mmSource).contains(
+                            "| 0x00000680 |") &&
+                        mayEvidence.substring(mmSource).contains(
+                            "NEVER EXECUTION, NEVER APPLY"),
+                        "Actual byte-witnessed CPU32 JSR must keep SIMCR/MM "+
+                        "source as MAY, separate from unverified JSR paths: "+
+                        mayEvidence.substring(0,Math.min(4000,mayEvidence.length())));
                     check(report.rawCfgMmioSites.stream().noneMatch(x->
                         x.pc()==0x606L),
                         "Computed JSR must not become direct CFG write evidence");
@@ -1946,6 +1959,21 @@ public final class Ga11VectorHeadlessMain {
                         "Bounded indirect may-effects must not promote "+
                         "unverified targets or automatic Ghidra changes: "+
                         mayOutput.substring(0,Math.min(3800,mayOutput.length())));
+                    int mmMayStart=mayOutput.indexOf(
+                        "## Byte-witnessed indirect JSR SIMCR/MM MAY effects");
+                    check(mmMayStart>=0 &&
+                        mayOutput.substring(mmMayStart).contains(
+                            "| 0x00000600 | 0x0000060A | 0x00000700 | "+
+                            "STATIC_MAY_MM_LOW_BYTE") &&
+                        mayOutput.substring(mmMayStart).contains(
+                            "| 0x00000680 | 0x00000688 | 0x00000700 | "+
+                            "STATIC_MAY_MM_LOW_BYTE") &&
+                        !mayOutput.substring(mmMayStart).contains(
+                            "| 0x000006A0 |") &&
+                        !mayOutput.substring(mmMayStart).contains(
+                            "| 0x000006C0 |"),
+                        "Actual two byte-witnessed CPU32 indirect JSRs "+
+                        "must show MAY SIMCR/MM without unverified sources");
                     check(report.rawCfgMmioSites.stream().noneMatch(hit->
                         hit.pc()==0x60aL || hit.pc()==0x688L),
                         "Bounded computed JSR wrongly became Review/Apply");
