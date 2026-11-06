@@ -12,7 +12,7 @@ public final class HardwareBitfieldDecoderSelfTest {
         var known = HardwareBitfieldDecoder.decode(mc,"simcr",0x40ca,16);
         check(known.status()==HardwareBitfieldDecoder.Status.DECODED,
             "MC68332 full-word SIMCR decode");
-        check(known.fields().size()==3,"only three sourced SIMCR fields");
+        check(known.fields().size()==8,"eight page-claimed SIMCR configuration fields");
         var mm = known.fields().stream().filter(f->f.name().equals("MM")).findFirst().orElseThrow();
         var supv = known.fields().stream().filter(f->f.name().equals("SUPV")).findFirst().orElseThrow();
         var iarb = known.fields().stream().filter(f->f.name().equals("IARB")).findFirst().orElseThrow();
@@ -22,7 +22,26 @@ public final class HardwareBitfieldDecoderSelfTest {
         check(iarb.mask()==0xf && iarb.value()==0xa,"IARB nibble");
         check(mm.sourcePage().contains("PDF page") && supv.sourcePage().contains("PDF page") &&
             iarb.sourcePage().contains("PDF page"),"source pages retained");
-        check(known.unspecifiedMask()==0xff30,"all non-sourced SIMCR bits remain uninterpreted");
+        check(known.unspecifiedMask()==0x1430,"reserved/unsourced SIMCR bits remain uninterpreted");
+        var simcrFields=new java.util.HashMap<String,HardwareBitfieldDecoder.FieldEvidence>();
+        for(var field:known.fields())
+            check(simcrFields.put(field.name(),field)==null,
+                "SIMCR sourced field labels must be unique");
+        check(simcrFields.get("EXOFF").mask()==0x8000 &&
+              simcrFields.get("EXOFF").value()==0 &&
+              simcrFields.get("FRZSW").mask()==0x4000 &&
+              simcrFields.get("FRZBM").mask()==0x2000 &&
+              simcrFields.get("SLVEN").mask()==0x0800 &&
+              simcrFields.get("SHEN").mask()==0x0300,
+            "MC68332UM D-5 EXOFF/FRZSW/FRZBM/SLVEN/SHEN masks");
+        for(var name:java.util.List.of("EXOFF","FRZSW","FRZBM","SLVEN","SHEN"))
+            check(simcrFields.get(name).sourcePage().equals("D-5 (PDF page 219)") &&
+                  !simcrFields.get(name).writeOnceAfterReset(),
+                "new SIMCR fields require exact physical page and no write-once claim");
+        check(known.fields().stream().filter(x->x.writeOnceAfterReset()).count()==1 &&
+              simcrFields.get("MM").writeOnceAfterReset() &&
+              mc.register("SIMCR").resetValue==null,
+            "only MM is write-once; no guessed SIMCR reset value");
         check(known.summary().contains("MM=1") &&
             known.summary().contains("IARB=0xA") &&
             known.summary().contains("not proven hardware state or write order"),
