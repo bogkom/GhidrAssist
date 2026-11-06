@@ -55,7 +55,8 @@ public final class HardwareChangeProvenance {
      * formula *inside quotes*; prefix potential formulas with an apostrophe.
      * Preserve the original spelling otherwise; this is never an Apply CSV.
      */
-    private static String cell(String value) {
+    /** Shared RFC-safe read-only CSV cell for the GA-13 receipt audit. */
+    static String cell(String value) {
         if(value==null)value="";
         // Bound raw input BEFORE chaining replace() (which would otherwise
         // duplicate a multi-MB string) and explicitly show evidence loss.
