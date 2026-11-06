@@ -56,7 +56,10 @@ The Ghidra 12.1.4 PUBLIC/Java25 isolated real synthetic headless test
   `0x500` or `0x620`, no recognized RESET root, and explicitly
   unknown GA-11 vector relation.
 - Same-revision replay does not resurrect the previous root; report
-  revision stays unchanged during read-only analysis.
+  revision stays unchanged during read-only analysis. Replay assertions
+  compare the **RESET candidate set, root/unknown status and vector
+  relation**, not the entire report text: valid GA-12 computed-vs-reused
+  cache counters can differ while the source evidence stays identical.
 
 The workflow builds the full extension using SHA-verified Ghidra
 12.1.4 PUBLIC and Java25; a Java21 standalone test is separate.
