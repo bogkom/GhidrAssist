@@ -78,6 +78,54 @@ public final class HardwareFunctionRenameService {
         return Optional.of(decoded);
     }
 
+    /**
+     * Read-only inspection of ALL existing GA-13 rename receipts.
+     * The native Program modification counter must not change while
+     * correlating saved Options with current Function and SourceType.
+     * Undo removing a receipt is NOT a durable record of an undone edit.
+     */
+    public static HardwareFunctionRenameAudit.Snapshot audit(Program program) {
+        if(program==null)
+            throw new IllegalArgumentException("No Ghidra Program to audit");
+        long before=program.getModificationNumber();
+        String sha=program.getExecutableSHA256();
+        if(sha==null)sha="UNKNOWN";
+        List<HardwareFunctionRenameAudit.Observation> observations=new ArrayList<>();
+        if(program.getOptionsNames().contains(
+                HardwareFunctionRenameReceipt.OPTIONS_CATEGORY)) {
+            Options options=program.getOptions(
+                HardwareFunctionRenameReceipt.OPTIONS_CATEGORY);
+            List<String> keys=options.getOptionNames();
+            if(keys.size()>HardwareFunctionRenameAudit.MAX_ROWS)
+                throw new IllegalStateException("Too many stored rename receipts");
+            for(String key:keys) {
+                if(key==null || !key.matches("FN_[0-9A-F]{8}"))
+                    throw new IllegalStateException(
+                        "Unexpected GhidrAssist rename Options entry");
+                String raw=options.getString(key,null);
+                if(raw==null)
+                    throw new IllegalStateException("Missing rename receipt value");
+                var decoded=HardwareFunctionRenameReceipt.decode(raw);
+                if(!HardwareFunctionRenameReceipt.optionKey(decoded.entry())
+                        .equals(key))
+                    throw new IllegalStateException("Rename receipt entry mismatch");
+                Address address=program.getAddressFactory()
+                    .getDefaultAddressSpace().getAddress(decoded.entry());
+                Function function=program.getFunctionManager().getFunctionAt(address);
+                observations.add(new HardwareFunctionRenameAudit.Observation(
+                    key,raw,function==null?null:function.getName(),
+                    function==null?"UNKNOWN":function.getSymbol().getSource().name()));
+            }
+        }
+        if(program.getModificationNumber()!=before)
+            throw new IllegalStateException(
+                "Program changed while auditing function rename receipts");
+        var snapshot=HardwareFunctionRenameAudit.inspect(observations,before,sha);
+        if(program.getModificationNumber()!=before)
+            throw new IllegalStateException("Stale function rename audit snapshot");
+        return snapshot;
+    }
+
     public static Outcome apply(Program program,
             List<HardwareFunctionNamingReview.Proposal> accepted,
             HardwareAnalysisRevision reviewedRevision) throws Exception {
