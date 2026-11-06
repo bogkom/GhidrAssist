@@ -78,6 +78,21 @@ public final class HardwareScopedVariableReviewSelfTest {
                 "ga_local_ptr_candidate_0","stack:e",true,true,false)))
             .get(0).decision()==HardwareScopedVariableReview.Decision.NAME_COLLISION,
             "cross-kind name collision blocked");
+        var forged=new HardwareScopedVariableReview.Proposal(
+            row(HardwareScopedVariableReview.Kind.PARAMETER,0,
+                "param_1","stack:fake",false,false,false),
+            "ga_arg_ptr_candidate_0",HardwareScopedVariableReview.Decision.READY);
+        ok(HardwareScopedVariableReview.recheck(forged,forged.original(),List.of())==
+                HardwareScopedVariableReview.Decision.INVALID,
+            "public READY constructor cannot forge pointer type");
+        var forgedManual=new HardwareScopedVariableReview.Proposal(
+            row(HardwareScopedVariableReview.Kind.LOCAL,0,
+                "my_ptr","stack:fake",true,true,false),
+            "ga_local_ptr_candidate_0",HardwareScopedVariableReview.Decision.READY);
+        ok(HardwareScopedVariableReview.recheck(
+            forgedManual,forgedManual.original(),List.of())==
+                HardwareScopedVariableReview.Decision.INVALID,
+            "public READY constructor cannot override manually named variable");
         boolean immutable=false;
         try{list.clear();}catch(UnsupportedOperationException expected){immutable=true;}
         ok(immutable,"proposals are immutable");
