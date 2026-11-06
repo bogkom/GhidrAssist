@@ -41,6 +41,38 @@ public final class HardwareDurableCfgReportSelfTest {
             true,false,true,false,0,0,List.of(),List.of(),List.of());
         ok(decode(encode(none)).orElseThrow().equals(none),
             "empty lists and incomplete markers preserved");
+        // GA-12: even schema-valid, checksum-protected payloads are NOT
+        // eligible as "completed" checkpoints when evidence was omitted.
+        var complete=new Snapshot("## complete real synthetic CFG", "fn,pc\n",
+            2,0,0,0,2,false,true,false,true,0,0,
+            List.of(),List.of(),List.of(0x100L));
+        ok(eligibleForCompletedRestore(complete) &&
+            eligibleForCompletedRestore(decode(encode(complete)).orElseThrow()),
+            "completed source set is eligible after strict binary roundtrip");
+        var omitted=new Snapshot(complete.markdown(),complete.csv(),
+            complete.functions(),complete.indirect(),complete.vbr(),
+            complete.unresolved(),complete.visited(),false,true,false,true,
+            1,0,complete.sites(),complete.roles(),complete.resetFunctions());
+        ok(decode(encode(omitted)).isPresent() &&
+            !eligibleForCompletedRestore(omitted) &&
+            !eligibleForCompletedRestore(decode(encode(omitted)).orElseThrow()),
+            "valid checksum with missing CFG sites must not restore as complete");
+        var omittedPointers=new Snapshot(complete.markdown(),complete.csv(),
+            complete.functions(),complete.indirect(),complete.vbr(),
+            complete.unresolved(),complete.visited(),false,true,false,true,
+            0,1,complete.sites(),complete.roles(),complete.resetFunctions());
+        ok(!eligibleForCompletedRestore(omittedPointers),
+            "omitted pointer provenance cannot be certified completed");
+        var stopped=new Snapshot(complete.markdown(),complete.csv(),
+            complete.functions(),complete.indirect(),complete.vbr(),
+            complete.unresolved(),complete.visited(),true,true,false,true,
+            0,0,complete.sites(),complete.roles(),complete.resetFunctions());
+        ok(!eligibleForCompletedRestore(stopped) &&
+            !eligibleForCompletedRestore(original) &&
+            !eligibleForCompletedRestore(none),
+            "partial analysis and interrupted checkpoint never restored complete");
+        ok(!eligibleForCompletedRestore(null),
+            "null checkpoint is not evidence");
         System.out.println("HardwareDurableCfgReportSelfTest OK");
     }
 }
