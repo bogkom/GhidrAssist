@@ -1,7 +1,45 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
-Status: **IN PROGRESS — integrated baseline 2026-11-06 (PR #188)**. Scope source: user-approved 2026-10-28 requirements (A–H, additional features 13.1–13.7, PDF/RAG, testing and Codex Supervisor integration).
+Status: **IN PROGRESS — integrated baseline 2026-11-06 (PR #192)**. Scope source: user-approved 2026-10-28 requirements (A–H, additional features 13.1–13.7, PDF/RAG, testing and Codex Supervisor integration).
 
+
+## Obowiązujący checkpoint — 2026-11-06 (GA-01/02/03/11 report and vector source guards)
+
+**Chroniony `master`:** [`41f42238a9dbe79c23959b533492be9c8dd20377`](https://github.com/bogkom/GhidrAssist/commit/41f42238a9dbe79c23959b533492be9c8dd20377), po scaleniu #192.
+Starsze sekcje są zachowanymi historycznymi checkpointami, nie aktualnym HEAD.
+
+| Pakiet | Dokładny HEAD PR | Actions na HEAD | Merge SHA |
+|---|---|---|---|
+| [#190](https://github.com/bogkom/GhidrAssist/pull/190) — walidacja niekompletnych rekordów SIMCR/MM MAY | `6afc2ce0016f44673e3db56ffadfcef450347494` | **25/25 SUCCESS** | `62ea1c9a23e51525ef401649622239f58615e8cb` |
+| [#191](https://github.com/bogkom/GhidrAssist/pull/191) — odrzucenie wskaźników wektorów poprzedzających zadeklarowaną funkcję | `e0d53cd0cfd97c7b1482331f7f83a1bfa2e3f626` | **25/25 SUCCESS po retry** | `dfb989c5b3545a55d4dcbfa87930cd5cf52a7f97` |
+| [#192](https://github.com/bogkom/GhidrAssist/pull/192) — walidacja liczników i źródeł STORE/VBR MAY | `41d020bb135de37a1f05a02bb06e5ada72440da0` | **25/25 SUCCESS** | `41f42238a9dbe79c23959b533492be9c8dd20377` |
+
+Wszystkie trzy HEAD PR przeszły deterministyczne regresje Java21, pełne
+buildy rozszerzenia Ghidra **12.1.4 PUBLIC / Java25** i inne przypisane
+workflow rzeczywistej syntetycznej Ghidry. Na osobnych SHA merge #191
+i #192 nie zarejestrowano odrębnych przebiegów Actions — nie oznaczamy
+więc ich jako dodatkowego CI PASS. #191 miał pierwotnie 24/25 SUCCESS:
+jedyny błąd pochodził z **HTTP 429 Maven Central**, przed uruchomieniem
+syntetycznej Ghidry. Ponowiono wyłącznie nieudany job na niezmienionym
+SHA, zakończony SUCCESS. Przyczyna i wynik zapisane w PR.
+
+**Status funkcjonalny: CZĘŚCIOWO.** Sprzeczne rekordy dowodów MAY
+nie są tolerowane; wskazanie wektora do wnętrza funkcji nie może
+poprzedzać jej wejścia. Nie tworzy to nowej krawędzi bezpośredniego
+CALL ani rzeczywistej osiągalności RESET/ISR. Wartości MM0/MM1,
+aktywne VBR/IRQ, wykonanie STORE i fizyczne CS pozostają nieznane.
+Review/Apply/Undo nadal wymagają oddzielnej autoryzacji.
+
+[Issue #106](https://github.com/bogkom/GhidrAssist/issues/106) jest
+OPEN (0 zgłoszeń), #98 pozostaje osobną luką CodeBrowsera.
+Nie wznowiono lokalnych testów Wyse/Precision ani starego Supervisora,
+nie modyfikowano prywatnego firmware ani projektu ECU411.
+
+**GA-01–GA-18 nadal W ROZWOJU; GA-14 ODŁOŻONE.** Dalsze priorytety:
+GA-01/02/03/11 — rozdzielanie lokalnych MAY od dowodów statycznego RESET,
+niepewnych CALL, VBR i ISR; GA-06/10/16 — autentyczna edycja, strona i
+SHA-256 lokalnej kopii PDF; GA-12/15 — kompletność dowodów i checkpointy;
+GA-17/18 — CI i Automation API.
 
 ## Obowiązujący checkpoint — 2026-11-06 (GA-02/03/11 computed JSR MAY)
 
