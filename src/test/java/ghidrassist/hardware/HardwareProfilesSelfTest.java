@@ -25,6 +25,27 @@ public final class HardwareProfilesSelfTest {
         check(m.absoluteAddress(m.register("SIMCR"), 1) == 0xfffa00L, "SIMCR MM1");
         check(m.absoluteAddress(m.register("CSBAR0"), 1) == 0xfffa4cL, "CSBAR0");
         check(m.absoluteAddress(m.register("CSBAR10"), 1) == 0xfffa74L, "CSBAR10");
+        // Official MC68332UM (Motorola 1995), Table D-2 continues from
+        // printed D-4 / physical PDF 218 to D-5 / PDF 219 exactly
+        // between CSBAR4 and CSOR4. No hardware CS enable is inferred.
+        for(int cs=0;cs<=10;cs++){
+            var bar=m.register("CSBAR"+cs);
+            var option=m.register("CSOR"+cs);
+            String barPage=cs<=4?"D-4 (PDF page 218)":"D-5 (PDF page 219)";
+            String orPage=cs<=3?"D-4 (PDF page 218)":"D-5 (PDF page 219)";
+            check(bar.widthBits==16 && option.widthBits==16 &&
+                bar.offset==0x0a4c+4*cs && option.offset==0x0a4e+4*cs,
+                "CSBAR/CSOR byte intervals follow D-2 Table: "+cs);
+            check(bar.sourcePage.equals(barPage) &&
+                option.sourcePage.equals(orPage) &&
+                bar.source.contains("MC68332UM Motorola 1995") &&
+                option.source.contains("MC68332UM Motorola 1995"),
+                "Exact printed and PDF source folios for CS index "+cs);
+            check(bar.writePolicy==HardwareProfiles.WritePolicy.UNKNOWN &&
+                option.writePolicy==HardwareProfiles.WritePolicy.UNKNOWN &&
+                bar.resetValue==null && option.resetValue==null,
+                "Source folio does not certify active CS or register reset: "+cs);
+        }
         check(m.absoluteAddress(m.register("TRAMMCR"),1) == 0xfffb00L, "TRAMMCR");
         check(m.absoluteAddress(m.register("TRAMBAR"),1) == 0xfffb04L, "TRAMBAR");
         check(m.absoluteAddress(m.register("QSMCR"),1) == 0xfffc00L, "QSMCR");

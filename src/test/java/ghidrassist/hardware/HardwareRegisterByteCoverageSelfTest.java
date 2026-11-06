@@ -71,6 +71,10 @@ public final class HardwareRegisterByteCoverageSelfTest {
             "SPANNING_WHOLE_REGISTER".equals(left.coverage()) &&
             "SPANNING_WHOLE_REGISTER".equals(right.coverage()),
             "MOVE.L crosses two distinct 16-bit register ranges without exact match");
+        check(left.sourcePageLabel().equals("D-5 (PDF page 219)") &&
+            right.sourcePageLabel().equals("D-5 (PDF page 219)") &&
+            across.markdown("one-hop").contains("UNVERIFIED"),
+            "D-5/PDF 219 applies to CSOR6 and CSBAR7 as a page claim only");
         var span=HardwareRegisterByteCoverage.analyze(device,List.of(
             store(0x108,0x646,simcr1-2,32)));
         var simcrSpan=hit(span,"SIMCR",simcr1);

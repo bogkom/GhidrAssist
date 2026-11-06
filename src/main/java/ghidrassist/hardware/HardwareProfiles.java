@@ -254,10 +254,23 @@ public final class HardwareProfiles {
         r.add(reg("SIM", "CSPAR1", 0x0a46, 16, source));
         r.add(reg("SIM", "CSBARBT", 0x0a48, 16, source));
         r.add(reg("SIM", "CSORBT", 0x0a4a, 16, source));
+        // Exact printed/physical folios of the official NXP-hosted
+        // MC68332UM (Motorola 1995) Table D-2 continuation:
+        // D-4 / PDF 218 ends at CSBAR4 ($YFFA5C);
+        // D-5 / PDF 219 begins at CSOR4 ($YFFA5E).
+        // These are source-page CLAIMS, not an authenticated local PDF copy
+        // or evidence of hardware chip-select activation/WRITE acceptance.
+        final String simD4="D-4 (PDF page 218)";
+        final String simD5="D-5 (PDF page 219)";
+        final String csSource=source+" ; MC68332UM Motorola 1995";
         for (int cs = 0; cs <= 10; cs++) {
             int offset = 0x0a4c + cs * 4;
-            r.add(reg("SIM", "CSBAR" + cs, offset, 16, source));
-            r.add(reg("SIM", "CSOR" + cs, offset + 2, 16, source));
+            r.add(new Register("SIM", "CSBAR" + cs, offset, 16,
+                List.of(),csSource,cs<=4?simD4:simD5,
+                Access.SUPERVISOR,WritePolicy.UNKNOWN,null));
+            r.add(new Register("SIM", "CSOR" + cs, offset + 2, 16,
+                List.of(),csSource,cs<=3?simD4:simD5,
+                Access.SUPERVISOR,WritePolicy.UNKNOWN,null));
         }
         // Distinct internal modules; these register-address entries are
         // MC68332-only hypotheses and are NOT CPU32 family-wide guarantees.
