@@ -137,6 +137,33 @@ public final class HardwareIndirectMayEffectsSelfTest {
             absent.markdown().contains("NOT proof of no CALL"),
             "unproven computed XREF is not an indirect MAY witness");
 
+        // Public report values may also be assembled by callers. Malformed
+        // evidence must fail at construction rather than rendering a false
+        // bounded VBR/STORE statement or crashing during Markdown export.
+        rejects(()->new HardwareIndirectMayEffects.Report(1,1,0,null),
+            "missing report rows rejected");
+        rejects(()->new HardwareIndirectMayEffects.Report(1,1,0,
+            Arrays.asList((HardwareIndirectMayEffects.Row)null)),
+            "null MAY report row rejected");
+        rejects(()->new HardwareIndirectMayEffects.Report(1,1,0,
+            List.of(new HardwareIndirectMayEffects.Row(null,effects))),
+            "missing byte witness rejected");
+        rejects(()->new HardwareIndirectMayEffects.Report(1,1,0,
+            List.of(new HardwareIndirectMayEffects.Row(site,null))),
+            "missing VBR/STORE evidence rejected");
+        rejects(()->new HardwareIndirectMayEffects.Report(1,1,0,
+            List.of(new HardwareIndirectMayEffects.Row(site,
+                new HardwareCallEffects.Summary(
+                    false,false,false,false,false,-1)))),
+            "negative examined count rejected");
+        rejects(()->new HardwareIndirectMayEffects.Report(2,1,0,may.rows()),
+            "inconsistent source and omission counts rejected");
+        rejects(()->new HardwareIndirectMayEffects.Report(2,2,0,may.rows()),
+            "report examined count must match row count");
+        rejects(()->new HardwareIndirectMayEffects.Report(17,17,0,
+            Collections.nCopies(17,may.rows().get(0))),
+            "unbounded display row count rejected");
+
         rejects(()->HardwareIndirectMayEffects.analyze(
             Arrays.asList(site,null),graph,16),
             "null unverified candidate refused");
