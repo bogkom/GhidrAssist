@@ -1273,6 +1273,17 @@ public final class GhidraHardwareFlowService {
             "Not evaluated: explicit MC68332 profile required. "+
             "Generic CPU32 has no verified MCU-specific MMIO mapping.\n\n";
 
+        // A source-proven computed JSR may point to a function with
+        // transitive STORE/VBR sites. This is separate, bounded **MAY**
+        // evidence: never a direct CALL/RESET/ISR graph edge.
+        String indirectMayEffects=mc68332Selected?
+            HardwareIndirectMayEffects.analyze(
+                indirectCandidates,staticCalls,HardwareIndirectMayEffects.MAX_ROWS)
+                .markdown():
+            "## Byte-witnessed indirect JSR transitive MAY effects (GA-02/03/11)\n\n"+
+            "Not evaluated: explicit MC68332 profile required. "+
+            "Generic CPU32 cannot imply MCU-specific MMIO effects.\n\n";
+
         String interproceduralMm=mc68332Selected?
             HardwareInterproceduralMmEffects.analyze(
                 mmEffectNodes,mmCallSites,evidencedFunctions,4,100,80).markdown():
@@ -1326,6 +1337,7 @@ public final class GhidraHardwareFlowService {
            .append(relocatedVbr)
            .append(detail).append(effects).append(interproceduralMm)
            .append(indirectCallEvidence)
+           .append(indirectMayEffects)
            .append(callsiteRegisters).append(twoHopRegisters);
         if(shown>=350)out.append("\n[Detailed report bounded at 350 sites.]\n");
         boolean cfgSourcesComplete=cfgMmioSites.safeAsComplete(!limited);
