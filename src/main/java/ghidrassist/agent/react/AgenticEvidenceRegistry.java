@@ -90,7 +90,9 @@ public final class AgenticEvidenceRegistry<K> {
             bound.findings.page(offset,limit) :
             bound.findings.page(offset,limit,expectedFindingsRevision);
         return new EvidencePage(bound.run,bound.revision,bound.importSha,
-            bound.state,"SUCCESS".equals(bound.state) && page.complete(),page);
+            bound.state,"SUCCESS".equals(bound.state) && page.complete() &&
+                page.retainedCount()>0 && bound.importSha.matches(
+                    "(?i)[a-f0-9]{64}"),page);
     }
 
     public synchronized void invalidate(K owner) {
