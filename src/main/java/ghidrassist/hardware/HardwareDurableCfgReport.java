@@ -33,6 +33,23 @@ public final class HardwareDurableCfgReport {
             resetFunctions=List.copyOf(resetFunctions);
         }
     }
+    /**
+     * GA-12: a valid checksum and matching Program fingerprint alone do not
+     * prove that a historical payload contains a completed CFG evidence set.
+     * An interrupted or display-budget-omitted snapshot is not a resumable
+     * "complete" analysis, even if a separate writer emitted it.
+     *
+     * This pure gate is checked both before durable save and AFTER decoding,
+     * preserving the ability to decode/inspect incomplete historical data.
+     */
+    public static boolean eligibleForCompletedRestore(Snapshot snapshot) {
+        return snapshot!=null && snapshot.cfgReviewComplete() &&
+            !snapshot.limited() &&
+            snapshot.cfgOmitted()==0 && snapshot.pointersOmitted()==0 &&
+            snapshot.markdown()!=null &&
+            snapshot.markdown().length()<=1_000_000;
+    }
+
     private static void writeText(DataOutputStream out,String text)throws IOException{
         if(text==null)throw new IOException("Null checkpoint string");
         byte[] bytes=text.getBytes(StandardCharsets.UTF_8);

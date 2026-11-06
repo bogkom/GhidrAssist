@@ -101,6 +101,64 @@ public final class FindingsCacheBudgetSelfTest {
         yes(summary.formatIterationSummaries(1).contains("### Iteration 1"),
             "clear resets numbering and retained summaries");
         yes(summary.getCount()==0,"clear drops findings");
+        // GA-15: page offsets are over retained evidence, not over
+        // discarded source. Relevance order stable on equal scores.
+        var paged=new FindingsCache(3);
+        paged.addFinding("low fact","e0","tool",1);
+        paged.addFinding("high-A","e1","tool",9);
+        paged.addFinding("high-B","e2","tool",9);
+        var first=paged.page(0,2);
+        yes(first.retainedCount()==3 && first.acceptedCount()==3 &&
+            first.evictedCount()==0 && first.hasMore() &&
+            !first.complete() && first.rows().size()==2 &&
+            first.rows().get(0).fact().equals("high-A") &&
+            first.rows().get(1).fact().equals("high-B"),
+            "first page is deterministic relevance-ordered and marks omitted tail");
+        var last=paged.page(2,2,first.revision());
+        yes(!last.hasMore() && last.rows().size()==1 &&
+            last.rows().get(0).fact().equals("low fact") &&
+            !last.complete(),"second page cannot independently certify all evidence");
+        var entire=paged.page(0,3,first.revision());
+        yes(entire.complete() && !entire.hasMore() && entire.rows().size()==3,
+            "only complete retained page with no omissions may claim complete");
+        boolean listImmutable=false;
+        try {entire.rows().clear();}
+        catch(UnsupportedOperationException expected){listImmutable=true;}
+        yes(listImmutable,"page rows immutable across new cache mutations");
+        paged.addFinding("high-C","e3","tool",10);
+        var afterEvict=paged.page(0,3);
+        yes(afterEvict.evictedCount()==1 && afterEvict.acceptedCount()==4 &&
+            afterEvict.retainedCount()==3 && !afterEvict.complete(),
+            "pruned evidence must remain marked omitted despite full last page");
+        boolean stale=false;
+        try{paged.page(2,2,first.revision());}
+        catch(IllegalStateException expected){stale=true;}
+        yes(stale,"relevance pages from different revisions cannot be stitched");
+        rejects(()->paged.page(-1,1),"negative pagination offset refused");
+        rejects(()->paged.page(0,0),"zero pagination limit refused");
+        rejects(()->paged.page(0,FindingsCache.MAX_PAGE_SIZE+1),
+            "oversized pagination limit refused");
+        yes(paged.page(Integer.MAX_VALUE,1).rows().isEmpty() &&
+            !paged.page(Integer.MAX_VALUE,1).complete(),
+            "out-of-range page is empty without integer overflow or false completeness");
+        // The pre-existing API exposes mutable relevance scores. Those
+        // edits must invalidate pagination even if no findings are added.
+        var beforeScoreEdit=paged.page(0,3);
+        paged.getAllFindings().get(0).setRelevance(8);
+        boolean scoreStale=false;
+        try{paged.page(0,3,beforeScoreEdit.revision());}
+        catch(IllegalStateException expected){scoreStale=true;}
+        yes(scoreStale,"public finding relevance edits invalidate page stitching");
+        paged.clear();
+        yes(paged.page(0,10).complete() &&
+            paged.page(0,10).acceptedCount()==0 &&
+            paged.page(0,10).evictedCount()==0,
+            "new analysis clears discarded-source receipts");
+        var truncatedPage=new FindingsCache(1);
+        truncatedPage.extractFromToolOutput("mcp",("buffer overflow x\n").repeat(10000));
+        yes(truncatedPage.page(0,100).sourceIncomplete() &&
+            !truncatedPage.page(0,100).complete(),
+            "complete-looking page never hides omitted tool source bytes");
         System.out.println("FindingsCacheBudgetSelfTest OK");
     }
 }
