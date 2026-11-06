@@ -112,8 +112,12 @@ public final class HardwareContextSelector {
                         .append(" of ").append(citationCount)
                         .append("; citation metadata, not authenticated PDF.\n");
                 if(requested.contains("SIMCR")){
-                    out.append("MM mask for an MC68332 SIMCR word: 0x0040; "+
-                        "actual hardware identity and first successful MM write UNKNOWN.\n");
+                    String caveat="MM mask for an MC68332 SIMCR word: 0x0040; "+
+                        "actual hardware identity and first successful MM write UNKNOWN.\n";
+                    // At tight context budgets, keep honest physical-page
+                    // source coverage ahead of a repeated mask reminder.
+                    if(out.length()+caveat.length()+END.length()<=maxChars)
+                        out.append(caveat);
                 }
                 out.append(END);
                 return out.toString();
