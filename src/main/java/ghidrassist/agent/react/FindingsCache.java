@@ -74,16 +74,27 @@ public class FindingsCache {
     private long totalIterationSummaries;
     private long acceptedFindings;
     private long evictedFindings;
+    private long findingsRevision;
     public static final int MAX_PAGE_SIZE=100;
 
     /** Immutable evidence copies, not mutable references to cache Findings. */
     public record FindingView(String fact,String evidence,String toolUsed,
                               int relevance,long timestamp) {}
-    public record FindingsPage(int offset,int limit,int retainedCount,
+    public record FindingsPage(long revision,int offset,int limit,int retainedCount,
                                long acceptedCount,long evictedCount,
                                boolean sourceIncomplete,boolean hasMore,
                                boolean complete,List<FindingView> rows) {
         public FindingsPage { rows=List.copyOf(rows); }
+    }
+
+    /**
+     * Refuse stale page stitching. The first page supplies its revision;
+     * later pages must use exactly the same cache generation.
+     */
+    public FindingsPage page(int offset,int limit,long requiredRevision) {
+        if(requiredRevision!=findingsRevision)
+            throw new IllegalStateException("Stale findings page / analysis revision");
+        return page(offset,limit);
     }
 
     /**
@@ -105,7 +116,7 @@ public class FindingsCache {
                 finding.getEvidence(),finding.getToolUsed(),
                 finding.getRelevance(),finding.getTimestamp()));
         boolean more=end<ordered.size();
-        return new FindingsPage(offset,limit,ordered.size(),
+        return new FindingsPage(findingsRevision,offset,limit,ordered.size(),
             acceptedFindings,evictedFindings,sourceIncomplete,more,
             offset==0 && !more && !sourceIncomplete &&
                 evictedFindings==0,
@@ -150,6 +161,7 @@ public class FindingsCache {
     public void addFinding(String fact, String evidence, String toolUsed, int relevance) {
         if(fact==null || fact.isBlank())return;
         acceptedFindings++;
+        findingsRevision++;
         findings.add(new Finding(bounded(fact,MAX_FACT_CHARS),
             bounded(evidence,MAX_EVIDENCE_CHARS),bounded(toolUsed,128),
             Math.max(0,Math.min(10,relevance))));
@@ -401,6 +413,7 @@ public class FindingsCache {
      * Clear all findings (for context reset).
      */
     public void clear() {
+        findingsRevision++;
         findings.clear();
         iterationSummaries.clear();
         totalIterationSummaries=0;
