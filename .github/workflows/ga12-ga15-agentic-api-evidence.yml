@@ -1,0 +1,46 @@
+name: GA-12/15 real ReAct evidence pages and explicit local checkpoint
+on:
+  pull_request:
+    paths:
+      - 'src/main/java/ghidrassist/agent/react/AgenticEvidenceRegistry.java'
+      - 'src/main/java/ghidrassist/agent/react/FindingsCache.java'
+      - 'src/main/java/ghidrassist/agent/react/ReActOrchestrator.java'
+      - 'src/main/java/ghidrassist/automation/AutomationServer.java'
+      - 'src/test/java/ghidrassist/agent/react/AgenticEvidenceRegistrySelfTest.java'
+      - 'tests/automation/test_agentic_evidence_checkpoint.py'
+      - 'tools/ghidrassist-agent'
+      - '.github/workflows/ga12-ga15-agentic-api-evidence.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  evidence-without-model:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Java21 ReAct evidence identity, revision, and completion policy
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/agentic"
+          javac --release 21 -d "$RUNNER_TEMP/agentic" \
+            src/main/java/ghidrassist/agent/react/FindingsCache.java \
+            src/main/java/ghidrassist/agent/react/AgenticEvidenceRegistry.java \
+            src/test/java/ghidrassist/agent/react/FindingsCacheBudgetSelfTest.java \
+            src/test/java/ghidrassist/agent/react/AgenticEvidenceRegistrySelfTest.java
+          java -ea -cp "$RUNNER_TEMP/agentic" ghidrassist.agent.react.FindingsCacheBudgetSelfTest
+          java -ea -cp "$RUNNER_TEMP/agentic" ghidrassist.agent.react.AgenticEvidenceRegistrySelfTest
+      - name: Python3 local Agentic CLI checkpoint and source dispatch contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile tools/ghidrassist-agent
+          python3 -m unittest discover -s tests/automation -p 'test_agentic_evidence_checkpoint.py' -v
