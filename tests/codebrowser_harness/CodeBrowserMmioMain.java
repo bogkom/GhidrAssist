@@ -431,13 +431,23 @@ public final class CodeBrowserMmioMain {
                         overview.contains("| CSBOOT |") &&
                         overview.contains("| CS10 |"),
                     "Real MC68332 Overview lacks twelve-select source summary");
+                require(full.contains("GA-10/16 bitfield source-page ledger") &&
+                        full.contains("| SIMCR | SHEN |") &&
+                        full.contains("| SYNCR | STEXT |") &&
+                        full.contains("PDF BYTES UNVERIFIED"),
+                    "Real CodeBrowser Full Evidence missing sourced field/page claim ledger");
                 require(ghidrassist.hardware.HardwareEvidenceCache.hasEvidence(first),
                     "Canonical report was not published for current Ghidra revision");
                 String rag=ghidrassist.hardware.HardwareEvidenceCache.enrich(
                     first,"#hardware SIMCR","#hardware SIMCR");
                 require(rag.contains("<<<LOCAL_GHIDRA_HARDWARE_EVIDENCE>>>") &&
-                        rag.contains("SIMCR") && rag.contains("NOT an ECU hardware readback"),
-                    "RAG did not retrieve the same current-revision synthetic SIMCR evidence");
+                        rag.contains("SIMCR") && rag.contains("NOT an ECU hardware readback") &&
+                        rag.contains("| SIMCR | MM |") &&
+                        rag.contains("| SIMCR | SHEN |") &&
+                        rag.contains("PDF BYTES/EDITION UNVERIFIED") &&
+                        !rag.contains("| SYNCR | STEXT |"),
+                    "Focused real-Ghidra RAG must retain only SIMCR field-page claims");
+                result.addProperty("sourced_bitfield_pdf_rag_consistent",true);
                 var page=tab.automationMmioRows("simcr",0,5);
                 require(page.get("total").getAsInt()==1 &&
                         page.getAsJsonArray("rows").size()==1 &&
