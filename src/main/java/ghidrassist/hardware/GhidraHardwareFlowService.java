@@ -790,6 +790,14 @@ public final class GhidraHardwareFlowService {
                         provenLeafCallSites++;
                     }
                 }
+                // Ghidra represents some absolute-address MOVE.W stores
+                // as P-code COPY to an address-space varnode rather than
+                // PcodeOp.STORE. The existing Listing translator recognizes
+                // these as STORE_DIRECT. Count BOTH forms as static source
+                // memory effects; this is not an MMIO or execution proof.
+                if(translated.kind==HardwareDataflow.Kind.STORE_DIRECT ||
+                        translated.kind==HardwareDataflow.Kind.STORE_INDIRECT)
+                    localStore=true;
                 steps.add(translated);
             }
             // Undecoded bytes inside the Ghidra function body are not proof
