@@ -48,6 +48,8 @@ public class GhidrAssistPlugin extends ProgramPlugin {
 
     @Override
     protected void dispose() {
+        ghidrassist.agent.react.AgenticEvidenceRegistry.shared()
+            .invalidate(currentProgram);
         if (automationServer != null) { automationServer.close(); automationServer = null; }
         if (provider != null) {
             tool.removeComponentProvider(provider);
@@ -58,6 +60,15 @@ public class GhidrAssistPlugin extends ProgramPlugin {
 
     @Override
     protected void programActivated(Program program) {
+        // GA-12/15: even returning to a previously opened Program must
+        // not expose findings gathered while CodeBrowser displayed another.
+        // A running ReAct job may still finish asynchronously; its cache
+        // cannot be reattached without an entirely new investigation.
+        Program previous=currentProgram;
+        if(previous!=null && previous!=program) {
+            ghidrassist.agent.react.AgenticEvidenceRegistry.shared()
+                .invalidate(previous);
+        }
         super.programActivated(program);
         if (provider != null) {
             javax.swing.SwingUtilities.invokeLater(() -> {
