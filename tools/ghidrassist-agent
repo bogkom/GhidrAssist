@@ -69,7 +69,9 @@ def capture_agentic_checkpoint(session, output, page_size=100):
         rows.extend(chunk)
     if len(rows)!=expected[5]:
         raise ValueError("Agentic checkpoint omitted retained rows")
-    complete = bool(current["complete"] and expected[3]=="SUCCESS" and
+    # A nonzero-offset page is never individually complete. Complete here
+    # means the entire unchanged run was stitched without omissions.
+    complete = bool(expected[3]=="SUCCESS" and
                     expected[6]==expected[5] and expected[7]==0 and not expected[8])
     payload = {
         "schema": 1, "kind": "ghidrassist-agentic-retained-evidence",
