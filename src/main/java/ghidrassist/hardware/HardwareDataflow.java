@@ -424,6 +424,22 @@ public final class HardwareDataflow {
              overlapsBytes(address,bytes,0xfffa01L,1));
     }
 
+    /**
+     * A known-width source STORE can begin before a tracked register base.
+     * Count any touched tracked address, including modulo-24-bit wrap. This
+     * is possible source alias evidence only, not a register value, executed
+     * write, MC68332 mapping proof, or authorization to Apply anything.
+     */
+    static boolean mayTouchTrackedAddress(Long address,int bits,Set<Long> tracked) {
+        int bytes=storeBytes(bits);
+        if(address==null || bytes==0 || tracked==null || tracked.isEmpty())
+            return false;
+        for(int byteOffset=0;byteOffset<bytes;byteOffset++)
+            if(tracked.contains((address+byteOffset)&MASK24))
+                return true;
+        return false;
+    }
+
     private static boolean candidateSimcrStore(Step step, Long address) {
         return mayTouchSimcrMmLowByte(address,step.writeBits);
     }

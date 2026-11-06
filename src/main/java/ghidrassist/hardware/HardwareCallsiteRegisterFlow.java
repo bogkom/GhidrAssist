@@ -199,7 +199,11 @@ public final class HardwareCallsiteRegisterFlow {
                 if(hit.effectiveAddress==null ||
                         (hit.writeBits!=8 && hit.writeBits!=16 &&
                          hit.writeBits!=32)) {aliases++;continue;}
-                if(!tracked.contains(hit.effectiveAddress) &&
+                // A long/word STORE starting before a tracked MMIO
+                // register can still touch its base; account for all
+                // known-width bytes on the 24-bit MCU bus, not only start.
+                if(!HardwareDataflow.mayTouchTrackedAddress(
+                        hit.effectiveAddress,hit.writeBits,tracked) &&
                         !HardwareDataflow.mayTouchSimcrMmLowByte(
                             hit.effectiveAddress,hit.writeBits))continue;
                 sites++;

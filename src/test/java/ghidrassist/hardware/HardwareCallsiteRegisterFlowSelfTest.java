@@ -239,6 +239,47 @@ public final class HardwareCallsiteRegisterFlowSelfTest {
             byteWrite.possibleStoreSites()==0 &&
             byteWrite.candidates().isEmpty(),
             "known 8-bit STORE not spanning MM remains excluded");
+        // A known MOVE.L at CSBAR-2 includes the tracked CSBAR base
+        // even though its starting address is not in the MMIO catalog.
+        // This source is a MAY-alias, never an observed CSBAR value.
+        var beforeCs=new HardwareCallsiteRegisterFlow.Call(
+            0xb00,0xb0c,0x640L,
+            Map.of("A0",0xfffa66L,"D0",0x1234L),false);
+        var crossingCs=HardwareCallsiteRegisterFlow.analyze(
+            List.of(beforeCs),List.of(spanningLong),Set.of(cs),8);
+        ok(crossingCs.possibleStoreSites()==1 &&
+            crossingCs.unresolvedAliases()==0 &&
+            crossingCs.candidates().size()==1 &&
+            crossingCs.candidates().get(0).address()==0xfffa66L &&
+            crossingCs.candidates().get(0).writeBits()==32 &&
+            crossingCs.candidates().get(0).writtenWord()==null,
+            "one-hop long STORE before tracked CSBAR base is a possible alias");
+        var beforeCsByte=HardwareCallsiteRegisterFlow.analyze(
+            List.of(beforeCs),List.of(narrowByte),Set.of(cs),8);
+        ok(beforeCsByte.possibleStoreSites()==0 &&
+            beforeCsByte.candidates().isEmpty(),
+            "byte STORE before CSBAR with no overlap remains excluded");
+        var unrelatedTracked=HardwareCallsiteRegisterFlow.analyze(
+            List.of(beforeCs),List.of(spanningLong),Set.of(simcr),8);
+        ok(unrelatedTracked.possibleStoreSites()==0 &&
+            unrelatedTracked.candidates().isEmpty(),
+            "known-width spanning STORE cannot hit a distant tracked register");
+        // The CPU32 external address bus wraps after 0xFFFFFF. The third
+        // byte of a MOVE.L starting 0xFFFFFE touches tracked 0x000000.
+        var atBusEnd=new HardwareCallsiteRegisterFlow.Call(
+            0xb40,0xb4c,0x640L,
+            Map.of("A0",0xfffffeL,"D0",0x1234L),false);
+        var wrappedTracked=HardwareCallsiteRegisterFlow.analyze(
+            List.of(atBusEnd),List.of(spanningLong),Set.of(0L),8);
+        ok(wrappedTracked.possibleStoreSites()==1 &&
+            wrappedTracked.candidates().size()==1 &&
+            wrappedTracked.candidates().get(0).address()==0xfffffeL,
+            "known 32-bit STORE wraps to tracked MCU24 address zero");
+        ok(!HardwareDataflow.mayTouchTrackedAddress(0xfffffeL,8,Set.of(0L)) &&
+            HardwareDataflow.mayTouchTrackedAddress(0xfffffeL,32,Set.of(0L)) &&
+            !HardwareDataflow.mayTouchTrackedAddress(0xfffffeL,0,Set.of(0L)),
+            "byte overlap uses known widths only and never invents unknown width");
+
         System.out.println("HardwareCallsiteRegisterFlowSelfTest PASS: assertions="+assertions);
     }
 }
