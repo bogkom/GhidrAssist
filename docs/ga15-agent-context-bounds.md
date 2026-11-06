@@ -73,6 +73,9 @@ The CLI's explicit `agentic-checkpoint --output` creates a local
 mode-0600, SHA-256-identified evidence handoff from a coherent sequence
 of retained pages. It is not an automatic background worker, an LLM
 session restart, a full transcript, an authentication signature or
-permission to Apply. The complete flag only describes the source
+permission to Apply. Verified offline pages can be browsed with
+`ghidrassist-agent agentic-read --input PATH --offset 0 --limit 25`
+without a Ghidra session; every page rechecks the bounded file and
+SHA-256 and retains incomplete-source counters. The complete flag only describes the source
 coverage **within the retained cache** and the ReAct outcome; it
 does not prove comprehensive analysis of a firmware image.
