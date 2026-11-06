@@ -111,7 +111,29 @@ public final class AutomationServer implements AutoCloseable {
                 result.addProperty("program_writable", writable);
                 result.addProperty("program_read_only", program == null ||
                     program.getDomainFile() == null || program.getDomainFile().isReadOnly());
-                if ("session.status".equals(method)) {
+                if ("agentic.findings.page".equals(method)) {
+                    // Local authenticated read-only evidence for the actual
+                    // ReAct investigation, never a synthetic cache fabricated
+                    // by Automation and never an Apply/AI invocation.
+                    if(program==null)throw new IllegalStateException(
+                        "Agentic evidence requires current Ghidra Program");
+                    long revision=program.getModificationNumber();
+                    if(args.has("expected_program_revision") &&
+                            args.get("expected_program_revision").getAsLong()!=revision)
+                        throw new IllegalStateException(
+                            "Agentic Program revision changed during pagination");
+                    int offset=args.has("offset")?args.get("offset").getAsInt():0;
+                    int limit=args.has("limit")?args.get("limit").getAsInt():25;
+                    String expectedRun=args.has("expected_run")?
+                        args.get("expected_run").getAsString():null;
+                    Long expectedPageRevision=args.has("expected_findings_revision")?
+                        args.get("expected_findings_revision").getAsLong():null;
+                    var page=ghidrassist.agent.react.AgenticEvidenceRegistry
+                        .shared().page(program,revision,program.getExecutableSHA256(),
+                            offset,limit,expectedRun,expectedPageRevision);
+                    result.add("agentic",JSON.toJsonTree(page));
+                    result.addProperty("read_only",true);
+                } else if ("session.status".equals(method)) {
                     result.addProperty("status", "READY");
                     result.addProperty("write_mode",AutomationWritePolicy.mode().name());
                     result.addProperty("production_writes_enabled",false);
