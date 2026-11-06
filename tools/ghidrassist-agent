@@ -71,7 +71,9 @@ def capture_agentic_checkpoint(session, output, page_size=100):
         raise ValueError("Agentic checkpoint omitted retained rows")
     # A nonzero-offset page is never individually complete. Complete here
     # means the entire unchanged run was stitched without omissions.
-    complete = bool(expected[3]=="SUCCESS" and
+    complete = bool(expected[3]=="SUCCESS" and expected[5]>0 and
+                    len(expected[2])==64 and
+                    all(c in "0123456789abcdefABCDEF" for c in expected[2]) and
                     expected[6]==expected[5] and expected[7]==0 and not expected[8])
     payload = {
         "schema": 1, "kind": "ghidrassist-agentic-retained-evidence",
@@ -107,11 +109,39 @@ def capture_agentic_checkpoint(session, output, page_size=100):
             "payload_sha256":envelope["payload_sha256"]}
 
 
+def verify_agentic_checkpoint(source):
+    """Offline SHA-256 integrity check; never authenticates the original actor."""
+    src=Path(source).expanduser()
+    if src.stat().st_size>8*1024*1024:
+        raise ValueError("Oversized local Agentic checkpoint")
+    report=json.loads(src.read_text(encoding="utf-8"))
+    payload=report["payload"]
+    if payload.get("schema")!=1 or payload.get("kind")!="ghidrassist-agentic-retained-evidence":
+        raise ValueError("Unsupported Agentic evidence checkpoint schema")
+    canonical=json.dumps(payload,sort_keys=True,separators=(",",":"),ensure_ascii=False).encode("utf-8")
+    digest=hashlib.sha256(canonical).hexdigest()
+    if digest!=report.get("payload_sha256"):
+        raise ValueError("Agentic checkpoint SHA-256 mismatch")
+    rows=payload["rows"]
+    kept=payload["retained_count"]
+    accepted=payload["accepted_count"]
+    evicted=payload["evicted_count"]
+    if not isinstance(rows,list) or not 0<=kept<=1000 or len(rows)!=kept or not accepted>=kept or not evicted==accepted-kept:
+        raise ValueError("Inconsistent Agentic evidence counters")
+    if payload["complete"] and (payload["state"]!="SUCCESS" or kept==0 or
+            evicted>0 or payload["source_incomplete"] or
+            len(payload["import_sha256"])!=64 or
+            not all(c in "0123456789abcdefABCDEF" for c in payload["import_sha256"])):
+        raise ValueError("False-complete Agentic evidence checkpoint")
+    return {"verified":True,"complete":payload["complete"],
+        "retained_count":kept,"payload_sha256":digest,
+        "notice":"SHA-256 integrity only; no authenticated actor or LLM session restore"}
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--session", default=os.environ.get(
         "GHIDRASSIST_AGENT_SESSION", str(Path.home() / ".local/state/ghidrassist-agent/session.json")))
-    parser.add_argument("action", choices=("status", "snapshot", "analyze", "task", "mmio", "review-preview", "profile-select", "function", "xrefs", "function-xrefs-body", "decompile", "decompile-status", "bundle", "paths", "listing", "listing-range", "goto", "tab-select", "table-select", "program-open", "review-prepare", "review-apply", "review-undo", "cancel", "report", "export", "agentic-findings", "agentic-checkpoint"))
+    parser.add_argument("action", choices=("status", "snapshot", "analyze", "task", "mmio", "review-preview", "profile-select", "function", "xrefs", "function-xrefs-body", "decompile", "decompile-status", "bundle", "paths", "listing", "listing-range", "goto", "tab-select", "table-select", "program-open", "review-prepare", "review-apply", "review-undo", "cancel", "report", "export", "agentic-findings", "agentic-checkpoint", "agentic-verify"))
     parser.add_argument("address", nargs="?")
     parser.add_argument("--filter", default="")
     parser.add_argument("--row", type=int, default=None)
@@ -120,6 +150,7 @@ def main():
     parser.add_argument("--expected-run", default="")
     parser.add_argument("--expected-findings-revision", type=int, default=None)
     parser.add_argument("--output", default="")
+    parser.add_argument("--input", default="")
     parser.add_argument("--expected-revision", type=int, default=None)
     parser.add_argument("--expected-entry", default="")
     parser.add_argument("--direction", choices=("incoming", "outgoing", "both"), default="both")
@@ -130,6 +161,15 @@ def main():
     parser.add_argument("--offset", type=int, default=0)
     parser.add_argument("--limit", type=int, default=100)
     args = parser.parse_args()
+    if args.action=="agentic-verify":
+        if not args.input:
+            parser.error("agentic-verify requires explicit --input local file")
+        try:
+            print(json.dumps(verify_agentic_checkpoint(args.input),indent=2))
+            return 0
+        except (OSError,ValueError,KeyError,TypeError) as error:
+            print("Agentic checkpoint verification refused: "+str(error),file=sys.stderr)
+            return 1
     session = load_session(args.session)
     if args.action=="agentic-checkpoint":
         if not args.output:
