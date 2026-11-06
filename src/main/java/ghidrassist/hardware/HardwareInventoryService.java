@@ -72,7 +72,7 @@ public final class HardwareInventoryService {
             this.sites=List.copyOf(sites);
             this.overviewMarkdown=overviewMarkdown;
             this.detailsMarkdown=detailsMarkdown;
-            this.markdown=overviewMarkdown+"\n\n---\n\n"+detailsMarkdown;
+            this.markdown=HardwareReportOverview.combine(overviewMarkdown,detailsMarkdown);
             this.namePreviewCsv=namePreviewCsv;
             this.configurationEvidenceCsv=configurationEvidenceCsv;
             this.functions=functions;
