@@ -230,7 +230,7 @@ public final class HardwareInventoryService {
         md.append(HardwareBitfieldSourceLedger.inspect(concreteDevice ?
             profile : HardwareProfiles.cpu32Family()).markdown());
         md.append("## Initialization/memory-map evidence (SIMCR/MM, TRAMBAR, CSBAR, CSOR, VBR)\n\n")
-          .append("CSPAR contributes to conditional chip-select decoding but is not listed as a separate register site.\n\nMC68332 sourced bitfields are shown only for exact full-word literal SIMCR MOVEs; they are static candidate values, not proven execution or latched MM state.\n\n");
+          .append("CSPAR contributes to conditional chip-select decoding but is not listed as a separate register site.\n\nMC68332 sourced bitfields are shown only for exact full-word literal SIMCR/SYNCR MOVEs; they are static candidate values, not proven execution, clock operation or latched MM state.\n\n");
         for(Map.Entry<String,List<Site>> group:grouped.entrySet()){
             monitor.checkCancelled();
             if(group.getValue().stream().noneMatch(site->
