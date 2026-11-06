@@ -69,6 +69,16 @@ investigation replaces the previous in-memory read-only snapshot;
 stale pages are rejected. Mutable relevance changes and concurrent
 writes are serialized with read-only page capture.
 
+Switching the live CodeBrowser to a different Program invalidates the
+previous Program's published ReAct evidence, even when its source SHA
+and revision remain unchanged. Returning to the original Program does
+not revive an old run. This protects against mixed evidence when an
+in-flight ReAct task could continue while the GUI switches programs.
+Disposal of the plugin also invalidates the current Program entry.
+A real two-Program CodeBrowser/Xvfb synthetic regression verifies
+this behavior. Invalidation does not cancel a model task, so it is not
+an execution or rollback guarantee.
+
 The CLI's explicit `agentic-checkpoint --output` creates a local
 mode-0600, SHA-256-identified evidence handoff from a coherent sequence
 of retained pages. It is not an automatic background worker, an LLM
