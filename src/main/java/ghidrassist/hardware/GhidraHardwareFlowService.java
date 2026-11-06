@@ -596,6 +596,22 @@ public final class GhidraHardwareFlowService {
         md.append("- Function containing vector PC: ").append(root.getName())
           .append(" at ").append(root.getEntryPoint())
           .append("; candidate only, not verified entry execution.\n");
+        if(!HardwareResetFlow.exactFunctionEntry(vector.resetPc(),
+                root.getEntryPoint().getOffset())){
+            // A Ghidra body containing RESET PC is not an entry at RESET PC.
+            // The prefix from the function entry to RESET PC would be
+            // artificially reachable and could include an earlier JSR to
+            // MMIO/ISR. Fail closed before computing any direct-CALL subset.
+            md.append("- **UNKNOWN RESET ROOT — INTERIOR FUNCTION POINTER:** ")
+              .append("vector PC is not a function entry. No CALL graph is ")
+              .append("rooted at the containing function's earlier entry; ")
+              .append("instructions preceding the vector PC are NOT ")
+              .append("reachable evidence. Disassemble/define a genuine entry ")
+              .append("at the vector PC in an isolated working copy for ")
+              .append("further analysis. Not proof of executed RESET.\n\n");
+            return new ResetCandidates(md.toString(),java.util.Set.of(),
+                false,true);
+        }
         HardwareResetFlow.Summary candidate=HardwareResetFlow.trace(
             root.getEntryPoint().getOffset(),graph,evidencedFunctions,6,128,30);
         md.append(candidate.markdown(vector.resetPc(),

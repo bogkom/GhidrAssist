@@ -90,7 +90,7 @@ def main():
     parser.add_argument("--strict-entry",action="store_true")
     parser.add_argument("--ga18-mode",choices=("none","overview","cache","startup","csbar","revision","simcr-alternatives","csbar-width",
                         "csbar-independent","csbar-identical","csbar-unknown-word",
-                        "simcr-partial","vector-edit-undo","cache-program-isolation",
+                        "simcr-partial","vector-edit-undo","reset-interior","cache-program-isolation",
                         "generic-profile","trambar-source","csbar-mm0-reject",
                         "mmio-read-reference","csbar-csor-conditional",
                         "simcr-mm0-literal","trambar-unknown","csor-alternatives",
@@ -241,6 +241,12 @@ def main():
                         "vector_native_undo_restored",
                         "vector_runtime_vbr_unproven",
                         "vector_scan_after_undo_read_only"),
+                    "reset-interior":(
+                        "reset_exact_entry_real_jsr_visible",
+                        "reset_interior_real_function_not_entry",
+                        "reset_interior_no_false_mmio_reachability",
+                        "reset_interior_revision_cache_conservative",
+                        "reset_interior_read_only"),
                     "cache-program-isolation":(
                         "cache_real_two_programs_isolated",
                         "cache_each_revision_reused_only_locally",

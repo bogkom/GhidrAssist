@@ -1,0 +1,125 @@
+name: GA-01/11 real Ghidra RESET interior entry refusal
+
+on:
+  pull_request:
+    paths:
+      - 'src/main/java/ghidrassist/hardware/HardwareResetFlow.java'
+      - 'src/main/java/ghidrassist/hardware/GhidraHardwareFlowService.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareResetFlowSelfTest.java'
+      - 'tests/ga11_headless/**'
+      - '.github/workflows/ga01-reset-interior-headless.yml'
+      - 'tools/ci/ghidra-gradle-ci-network.sh'
+  push:
+    paths:
+      - 'src/main/java/ghidrassist/hardware/HardwareResetFlow.java'
+      - 'src/main/java/ghidrassist/hardware/GhidraHardwareFlowService.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareResetFlowSelfTest.java'
+      - 'tests/ga11_headless/**'
+      - '.github/workflows/ga01-reset-interior-headless.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source-reset-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Compile and verify exact RESET entry source policy
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/ga01-reset"
+          javac --release 21 -d "$RUNNER_TEMP/ga01-reset" \
+            src/main/java/ghidrassist/hardware/HardwareCallEffects.java \
+            src/main/java/ghidrassist/hardware/HardwareResetFlow.java \
+            src/test/java/ghidrassist/hardware/HardwareResetFlowSelfTest.java
+          java -cp "$RUNNER_TEMP/ga01-reset" \
+            ghidrassist.hardware.HardwareResetFlowSelfTest
+
+  actual-ghidra:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Download pinned Ghidra 12.1.4 PUBLIC
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fLsS --retry 3 --connect-timeout 20 -o "$RUNNER_TEMP/ghidra.zip" \
+            "https://github.com/NationalSecurityAgency/ghidra/releases/download/Ghidra_12.1.4_build/ghidra_12.1.4_PUBLIC_20260921.zip"
+          echo "ddac49f903da9d5bac833e5cc79395098b9c33cfd3279be5f31bd00387d2d4db  $RUNNER_TEMP/ghidra.zip" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/ghidra"
+          unzip -q "$RUNNER_TEMP/ghidra.zip" -d "$RUNNER_TEMP/ghidra"
+          GHIDRA_DIR="$(find "$RUNNER_TEMP/ghidra" -mindepth 1 -maxdepth 1 -type d -name 'ghidra_*' -print -quit)"
+          test -n "$GHIDRA_DIR"
+          echo "GHIDRA_INSTALL_DIR=$GHIDRA_DIR" >> "$GITHUB_ENV"
+      - name: Full extension build and validated ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash tools/ci/ghidra-gradle-ci-network.sh "$GHIDRA_INSTALL_DIR"
+          "$GHIDRA_INSTALL_DIR/support/gradle/gradlew" --no-daemon buildExtension
+          shopt -s nullglob
+          zips=(dist/ghidra_12.1.4_PUBLIC_*_GhidrAssist.zip)
+          test "${#zips[@]}" -eq 1
+          unzip -tq "${zips[0]}"
+          sha256sum "${zips[0]}"
+          echo "EXTENSION=$PWD/${zips[0]}" >> "$GITHUB_ENV"
+      - name: Real CPU32 source RESET = exact entry then interior PC
+        shell: bash
+        run: |
+          set -euo pipefail
+          HASH="$(sha256sum "$EXTENSION" | cut -d' ' -f1)"
+          python3 tests/ga11_headless/run.py \
+            --ghidra "$GHIDRA_INSTALL_DIR" \
+            --java-home "$JAVA_HOME" \
+            --extension-zip "$EXTENSION" --extension-sha256 "$HASH" \
+            --output "$RUNNER_TEMP/ga01-interior" \
+            --strict-entry --ga18-mode reset-interior
+          python3 - "$RUNNER_TEMP/ga01-interior/summary.json" <<'PY'
+          import json,sys
+          p=json.load(open(sys.argv[1]))
+          assert p["status"]=="PASSED_SYNTHETIC_REAL_GHIDRA_HEADLESS",p
+          assert p["ga18_hardware_verified"] is True,p
+          assert p["ga18_mode"]=="reset-interior",p
+          PY
+      - name: Record exact fixture / extension SHA-256
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/ga01-proof"
+          sha256sum "$EXTENSION" | tee "$RUNNER_TEMP/ga01-proof/extension-SHA256SUMS"
+          sha256sum tests/ga11_headless/run.py \
+            tests/ga11_headless/Ga11VectorHeadlessMain.java \
+            | tee "$RUNNER_TEMP/ga01-proof/harness-SHA256SUMS"
+          cp "$RUNNER_TEMP/ga01-interior/summary.json" \
+            "$RUNNER_TEMP/ga01-interior/result.json" \
+            "$RUNNER_TEMP/ga01-proof/"
+          cp "$EXTENSION" "$RUNNER_TEMP/ga01-proof/"
+      - name: Diagnostics (bounded)
+        if: failure()
+        shell: bash
+        run: |
+          for p in "$RUNNER_TEMP"/ga01-interior/{integration,compile,vectors-full.bin.import}.log; do
+            if test -f "$p"; then echo "== $(basename "$p") =="; tail -n 70 "$p"; fi
+          done
+      - name: Publish tested extension and genuine isolated Ghidra receipt
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: GhidrAssist-GA01-Reset-Interior-Real-Ghidra-${{ github.run_id }}
+          path: ${{ runner.temp }}/ga01-proof/
+          if-no-files-found: error
+          retention-days: 21

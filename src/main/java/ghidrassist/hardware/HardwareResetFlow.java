@@ -30,6 +30,21 @@ public final class HardwareResetFlow {
         }
     }
 
+    /**
+     * A RESET vector into a function body is NOT the function's entry.
+     * Treating the containing function's complete CALL graph as reachable
+     * would include instructions BEFORE the real vector PC and could invent
+     * initialization/ISR/MMIO source paths. Do not silently round backward
+     * to Ghidra's function entry; retain an UNKNOWN RESET root instead.
+     * This is a source-entry gate, not proof of CPU execution.
+     */
+    public static boolean exactFunctionEntry(long vectorPc,long functionEntry) {
+        return vectorPc>=0 && vectorPc<=0xffffffffL &&
+            functionEntry>=0 && functionEntry<=0xffffffffL &&
+            (vectorPc&1)==0 && (functionEntry&1)==0 &&
+            vectorPc==functionEntry;
+    }
+
     /** CPU32/68000 vector words are unsigned big-endian values at image 0..7. */
     public static Vector readVector(byte[] eightBytes) {
         if(eightBytes==null || eightBytes.length!=8)

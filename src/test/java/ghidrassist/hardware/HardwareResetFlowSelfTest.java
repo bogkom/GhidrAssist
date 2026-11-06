@@ -27,6 +27,28 @@ public final class HardwareResetFlowSelfTest {
         byte[] erased=new byte[8];java.util.Arrays.fill(erased,(byte)0xff);
         ok(!HardwareResetFlow.readVector(erased).valid(),
             "erased reset PC cannot masquerade as reset handler");
+        // A reset vector pointing inside an existing function cannot
+        // borrow the function's earlier JSR/BSR prefix. Otherwise the
+        // unexecuted prefix could fabricate reachable MMIO/ISR sites.
+        ok(HardwareResetFlow.exactFunctionEntry(0x400L,0x400L) &&
+            !HardwareResetFlow.exactFunctionEntry(0x402L,0x400L) &&
+            !HardwareResetFlow.exactFunctionEntry(0x400L,0x402L) &&
+            !HardwareResetFlow.exactFunctionEntry(0x403L,0x403L) &&
+            !HardwareResetFlow.exactFunctionEntry(-1L,-1L) &&
+            !HardwareResetFlow.exactFunctionEntry(0x100000000L,0x100000000L),
+            "only a valid exact function entry may root RESET CALL evidence");
+        var prefixCalls=List.of(
+            fn(0x400,false,false,false,0x500L),
+            fn(0x500,true,true,false));
+        var wronglyRounded=HardwareResetFlow.trace(0x400,prefixCalls,
+            List.of(0x500L),6,128,30);
+        ok(wronglyRounded.rootRecognized() &&
+            wronglyRounded.visitedEntries().contains(0x500L),
+            "regression fixture demonstrates false reachable STORE/VBR "+
+            "when interior RESET is rounded back to function entry");
+        ok(!HardwareResetFlow.exactFunctionEntry(0x402L,0x400L),
+            "the Ghidra service must refuse that rounded CALL prefix");
+
         // A reset function can branch at runtime, so a static graph does NOT
         // establish execution, nor that one numeric address precedes another.
         var calls=List.of(
