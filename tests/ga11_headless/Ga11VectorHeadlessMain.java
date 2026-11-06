@@ -1767,7 +1767,12 @@ public final class Ga11VectorHeadlessMain {
                     int maySection=evidence.indexOf(
                         "## Byte-witnessed indirect JSR transitive MAY effects");
                     check(maySection>=0,"Missing separately bounded indirect MAY report");
-                    String mayEvidence=evidence.substring(maySection);
+                    int mayEnd=evidence.indexOf(
+                        "## One-hop CALL-site A/D register and MMIO candidates",
+                        maySection);
+                    check(mayEnd>maySection,
+                        "Indirect MAY section must end before direct CALL context");
+                    String mayEvidence=evidence.substring(maySection,mayEnd);
                     check(mayEvidence.contains("DISPLAY ONLY") &&
                         mayEvidence.contains("NEVER EXECUTION") &&
                         mayEvidence.contains("not a proven MMIO access") &&
@@ -1920,7 +1925,12 @@ public final class Ga11VectorHeadlessMain {
                         "## Byte-witnessed indirect JSR transitive MAY effects");
                     check(mayPosition>=0,
                         "Bounded MOVEA/JSR MUST expose separate MAY effects");
-                    String mayOutput=evidence.substring(mayPosition);
+                    int mayOutputEnd=evidence.indexOf(
+                        "## One-hop CALL-site A/D register and MMIO candidates",
+                        mayPosition);
+                    check(mayOutputEnd>mayPosition,
+                        "Bounded MAY section must end before direct CALL context");
+                    String mayOutput=evidence.substring(mayPosition,mayOutputEnd);
                     check(mayOutput.contains("Indirect CALL source witnesses: 2") &&
                         mayOutput.contains(
                             "| 0x00000600 | 0x0000060A | 0x00000700 | "+
@@ -1934,7 +1944,8 @@ public final class Ga11VectorHeadlessMain {
                         mayOutput.contains("No Apply/Undo") &&
                         mayOutput.contains("not a proven MMIO access"),
                         "Bounded indirect may-effects must not promote "+
-                        "unverified targets or automatic Ghidra changes");
+                        "unverified targets or automatic Ghidra changes: "+
+                        mayOutput.substring(0,Math.min(3800,mayOutput.length())));
                     check(report.rawCfgMmioSites.stream().noneMatch(hit->
                         hit.pc()==0x60aL || hit.pc()==0x688L),
                         "Bounded computed JSR wrongly became Review/Apply");
