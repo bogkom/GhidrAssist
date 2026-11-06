@@ -68,6 +68,14 @@ class LocalAgenticCheckpoint(unittest.TestCase):
             with self.assertRaises(FileExistsError):
                 cli.capture_agentic_checkpoint({},target,2)
             self.assertEqual(json.loads(target.read_text()),payload)
+            verified=cli.verify_agentic_checkpoint(target)
+            self.assertTrue(verified["verified"] and verified["complete"])
+            self.assertEqual(verified["retained_count"],3)
+            tampered=payload.copy()
+            tampered["payload"]=dict(payload["payload"],state="CANCELLED")
+            target.write_text(json.dumps(tampered))
+            with self.assertRaises(ValueError):
+                cli.verify_agentic_checkpoint(target)
 
     def test_cache_revision_change_refuses_partial_checkpoint(self):
         def rpc(_session,_method,args):
@@ -90,6 +98,7 @@ class LocalAgenticCheckpoint(unittest.TestCase):
                     self.assertFalse(info["complete"])
                     self.assertFalse(json.loads(target.read_text())
                         ["payload"]["complete"])
+                    self.assertFalse(cli.verify_agentic_checkpoint(target)["complete"])
 
     def test_no_write_on_invalid_or_unbounded_pages(self):
         with tempfile.TemporaryDirectory() as work:
