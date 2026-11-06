@@ -20,6 +20,8 @@ on:
       - 'src/main/java/ghidrassist/hardware/HardwareFunctionNamingReview.java'
       - 'src/main/java/ghidrassist/hardware/HardwareFunctionRenamePolicy.java'
       - 'src/main/java/ghidrassist/hardware/HardwareContextSelector.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareBitfieldSourceLedger.java'
+      - 'src/main/java/ghidrassist/hardware/ManualPdfPageClaim.java'
       - 'src/main/java/ghidrassist/core/RAGQueryFocus.java'
       - 'src/test/java/ghidrassist/core/RAGQueryFocusSelfTest.java'
       - 'src/main/java/ghidrassist/hardware/HardwareBitMath.java'
@@ -65,6 +67,8 @@ on:
       - 'src/main/java/ghidrassist/hardware/HardwareFunctionNamingReview.java'
       - 'src/main/java/ghidrassist/hardware/HardwareFunctionRenamePolicy.java'
       - 'src/main/java/ghidrassist/hardware/HardwareContextSelector.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareBitfieldSourceLedger.java'
+      - 'src/main/java/ghidrassist/hardware/ManualPdfPageClaim.java'
       - 'src/main/java/ghidrassist/core/RAGQueryFocus.java'
       - 'src/test/java/ghidrassist/core/RAGQueryFocusSelfTest.java'
       - 'src/main/java/ghidrassist/hardware/HardwareBitMath.java'
@@ -129,6 +133,8 @@ jobs:
             src/main/java/ghidrassist/hardware/HardwarePcodeStoreSafety.java \
             src/main/java/ghidrassist/hardware/HardwareIndexedAddress.java \
             src/main/java/ghidrassist/hardware/HardwareContextSelector.java \
+            src/main/java/ghidrassist/hardware/HardwareBitfieldSourceLedger.java \
+            src/main/java/ghidrassist/hardware/ManualPdfPageClaim.java \
             src/main/java/ghidrassist/core/RAGQueryFocus.java \
             src/test/java/ghidrassist/core/RAGQueryFocusSelfTest.java \
             src/main/java/ghidrassist/hardware/HardwareBitMath.java \
