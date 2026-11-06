@@ -55,3 +55,52 @@ applicable synthetic headless CI must PASS at the exact PR SHA.
 No local variable/HighVariable rename, transaction, audit author,
 program modification, original ECU411 firmware or stopped
 Wyse/Precision/legacy Supervisor operation is introduced.
+
+
+## 2026-11-06 — GA-05/08 safe, typed Ghidra pointer variable names
+
+The original `HardwarePointerRoleReview` remains **source-only**.
+It detects patterns of A-register use but cannot identify a durable
+Decompiler `HighVariable`, named Ghidra local, or argument. Never
+promote its hints to Apply input.
+
+An independent **Review pointers...** UI now examines only the
+**currently selected Ghidra Function's existing DB variables**:
+`Function.getParameters()` and `Function.getLocalVariables()`.
+The explicit MC68332 device hypothesis must be selected. Only a
+Ghidra `Pointer` DataType, a generated `param_N`/`local_*` name,
+unambiguous variable ordinal **and** exact `VariableStorage`
+qualify for a new neutral type-only placeholder suggestion
+(`ga_arg_ptr_candidate_N` or `ga_local_ptr_candidate_N`).
+This is **not** a hardware-register name or proof of pointer values.
+No variable is created from the pseudocode text; non-pointer types,
+source `USER_DEFINED`, user-named variables, ABI auto-parameters,
+forced-indirect arguments and unassigned storage are excluded.
+
+All review checkboxes default to **unchecked**. The user must
+explicitly check rows, confirm the dialog, and **confirm Apply again**.
+Immediately before modification, the service requires an exact
+Ghidra Program identity, language, executable SHA, MCU-selection
+and modification/Undo revision matching its review snapshot.
+It then re-resolves every existing `Variable` by exact Ghidra
+Function entry, kind, ordinal and storage, rechecks original name,
+pointer datatype, SourceType, dynamic ABI status and collisions
+among all variables in the function. The entire selected batch is
+renamed in a **single native undoable Program transaction**;
+on any failure, all edits roll back together.
+
+After Apply, existing report/revision caches are invalidated.
+The Java21 policy regression covers stale storage, altered datatype,
+manual/source names, namespace collisions, missing evidence,
+duplicates, source bounds, unassigned storage and lack of implicit
+A-register application. A separate genuine synthetic Ghidra
+12.1.4 PUBLIC / Java25 integration regression creates actual typed
+pointer Function variables and verifies atomic refusal,
+explicit Apply, native Undo/Redo and stale replay refusal.
+
+This does not yet offer hardware-specific pointer-role names,
+cross-function type inference or a trustworthy identity for
+Decompiler `HighVariable` temporary values; those remain GA-08
+PARTIAL. It does **not** create an append-only authorship journal
+or authorize naming on original ECU411 firmware/project. No
+stopped Wyse/Precision/legacy Supervisor process is restarted.
