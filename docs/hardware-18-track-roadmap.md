@@ -1,7 +1,66 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
-Status: **IN PROGRESS — integrated baseline 2026-11-06 (PR #183)**. Scope source: user-approved 2026-10-28 requirements (A–H, additional features 13.1–13.7, PDF/RAG, testing and Codex Supervisor integration).
+Status: **IN PROGRESS — integrated baseline 2026-11-06 (PR #185)**. Scope source: user-approved 2026-10-28 requirements (A–H, additional features 13.1–13.7, PDF/RAG, testing and Codex Supervisor integration).
 
+
+## Obowiązujący checkpoint — 2026-11-06 (GA-01/02/03/11 computed CALL XREF)
+
+**Aktualny chroniony `master`:**
+[`da88e9b6ea1ff1d04c34910f19d109c6577c0af8`](https://github.com/bogkom/GhidrAssist/commit/da88e9b6ea1ff1d04c34910f19d109c6577c0af8)
+po scaleniu [PR #185](https://github.com/bogkom/GhidrAssist/pull/185).
+Poprzednie checkpointy zachowane niżej są historią ukończonych
+prac, nie bieżącą listą otwartych PR-ów.
+
+**GA-01/02/03/11 — CZĘŚCIOWO:** W Ghidra 12.1.4
+`Instruction.getFlows()` może odzwierciedlać odsyłacz
+`RefType.COMPUTED_CALL`, w tym ręcznie dodany przez użytkownika.
+Poprzednia analiza mogła zinterpretować jeden taki odsyłacz
+na instrukcji `JSR (An)` jako krawędź bezpośredniego CALL,
+mimo równoległej flagi niepewności. Dawało to fałszywą
+**pozytywną statyczną osiągalność** od RESET oraz pozorne
+kandydaty skutków MMIO/SIMCR, VBR i ISR.
+
+Nowa bramka `HardwareDirectCallGate` dopuszcza
+do grafu bezpośrednich CALL wyłącznie **zdekodowaną instrukcję
+CALL bez cechy `computed`**, z jednym celem przepływu
+i dokładnie rozpoznanym wejściem funkcji. Obliczany CALL
+pozostaje `UNKNOWN`, widoczny w raporcie
+`HardwareInterproceduralMmEffects`, nawet jeśli ma jeden
+odsyłacz do prawdziwej funkcji. Istniejące ograniczone,
+potwierdzane bajtowo możliwości `MOVEA/JSR (An)`
+pozostają **osobnymi kandydatami tylko do odczytu**:
+nie tworzą globalnej krawędzi, checkpointu ani uprawnienia
+Review/Apply.
+
+**Dokładne dowody:** przetestowany HEAD
+`a55f3308de67122aecd0a35120092db1abf18125`
+([PR #185](https://github.com/bogkom/GhidrAssist/pull/185))
+**62/62 GitHub Actions SUCCESS**, Java21, pełna kompilacja
+Ghidry **12.1.4 PUBLIC / Java25** oraz rzeczywista
+syntetyczna Ghidra (CPU32 `JSR absolute` kontra
+`JSR (A1)` + ręczny `COMPUTED_CALL` XREF, wektor
+RESET i tablica kandydatów ISR). Po scaleniu
+`da88e9b6ea1ff1d04c34910f19d109c6577c0af8`
+**14/14 GitHub Actions SUCCESS**, również pełny build
+i rzeczywisty test Ghidry. Drzewo Git HEAD i merge
+**identyczne:** `570c9ca51da758066485953102e3aa18ae26080d`.
+
+**Niepotwierdzone:** to nadal tylko analiza statyczna,
+nie dowód wykonania CALL/RESET, rzeczywistego zapisu SIMCR,
+aktywnego MM, VBR/ISR ani fizycznej mapy CS. Brak
+niezależnie uwierzytelnionego wydania/strony PDF i pełnej
+analizy pośrednich MAY-ścieżek pozostają lukami.
+Issue [#106](https://github.com/bogkom/GhidrAssist/issues/106)
+otwarte, bez nowych wpisów; #98 osobna migracja CodeBrowsera.
+Nie uruchomiono Wyse/Precision, zatrzymanego Supervisora,
+timerów, workerów, prywatnego firmware ani testów AI.
+
+**GA-01–GA-18 nadal W ROZWOJU; GA-14 ODŁOŻONE.**
+Dalej: kontrolowana, odrębna prezentacja MAY-skutków
+wiarygodnie ograniczonych pośrednich CALL, bez fałszywej
+osiągalności RESET/ISR; następnie GA-06/10/16 powiązanie
+deklarowanego hash/edycji i stron z konkretną kopią PDF;
+GA-12/15 zachowanie niekompletnych dowodów.
 
 ## Obowiązujący checkpoint — 2026-11-06 (GA-01/11 RESET exact-entry)
 
