@@ -87,6 +87,7 @@ public final class HardwareAnalysisTab extends JPanel {
     private final JButton approve=new JButton("Review / Apply...");
     private final JButton exploreMmio=new JButton("MMIO accesses...");
     private final JButton reviewNames=new JButton("Review names...");
+    private final JButton renameAudit=new JButton("Rename audit CSV...");
     private final JButton previewProfile=new JButton("Preview profile...");
     private final JTextArea report=new JTextArea();
     private final JTextArea overview=new JTextArea();
@@ -455,6 +456,7 @@ public final class HardwareAnalysisTab extends JPanel {
         profileRow.add(new JLabel("Profile:"));
         profileRow.add(selection);
         profileRow.add(reviewNames);
+        profileRow.add(renameAudit);
         profileRow.add(previewProfile);
         profileRow.add(exportConfigCsv);
         JPanel actionRow=new JPanel(new FlowLayout(FlowLayout.LEFT,5,1));
@@ -552,6 +554,7 @@ public final class HardwareAnalysisTab extends JPanel {
         approve.addActionListener(e->reviewHardwareChanges());
         exploreMmio.addActionListener(e->showMmioExplorer());
         reviewNames.addActionListener(e->reviewFunctionNames());
+        renameAudit.addActionListener(e->exportPersistedNameAudit());
         previewProfile.addActionListener(e->previewExternalProfile());
         selection.addActionListener(e->{
             if(latestRevision!=null && !currentScan())
@@ -1112,6 +1115,54 @@ public final class HardwareAnalysisTab extends JPanel {
                 "Export error",JOptionPane.ERROR_MESSAGE);
         }
     }
+    /**
+     * GA-13 read-only current-Program receipt audit. No Analyze, profile
+     * selection, Review or Apply permission is required to inspect
+     * historical approvals that survive in this Program's Options.
+     */
+    private void exportPersistedNameAudit() {
+        final Program program=plugin.getCurrentProgram();
+        if(program==null){
+            status.setText("Open a Ghidra Program before exporting rename audit.");
+            return;
+        }
+        final ghidrassist.hardware.HardwareFunctionRenameAudit.Snapshot source;
+        try{
+            source=HardwareFunctionRenameService.audit(program);
+        }catch(Exception invalid){
+            status.setText("Rename audit unavailable: stored evidence invalid or stale.");
+            ghidra.util.Msg.error(this,"GA-13 audit refused",invalid);
+            return;
+        }
+        JFileChooser chooser=new JFileChooser();
+        chooser.setDialogTitle("Export current Ghidra Program rename receipt audit (read only)");
+        chooser.setSelectedFile(new File("ghidrassist-function-rename-audit.csv"));
+        chooser.setFileFilter(new FileNameExtensionFilter("CSV audit (*.csv)","csv"));
+        if(chooser.showSaveDialog(this)!=JFileChooser.APPROVE_OPTION)return;
+        File dest=chooser.getSelectedFile();
+        if(dest==null)return;
+        if(!dest.getName().toLowerCase(java.util.Locale.ROOT).endsWith(".csv"))
+            dest=new File(dest.getParentFile(),dest.getName()+".csv");
+        if(dest.isFile() && JOptionPane.showConfirmDialog(this,
+                "Replace existing audit CSV?\\n"+dest.getAbsolutePath(),
+                "Confirm read-only export",JOptionPane.YES_NO_OPTION)
+                    !=JOptionPane.YES_OPTION)return;
+        try {
+            // The chooser and overwrite question are modal. Any external
+            // Program edit, Undo/Redo or Program switch invalidates export.
+            if(program!=plugin.getCurrentProgram() ||
+                    !source.equals(HardwareFunctionRenameService.audit(program)))
+                throw new IllegalStateException(
+                    "Program or stored receipts changed during audit export");
+            Files.writeString(dest.toPath(),source.csv(),StandardCharsets.UTF_8);
+            status.setText("Exported "+source.rows().size()+
+                " saved function rename receipt(s), read-only. Actor UNKNOWN.");
+        }catch(Exception invalid){
+            status.setText("Rename audit export refused: stale or invalid evidence.");
+            ghidra.util.Msg.error(this,"GA-13 audit export refused",invalid);
+        }
+    }
+
     /**
      * Separate, opt-in function naming approval, keeping the Memory Review
      * unaffected. Preflight is rechecked under a single undoable transaction.

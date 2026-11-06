@@ -1,0 +1,45 @@
+name: GA-13 saved function rename receipt read-only audit
+on:
+  pull_request:
+    paths:
+      - 'src/main/java/ghidrassist/hardware/HardwareFunctionRenameAudit.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareFunctionRenameReceipt.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareChangeProvenance.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareFunctionRenameAuditSelfTest.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareFunctionRenameService.java'
+      - 'tests/ga11_headless/Ga11VectorHeadlessMain.java'
+      - '.github/workflows/ga13-rename-audit-regression.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  source-only-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Compile deterministic GA-13 receipt audit with CSV hardening
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/audit"
+          javac --release 21 -d "$RUNNER_TEMP/audit" \
+            src/main/java/ghidrassist/hardware/HardwareChangeProvenance.java \
+            src/main/java/ghidrassist/hardware/HardwareFunctionRenameReceipt.java \
+            src/main/java/ghidrassist/hardware/HardwareFunctionRenameAudit.java \
+            src/test/java/ghidrassist/hardware/HardwareFunctionRenameAuditSelfTest.java \
+            src/test/java/ghidrassist/hardware/HardwareFunctionRenameReceiptSelfTest.java \
+            src/test/java/ghidrassist/hardware/HardwareChangeProvenanceSelfTest.java
+      - name: Assert audit statuses, corruption refusal and immutable CSV
+        shell: bash
+        run: |
+          set -euo pipefail
+          for test in HardwareFunctionRenameReceiptSelfTest \
+                      HardwareChangeProvenanceSelfTest \
+                      HardwareFunctionRenameAuditSelfTest; do
+            java -cp "$RUNNER_TEMP/audit" "ghidrassist.hardware.$test"
+          done
