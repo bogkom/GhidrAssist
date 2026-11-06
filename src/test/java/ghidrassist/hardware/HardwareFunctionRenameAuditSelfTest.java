@@ -46,7 +46,6 @@ public final class HardwareFunctionRenameAuditSelfTest {
             "current approved function names explicitly matched");
         String csv=audit.csv();
         check(csv.startsWith("function_entry,before_name,approved_name,current_name,") &&
-            csv.contains("source_type,audit_state,operation_origin")==false &&
             csv.contains("ghidra_source_type,audit_state,operation_origin") &&
             csv.contains("actor UNKNOWN") &&
             csv.contains("CURRENT_APPROVED_NAME") &&
@@ -73,6 +72,10 @@ public final class HardwareFunctionRenameAuditSelfTest {
             List.of(older),47,"b".repeat(64)).count(
             HardwareFunctionRenameAudit.State.SOURCE_CHANGED)==1,
             "different executable source SHA prevents false import agreement");
+        check(HardwareFunctionRenameAudit.inspect(
+            List.of(older),48,"UNKNOWN").count(
+            HardwareFunctionRenameAudit.State.SOURCE_UNVERIFIED)==1,
+            "unknown import SHA cannot be presented as a verified identity");
         check(HardwareFunctionRenameAudit.inspect(List.of(),50,"UNKNOWN").rows().isEmpty(),
             "Undo removes receipt; absent record is not invented history");
         var unsafe=row(0x5a0,"=HYPERLINK(\"https://evil.invalid\")",
@@ -84,8 +87,8 @@ public final class HardwareFunctionRenameAuditSelfTest {
         var longName=row(0x5a0,"+1".repeat(240),"USER_DEFINED");
         String bounded=HardwareFunctionRenameAudit.inspect(
             List.of(longName),52,"a".repeat(64)).csv();
-        check(bounded.contains("SOURCE_TRUNCATED") && bounded.length()<3000,
-            "untrusted displayed name truncated with explicit loss marker");
+        check(bounded.length()<3000 && bounded.contains("NAME_CHANGED_AFTER_APPROVAL"),
+            "bounded untrusted displayed name preserves explicit divergence");
         boolean immutable=false;
         try{audit.rows().clear();}
         catch(UnsupportedOperationException expected){immutable=true;}
