@@ -3,6 +3,18 @@
 Status: **IN PROGRESS — integrated baseline 2026-11-06 (PR #192)**. Scope source: user-approved 2026-10-28 requirements (A–H, additional features 13.1–13.7, PDF/RAG, testing and Codex Supervisor integration).
 
 
+## Obowiązujący checkpoint — 2026-11-06 (GA-02/03/11 CALL target validation)
+
+**Chroniony `master`:** [`e3c01d8af52509118d27de6588c4607d220122ba`](https://github.com/bogkom/GhidrAssist/commit/e3c01d8af52509118d27de6588c4607d220122ba), po scaleniu [PR #194](https://github.com/bogkom/GhidrAssist/pull/194). Poprzednie checkpointy poniżej są historyczne.
+
+**GA-02/03/11 — CZĘŚCIOWO.** `HardwareCallEffects.FunctionNode` odrzuca teraz ujemne i `null` bezpośrednie cele CALL tak samo jak wadliwe wejścia funkcji. Poprawny nieujemny, ale nierozpoznany cel pozostaje `UNKNOWN`, bez tworzenia globalnej osiągalności RESET/ISR ani negatywnego dowodu braku STORE/VBR.
+
+**Testowany HEAD #194:** `bd9aacefdc93a24b129a5fafa3a92d9c5193ca6e` — **28/28 GitHub Actions SUCCESS**: Java21 source regression, pełna kompilacja Ghidry **12.1.4 PUBLIC / Java25**, rzeczywista izolowana syntetyczna Ghidra i bramki bezpieczeństwa. **Merge SHA:** `e3c01d8af52509118d27de6588c4607d220122ba`; brak odrębnego CI PASS przypisanego do merge SHA w momencie checkpointu. Dowody i ograniczenia zapisano w PR #194.
+
+Issue [#106](https://github.com/bogkom/GhidrAssist/issues/106) OPEN (0 zgłoszeń); #98 pozostaje osobnym zadaniem migracji CodeBrowser. Nie uruchomiono Wyse/Precision, zatrzymanego Supervisora ani prywatnych projektów/firmware ECU411. Statyczne MAY, MM0/MM1, aktywne VBR/IRQ, fizyczne CS i prawa Review/Apply/Undo pozostają rozdzielone.
+
+**Wszystkie GA-01–GA-18 nadal W ROZWOJU; GA-14 ODŁOŻONE.** Następne: GA-01/02/03/11 — konserwatywna obsługa nieznanych wywołań i skutków RESET/VBR/ISR; GA-06/10/16 — weryfikowalne PDF/edycja/digest/strona; GA-12/15 — kompletność dowodów i trwałość checkpointów; GA-17/18 — CI/Automation API.
+
 ## Obowiązujący checkpoint — 2026-11-06 (GA-01/02/03/11 report and vector source guards)
 
 **Chroniony `master`:** [`41f42238a9dbe79c23959b533492be9c8dd20377`](https://github.com/bogkom/GhidrAssist/commit/41f42238a9dbe79c23959b533492be9c8dd20377), po scaleniu #192.
