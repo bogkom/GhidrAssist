@@ -639,6 +639,10 @@ ghidrassist-agent agentic-checkpoint --limit 100 \
 # checks corruption only; does NOT restore a model or tool session.
 ghidrassist-agent agentic-verify \\
   --input /path/to/isolated/private/agentic-evidence.json
+
+# Browse already saved evidence pages offline after Ghidra closes.
+# No token, ready session, model or project is needed.
+ghidrassist-agent agentic-read --input /path/to/isolated/private/agentic-evidence.json --offset 0 --limit 25
 ```
 
 The checkpoint command fetches **every retained page** with strict
