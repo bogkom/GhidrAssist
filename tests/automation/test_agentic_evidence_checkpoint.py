@@ -41,6 +41,23 @@ def page(offset, limit, *, state="SUCCESS", incomplete=False, evicted=0,
 
 
 class LocalAgenticCheckpoint(unittest.TestCase):
+    def test_production_react_and_server_are_wired_without_model_rpc(self):
+        root=ROOT/"src/main/java/ghidrassist"
+        orchestrator=(root/"agent/react/ReActOrchestrator.java").read_text()
+        server=(root/"automation/AutomationServer.java").read_text()
+        registry=(root/"agent/react/AgenticEvidenceRegistry.java").read_text()
+        for source,required in (
+            (orchestrator,"AgenticEvidenceRegistry.shared().begin"),
+            (orchestrator,"AgenticEvidenceRegistry.shared().finish"),
+            (server,'"agentic.findings.page".equals(method)'),
+            (server,'result.add("agentic",JSON.toJsonTree(page))'),
+            (server,'result.addProperty("read_only",true)'),
+            (registry,'bound.owner.get()!=owner'),
+            (registry,'expectedFindingsRevision'),
+        ):
+            self.assertIn(required,source)
+        self.assertIn('"agentic-findings":"agentic.findings.page"',AGENT.read_text())
+
     def test_multi_page_complete_and_atomic_no_overwrite(self):
         calls=[]
         def rpc(_session,method,args):
