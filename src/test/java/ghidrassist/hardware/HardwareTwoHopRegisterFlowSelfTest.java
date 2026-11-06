@@ -366,6 +366,37 @@ public final class HardwareTwoHopRegisterFlowSelfTest {
             wrappedTwoHop.markdown().contains("Review/Apply") &&
             wrappedTwoHop.markdown().contains("unknown STORE alias: 1"),
             "24-bit wrap stays source-only MAY with explicit missing index");
+        // Two-hop delegates to the one-hop closed leaf: a 32-bit STORE
+        // starting two bytes before CSBAR must not disappear from evidence.
+        var crossingOuter=outer(0xe00,0x640,0xfffa66L,0x1234L);
+        var wideLeaf=new HardwareCallsiteRegisterFlow.Callee(
+            0x700,List.of(new HardwareDataflow.Step(
+                0x700,STORE_INDIRECT,"A1","D0",0,0,null,32,
+                List.of(0x702L),"MOVE.L"),ret(0x702)),true);
+        var crossingTwoHop=HardwareTwoHopRegisterFlow.analyze(
+            List.of(crossingOuter),List.of(bridge),List.of(wideLeaf),
+            Set.of(cs),48);
+        ok(crossingTwoHop.possibleStores()==1 &&
+            crossingTwoHop.unknownAliases()==0 &&
+            crossingTwoHop.rows().size()==1 &&
+            crossingTwoHop.rows().get(0).effectiveAddress()==0xfffa66L &&
+            crossingTwoHop.rows().get(0).writtenWord()==null,
+            "two-hop long STORE spanning tracked CSBAR is a MAY source only");
+        var crossingNegative=HardwareTwoHopRegisterFlow.analyze(
+            List.of(crossingOuter),List.of(bridge),List.of(wideLeaf),
+            Set.of(simcr),48);
+        ok(crossingNegative.possibleStores()==0 &&
+            crossingNegative.rows().isEmpty(),
+            "two-hop known-width STORE cannot hit unrelated SIMCR address");
+        var wrapOuter=outer(0xe40,0x640,0xfffffeL,0x1234L);
+        var wrapTwoHop=HardwareTwoHopRegisterFlow.analyze(
+            List.of(wrapOuter),List.of(bridge),List.of(wideLeaf),
+            Set.of(0L),48);
+        ok(wrapTwoHop.possibleStores()==1 &&
+            wrapTwoHop.rows().size()==1 &&
+            wrapTwoHop.rows().get(0).effectiveAddress()==0xfffffeL,
+            "two-hop source can cross the MCU24 bus wrap without alias loss");
+
         System.out.println("HardwareTwoHopRegisterFlowSelfTest PASS: assertions="+checks);
     }
 }
