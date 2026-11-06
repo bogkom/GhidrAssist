@@ -1,7 +1,64 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
-Status: **IN PROGRESS — integrated baseline 2026-11-06 (PR #181)**. Scope source: user-approved 2026-10-28 requirements (A–H, additional features 13.1–13.7, PDF/RAG, testing and Codex Supervisor integration).
+Status: **IN PROGRESS — integrated baseline 2026-11-06 (PR #183)**. Scope source: user-approved 2026-10-28 requirements (A–H, additional features 13.1–13.7, PDF/RAG, testing and Codex Supervisor integration).
 
+
+## Obowiązujący checkpoint — 2026-11-06 (GA-01/11 RESET exact-entry)
+
+**Aktualny chroniony `master`:**
+[`cedc0b8aee8f64a48390bae6dbc9e5be3743a030`](https://github.com/bogkom/GhidrAssist/commit/cedc0b8aee8f64a48390bae6dbc9e5be3743a030)
+po scaleniu [PR #183](https://github.com/bogkom/GhidrAssist/pull/183).
+Poprzednie checkpointy #180–#182 poniżej pozostają historią,
+a nie informacją o otwartych gałęziach.
+
+**GA-01/02/03/11 (CZĘŚCIOWO):** Przed poprawką
+`GhidraHardwareFlowService.resetStaticCandidates` traktował funkcję
+**zawierającą** adres wektora RESET tak samo jak funkcję, której
+**wejście** jest dokładnie równe temu adresowi. Wektor wewnątrz
+funkcji mógł wskutek tego błędnie dziedziczyć CALL, STORE/MMIO
+i kandydatów VBR/ISR z instrukcji poprzedzających RESET PC.
+Obecnie tylko dokładne wejście jest źródłowym korzeniem
+ograniczonego grafu CALL; przy PC w środku funkcji wynik
+`UNKNOWN RESET ROOT — INTERIOR FUNCTION POINTER`, zbiór
+`resetCandidateFunctions` pusty, relacje wektorów
+`RESET_ROOT_UNKNOWN` i `resetGraphIncomplete=true`.
+Nie modyfikuje to projektu Ghidry ani uprawnień Review/Apply/Undo.
+
+**Dokładne wyniki:** HEAD [PR #183](https://github.com/bogkom/GhidrAssist/pull/183)
+`904f478c7749c5c98722bc083e429fd873626aa3`:
+**104/104 GitHub Actions SUCCESS**; pełna kompilacja rozszerzenia
+**Ghidra 12.1.4 PUBLIC / Java25**, Java21 i rzeczywista
+syntetyczna Ghidra headless sprawdzająca CPU32 JSR przed
+RESET PC oraz bezpieczną zmianę wektora i cache.
+Scalony commit `master`:
+`cedc0b8aee8f64a48390bae6dbc9e5be3743a030`,
+**15/15 GitHub Actions SUCCESS**, łącznie z pełnym buildem
+i realnym testem `reset-interior`. Drzewo Git na HEAD
+oraz merge SHA jest **identyczne**:
+`a6c4211cde462745c564a3e29acc301e3f78aa79`.
+
+**Rozróżnienie wcześniejszego błędu testu:** stary kandydat
+`3fb948f7d553e39d37a2d388c0910f05f1366d76`
+miał dwa FAILED w nowym teście GUI/headless przez
+porównywanie całych raportów, podczas gdy legalne liczniki
+computed/reused GA-12 zmieniają się między przebiegami.
+Zmiana testu na asercje trwałych faktów RESET/osiągalności
+została wykonana przed ostatecznym 104/104 PASS.
+Nie uznawano starego SHA za PASS.
+
+**Ograniczenia:** to nadal analiza **statycznych kandydatów**,
+nie dowód wykonania RESET, realnego MM/CS, aktywnego ISR/VBR
+czy możliwego przebiegu każdej gałęzi. Dla PC wskazującego
+środek funkcji ewentualny faktyczny kod od tego PC wymaga
+osobnego, bezpiecznego grafu ograniczonego do poprawnego wejścia.
+Issue [#106](https://github.com/bogkom/GhidrAssist/issues/106)
+otwarte (0 nowych wpisów produktu), osobno #98. Bez Wyse,
+Precision, zatrzymanego Supervisora, prywatnego ECU411 ani
+testów AI. **GA-01–GA-18 nadal W ROZWOJU; GA-14 ODŁOŻONE.**
+Kolejne priorytety: bezpieczny pośredni CALL/MMIO i niepewność
+RESET/VBR/ISR (GA-01/02/03/11), weryfikowane wydania i
+SHA-256 dokumentacji (GA-06/10/16), trwałe checkpointy
+i kompletność dowodów (GA-12/15), ciągły CI (GA-17/18).
 
 ## Obowiązujący checkpoint — 2026-11-06 (aktualizacja po PR #181)
 
