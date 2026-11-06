@@ -9,7 +9,7 @@ public final class HardwareReportScope {
     private HardwareReportScope() {}
     public static boolean isInitializationRegister(String name) {
         if (name == null) return false;
-        return name.equals("SIMCR") || name.equals("TRAMBAR")
+        return name.equals("SIMCR") || name.equals("SYNCR") || name.equals("TRAMBAR")
             || name.matches("CSBAR(?:BT|10|[0-9])")
             || name.matches("CSOR(?:BT|10|[0-9])");
     }
