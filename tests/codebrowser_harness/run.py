@@ -40,6 +40,10 @@ def fixture(path, with_simcr):
     # Synthetic 68000: MOVE.W #$40CA,($00FFFA00).L ; RTS.
     data[0x20:0x2a]=(bytes.fromhex("33fc40ca00fffa004e75") if with_simcr
                        else bytes.fromhex("4e714e714e75"))
+    # Separate disconnected MC68332 SYNCR literal candidate, not a
+    # reachable reset path or executed peripheral clock configuration.
+    if with_simcr:
+        data[0x30:0x3a]=bytes.fromhex("33fcd08400fffa044e75")
     path.write_bytes(data)
 
 
