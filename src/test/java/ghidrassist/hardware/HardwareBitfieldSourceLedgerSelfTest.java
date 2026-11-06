@@ -48,8 +48,13 @@ public final class HardwareBitfieldSourceLedgerSelfTest {
               md.contains("| SIMCR | SHEN |") &&
               md.contains("| SYNCR | STSIM |") &&
               md.contains("PDF BYTES UNVERIFIED") &&
-              md.contains("No PDF file bytes or SHA-256 authenticated"),
+              md.contains("No locally supplied PDF bytes or SHA-256 authenticated") &&
+              md.contains(HardwareBitfieldSourceLedger.MC68332_PUBLIC_PDF_SHA256) &&
+              md.contains("not checked against any local/RAG PDF copy"),
               "RAG Markdown must retain citations AND authentication caveat");
+        check(HardwareBitfieldSourceLedger.MC68332_PUBLIC_PDF_SHA256
+                  .matches("[a-f0-9]{64}"),
+              "publisher SHA-256 pin must be structurally complete");
         var generic=HardwareBitfieldSourceLedger.inspect(HardwareProfiles.cpu32Family());
         check(generic.entries().isEmpty() && generic.excludedFields()==0 &&
               !generic.markdown().contains("| SIMCR |"),
