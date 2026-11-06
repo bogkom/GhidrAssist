@@ -2381,6 +2381,14 @@ public final class Ga11VectorHeadlessMain {
                     check(refused && !bridge.page(full,rev,importSha,0,2,
                             null,null).complete(),
                         "Pruning/stale evidence pages cannot be marked complete");
+                    evidence.extractFromToolOutput("mcp",
+                        ("buffer overflow unexamined hardware line\\n").repeat(6000));
+                    check(evidence.isSourceIncomplete() &&
+                        bridge.page(full,rev,importSha,0,2,null,null)
+                            .findings().sourceIncomplete() &&
+                        !bridge.page(full,rev,importSha,0,2,null,null)
+                            .complete(),
+                        "Unread tool source is not complete Agentic evidence");
                     bridge.invalidate(full);
                     check(full.getModificationNumber()==rev,
                         "Agentic evidence bridge must not mutate real Ghidra Program");
