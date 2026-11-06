@@ -555,7 +555,13 @@ public final class CodeBrowserMmioMain {
             },10);
             // Real Swing CodeBrowser program-activation callback must clear
             // the old source cache even if its Program remains open.
-            until(()->evalEdt(()->plugin.getCurrentProgram()==second),10);
+            until(()->{
+                try {
+                    return evalEdt(()->plugin.getCurrentProgram()==second);
+                } catch(Exception e) {
+                    throw new RuntimeException(e);
+                }
+            },10);
             boolean ga15OldRejected=false;
             try {
                 ga15EvidenceRegistry.page(first,ga15EvidenceRev,
