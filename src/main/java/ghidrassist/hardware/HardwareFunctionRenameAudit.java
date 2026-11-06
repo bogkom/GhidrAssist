@@ -21,7 +21,7 @@ public final class HardwareFunctionRenameAudit {
 
     public enum State {
         CURRENT_APPROVED_NAME, NAME_CHANGED_AFTER_APPROVAL,
-        FUNCTION_MISSING, SOURCE_CHANGED, SOURCE_TYPE_CHANGED
+        FUNCTION_MISSING, SOURCE_CHANGED, SOURCE_UNVERIFIED, SOURCE_TYPE_CHANGED
     }
 
     /** One stored Options value and the corresponding live Function lookup. */
@@ -49,7 +49,7 @@ public final class HardwareFunctionRenameAudit {
                            String programSourceSha256) {
         public Snapshot {
             if(rows==null || rows.size()>MAX_ROWS || programRevision<0 ||
-                    programSourceSha256==null)
+                    programSourceSha256==null || programSourceSha256.length()>128)
                 throw new IllegalArgumentException("Invalid audit snapshot");
             rows=List.copyOf(rows);
         }
@@ -94,7 +94,7 @@ public final class HardwareFunctionRenameAudit {
     public static Snapshot inspect(List<Observation> observations,
             long programRevision,String programSourceSha256) {
         if(observations==null || observations.size()>MAX_ROWS ||
-                programRevision<0 || programSourceSha256==null)
+                programRevision<0 || programSourceSha256==null || programSourceSha256.length()>128)
             throw new IllegalArgumentException("Unbounded rename audit inventory");
         List<Row> rows=new ArrayList<>(observations.size());
         Set<String> keys=new HashSet<>();
@@ -110,8 +110,12 @@ public final class HardwareFunctionRenameAudit {
             State state;
             if(name==null)state=State.FUNCTION_MISSING;
             else if(!"UNKNOWN".equals(receipt.sourceSha256()) &&
+                    !"UNKNOWN".equals(programSourceSha256) &&
                     !receipt.sourceSha256().equalsIgnoreCase(programSourceSha256))
                 state=State.SOURCE_CHANGED;
+            else if("UNKNOWN".equals(receipt.sourceSha256()) ||
+                    "UNKNOWN".equals(programSourceSha256))
+                state=State.SOURCE_UNVERIFIED;
             else if(!name.equals(receipt.afterName()))
                 state=State.NAME_CHANGED_AFTER_APPROVAL;
             else if(!"USER_DEFINED".equals(type))
