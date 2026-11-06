@@ -2483,6 +2483,20 @@ public final class Ga11VectorHeadlessMain {
                           ghidrassist.hardware.HardwareFunctionRenameReceipt
                             .decode(persisted).equals(receipt1),
                         "Ghidra Program Options do not preserve canonical GA-13 receipt");
+                    // GA-13 audit: two approved, address-ordered operations,
+                    // with live SourceType and no Program database mutation.
+                    long auditRevision=full.getModificationNumber();
+                    var approvedAudit=ghidrassist.hardware.HardwareFunctionRenameService
+                        .audit(full);
+                    check(approvedAudit.rows().size()==2 &&
+                          approvedAudit.count(ghidrassist.hardware
+                            .HardwareFunctionRenameAudit.State.CURRENT_APPROVED_NAME)==2 &&
+                          approvedAudit.rows().get(0).receipt().entry()==0x5a0L &&
+                          approvedAudit.rows().get(1).receipt().entry()==0x640L &&
+                          approvedAudit.csv().contains("actor UNKNOWN") &&
+                          full.getModificationNumber()==auditRevision,
+                        "Real Ghidra audit failed to reconcile two approved names");
+                    result.addProperty("ga13_rename_audit_two_approved",true);
                     check(full.canUndo(),"Real Ghidra Undo unavailable after renames");
                     full.undo();
                     check(fn1.getName().equals(firstName) &&
@@ -2492,6 +2506,9 @@ public final class Ga11VectorHeadlessMain {
                           ghidrassist.hardware.HardwareFunctionRenameService
                               .receipt(full,0x640L).isEmpty(),
                         "Ghidra native Undo must restore function names AND provenance");
+                    check(ghidrassist.hardware.HardwareFunctionRenameService.audit(full)
+                            .rows().isEmpty(),
+                        "Native Undo must remove reverted operation receipts from current audit");
                     check(full.canRedo(),"Ghidra Redo unavailable for receipt transaction");
                     full.redo();
                     check(fn1.getName().equals(first.proposedName) &&
@@ -2501,6 +2518,9 @@ public final class Ga11VectorHeadlessMain {
                           ghidrassist.hardware.HardwareFunctionRenameService
                               .receipt(full,0x640L).orElseThrow().equals(receipt2),
                         "Ghidra Redo must restore BOTH names and exact GA-13 receipts");
+                    check(ghidrassist.hardware.HardwareFunctionRenameService.audit(full)
+                            .rows().equals(approvedAudit.rows()),
+                        "Redo must restore exact persistent audit snapshot");
                     full.undo();
                     check(fn1.getName().equals(firstName) &&
                           fn2.getName().equals(secondName) &&
@@ -2509,6 +2529,10 @@ public final class Ga11VectorHeadlessMain {
                           ghidrassist.hardware.HardwareFunctionRenameService
                               .receipt(full,0x640L).isEmpty(),
                         "Second Undo must again clear both receipt and name");
+                    check(ghidrassist.hardware.HardwareFunctionRenameService.audit(full)
+                            .rows().isEmpty(),
+                        "Second Undo must not leave a false durable audit event");
+                    result.addProperty("ga13_rename_audit_undo_redo_correlated",true);
                     result.addProperty("rename_real_functions_and_collision",true);
                     result.addProperty("rename_atomic_rollback",true);
                     result.addProperty("rename_stale_revision_blocked",true);
@@ -2613,8 +2637,17 @@ public final class Ga11VectorHeadlessMain {
                         ghidrassist.hardware.HardwareFunctionRenameReceipt
                             .decode(stored).equals(receipt),
                         "Second JVM found noncanonical or missing Options record");
+                    var reloadedAudit=ghidrassist.hardware.HardwareFunctionRenameService
+                        .audit(full);
+                    check(reloadedAudit.rows().size()==1 &&
+                          reloadedAudit.count(ghidrassist.hardware
+                            .HardwareFunctionRenameAudit.State.CURRENT_APPROVED_NAME)==1 &&
+                          reloadedAudit.rows().get(0).receipt().equals(receipt) &&
+                          reloadedAudit.csv().contains("actor UNKNOWN"),
+                        "Distinct second JVM must retain current rename audit identity");
                     check(full.getModificationNumber()==unchanged,
-                        "Reading persisted receipt must never edit Ghidra Program");
+                        "Reading persisted receipt and audit must never edit Ghidra Program");
+                    result.addProperty("ga13_restart_audit_read_only",true);
                     result.addProperty("rename_receipt_second_jvm_reopened",true);
                     result.addProperty("rename_receipt_saved_name_and_source",true);
                     result.addProperty("rename_receipt_restart_read_only",true);
