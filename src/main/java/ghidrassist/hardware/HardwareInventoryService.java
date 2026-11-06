@@ -276,7 +276,10 @@ public final class HardwareInventoryService {
                 md.append("- ").append(consensus.description()).append(". ")
                     .append("Alternative/unknown sites are excluded from any ")
                     .append("single-value CS table.\n\n");
-                if(concreteDevice && !values.isEmpty()){
+                // Emit all 12 UNKNOWN/conditional rows even when every local
+                // literal was excluded by conflicts, aliases or unknown writes.
+                // Absence of a single-value snapshot is not absence of CS.
+                if(concreteDevice){
                     md.append("**Per-select Chip Select table (conditional; function-local code sites)**\n\n");
                     md.append(ChipSelectTable.markdown(values, true));
                 } else if(!concreteDevice) {
