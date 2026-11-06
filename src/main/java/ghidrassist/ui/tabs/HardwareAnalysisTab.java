@@ -87,6 +87,7 @@ public final class HardwareAnalysisTab extends JPanel {
     private final JButton approve=new JButton("Review / Apply...");
     private final JButton exploreMmio=new JButton("MMIO accesses...");
     private final JButton reviewNames=new JButton("Review names...");
+    private final JButton reviewVariables=new JButton("Review pointers...");
     private final JButton renameAudit=new JButton("Rename audit CSV...");
     private final JButton previewProfile=new JButton("Preview profile...");
     private final JTextArea report=new JTextArea();
@@ -456,6 +457,7 @@ public final class HardwareAnalysisTab extends JPanel {
         profileRow.add(new JLabel("Profile:"));
         profileRow.add(selection);
         profileRow.add(reviewNames);
+        profileRow.add(reviewVariables);
         profileRow.add(renameAudit);
         profileRow.add(previewProfile);
         profileRow.add(exportConfigCsv);
@@ -554,6 +556,7 @@ public final class HardwareAnalysisTab extends JPanel {
         approve.addActionListener(e->reviewHardwareChanges());
         exploreMmio.addActionListener(e->showMmioExplorer());
         reviewNames.addActionListener(e->reviewFunctionNames());
+        reviewVariables.addActionListener(e->reviewTypedPointerVariables());
         renameAudit.addActionListener(e->exportPersistedNameAudit());
         previewProfile.addActionListener(e->previewExternalProfile());
         selection.addActionListener(e->{
@@ -1160,6 +1163,95 @@ public final class HardwareAnalysisTab extends JPanel {
         }catch(Exception invalid){
             status.setText("Rename audit export refused: stale or invalid evidence.");
             ghidra.util.Msg.error(this,"GA-13 audit export refused",invalid);
+        }
+    }
+
+    /**
+     * GA-05/08 explicitly approved, existing typed pointer variable naming.
+     * This is not a decompiler HighVariable or A-register role rename.
+     * All rows start UNCHECKED and the entire batch is one Undo transaction.
+     */
+    private void reviewTypedPointerVariables() {
+        Program program=plugin.getCurrentProgram();
+        if(program==null || selection.getSelectedIndex()!=1){
+            status.setText("Select MC68332 explicitly and a function before pointer review.");
+            return;
+        }
+        ghidra.program.model.listing.Function fn=plugin.getCurrentFunction();
+        if(fn==null || fn.getEntryPoint().getOffset()>0xffffffL){
+            status.setText("Navigate Listing into a supported MCU24 function.");
+            return;
+        }
+        final ghidrassist.hardware.HardwareAnalysisRevision reviewed=
+            ghidrassist.hardware.HardwareAnalysisRevision.capture(
+                program,program.getModificationNumber(),
+                program.getLanguageID().toString(),program.getExecutableSHA256(),true);
+        List<ghidrassist.hardware.HardwareScopedVariableReview.Proposal> proposals;
+        try {
+            proposals=ghidrassist.hardware.HardwareScopedVariableService.preview(fn);
+        } catch(Exception ex) {
+            status.setText("Variable preview refused: conflicting or invalid Ghidra storage.");
+            return;
+        }
+        if(proposals.isEmpty()){
+            status.setText("Current function has no Ghidra database variables to review.");
+            return;
+        }
+        DefaultTableModel model=new DefaultTableModel(new Object[]{
+            "Apply","Decision","Variable","Kind","Storage","Proposed name"},0){
+            @Override public Class<?> getColumnClass(int col){
+                return col==0?Boolean.class:String.class;
+            }
+            @Override public boolean isCellEditable(int row,int col){
+                return col==0 && proposals.get(row).decision()==
+                    ghidrassist.hardware.HardwareScopedVariableReview.Decision.READY;
+            }
+        };
+        for(var p:proposals) {
+            var o=p.original();
+            model.addRow(new Object[]{Boolean.FALSE,p.decision().name(),
+                o.currentName(),o.kind().name(),o.storage(),p.proposedName()});
+        }
+        JTable table=new JTable(model);
+        table.setAutoCreateRowSorter(true);
+        JScrollPane scroll=new JScrollPane(table);
+        scroll.setPreferredSize(new Dimension(950,Math.min(520,110+30*proposals.size())));
+        int choice=JOptionPane.showConfirmDialog(this,scroll,
+            "MC68332: existing typed Ghidra pointer variables (all unchecked)",
+            JOptionPane.OK_CANCEL_OPTION,JOptionPane.PLAIN_MESSAGE);
+        if(choice!=JOptionPane.OK_OPTION)return;
+        if(table.isEditing())table.getCellEditor().stopCellEditing();
+        List<ghidrassist.hardware.HardwareScopedVariableReview.Proposal> accepted=
+            new ArrayList<>();
+        for(int i=0;i<proposals.size();i++) {
+            if(Boolean.TRUE.equals(model.getValueAt(i,0)))
+                accepted.add(proposals.get(i));
+        }
+        if(accepted.isEmpty()){
+            status.setText("No pointer variable names selected. No edits.");
+            return;
+        }
+        if(program!=plugin.getCurrentProgram() ||
+                selection.getSelectedIndex()!=1 ||
+                JOptionPane.showConfirmDialog(this,
+                    "Rename "+accepted.size()+" existing pointer variable(s) "+
+                    "in one undoable Ghidra transaction? "+
+                    "Names indicate TYPE only; no MMIO meaning is proven.",
+                    "Explicit pointer rename approval",JOptionPane.YES_NO_OPTION)
+                        !=JOptionPane.YES_OPTION)return;
+        try{
+            if(program!=plugin.getCurrentProgram() ||
+                    selection.getSelectedIndex()!=1)
+                throw new IllegalStateException("Program or MCU changed");
+            var result=ghidrassist.hardware.HardwareScopedVariableService.apply(
+                program,accepted,reviewed);
+            ghidrassist.hardware.HardwareEvidenceCache.clear(program);
+            discardStale("Applied "+result.renamed()+
+                " approved typed pointer variable name(s). Undo available; reanalyze.");
+        }catch(Exception e){
+            status.setText("Pointer rename rejected; transaction rolled back: "+
+                e.getClass().getSimpleName());
+            ghidra.util.Msg.error(this,"GA-05/08 pointer Apply refused",e);
         }
     }
 

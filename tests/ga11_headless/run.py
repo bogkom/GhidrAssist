@@ -95,7 +95,7 @@ def main():
                         "mmio-read-reference","csbar-csor-conditional",
                         "simcr-mm0-literal","trambar-unknown","csor-alternatives",
                         "branch-simcr","call-barrier","leaf-return","call-context","joint-source","two-hop","two-hop-indexed","two-hop-indexed-wrap","indirect-adjacent","indirect-bounded","indirect-reset-xref","branch-leaf","branch-cache","cancel-incomplete",
-                        "function-stage-resume","function-rename","receipt-restart",
+                        "function-stage-resume","function-rename","scoped-variable","receipt-restart",
                         "apply-preserve","provenance-csv","movec-vbr","vbr-relocation"),
                         default="none",help="Run GA-07/12 or GA-02/03 genuine headless source-evidence checks")
     args=parser.parse_args()
@@ -416,6 +416,12 @@ def main():
                         "rename_atomic_rollback",
                         "rename_transactional_two_function_apply",
                         "rename_native_undo_restored"),
+                    "scoped-variable":(
+                        "scoped_real_pointer_param_local",
+                        "scoped_atomic_rejection",
+                        "scoped_explicit_apply",
+                        "scoped_native_undo_redo",
+                        "scoped_stale_revision_rejected"),
                     "receipt-restart":(
                         "rename_receipt_second_jvm_reopened",
                         "rename_receipt_saved_name_and_source",
