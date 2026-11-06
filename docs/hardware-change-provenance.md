@@ -73,3 +73,63 @@ only, not a cryptographic identity signature or actor attestation.
 This is separate from the preview CSV and from GA-12 analysis
 checkpoints. It changes neither export/Apply permission nor
 the physical interpretation of MCU firmware.
+
+
+## 2026-11-06 — GA-13 current-revision saved rename audit
+
+A single read-only **Rename audit CSV...** action now inspects every
+versioned receipt stored in the **current Ghidra Program's** transactional
+`GhidrAssist Function Rename Receipts` Options category. It works
+independently of Analyze, the explicitly selected MCU, and permission
+to Review/Apply. No local preferences, firmware images, OAuth or other
+projects are read or modified. The new
+`HardwareFunctionRenameService.audit(program)` builds an immutable
+snapshot by correlating each canonical receipt with its **currently
+existing** Ghidra Function and `Symbol.getSource()` value.
+
+Each report row includes: 24-bit function entry, before/approved/current
+names, approved analysis revision and current Program revision, original
+import SHA metadata, role and contributing register names, distinct
+write-site count, Ghidra SourceType, conservative operation origin
+(`actor UNKNOWN`) and explicit audit status.
+
+The read-only states are `CURRENT_APPROVED_NAME`,
+`NAME_CHANGED_AFTER_APPROVAL`, `FUNCTION_MISSING`,
+`SOURCE_CHANGED`, `SOURCE_UNVERIFIED` and
+`SOURCE_TYPE_CHANGED`. A changed name cannot silently masquerade
+as an unchanged approved name. Missing Program SHA does not become
+a verified source identity. An invalid checksum, unsupported record
+version, duplicate key, inconsistent key/function address or oversized
+receipt inventory **blocks the entire export** rather than turning
+partial records into approved facts. Export re-checks Program identity
+and the complete Options/current-symbol snapshot **after the modal
+Save/Overwrite dialogs**, preventing a stale CSV from being saved.
+
+CSV fields share the existing per-cell 512-character cap, Unicode
+control protection, formula-prefix hardening and RFC-style escaping
+used by read-only Review provenance. The audit is never Apply input
+and contains no reusable approval token. Max 4096 persisted receipts;
+excess entries reject rather than silently truncating an audit.
+
+**Undo/Redo scope:** receipts are saved in the same Ghidra Program
+transaction as the approved rename. The audit shows the currently
+persisted approved state; native Undo removes both name and receipt,
+Redo restores both. **It is not an append-only history of discarded
+or undone decisions**; erased receipts cannot prove who approved,
+undid or redid a change. `USER_DEFINED` does not authenticate
+a human/AI author. A checksum detects accidental corruption only.
+
+Regression gates:
+- Java21 pure receipt codec, original review CSV and bounded
+  current-Program audit state/CSV tests;
+- genuine Ghidra 12.1.4 PUBLIC / Java25 two-function Apply,
+  collision rollback, Undo/Redo and second Undo with audit assertions;
+- genuine cross-JVM save/open of the same isolated synthetic project
+  with read-only audit and revision-unchanged verification;
+- complete extension build. No Wyse/Precision, stopped Supervisor
+  or private ECU411 project.
+
+GA-13 remains **PARTIAL**: a separately authorized, trustworthy
+and appropriately protected event journal would be necessary to
+retain explicitly rejected proposals, Undo/Redo operations after
+reversal and user/AI identities. That is not fabricated here.
