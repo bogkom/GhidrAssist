@@ -95,6 +95,12 @@ public final class HardwareScopedVariableReview {
             return Decision.INVALID;
         if(!proposal.original().equals(current))
             return Decision.STALE_OR_CHANGED;
+        // Never trust the requested READY flag: callers can construct a
+        // public Proposal. Derive eligibility again from live typed data.
+        Proposal recalculated=propose(List.of(current)).get(0);
+        if(recalculated.decision()!=Decision.READY ||
+                !recalculated.proposedName().equals(proposal.proposedName()))
+            return Decision.INVALID;
         for(String n:currentNames) {
             if(n!=null && n.equalsIgnoreCase(proposal.proposedName()))
                 return Decision.NAME_COLLISION;
