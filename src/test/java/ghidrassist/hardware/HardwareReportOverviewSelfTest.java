@@ -153,6 +153,19 @@ public final class HardwareReportOverviewSelfTest {
                 new HardwareReportOverview.Site("SIMCR",true,true)));}
         catch(IllegalArgumentException expected){largeRejected=true;}
         require(largeRejected,"oversized source inventory must fail closed");
+        String clock=HardwareReportOverview.render(true,2,1,0,0,false,
+            List.of(new HardwareReportOverview.Site("SYNCR",true,true)));
+        require(clock.contains("SYNCR clock sites: 1") &&
+                clock.contains("focused initialization register sites: 1") &&
+                clock.contains("direct word values: 1") &&
+                clock.contains("actual MM/VBR states UNKNOWN"),
+            "focused SYNCR must be visible but never assert clock execution");
+        String clockGeneric=HardwareReportOverview.render(false,2,1,0,0,false,
+            List.of(new HardwareReportOverview.Site("SYNCR",true,true)));
+        require(clockGeneric.contains("SYNCR clock sites: 1") &&
+                clockGeneric.contains("CPU32 — address survey ONLY") &&
+                !clockGeneric.contains("Twelve-select Listing/XREF source coverage"),
+            "generic CPU32 listing sees SYNCR address only, no device interpretation");
         System.out.println("HardwareReportOverviewSelfTest OK");
     }
 }

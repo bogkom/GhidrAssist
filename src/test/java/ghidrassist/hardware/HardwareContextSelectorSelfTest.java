@@ -76,6 +76,29 @@ public final class HardwareContextSelectorSelfTest {
             "coverage must count actual unique sites");
         ok(!deduped.contains("PC 0x002BCA:"),
             "prefer original disassembly evidence over repeated P-code entry");
+        String cited=HardwareBitfieldSourceLedger.inspect(
+            HardwareProfiles.mc68332()).markdown()+
+            "## Function-local evidence\n"+
+            "### reset @ 00002bc0\n"+
+            "- `00002bca` SIMCR `0xFFFA00` WRITE 0x40CA\n"+
+            "- `00003010` SYNCR `0xFFFA04` WRITE 0xD084\n";
+        String simRag=HardwareContextSelector.select(cited,"#hardware SIMCR",5000);
+        ok(simRag.contains("| SIMCR | SHEN |") &&
+            simRag.contains("| SIMCR | MM |") &&
+            simRag.contains("FIELD PAGE CLAIM COVERAGE: 8 of 8") &&
+            simRag.contains("PDF BYTES/EDITION UNVERIFIED") &&
+            !simRag.contains("| SYNCR | W |"),
+            "focused SIMCR RAG must retain all eight source-page claims only");
+        String synRag=HardwareContextSelector.select(cited,"#hardware SYNCR",5000);
+        ok(synRag.contains("| SYNCR | STEXT |") &&
+            synRag.contains("FIELD PAGE CLAIM COVERAGE: 7 of 7") &&
+            !synRag.contains("| SIMCR | MM |"),
+            "SYNCR RAG source citations must remain register-specific");
+        String shortRag=HardwareContextSelector.select(cited,"#hardware SIMCR",700);
+        ok(shortRag.contains("FIELD PAGE CLAIM COVERAGE:") &&
+            shortRag.contains("<<<END_LOCAL_GHIDRA_HARDWARE_EVIDENCE>>>") &&
+            shortRag.length()<=700,
+            "bounded RAG explicitly reports omitted field citations");
         System.out.println("HardwareContextSelectorSelfTest OK");
     }
 }

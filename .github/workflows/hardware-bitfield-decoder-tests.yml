@@ -3,6 +3,12 @@ name: Hardware sourced bitfield decoder tests
 on:
   push:
     paths:
+      - 'src/main/java/ghidrassist/hardware/HardwareBitfieldSourceLedger.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareBitfieldSourceLedgerSelfTest.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareContextSelector.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareContextSelectorSelfTest.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareReportScope.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareInventoryService.java'
       - 'src/main/java/ghidrassist/hardware/HardwareBitfieldDecoder.java'
       - 'src/main/java/ghidrassist/hardware/ManualPdfPageClaim.java'
       - 'src/test/java/ghidrassist/hardware/ManualPdfPageClaimSelfTest.java'
@@ -11,6 +17,12 @@ on:
       - '.github/workflows/hardware-bitfield-decoder-tests.yml'
   pull_request:
     paths:
+      - 'src/main/java/ghidrassist/hardware/HardwareBitfieldSourceLedger.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareBitfieldSourceLedgerSelfTest.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareContextSelector.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareContextSelectorSelfTest.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareReportScope.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareInventoryService.java'
       - 'src/main/java/ghidrassist/hardware/HardwareBitfieldDecoder.java'
       - 'src/main/java/ghidrassist/hardware/ManualPdfPageClaim.java'
       - 'src/test/java/ghidrassist/hardware/ManualPdfPageClaimSelfTest.java'
@@ -39,6 +51,10 @@ jobs:
           javac --release 21 -d "$RUNNER_TEMP/bitfields" \
             src/main/java/ghidrassist/hardware/HardwareProfiles.java \
             src/main/java/ghidrassist/hardware/HardwareBitfieldDecoder.java \
+            src/main/java/ghidrassist/hardware/HardwareBitfieldSourceLedger.java \
+            src/main/java/ghidrassist/hardware/HardwareContextSelector.java \
+            src/test/java/ghidrassist/hardware/HardwareBitfieldSourceLedgerSelfTest.java \
+            src/test/java/ghidrassist/hardware/HardwareContextSelectorSelfTest.java \
             src/main/java/ghidrassist/hardware/ManualPdfPageClaim.java \
             src/test/java/ghidrassist/hardware/HardwareBitfieldDecoderSelfTest.java \
             src/test/java/ghidrassist/hardware/ManualPdfPageClaimSelfTest.java
@@ -46,3 +62,7 @@ jobs:
         run: java -cp "$RUNNER_TEMP/bitfields" ghidrassist.hardware.HardwareBitfieldDecoderSelfTest
       - name: Verify shared physical PDF page-claim validation
         run: java -cp "$RUNNER_TEMP/bitfields" ghidrassist.hardware.ManualPdfPageClaimSelfTest
+      - name: Verify field-to-page ledger and PDF authentication caveat
+        run: java -cp "$RUNNER_TEMP/bitfields" ghidrassist.hardware.HardwareBitfieldSourceLedgerSelfTest
+      - name: Verify focused SIMCR/SYNCR RAG keeps bounded source citations
+        run: java -cp "$RUNNER_TEMP/bitfields" ghidrassist.hardware.HardwareContextSelectorSelfTest

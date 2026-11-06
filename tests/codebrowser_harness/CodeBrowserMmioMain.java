@@ -222,6 +222,8 @@ public final class CodeBrowserMmioMain {
                 "Real Swing display required");
             Address site=first.getAddressFactory().getDefaultAddressSpace()
                 .getAddress(0x20);
+            Address clockSite=first.getAddressFactory().getDefaultAddressSpace()
+                .getAddress(0x30);
             // The fixture, never a private project, is the ONLY write target.
             int tx=first.startTransaction("TEST-ONLY decode synthetic MMIO");
             try {
@@ -237,6 +239,18 @@ public final class CodeBrowserMmioMain {
                     new ghidra.program.model.address.AddressSet(site,last),
                     ghidra.program.model.symbol.SourceType.ANALYSIS)!=null,
                     "Failed to create real synthetic CPU32 Function");
+                require(new DisassembleCommand(clockSite,null,false)
+                    .applyTo(first,TaskMonitor.DUMMY),
+                    "Failed to disassemble synthetic SYNCR MOVE.W");
+                require(new DisassembleCommand(clockSite.add(8),null,false)
+                    .applyTo(first,TaskMonitor.DUMMY),
+                    "Failed to disassemble synthetic SYNCR RTS");
+                require(first.getFunctionManager().createFunction(
+                    "FUN_00000030",clockSite,
+                    new ghidra.program.model.address.AddressSet(
+                        clockSite,clockSite.add(9)),
+                    ghidra.program.model.symbol.SourceType.ANALYSIS)!=null,
+                    "Failed to create separate SYNCR synthetic function");
             }finally{first.endTransaction(tx,true);}
             Instruction instruction=first.getListing().getInstructionAt(site);
             require(instruction!=null && instruction.toString()
@@ -247,6 +261,19 @@ public final class CodeBrowserMmioMain {
                     s.register.equals("SIMCR") && s.literal!=null &&
                     s.literal==0x40ca),
                 "Read-only scanner did not recognize synthetic SIMCR word");
+            require(scan.sites.stream().anyMatch(s->
+                    s.pc.equals(clockSite) &&
+                    s.register.equals("SYNCR") && s.literal!=null &&
+                    s.literal==0xd084),
+                "Read-only scanner did not recognize separate SYNCR full-word literal");
+            require(scan.overviewMarkdown.contains("SYNCR clock sites: 1"),
+                "SYNCR candidate not included in focused MCU overview");
+            require(scan.detailsMarkdown.contains("SYNCR") &&
+                    scan.detailsMarkdown.contains("W=1") &&
+                    scan.detailsMarkdown.contains("source-page-claimed") &&
+                    scan.detailsMarkdown.contains("| SYNCR | STEXT |"),
+                "SYNCR bitfield interpretation not sourced in real Ghidra Full Evidence");
+            result.addProperty("synthetic_syncr_full_word_sourced",true);
             result.addProperty("synthetic_simcr_site",true);
             String before=instruction.toString();
             edt(()->{try{
@@ -431,13 +458,29 @@ public final class CodeBrowserMmioMain {
                         overview.contains("| CSBOOT |") &&
                         overview.contains("| CS10 |"),
                     "Real MC68332 Overview lacks twelve-select source summary");
+                require(full.contains("GA-10/16 bitfield source-page ledger") &&
+                        full.contains("| SIMCR | SHEN |") &&
+                        full.contains("| SYNCR | STEXT |") &&
+                        full.contains("PDF BYTES UNVERIFIED"),
+                    "Real CodeBrowser Full Evidence missing sourced field/page claim ledger");
                 require(ghidrassist.hardware.HardwareEvidenceCache.hasEvidence(first),
                     "Canonical report was not published for current Ghidra revision");
                 String rag=ghidrassist.hardware.HardwareEvidenceCache.enrich(
                     first,"#hardware SIMCR","#hardware SIMCR");
                 require(rag.contains("<<<LOCAL_GHIDRA_HARDWARE_EVIDENCE>>>") &&
-                        rag.contains("SIMCR") && rag.contains("NOT an ECU hardware readback"),
-                    "RAG did not retrieve the same current-revision synthetic SIMCR evidence");
+                        rag.contains("SIMCR") && rag.contains("NOT an ECU hardware readback") &&
+                        rag.contains("| SIMCR | MM |") &&
+                        rag.contains("| SIMCR | SHEN |") &&
+                        rag.contains("PDF BYTES/EDITION UNVERIFIED") &&
+                        !rag.contains("| SYNCR | STEXT |"),
+                    "Focused real-Ghidra RAG must retain only SIMCR field-page claims");
+                String clockRag=ghidrassist.hardware.HardwareEvidenceCache.enrich(
+                    first,"#hardware SYNCR","#hardware SYNCR");
+                require(clockRag.contains("| SYNCR | STEXT |") &&
+                        clockRag.contains("FIELD PAGE CLAIM COVERAGE: 7 of 7") &&
+                        !clockRag.contains("| SIMCR | MM |"),
+                    "Real Ghidra RAG must keep only SYNCR D-6/D-7 field sources");
+                result.addProperty("sourced_bitfield_pdf_rag_consistent",true);
                 var page=tab.automationMmioRows("simcr",0,5);
                 require(page.get("total").getAsInt()==1 &&
                         page.getAsJsonArray("rows").size()==1 &&

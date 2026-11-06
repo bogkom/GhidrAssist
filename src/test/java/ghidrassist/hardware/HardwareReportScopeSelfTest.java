@@ -9,10 +9,10 @@ public final class HardwareReportScopeSelfTest {
             throw new AssertionError("Unexpected Analyze visibility for " + s);
     }
     public static void main(String[] args) {
-        for(String s:List.of("SIMCR","TRAMBAR","CSBARBT","CSORBT",
+        for(String s:List.of("SIMCR","SYNCR","TRAMBAR","CSBARBT","CSORBT",
                 "CSBAR0","CSOR0","CSBAR7","CSOR7","CSBAR10","CSOR10"))
             check(s,true);
-        for(String s:List.of("SYNCR","SYPCR","SWSR","QSMCR","TPUMCR",
+        for(String s:List.of("SYPCR","SWSR","QSMCR","TPUMCR",
                 "CSPAR0","CSPAR1","PEPAR","PORTF0","CSBAR11","CSOR11"))
             check(s,false);
         check(null,false);

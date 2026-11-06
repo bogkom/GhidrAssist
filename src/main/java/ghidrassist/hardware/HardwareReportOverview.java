@@ -58,7 +58,7 @@ public final class HardwareReportOverview {
         if(input.size()>200000)
             throw new IllegalArgumentException(
                 "Oversized overview evidence: counts not known to be complete");
-        int visible=0,hidden=0,simcr=0,tram=0,csbar=0,csor=0,known=0,unknown=0;
+        int visible=0,hidden=0,simcr=0,syncr=0,tram=0,csbar=0,csor=0,known=0,unknown=0;
         for(Site site:input) {
             if(site==null || site.register()==null || site.register().isBlank() ||
                     (site.literalKnown() && !site.writeCandidate()))
@@ -70,6 +70,7 @@ public final class HardwareReportOverview {
             visible++;
             String name=site.register();
             if("SIMCR".equals(name))simcr++;
+            else if("SYNCR".equals(name))syncr++;
             else if("TRAMBAR".equals(name))tram++;
             else if(name.startsWith("CSBAR"))csbar++;
             else if(name.startsWith("CSOR"))csor++;
@@ -133,7 +134,7 @@ public final class HardwareReportOverview {
             "- Listing instructions inspected: "+listingScanned+
             "; focused initialization register sites: "+visible+
             "; candidate functions: "+initializationFunctions+".\n"+
-            "- SIMCR/MM sites: "+simcr+"; TRAMBAR sites: "+tram+
+            "- SIMCR/MM sites: "+simcr+"; SYNCR clock sites: "+syncr+"; TRAMBAR sites: "+tram+
             "; CSBAR sites: "+csbar+"; CSOR sites: "+csor+
             "; VBR MOVEC sightings: "+vbrCandidates+".\n"+
             "- Other/omitted register references (including CSPAR): "+hidden+

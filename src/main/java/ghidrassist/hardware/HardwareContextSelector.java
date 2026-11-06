@@ -24,6 +24,8 @@ public final class HardwareContextSelector {
     private static final Pattern REGISTERS=Pattern.compile(
         "(?iu)\\b(SIMCR|SYNCR|RSR|CSPAR\\d?|CSBAR(?:BT|\\d+)?|CSOR(?:BT|\\d+)?|"+
         "TRAMBAR|TRAMMCR|QSMCR|TPUMCR|PITR|PICR|VBR)\\b");
+    private static final Pattern FIELD_CITATION=Pattern.compile(
+        "(?iu)^\\|\\s*(SIMCR|SYNCR)\\s*\\|\\s*[A-Z0-9_]+\\s*\\|");
     private static final Pattern SITE=Pattern.compile(
         "(?iu)^\\s*-?\\s*(?:\u0060?([0-9a-f]{6,8})\u0060?\\s+|PC\\s+0x([0-9a-f]{4,8})\\s*:\\s+)(.*)$");
     private static final String INTRO="<<<LOCAL_GHIDRA_HARDWARE_EVIDENCE>>>\n"+
@@ -88,9 +90,34 @@ public final class HardwareContextSelector {
                     out.append("; ").append(matched.size()-added)
                         .append(" omitted due to context size. Not an exhaustive AI view");
                 out.append(". Listing matches are static, not an execution trace.\n");
+                // Preserve modeled, source-only page claims for focused
+                // bitfield queries. Numeric folios do not authenticate PDF
+                // bytes or the document edition.
+                int citationCount=0, cited=0;
+                for(String line:report.split("\\R")) {
+                    Matcher source=FIELD_CITATION.matcher(line);
+                    if(!source.find() ||
+                            !requested.contains(source.group(1).toUpperCase(Locale.ROOT)))
+                        continue;
+                    citationCount++;
+                    if(cited>=32 || out.length()+line.length()+160>=allowance)
+                        continue;
+                    if(cited==0)
+                        out.append("FIELD PAGE CLAIMS (PDF BYTES/EDITION UNVERIFIED):\n");
+                    out.append(line).append("\n");
+                    cited++;
+                }
+                if(citationCount>0)
+                    out.append("FIELD PAGE CLAIM COVERAGE: ").append(cited)
+                        .append(" of ").append(citationCount)
+                        .append("; citation metadata, not authenticated PDF.\n");
                 if(requested.contains("SIMCR")){
-                    out.append("MM mask for an MC68332 SIMCR word: 0x0040; "+
-                        "actual hardware identity and first successful MM write UNKNOWN.\n");
+                    String caveat="MM mask for an MC68332 SIMCR word: 0x0040; "+
+                        "actual hardware identity and first successful MM write UNKNOWN.\n";
+                    // At tight context budgets, keep honest physical-page
+                    // source coverage ahead of a repeated mask reminder.
+                    if(out.length()+caveat.length()+END.length()<=maxChars)
+                        out.append(caveat);
                 }
                 out.append(END);
                 return out.toString();

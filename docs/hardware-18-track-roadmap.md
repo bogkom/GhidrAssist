@@ -1,7 +1,49 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
-Status: **IN PROGRESS — integrated baseline 2026-11-06 (PR #192)**. Scope source: user-approved 2026-10-28 requirements (A–H, additional features 13.1–13.7, PDF/RAG, testing and Codex Supervisor integration).
+Status: **IN PROGRESS — integrated baseline 2026-11-06 (PR #197)**. Scope source: user-approved 2026-10-28 requirements (A–H, additional features 13.1–13.7, PDF/RAG, testing and Codex Supervisor integration).
 
+
+## Obowiązujący checkpoint — GA-10/16 źródłowe SIMCR/SYNCR i PDF (2026-11-06)
+
+**Baza:** [`master` po PR #197](https://github.com/bogkom/GhidrAssist/commit/d401e42178d88a7fe98f77dee8791aeddfabec0f).
+Poprzedni [#196](https://github.com/bogkom/GhidrAssist/pull/196)
+(HEAD `499fda6ffc621ec6acb8e58f758a6cababea62c7`: **35/35 CI PASS**)
+domknął statyczny GA-04, a [#197](https://github.com/bogkom/GhidrAssist/pull/197)
+(HEAD `c728bd0b91b30f1afd07fcf2dd2690fd20f3ec29`:
+**42/42 CI PASS**, real CodeBrowser/Xvfb) domknął przyjęte
+zakresy GA-07 i GA-09. Osobnych Actions PASS na SHA merge nie
+stwierdzono; dowody pozostają na dokładnych HEAD PR.
+
+**GA-10 — PARTIAL:** rozszerzenie odczytowego dekodera MC68332
+o **5 dodatkowych SIMCR** (EXOFF, FRZSW, FRZBM, SLVEN, SHEN) obok
+MM, SUPV, IARB oraz 7 pól SYNCR; tylko pełny, dosłowny `MOVE.W`,
+bez reset-state i aktywnego MCU. Rejestry bez wiarygodnych masek
+i pola statusowe SLIMP/SLOCK nadal są UNKNOWN. Fizyczne strony
+D-5=219, D-6=220, D-7=221 są identyfikowane jawnie.
+
+**GA-16 — PARTIAL:** `HardwareBitfieldSourceLedger` zawiera
+15 ograniczonych wierszy *claim-only* rejestr/pole/maska/strona,
+z URL dokumentu, deklaracją wydania Motorola 1995, przypiętym
+SHA-256 oficjalnego PDF (`02c2cb99738dd45a785798bba3e7dcc34bb0d54fb5fba42900e6ecb8356bf28a`)
+i wyraźną granicą **niezweryfikowanej lokalnej kopii RAG**.
+Wiersze są częścią Full Evidence, Markdown eksportu i aktualnego
+kontekstu RAG, który oznacza pominięte odsyłacze. Dedykowana
+[bramka PDF Actions #42233819507](https://github.com/bogkom/GhidrAssist/actions/runs/42233819507)
+przeszła porównanie SHA-256 bajtów z NXP, 265 stron i ekstrakcję
+D-5/D-6/D-7 (fizyczne 219/220/221) na publicznym runnerze.
+Sam parser etykiet nadal nie uwierzytelnia dowolnego lokalnego PDF;
+pełny import i ekstrakcja innych tabel nie są gotowe.
+
+**Kryteria odbioru pakietu:** Java21 regresje masek/UNKNOWN,
+physical-range parser, stały field ledger i RAG; rzeczywisty
+izolowany CodeBrowser/Xvfb z potwierdzeniem widoczności pól
+oraz przekazania cytowań do RAG; pełny build Ghidra
+**12.1.4 PUBLIC / Java25**; niezależny hash-pinned
+publiczny PDF (jeśli pobranie dostępne); dokładny HEAD SHA,
+raport CI i checkpoint w tym samym PR. GA-10/16 nie otrzymają
+DONE za pokrycie tylko SIMCR/SYNCR lub parsowanie stron.
+Nie używać prywatnych firmware, projektu ECU411, lokalnych
+testów Wyse/Precision ani zatrzymanego Supervisora.
 
 ## GA-07 / GA-09 — pakiet odbiorowy: spójny report, MMIO GUI i Automation API (2026-11-06)
 

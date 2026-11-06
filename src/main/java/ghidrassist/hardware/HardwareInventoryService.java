@@ -224,8 +224,13 @@ public final class HardwareInventoryService {
           .append("- Register address provenance: [MC68332 User's Manual](https://www.nxp.com/docs/en/user-guide/MC68332UM.pdf)\n\n");
         md.append(HardwareProfileAudit.inspect(concreteDevice ?
             profile : HardwareProfiles.cpu32Family()).markdown());
+        // Include all modeled field-to-physical-page claims in the same
+        // read-only Full Evidence / Markdown export / current-revision RAG.
+        // A numeric claim alone does not authenticate a PDF or edition.
+        md.append(HardwareBitfieldSourceLedger.inspect(concreteDevice ?
+            profile : HardwareProfiles.cpu32Family()).markdown());
         md.append("## Initialization/memory-map evidence (SIMCR/MM, TRAMBAR, CSBAR, CSOR, VBR)\n\n")
-          .append("CSPAR contributes to conditional chip-select decoding but is not listed as a separate register site.\n\nMC68332 sourced bitfields are shown only for exact full-word literal SIMCR MOVEs; they are static candidate values, not proven execution or latched MM state.\n\n");
+          .append("CSPAR contributes to conditional chip-select decoding but is not listed as a separate register site.\n\nMC68332 sourced bitfields are shown only for exact full-word literal SIMCR/SYNCR MOVEs; they are static candidate values, not proven execution, clock operation or latched MM state.\n\n");
         for(Map.Entry<String,List<Site>> group:grouped.entrySet()){
             monitor.checkCancelled();
             if(group.getValue().stream().noneMatch(site->
@@ -268,7 +273,8 @@ public final class HardwareInventoryService {
                     // Only a literal full-width word MOVE supports exact SIMCR
                     // bit decoding. Byte/indirect/derived writes remain UNKNOWN.
                     if (concreteDevice && site.write && site.literal != null &&
-                            "SIMCR".equals(site.register) &&
+                            ("SIMCR".equals(site.register) ||
+                             "SYNCR".equals(site.register)) &&
                             site.asm.stripLeading().toUpperCase(Locale.ROOT)
                                 .matches("MOVE\\.W\\s+#.*")) {
                         md.append("; ")

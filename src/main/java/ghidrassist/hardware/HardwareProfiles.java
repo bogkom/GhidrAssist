@@ -181,7 +181,21 @@ public final class HardwareProfiles {
     public static Profile mc68332() {
         List<Register> r = new ArrayList<>();
         String source = MC68332_MANUAL + " ; Appendix D, Table D-2";
+        // MC68332UM (Motorola 1995), printed D-5 (physical PDF page 219):
+        // the register diagram identifies EXOFF, FRZSW, FRZBM, SLVEN
+        // and SHEN[1:0]. We interpret only masked bits from a complete
+        // source-side literal, never reset state or executed hardware writes.
         List<BitField> simcrFields = List.of(
+            new BitField("EXOFF",0x8000,"External clock output disable",
+                null,"D-5 (PDF page 219)",false),
+            new BitField("FRZSW",0x4000,"Freeze software watchdog and PIT counters",
+                null,"D-5 (PDF page 219)",false),
+            new BitField("FRZBM",0x2000,"Freeze bus monitor",
+                null,"D-5 (PDF page 219)",false),
+            new BitField("SLVEN",0x0800,"External IMB slave mode enable (factory test)",
+                null,"D-5 (PDF page 219)",false),
+            new BitField("SHEN",0x0300,"Show-cycle enable mode",
+                null,"D-5 (PDF page 219)",false),
             new BitField("MM", MM_MASK,
                 "0: internal modules at 0x7ff000-0x7fffff; 1: 0xfff000-0xffffff",
                 null, "D-5/D-6 (PDF pages 219-220)", true),

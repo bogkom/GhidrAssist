@@ -43,6 +43,24 @@ public final class ManualPdfPageClaim {
         return false;
     }
 
+    /** Parsed one-based physical PDF page claim. Never authenticates bytes. */
+    public record PhysicalRange(int first, int last) {
+        public PhysicalRange {
+            if(first<1 || last<first || last>100000)
+                throw new IllegalArgumentException("Invalid physical page range");
+        }
+    }
+
+    /** Only structurally accepted claims are eligible for a numeric range. */
+    public static PhysicalRange physicalRange(String label) {
+        if(!hasSingleConsistentClaim(label))return null;
+        Matcher match=CLAIM.matcher(label);
+        if(!match.find())return null;
+        int first=Integer.parseInt(match.group(1));
+        int last=match.group(2)==null?first:Integer.parseInt(match.group(2));
+        return new PhysicalRange(first,last);
+    }
+
     /**
      * A unique, ascending, bounded physical page number/range claim is
      * *eligible for display as a claim*, not verified provenance.
