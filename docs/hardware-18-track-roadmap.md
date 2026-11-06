@@ -1,7 +1,60 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
-Status: **IN PROGRESS — integrated baseline 2026-11-06 (PR #178)**. Scope source: user-approved 2026-10-28 requirements (A–H, additional features 13.1–13.7, PDF/RAG, testing and Codex Supervisor integration).
+Status: **IN PROGRESS — integrated baseline 2026-11-06 (PR #181)**. Scope source: user-approved 2026-10-28 requirements (A–H, additional features 13.1–13.7, PDF/RAG, testing and Codex Supervisor integration).
 
+
+## Obowiązujący checkpoint — 2026-11-06 (aktualizacja po PR #181)
+
+Chroniony `master`:
+[`f78478ea837f732bf75e0681599cf36ea16f4bd3`](https://github.com/bogkom/GhidrAssist/commit/f78478ea837f732bf75e0681599cf36ea16f4bd3).
+Poprzednie checkpointy zachowane niżej są **historią**, nie listą
+otwartych zadań ani bieżącego HEAD.
+
+| Pakiet | Dokładny HEAD PR | GitHub Actions na HEAD | Merge SHA `master` | Actions na merge SHA |
+|---|---|---|---|---|
+| [#180](https://github.com/bogkom/GhidrAssist/pull/180) — GA-02/03/06: odczytowa klasyfikacja bajtów zapisów CALL względem profilu MCU | `cbd8ab1945bff07cd0aede9a7802497a2a4d0d20` | **58/58 SUCCESS** | `28392aaf0526d37d9656f19a2effd3a35028ee78` | **12/12 SUCCESS** |
+| [#181](https://github.com/bogkom/GhidrAssist/pull/181) — GA-06/10/16: właściwe folia MC68332UM D-4/D-5 dla CSBAR/CSOR | `b974b006efc3f39b00b8a9807857f8dae9595746` | **30/30 SUCCESS** | `f78478ea837f732bf75e0681599cf36ea16f4bd3` | **4/4 SUCCESS** |
+
+Dla #180 oraz #181 drzewo Git na przetestowanym PR HEAD
+jest **identyczne** z drzewem scalonego commita
+(odpowiednio `480498b188547b440627ee9e9d4aa3784d907cd2`
+oraz `98a8181f1c8af1e4a35e8fcbc86b2a63f09bb40c`).
+Oba pakiety na własnych HEAD przeszły Java21, pełny build
+**Ghidry 12.1.4 PUBLIC / Java25** i rzeczywistą syntetyczną
+Ghidrę headless; osobne testy `master` potwierdziły ponownie
+pełny build na dokładnych merge SHA.
+
+**GA-02/03 — CZĘŚCIOWO.** Dla już pokazanych kandydatów STORE
+w kontekście jednego lub dwóch bezpośrednich CALL rozróżniamy
+`EXACT_BYTE_RANGE`, `PARTIAL_REGISTER` i
+`SPANNING_WHOLE_REGISTER`, łącznie z MM0/MM1 jako
+alternatywnymi mapami. Liczba miejsc STORE i ograniczenia dowodów
+nie uległy rozszerzeniu. Pełne pokrycie bajtów **nie jest**
+dowodem znanej wartości rejestru, aktywnego MM, rzeczywistego
+wykonania ani fizycznej mapy CS. Nie uprawnia do Review/Apply.
+
+**GA-06/10/16 — CZĘŚCIOWO.** W oficjalnym MC68332UM, © Motorola
+1995, NXP/Freescale-hosted PDF, źródłowa tabela D-2 zawiera
+CSBAR0..4 na drukowanej D-4 (fizyczna PDF 218), a CSOR4..10
+oraz CSBAR5..10 na drukowanej D-5 (PDF 219). Precyzyjny podział
+CSBAR4/CSOR4 potwierdzają testy wszystkich 22 rejestrów.
+Odsyłacze w kodzie nadal są **deklaracjami metadanych**:
+nie uwierzytelniono żadnej osobno zaimportowanej kopii PDF
+ani jej SHA/edycji, nie rozpoznano stanu układu ani wartości reset.
+
+Issue [#106](https://github.com/bogkom/GhidrAssist/issues/106)
+pozostaje otwarte bez nowych wpisów produktu;
+[#98](https://github.com/bogkom/GhidrAssist/issues/98)
+to osobna luka migracji historycznego CodeBrowsera.
+Nie wznowiono lokalnych testów Wyse/Precision, timerów,
+workerów lub starego Supervisora. Nie zmieniano firmware ECU411,
+oryginalnego projektu Ghidry, OAuth ani profili użytkownika.
+
+**GA-01–GA-18: nadal W ROZWOJU; GA-14: ODŁOŻONE.**
+Dalsze zależności: GA-01/02/03/11 — ograniczone źródła CALL/RESET;
+GA-06/10/16 — weryfikowalna edycja/strona i digest wybranej
+kopii PDF; GA-08/12/13/15 — bezpieczne decyzje, checkpointy
+i kontrola niepełnych dowodów; GA-17/18 — CI + Automation API v3.
 
 ## Obowiązujący checkpoint — 2026-11-06 (GitHub)
 
