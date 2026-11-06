@@ -1,0 +1,40 @@
+name: GA-12/15 complete checkpoints and versioned Agentic findings pages
+on:
+  pull_request:
+    paths:
+      - 'src/main/java/ghidrassist/hardware/HardwareDurableCfgReport.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareFlowStageCache.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareDurableCfgReportSelfTest.java'
+      - 'src/main/java/ghidrassist/agent/react/FindingsCache.java'
+      - 'src/test/java/ghidrassist/agent/react/FindingsCacheBudgetSelfTest.java'
+      - '.github/workflows/ga12-ga15-completeness-pagination.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  completion-policy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Compile all GA-12/15 pure policy and source evidence tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/complete"
+          javac --release 21 -d "$RUNNER_TEMP/complete" \
+            src/main/java/ghidrassist/hardware/HardwareDurableStageStore.java \
+            src/main/java/ghidrassist/hardware/HardwareDurableCfgReport.java \
+            src/test/java/ghidrassist/hardware/HardwareDurableCfgReportSelfTest.java \
+            src/main/java/ghidrassist/agent/react/FindingsCache.java \
+            src/test/java/ghidrassist/agent/react/FindingsCacheBudgetSelfTest.java
+      - name: Assert incomplete persisted payload refusal and Agentic page stitching gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          java -ea -cp "$RUNNER_TEMP/complete" ghidrassist.hardware.HardwareDurableCfgReportSelfTest
+          java -ea -cp "$RUNNER_TEMP/complete" ghidrassist.agent.react.FindingsCacheBudgetSelfTest
