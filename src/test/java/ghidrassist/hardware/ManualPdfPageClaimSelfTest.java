@@ -47,14 +47,14 @@ public final class ManualPdfPageClaimSelfTest {
         // display a plausible page number while changing or hiding context.
         // Valid visible Unicode en dashes remain supported above.
         for(String hidden:new String[]{
-                "PDF\\npage 215",
-                "PDF\\tpage 215",
-                "PDF page 215\\rAppendix",
-                "\\u202e PDF page 215",
-                "\\u200bPDF page 215",
-                "PDF page 215 \\u2066",
-                "PDF\\u00a0page 215",
-                "PDF page 215\\u2028Appendix"}) {
+                "PDF\npage 215",
+                "PDF\tpage 215",
+                "PDF page 215\rAppendix",
+                "\u202e PDF page 215",
+                "\u200bPDF page 215",
+                "PDF page 215 \u2066",
+                "PDF\u00a0page 215",
+                "PDF page 215\u2028Appendix"}) {
             check(!ManualPdfPageClaim.hasSingleConsistentClaim(hidden),
                 "hidden control/separator cannot authenticate PDF page claim");
         }
