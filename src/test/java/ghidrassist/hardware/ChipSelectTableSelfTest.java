@@ -58,6 +58,33 @@ public final class ChipSelectTableSelfTest {
         try {ChipSelectTable.markdown(null,true);}
         catch(IllegalArgumentException expected){noSourceRejected=true;}
         check(noSourceRejected,"missing source word map rejected");
+        // Two conflicting function-local BAR writes invalidate the
+        // exact range even if CSOR and CSPAR have consistent literals.
+        var conflict=HardwareStaticWordConsensus.inspect(java.util.List.of(
+            new HardwareStaticWordConsensus.Observation(
+                "CSBAR0",true,0xf803),
+            new HardwareStaticWordConsensus.Observation(
+                "CSBAR0",true,0xe803),
+            new HardwareStaticWordConsensus.Observation(
+                "CSOR0",true,0x3870),
+            new HardwareStaticWordConsensus.Observation(
+                "CSPAR0",true,0x2f7f)));
+        String disputed=ChipSelectTable.markdown(
+            conflict.singleLiteralCandidates(),true);
+        check(conflict.conflictedRegisters()==1 &&
+                disputed.contains("| CS0 | UNKNOWN | UNKNOWN | UNKNOWN |") &&
+                disputed.contains("UNKNOWN: missing CSBAR") &&
+                !disputed.contains("| CS0 | 0xF80000"),
+            "conflicting CSBAR literals must not create a false map");
+        var noLiteral=HardwareStaticWordConsensus.inspect(java.util.List.of(
+            new HardwareStaticWordConsensus.Observation(
+                "CSBAR0",true,null),
+            new HardwareStaticWordConsensus.Observation(
+                "CSPAR0",true,0x2f7f)));
+        check(ChipSelectTable.markdown(
+                noLiteral.singleLiteralCandidates(),true)
+                .contains("| CS0 | UNKNOWN | UNKNOWN | UNKNOWN |"),
+            "unknown source write preserves UNKNOWN select window");
         System.out.println("ChipSelectTableSelfTest OK");
     }
 }
