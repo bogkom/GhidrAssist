@@ -86,11 +86,16 @@ publisher-hosted D-5/D-6/D-7 pages identifies these fields and folios.
 The portable runtime ledger is still **CLAIM_ONLY**: it does not read a
 local PDF, authenticate its bytes, independently identify the edition,
 or attest physical hardware. The dedicated official-PDF Actions gate
-downloads from the NXP URL, checks the **exact SHA-256 pin** (to be set
-from a reviewed external run), verifies 265 physical pages and the
-three printed folios with PDF text extraction. Until that gate passes
-on an exact PR HEAD, the PDF-byte evidence is **INCONCLUSIVE**.
-Do not populate a claimed checksum from a URL or from unknown user files.
+downloads from the NXP URL and checks the reviewed **exact SHA-256 pin**:
+`02c2cb99738dd45a785798bba3e7dcc34bb0d54fb5fba42900e6ecb8356bf28a`.
+On the tested public GitHub runner (Actions
+[42233819507](https://github.com/bogkom/GhidrAssist/actions/runs/42233819507)),
+the pinned bytes passed the 265-page check and extracted-text assertions
+for physical folios 219/220/221. The runtime ledger publishes this
+expected publisher checksum as provenance metadata but **does not**
+authenticate any local/RAG-imported copy; do not silently substitute
+a different file or infer hardware state from PDF content.
+The final PR HEAD requires independent passing CI evidence.
 
 **CI acceptance:** independent Java21 bitfield/page parser/source-ledger
 and context-selection regressions; Java21 Overview; Ghidra 12.1.4
