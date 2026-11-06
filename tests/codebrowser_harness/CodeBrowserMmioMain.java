@@ -433,6 +433,11 @@ public final class CodeBrowserMmioMain {
                     "Real MC68332 Overview lacks twelve-select source summary");
                 require(ghidrassist.hardware.HardwareEvidenceCache.hasEvidence(first),
                     "Canonical report was not published for current Ghidra revision");
+                String rag=ghidrassist.hardware.HardwareEvidenceCache.enrich(
+                    first,"#hardware SIMCR","#hardware SIMCR");
+                require(rag.contains("<<<LOCAL_GHIDRA_HARDWARE_EVIDENCE>>>") &&
+                        rag.contains("SIMCR") && rag.contains("NOT an ECU hardware readback"),
+                    "RAG did not retrieve the same current-revision synthetic SIMCR evidence");
                 var page=tab.automationMmioRows("simcr",0,5);
                 require(page.get("total").getAsInt()==1 &&
                         page.getAsJsonArray("rows").size()==1 &&
