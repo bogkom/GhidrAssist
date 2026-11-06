@@ -414,6 +414,34 @@ public final class CodeBrowserMmioMain {
                 catch(Exception e){throw new RuntimeException(e);}
             },35);
             result.addProperty("hardware_analyze_gui",true);
+            // GA-07: the actual rendered Swing text, export/RAG report,
+            // and revision-aware evidence cache must describe one snapshot.
+            edt(()->{try {
+                String overview=((JTextArea)field(tab,"overview")).getText();
+                String full=((JTextArea)field(tab,"report")).getText();
+                String published=(String)field(tab,"latestMarkdown");
+                require(published.equals(
+                        ghidrassist.hardware.HardwareReportOverview.combine(
+                            overview,full)),
+                    "Displayed Overview/Full Evidence differ from export/RAG payload");
+                require(overview.contains("## 1. Initialization") &&
+                        overview.contains("## 2. Register write history") &&
+                        overview.contains("## 3. Chip Select map") &&
+                        overview.contains("Twelve-select Listing/XREF source coverage") &&
+                        overview.contains("| CSBOOT |") &&
+                        overview.contains("| CS10 |"),
+                    "Real MC68332 Overview lacks twelve-select source summary");
+                require(ghidrassist.hardware.HardwareEvidenceCache.hasEvidence(first),
+                    "Canonical report was not published for current Ghidra revision");
+                var page=tab.automationMmioRows("simcr",0,5);
+                require(page.get("total").getAsInt()==1 &&
+                        page.getAsJsonArray("rows").size()==1 &&
+                        page.getAsJsonArray("rows").get(0).getAsJsonObject()
+                            .get("pc").getAsString().equals("0x00000020"),
+                    "Automation MMIO row differs from the actual synthetic Listing");
+                result.addProperty("overview_full_export_rag_consistent",true);
+                result.addProperty("mmio_automation_gui_source_agreement",true);
+            }catch(Exception e){throw new RuntimeException(e);}});
             edt(()->{try{
                 ((JButton)field(tab,"exploreMmio")).doClick();
             }catch(Exception e){throw new RuntimeException(e);}});
@@ -426,7 +454,12 @@ public final class CodeBrowserMmioMain {
             require(filter!=null,"No real MMIO filter");
             edt(()->filter.setText("SIMCR"));
             require(table.getRowCount()==1,"SIMCR filter did not isolate fixture");
-            edt(()->table.setRowSelectionInterval(0,0));
+            edt(()->{
+                require(table.getRowSorter()!=null,
+                    "Real MMIO Explorer must support deterministic column sorting");
+                table.getRowSorter().toggleSortOrder(0);
+                table.setRowSelectionInterval(0,0);
+            });
             String column=table.getValueAt(0,0).toString();
             require(column.toLowerCase(Locale.ROOT).contains("20"),
                 "MMIO row PC does not reference synthetic instruction");
