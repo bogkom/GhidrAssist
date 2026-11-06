@@ -16,6 +16,12 @@ public final class ChipSelectTable {
             return "MC68332 chip-select ranges are not decoded in generic CPU32 mode; "
                 + "select a documented MCU profile to enable this table.\n";
         }
+        if (observed == null || observed.size() > 256 ||
+                observed.entrySet().stream().anyMatch(item ->
+                    item.getKey() == null || item.getValue() == null ||
+                    item.getValue() < 0 || item.getValue() > 0xffff))
+            throw new IllegalArgumentException(
+                "Invalid full-word chip-select evidence");
         ChipSelectModel.Decoder decoder = new ChipSelectModel.Decoder(
             "MC68332", "MC68332 manual; function-local conditional candidates");
         StringBuilder md = new StringBuilder();
