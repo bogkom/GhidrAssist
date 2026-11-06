@@ -35,6 +35,10 @@ public final class HardwareVectorResetCorrelation {
                     pointer > 0xffffffffL || (pointer & 1) != 0 ||
                     functionEntry < 0 || functionEntry > 0xffffffffL ||
                     (functionEntry & 1) != 0 ||
+                    // An interior pointer can only be inside a function
+                    // whose entry precedes that pointer; a later entry is
+                    // not evidence of a containing function.
+                    (!exactEntry && functionEntry >= pointer) ||
                     exactEntry != (pointer == functionEntry))
                 throw new IllegalArgumentException("Invalid recognized vector target");
         }
