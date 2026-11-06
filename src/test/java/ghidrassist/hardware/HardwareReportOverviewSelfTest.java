@@ -64,6 +64,26 @@ public final class HardwareReportOverviewSelfTest {
             cpu.contains("No MC68332 CS ranges are asserted") &&
             cpu.contains("focused initialization register sites: 0"),
             "generic CPU32 does not inherit MCU-specific map");
+        String details="## Full evidence\n\nStatic candidate observations ONLY.\n";
+        String canonical=HardwareReportOverview.combine(selected,details);
+        require(canonical.startsWith(selected+"\n\n---\n\n") &&
+                canonical.endsWith(details) &&
+                canonical.contains("Twelve-select Listing/XREF source coverage"),
+            "export/RAG canonical text must contain exact displayed Overview and details");
+        for(String incomplete:new String[]{
+                selected.replace("## 3. Chip Select map","## 3. Missing"),
+                "not a report", ""
+        }){
+            boolean refused=false;
+            try {HardwareReportOverview.combine(incomplete,details);}
+            catch(IllegalArgumentException expected){refused=true;}
+            require(refused,"incomplete GUI overview must not be published to RAG");
+        }
+        boolean noDetails=false;
+        try {HardwareReportOverview.combine(selected," ");}
+        catch(IllegalArgumentException expected){noDetails=true;}
+        require(noDetails,"missing Full evidence must block export/RAG report");
+
         var merged=HardwareStartupEvidenceMerge.reconcile(List.of(
             new HardwareStartupEvidenceMerge.Observation(
                 0x2bc0,0x2bca,0xfffa00,"SIMCR",
