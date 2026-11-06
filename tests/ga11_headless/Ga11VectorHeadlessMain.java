@@ -1093,6 +1093,14 @@ public final class Ga11VectorHeadlessMain {
                         source.contains("unknown STORE alias: "),
                         "Two-hop candidate was promoted to actual MM "+
                         "execution or unconditional Apply evidence");
+                    check(source.contains(
+                        "### MC68332 register-byte coverage for two-hop CALL evidence") &&
+                        source.contains("SIM.SIMCR / 0xFFFA00 / 16") &&
+                        source.contains("SIM.CSBAR7 / 0xFFFA68 / 16") &&
+                        source.contains("EXACT_BYTE_RANGE") &&
+                        source.contains("Source-page labels are UNVERIFIED claims"),
+                        "Real Ghidra two-hop MMIO sources lost selected-profile "+
+                        "byte widths or promoted unverified PDF evidence");
                     check(report.rawCfgMmioSites.stream().noneMatch(s->
                         s.pc()==0x700L && s.address()==0xfffa00L),
                         "Nested callee write leaked into global Review/Apply "+
@@ -1116,6 +1124,7 @@ public final class Ga11VectorHeadlessMain {
                             "0x00000642 |") &&
                         full.getModificationNumber()==revision,
                         "Generic CPU32 inherited MC68332 two-hop MMIO");
+                    result.addProperty("twohop_register_width_metadata_readonly",true);
                     result.addProperty("twohop_real_nested_jsr_decoded",true);
                     result.addProperty("twohop_independent_a0_d0",true);
                     result.addProperty("twohop_unknown_alias_not_promoted",true);
