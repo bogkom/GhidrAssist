@@ -23,6 +23,10 @@ public final class HardwareIndirectMmMay {
                       HardwareInterproceduralMmEffects.Summary source) {}
     public record Report(int totalWitnesses,int omittedWitnesses,List<Row> rows) {
         public Report {
+            if(rows==null || rows.stream().anyMatch(row ->
+                    row==null || row.witness()==null || row.source()==null ||
+                    row.source().visited()<0))
+                throw new IllegalArgumentException("Invalid MAY source row");
             rows=List.copyOf(rows);
             if(totalWitnesses<0 || omittedWitnesses<0 ||
                     totalWitnesses!=rows.size()+omittedWitnesses)
