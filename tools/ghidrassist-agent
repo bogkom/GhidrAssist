@@ -112,10 +112,14 @@ def capture_agentic_checkpoint(session, output, page_size=100):
 def load_verified_agentic_payload(source):
     """Read and validate one bounded offline snapshot; never contacts Ghidra."""
     src=Path(source).expanduser()
-    if src.stat().st_size>8*1024*1024:
+    # Bound the actual read, not only a prior stat(): the file may grow
+    # between metadata inspection and open. Never consume an unbounded file.
+    with src.open("rb") as handle:
+        raw=handle.read(8*1024*1024+1)
+    if len(raw)>8*1024*1024:
         raise ValueError("Oversized local Agentic checkpoint")
-    # Read once to avoid mixing two different versions of a mutable file.
-    report=json.loads(src.read_bytes().decode("utf-8"))
+    # One captured buffer prevents mixing different file generations.
+    report=json.loads(raw.decode("utf-8"))
     if not isinstance(report,dict):
         raise ValueError("Invalid Agentic evidence checkpoint envelope")
     payload=report["payload"]
