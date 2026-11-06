@@ -622,6 +622,15 @@ It remains false when evidence was pruned or original tool output was
 truncated. It is *not* a claim of dynamic firmware execution or a
 complete reverse engineering proof.
 
+Switching to a different active CodeBrowser Program invalidates the
+old Program's published Agentic pages immediately. Returning to a
+previously opened Program does not revive the prior run: start a new
+investigation to publish new evidence. This protects against linking
+post-switch tool results to a pre-switch source while the real ReAct
+background task is still executing. The switch invalidates the read-only
+bridge, not the LLM task itself. The protection is also checked in
+an isolated real CodeBrowser two-Program Xvfb regression.
+
 CLI:
 
 ```sh
