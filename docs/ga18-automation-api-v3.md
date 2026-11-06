@@ -595,3 +595,61 @@ The RPC operations do not write Ghidra database content, enable
 `FULL_CONTROL`, or establish physical MMIO/IRQ mapping. Native Ghidra
 12.1.4 CI verifies packaged production classes on synthetic CPU32
 functions, pagination and stale-guard failures.
+
+## GA-12/15 — ReAct evidence read-only pages and explicit local checkpoint (2026-11-06)
+
+`agentic.findings.page` exposes **only the real active/last completed
+ReActOrchestrator FindingsCache** attached to the **same current Ghidra
+Program object**. It never starts a model, executes a tool, modifies
+Ghidra or accepts a client-provided finding. The authenticated loopback
+server remains disabled unless Automation API is explicitly enabled.
+No user credentials, original firmware or production project are
+required by its deterministic regression tests.
+
+JSON-RPC params: `offset` (0+), `limit` (1..100, default 25),
+optional `expected_run`, `expected_findings_revision` and
+`expected_program_revision`. A nonzero offset must bind to the first
+page's `run` and `findings.revision`; clients should also bind
+`expected_program_revision`. Invalid/stale run ID, active Program,
+Program modification revision or import SHA causes a refusal, not a
+partial, silently substituted page. Pages include an opaque per-analysis
+run ID, Program revision, import SHA metadata, analysis state
+(RUNNING/SUCCESS/CANCELLED/MAX_ITERATIONS/MAX_TOOLS/ERROR), immutable
+retained finding rows, accepted/evicted counters, source-incomplete,
+`hasMore` and `complete`. Completion is **false** during RUNNING or
+cancelled/failed/budget-limited analysis even when all retained rows fit.
+It remains false when evidence was pruned or original tool output was
+truncated. It is *not* a claim of dynamic firmware execution or a
+complete reverse engineering proof.
+
+CLI:
+
+```sh
+ghidrassist-agent agentic-findings --offset 0 --limit 25
+ghidrassist-agent agentic-findings --offset 25 --limit 25 \
+  --expected-run '<run from first page>' \
+  --expected-findings-revision 3 --expected-revision 7
+
+# Save a bounded, immutable, read-only evidence handoff locally;
+# this file must not already exist. Never upload private evidence.
+ghidrassist-agent agentic-checkpoint --limit 100 \
+  --output /path/to/isolated/private/agentic-evidence.json
+```
+
+The checkpoint command fetches **every retained page** with strict
+run/Program/evidence-revision and count checks, refuses races/oversized
+responses, emits a canonical SHA-256 digest of the bounded JSON payload,
+and creates a local file atomically with mode 0600. It does not overwrite
+existing files, upload data, create an AI task, re-run the model or write
+anything into the Ghidra Program. The digest detects accidental local
+file corruption, **not** malicious modification or authenticated
+authorship. Omitted/pruned source is identified and never reconstructed.
+A checkpoint is a durable **read-only evidence handoff**, not a
+serializable/resumable model context or authority to Review/Apply/Undo.
+
+Regressions: pure Java21 per-run/Program identity + stale refusal;
+Python3 standard-library local SHA-256, atomic no-overwrite and
+multi-page stitching; full Ghidra 12.1.4 PUBLIC/Java25 extension build;
+actual isolated synthetic Ghidra Program object and its unchanged
+revision. The synthetic bridge test does not perform model calls and
+does not claim to test a real user investigation.
