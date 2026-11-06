@@ -28,9 +28,9 @@ jobs:
           test "$(head -c 5 "$pdf")" = '%PDF-'
           actual="$(sha256sum "$pdf" | cut -d' ' -f1)"
           echo "SOURCE_PDF_SHA256=$actual"
-          # Initially UNKNOWN: pin the independently observed SHA-256 in
+          # Official SHA-256 observed on Actions run 42233497907; pin reviewed bytes in
           # a reviewed follow-up commit. NEVER auto-accept a changed PDF.
-          EXPECTED_SHA256="PENDING_MANUAL_VERIFICATION"
+          EXPECTED_SHA256="02c2cb99738dd45a785798bba3e7dcc34bb0d54fb5fba42900e6ecb8356bf28a"
           if test "$actual" != "$EXPECTED_SHA256"; then
             echo "PDF digest requires an explicitly reviewed pin" >&2
             exit 1
