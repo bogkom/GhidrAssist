@@ -18,7 +18,13 @@ A new independent **read-only** `HardwareIndirectMayEffects`
 joins *only the already collected* bounded witnesses with the
 existing static `HardwareCallEffects` inventory for their target.
 The section states whether a target's bounded static CALL subtree
-contains **any P-code memory STORE** or a candidate VBR write.
+contains a **modeled Listing/P-code memory write** or a candidate
+VBR write. Ghidra 12.1.4 can represent direct absolute-address
+`MOVE.W #imm,(addr).L` as a P-code `COPY` to a memory varnode
+rather than a `PcodeOp.STORE`; the production flow service now
+counts its existing `HardwareDataflow.STORE_DIRECT/INDIRECT`
+translation too. Otherwise the source graph could falsely report
+no memory write for a real decoded direct SIMCR store.
 The result is **MAY** for the witnessed source (not for runtime),
 and a memory STORE is **not necessarily MMIO**.
 
