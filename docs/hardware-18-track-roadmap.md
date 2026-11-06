@@ -31,7 +31,11 @@ licznikami utraty źródeł i jednoznacznym statusem.
 Istniejących plików nie nadpisuje, nie wykonuje uploadu
 i nie wznawia modelu. To trwały **handoff dowodów**,
 nie pełny checkpoint LLM, sesji MCP ani uprawnienie do
-odtworzenia narzędzi bez nowego Review. Dalsze zadania:
+odtworzenia narzędzi bez nowego Review. Zapisane dowody
+można przeglądać offline poleceniem
+`agentic-read --input PLIK --offset N --limit 1..100` po
+sprawdzeniu SHA-256, bez działającego API i bez ponownej
+analizy; status kompletności dotyczy tylko zachowanych źródeł. Dalsze zadania:
 sterowana i bezpieczna kontynuacja pełnych sesji modelu,
 przekazywanie wszystkich długo stronicowanych narzędzi
 oraz weryfikacja kompletności planów poza cache ReAct.
