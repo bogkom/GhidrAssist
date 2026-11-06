@@ -2936,7 +2936,7 @@ public final class Ga11VectorHeadlessMain {
                         relocated.contains("ODD_POINTER") &&
                         relocated.contains("OUTSIDE_SELECTED_MCU24_RANGE") &&
                         relocated.contains("outside explicitly selected MCU24 width: 1") &&
-                        relocated.contains(HardwareBitfieldSourceLedger.MC68332_PUBLIC_PDF_SHA256) &&
+                        md.contains(HardwareBitfieldSourceLedger.MC68332_PUBLIC_PDF_SHA256) &&
                         relocated.contains("pointers inside recognized "+
                             "function bodies (NOT entries): 1"),
                         "Actual relocated table bytes or function entry "+
