@@ -33,8 +33,11 @@ public final class HardwareMmioExplorer {
 
     /** The same deterministic filter backs the Swing table and Automation API. */
     public static List<Row> filter(List<Row> rows, String query) {
-        if (rows == null || rows.contains(null))
+        if (rows == null)
             throw new IllegalArgumentException("Invalid MMIO row inventory");
+        for (Row row : rows)
+            if (row == null)
+                throw new IllegalArgumentException("Null MMIO evidence row");
         if (query == null || query.isBlank()) return List.copyOf(rows);
         List<Row> matching = new ArrayList<>();
         for (Row row : rows)
@@ -46,9 +49,12 @@ public final class HardwareMmioExplorer {
     public record Page(int total, int offset, int limit, List<Row> rows) {
         public Page {
             if (total < 0 || offset < 0 || limit < 1 || limit > 200 ||
-                    rows == null || rows.contains(null) ||
+                    rows == null ||
                     rows.size() > limit || rows.size() > total)
                 throw new IllegalArgumentException("Invalid MMIO page");
+            for (Row row : rows)
+                if (row == null)
+                    throw new IllegalArgumentException("Null MMIO page row");
             rows = List.copyOf(rows);
         }
     }
