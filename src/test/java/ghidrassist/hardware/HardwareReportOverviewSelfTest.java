@@ -29,6 +29,18 @@ public final class HardwareReportOverviewSelfTest {
             selected.contains("CSOR sites: 1") &&
             selected.contains("Other/omitted register references (including CSPAR): 2"),
             "focused site counts and complete inventory count are separate");
+        // GA-04/07: twelve distinct source-coverage rows, not a
+        // function-spanning or MM-spanning synthetic configuration.
+        require(selected.lines().filter(line -> line.matches(
+                "\\| CS(?:BOOT|[0-9]+) \\|.*")).count()==12,
+            "three-part overview must show exactly twelve CS source rows");
+        require(selected.contains("| CS0 | 1/1 | 0/1 | 1/1 |") &&
+                selected.contains("| CS6 | 0/0 | 0/0 | 0/0 |"),
+            "known and unknown literal counts remain select-local");
+        require(selected.contains("CSPAR0/1 sources are shared") &&
+                selected.contains("physical CS remains UNKNOWN") &&
+                selected.contains("NOT a decoded map"),
+            "source counts cannot promote values into a physical bus map");
         require(selected.contains("direct word values: 2") &&
             selected.contains("writes with UNKNOWN literal: 2") &&
             selected.contains("stores in bounded CFG pass: at least 9"),
@@ -39,6 +51,15 @@ public final class HardwareReportOverviewSelfTest {
             selected.contains("NOT a single proven active CS map"),
             "status must not assert a dynamic execution history");
         String cpu=HardwareReportOverview.render(false,0,0,0,0,false,List.of());
+        require(!cpu.contains("Twelve-select Listing/XREF source coverage") &&
+                !cpu.contains("| CS0 |"),
+            "generic CPU32 never displays MC68332-specific CS evidence");
+        var noSource=HardwareReportOverview.render(true,0,0,0,0,false,
+            List.of());
+        require(noSource.lines().filter(line -> line.matches(
+                "\\| CS(?:BOOT|[0-9]+) \\|.*")).count()==12 &&
+                noSource.contains("0/0 means no write source was observed"),
+            "empty source inventory retains all twelve honest unknown selects");
         require(cpu.contains("CPU32 — address survey ONLY") &&
             cpu.contains("No MC68332 CS ranges are asserted") &&
             cpu.contains("focused initialization register sites: 0"),

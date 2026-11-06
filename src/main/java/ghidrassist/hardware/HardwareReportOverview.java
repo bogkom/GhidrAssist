@@ -66,6 +66,48 @@ public final class HardwareReportOverview {
                 if(site.literalKnown())known++;else unknown++;
             }
         }
+        // GA-04/07: exactly twelve *source-coverage* rows from the
+        // SAME Listing/XREF input as the three-part summary and full report.
+        // These independent counts must never combine CSBAR/CSOR/CSPAR
+        // literals into a fabricated active register configuration.
+        String csCoverage="";
+        if(userSelectedMc68332) {
+            int[][] writes=new int[12][3];
+            int[][] knownWords=new int[12][3];
+            for(Site site:input) {
+                if(!site.writeCandidate())continue;
+                for(int n=0;n<12;n++) {
+                    String suffix=n==0?"BT":Integer.toString(n-1);
+                    String pin=n<=6?"CSPAR0":"CSPAR1";
+                    String[] names={"CSBAR"+suffix,"CSOR"+suffix,pin};
+                    for(int kind=0;kind<3;kind++) {
+                        if(!site.register().equals(names[kind]))continue;
+                        writes[n][kind]++;
+                        if(site.literalKnown())knownWords[n][kind]++;
+                    }
+                }
+            }
+            StringBuilder coverage=new StringBuilder(
+                "\n**Twelve-select Listing/XREF source coverage (GA-04/07; NOT a decoded map)**\n\n")
+                .append("| Chip Select | CSBAR known/WRITE sites | CSOR known/WRITE sites | Shared CSPAR known/WRITE sites |\n")
+                .append("|---|---|---|---|\n");
+            for(int n=0;n<12;n++) {
+                coverage.append("| ").append(n==0?"CSBOOT":"CS"+(n-1));
+                for(int kind=0;kind<3;kind++)
+                    coverage.append(" | ").append(knownWords[n][kind])
+                        .append("/").append(writes[n][kind]);
+                coverage.append(" |\n");
+            }
+            coverage.append("\n0/0 means no write source was observed in this ")
+                .append("Listing/XREF inventory, NOT that the register is absent ")
+                .append("or the select inactive. CSPAR0/1 sources are shared ")
+                .append("by multiple rows, never independent per-select writes. ")
+                .append("No CSBAR/CSOR/CSPAR literals are combined across ")
+                .append("functions, MM windows or branch alternatives. ")
+                .append("Consult function-local conditional snapshots in ")
+                .append("Full evidence; physical CS remains UNKNOWN.\n");
+            csCoverage=coverage.toString();
+        }
         return "# Hardware Analyze — three-part overview (READ ONLY)\n\n" +
             "- Profile: **" + (userSelectedMc68332?
                 "MC68332 — user-selected HYPOTHESIS":"CPU32 — address survey ONLY") +
@@ -104,6 +146,7 @@ public final class HardwareReportOverview {
                 "CSBOOT/CS0–CS10 rows in **Full evidence**; rows across " +
                 "functions/branches are NOT a single proven active CS map.\n" :
                 "No MC68332 CS ranges are asserted in generic CPU32 mode.\n")+
+            csCoverage +
             "- Address windows do not establish chip presence, bus cycles " +
             "or external wiring. Full source evidence is preserved in the " +
             "details, Markdown export and RAG context.\n";

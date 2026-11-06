@@ -229,7 +229,9 @@ public final class HardwareInventoryService {
         for(Map.Entry<String,List<Site>> group:grouped.entrySet()){
             monitor.checkCancelled();
             if(group.getValue().stream().noneMatch(site->
-                    HardwareReportScope.isInitializationRegister(site.register)))
+                    HardwareReportScope.isInitializationRegister(site.register) ||
+                    "CSPAR0".equals(site.register) ||
+                    "CSPAR1".equals(site.register)))
                 continue;
             md.append("### ").append(group.getKey()).append("\n\n");
             // Different MM windows never form one combined state.
@@ -244,9 +246,14 @@ public final class HardwareInventoryService {
                 // No source-PC last-write-wins: any conflicting or unknown
                 // write excludes the register from a single-value sketch.
                 Map<String,Integer> values=consensus.singleLiteralCandidates();
-                boolean any=false;
+                boolean any=false,csSource=false;
                 for(Site site:group.getValue()){
                     if((site.registerAddress<0x800000L?0:1)!=mm)continue;
+                    // Recognize even CSPAR-only or conflicting CS sources.
+                    // The table remains UNKNOWN where BAR/OR are missing.
+                    csSource |= site.register.matches("CS(?:BAR|OR)(?:BT|10|[0-9])") ||
+                        "CSPAR0".equals(site.register) ||
+                        "CSPAR1".equals(site.register);
                     // CSPAR and other register writes update internal context,
                     // but only key initialization registers appear as rows.
                     if(!HardwareReportScope.isInitializationRegister(site.register))
@@ -270,13 +277,16 @@ public final class HardwareInventoryService {
                     }
                     md.append("\n");
                 }
-                if(!any)continue;
+                if(!any && !csSource)continue;
                 md.append("\n**MM=").append(mm)
                     .append(" conditional candidate snapshot (NOT active state)**\n\n");
                 md.append("- ").append(consensus.description()).append(". ")
                     .append("Alternative/unknown sites are excluded from any ")
                     .append("single-value CS table.\n\n");
-                if(concreteDevice && !values.isEmpty()){
+                // Emit all 12 UNKNOWN/conditional rows even when every local
+                // literal was excluded by conflicts, aliases or unknown writes.
+                // Absence of a single-value snapshot is not absence of CS.
+                if(concreteDevice && csSource){
                     md.append("**Per-select Chip Select table (conditional; function-local code sites)**\n\n");
                     md.append(ChipSelectTable.markdown(values, true));
                 } else if(!concreteDevice) {
