@@ -78,9 +78,10 @@ public final class AgenticEvidenceRegistrySelfTest {
             "explicit Program invalidation removes prior evidence");
         denies(()->registry.begin(null,0,"a",newer),
             "null Program must not register evidence");
+        registry.begin(programA,17L,"a".repeat(64),newer);
         denies(()->registry.page(programA,17L,"a".repeat(64),
             0,FindingsCache.MAX_PAGE_SIZE+1,null,null),
-            "invalid oversized pages fail closed after new begin"); // no cache should already reject
+            "oversized bounded pages must be rejected");
         System.out.println("AGENTIC REGISTRY PASS assertions="+assertions);
     }
 }
