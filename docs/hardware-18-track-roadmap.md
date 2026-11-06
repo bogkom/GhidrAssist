@@ -3,6 +3,50 @@
 Status: **IN PROGRESS — integrated baseline 2026-11-06 (PR #198)**. Scope source: user-approved 2026-10-28 requirements (A–H, additional features 13.1–13.7, PDF/RAG, testing and Codex Supervisor integration).
 
 
+## GA-12 + GA-15 — odrzucanie niepełnych checkpointów i stronicowanie Agentic (2026-11-06)
+
+**Baza:** PR #201 scalony do chronionego `master`
+`585b2efe450364b0e73fa17aa1ec8119ab102ecb`,
+po 57/57 Actions SUCCESS na SHA
+`1e9fc9a7127921043dd08fcd2bd1cfd8e0a15a4d`.
+GA-06/11 pozostają PARTIAL: analiza VBR jest tylko statyczna.
+
+**GA-12 — PARTIAL:** odczytowy, opt-in zapis raportu CFG jest
+odtwarzalny tylko po dopasowaniu pełnej tożsamości programu
+i po walidacji `HardwareDurableCfgReport.eligibleForCompletedRestore`.
+Poprawny format/suma kontrolna NIE wystarcza: `limited`,
+`!cfgReviewComplete`, `cfgOmitted>0`, `pointersOmitted>0`
+albo przekroczony limit tekstu uniemożliwiają użycie
+zapisanej migawki jako kompletnej. Zarówno ścieżka zapisu,
+jak i przywrócenia egzekwuje tę samą politykę. Dekodowanie
+historycznej niepełnej migawki nadal jest możliwe w testach;
+nie daje uprawnienia do jej uznania za ukończoną analizę.
+Dalsze prace: trwałość częściowych faz i pełnej sesji.
+
+**GA-15 — PARTIAL:** `FindingsCache.page(offset,limit)`
+udostępnia deterministyczne strony (maks. 100) zachowanych
+źródłowych findings, z kopiami tylko-do-odczytu, wersją
+migawki, pełnym licznikiem przyjętych i odrzuconych
+przez budżet wyników oraz flagami `sourceIncomplete`,
+`hasMore`, `complete`. `page(offset,limit,revision)`
+odmawia łączenia stron z różnych wersji analizy.
+`complete=true` jest dopuszczalne tylko gdy nie ma
+pominiętych wyników, skróconego źródła ani ukrytej
+części listy. Zachowana jest dotychczasowa kolejność
+wg trafności i niezmieniona polityka redukcji kontekstu.
+Dalsze prace: kontrolowane paginowanie wszystkich
+złożonych narzędzi Agentic i trwałość sesji modelu.
+
+**Wymagany odbiór:** Java21 regresja dekodowalnych lecz
+nieuprawnionych snapshotów, granic paginacji, odrzucenia
+starego tokenu wersji oraz brak fałszywego kompletnego
+dowodu po evikcji; pełny Ghidra 12.1.4 PUBLIC Java25 build;
+prawdziwa syntetyczna Ghidra headless (oddzielne JVM)
+z zapisem i bezpiecznym przywróceniem ukończonego etapu
+CFG. Wyniki GitHub Actions przypiąć do **dokładnego SHA**,
+zamiast nadpisywać historyczne checkpointy. Tylko kopie
+syntetyczne; bez Wyse/Precision i zatrzymanego Supervisora.
+
 ## GA-06 + GA-11 — jawna tożsamość MC68332 przy relokowanych wektorach (2026-11-06)
 
 **Baza:** PR #200 scalony do `master`
