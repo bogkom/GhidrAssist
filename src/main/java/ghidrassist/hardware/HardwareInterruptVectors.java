@@ -17,7 +17,8 @@ public final class HardwareInterruptVectors {
 
     public enum Classification {
         UNREADABLE, NULL_OR_ERASED, ODD_POINTER,
-        UNMAPPED_TARGET, MAPPED_TARGET, INTERIOR_FUNCTION_POINTER_CANDIDATE,
+        UNMAPPED_TARGET, OUTSIDE_SELECTED_MCU24_RANGE, MAPPED_TARGET,
+        INTERIOR_FUNCTION_POINTER_CANDIDATE,
         RECOGNIZED_FUNCTION_CANDIDATE
     }
 
@@ -28,7 +29,15 @@ public final class HardwareInterruptVectors {
      */
     public record Observation(int vectorNumber, Long pointer,
                               boolean mappedTarget, String containingFunction,
-                              boolean exactFunctionEntry) {}
+                              boolean exactFunctionEntry,
+                              boolean outsideSelectedMcu24Range) {
+        /** Existing image-zero/generic CPU32 callers do not assume an MCU. */
+        public Observation(int vectorNumber,Long pointer,boolean mappedTarget,
+                String containingFunction,boolean exactFunctionEntry) {
+            this(vectorNumber,pointer,mappedTarget,containingFunction,
+                exactFunctionEntry,false);
+        }
+    }
 
     public record Entry(int vectorNumber, long slotAddress, Long pointer,
                         Classification classification, String function) {
@@ -43,7 +52,8 @@ public final class HardwareInterruptVectors {
 
     public record Summary(long tableAddress, int sampledSlots, int readable,
                           int plausibleMapped, int recognizedFunctions,
-                          int interiorFunctionPointers, int unmapped, int odd, int unreadable, int absent,
+                          int interiorFunctionPointers, int unmapped, int outsideMcu24,
+                          int odd, int unreadable, int absent,
                           boolean truncated, List<Entry> displayed) {
         public Summary { displayed=List.copyOf(displayed); }
 
@@ -63,6 +73,8 @@ public final class HardwareInterruptVectors {
              .append("; pointers inside recognized function bodies (NOT entries): ")
              .append(interiorFunctionPointers)
              .append("; unmapped: ").append(unmapped)
+             .append("; outside explicitly selected MCU24 width: ")
+             .append(outsideMcu24)
              .append("; odd: ").append(odd)
              .append("; null/erased: ").append(absent)
              .append("; unreadable: ").append(unreadable).append(".\n\n");
@@ -112,6 +124,10 @@ public final class HardwareInterruptVectors {
                     !seen.add(o.vectorNumber()) ||
                     (o.pointer()!=null &&
                       (o.pointer()<0 || o.pointer()>0xffffffffL)) ||
+                    (o.outsideSelectedMcu24Range() &&
+                     (o.pointer()==null || o.pointer()<=0xffffffL ||
+                      o.mappedTarget() || o.containingFunction()!=null ||
+                      o.exactFunctionEntry())) ||
                     (o.exactFunctionEntry() &&
                         (!o.mappedTarget() || o.containingFunction()==null ||
                          o.containingFunction().isBlank() || o.pointer()==null ||
@@ -120,7 +136,7 @@ public final class HardwareInterruptVectors {
                 throw new IllegalArgumentException("Invalid or duplicate vector entry");
         }
         sorted.sort(Comparator.comparingInt(Observation::vectorNumber));
-        int readable=0,mapped=0,functions=0,interior=0,unmapped=0,odd=0,unreadable=0,absent=0;
+        int readable=0,mapped=0,functions=0,interior=0,unmapped=0,outside24=0,odd=0,unreadable=0,absent=0;
         List<Entry> displayed=new ArrayList<>();
         int wanted=0;
         for(Observation o:sorted) {
@@ -137,6 +153,9 @@ public final class HardwareInterruptVectors {
                 if(target==0 || target==0xffffffffL) {
                     state=Classification.NULL_OR_ERASED;
                     absent++;
+                } else if(o.outsideSelectedMcu24Range()) {
+                    state=Classification.OUTSIDE_SELECTED_MCU24_RANGE;
+                    outside24++;
                 } else if((target&1)!=0) {
                     state=Classification.ODD_POINTER;
                     odd++;
@@ -165,7 +184,8 @@ public final class HardwareInterruptVectors {
                         o.containingFunction()));
         }
         return new Summary(tableAddress,sorted.size(),readable,mapped,functions,
-            interior,unmapped,odd,unreadable,absent,wanted>displayed.size(),displayed);
+            interior,unmapped,outside24,odd,unreadable,absent,
+            wanted>displayed.size(),displayed);
     }
 
     private static String hex(long number) {
