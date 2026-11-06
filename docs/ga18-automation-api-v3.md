@@ -634,6 +634,11 @@ ghidrassist-agent agentic-findings --offset 25 --limit 25 \
 # this file must not already exist. Never upload private evidence.
 ghidrassist-agent agentic-checkpoint --limit 100 \
   --output /path/to/isolated/private/agentic-evidence.json
+
+# Offline verification after reopening a terminal or restarting Ghidra;
+# checks corruption only; does NOT restore a model or tool session.
+ghidrassist-agent agentic-verify \\
+  --input /path/to/isolated/private/agentic-evidence.json
 ```
 
 The checkpoint command fetches **every retained page** with strict
