@@ -15,6 +15,10 @@ public final class HardwareBitfieldSourceLedger {
     private HardwareBitfieldSourceLedger() {}
 
     public static final String MC68332_EDITION_CLAIM="MC68332UM — Motorola 1995";
+    /** Public publisher PDF digest pinned and verified by GitHub Actions.
+     *  NEVER implicitly proves a user's local/RAG PDF is that same copy. */
+    public static final String MC68332_PUBLIC_PDF_SHA256=
+        "02c2cb99738dd45a785798bba3e7dcc34bb0d54fb5fba42900e6ecb8356bf28a";
 
     public record Entry(String register, String field, long mask,
                         int firstPage, int lastPage, String label) {
@@ -46,7 +50,11 @@ public final class HardwareBitfieldSourceLedger {
                 .append("- Numeric physical PDF-page claim records: ")
                 .append(entries.size()).append("; missing/ambiguous page claims: ")
                 .append(excludedFields).append(".\n")
-                .append("- No PDF file bytes or SHA-256 authenticated here; ")
+                .append("- Publisher-hosted PDF SHA-256 pin checked by CI: ")
+                .append("MC68332".equals(device)?
+                    MC68332_PUBLIC_PDF_SHA256:"UNKNOWN")
+                .append("; not checked against any local/RAG PDF copy.\n")
+                .append("- No locally supplied PDF bytes or SHA-256 authenticated here; ")
                 .append("no content extraction, verified edition, runtime ")
                 .append("state or reset-value proof. These are metadata ")
                 .append("candidates only.\n\n");
