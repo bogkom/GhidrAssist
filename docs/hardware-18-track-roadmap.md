@@ -3,6 +3,39 @@
 Status: **IN PROGRESS — integrated baseline 2026-11-06 (PR #192)**. Scope source: user-approved 2026-10-28 requirements (A–H, additional features 13.1–13.7, PDF/RAG, testing and Codex Supervisor integration).
 
 
+## GA-04 / GA-07 — pakiet odbiorowy: kompletna tabela źródłowa CS (2026-11-06)
+
+**GA-04 — zakres odbiorowy DONE po zaliczeniu pełnego CI na HEAD pakietu:** dla
+jawnie wybranego MC68332 raport przedstawia dwanaście odrębnych pozycji
+CSBOOT i CS0–CS10; tabela warunkowa pokazuje zakres START/END/SIZE lub
+`UNKNOWN`, niezależne CSBAR/CSOR i współdzielone CSPAR0/1 oraz stan
+kwalifikacji wyłącznie dla lokalnych dowodów funkcji i okna MM.
+Sprzeczne literały CSBAR, zapisy o nieznanej wartości i same CSPAR
+nie mogą tworzyć okien; mimo to obecność źródeł CS zachowuje dwanaście
+wierszy `UNKNOWN`. Wszystkie słowa wejściowe muszą być pełnymi wartościami
+16-bitowymi (0..0xFFFF), bez cichego maskowania. Dla CPU32 bez jawnego
+modelu MC68332 nie ma dekodowania tych okien. Brak dowodu rzeczywistego
+wykonania, MM latch, fizycznej mapy, pinu ani uprawnień Apply/Undo
+nie jest błędem zakresu: nie należą do statycznego kryterium GA-04.
+
+**GA-07 — nadal PARTIAL:** trójczęściowy Overview zachowuje podział
+inicjalizacja / historia rejestrów / Chip Select i dodatkowo prezentuje
+dwanaście wierszy wyłącznie **liczby źródeł zapisów** CSBAR, CSOR oraz
+współdzielonych CSPAR; wynik 0/0 oznacza brak obserwacji w Listing/XREF,
+nie nieobecność układu. Zestawienie nie łączy wartości z różnych funkcji,
+gałęzi i MM; szczegółowe raporty, eksport Markdown i RAG otrzymują
+tę samą parę `overviewMarkdown + detailsMarkdown` bieżącej rewizji.
+Przed formalnym DONE GA-07 nadal wymagane są odrębne testy spójności
+rzeczywistego GUI, eksportu i RAG w zakresie pełnych dowodów.
+
+**Dowody do odbioru:** `ChipSelectTableSelfTest` (12 wierszy,
+CSBAR/CSOR/CSPAR, zakresy, brak danych, konflikt, niepoprawne słowa),
+`HardwareReportOverviewSelfTest` (12 wierszy źródeł, brak dziedziczenia
+MC68332 przez CPU32), wspólne GitHub Actions Java21, pełny build
+Ghidry 12.1.4 PUBLIC / Java25 i rzeczywiste syntetyczne testy Ghidry.
+Dokładny HEAD, statusy CI oraz merge SHA muszą zostać zapisane w PR
+po wynikach. Brak lokalnych testów Wyse/Precision i starego Supervisora.
+
 ## Obowiązujący checkpoint — 2026-11-06 (GA-02/03/11 CALL target validation)
 
 **Chroniony `master`:** [`e3c01d8af52509118d27de6588c4607d220122ba`](https://github.com/bogkom/GhidrAssist/commit/e3c01d8af52509118d27de6588c4607d220122ba), po scaleniu [PR #194](https://github.com/bogkom/GhidrAssist/pull/194). Poprzednie checkpointy poniżej są historyczne.
