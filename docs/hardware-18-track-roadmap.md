@@ -1,7 +1,66 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
-Status: **IN PROGRESS — integrated baseline 2026-11-05 (PR #170)**. Scope source: user-approved 2026-10-28 requirements (A–H, additional features 13.1–13.7, PDF/RAG, testing and Codex Supervisor integration).
+Status: **IN PROGRESS — integrated baseline 2026-11-06 (PR #178)**. Scope source: user-approved 2026-10-28 requirements (A–H, additional features 13.1–13.7, PDF/RAG, testing and Codex Supervisor integration).
 
+
+## Obowiązujący checkpoint — 2026-11-06 (GitHub)
+
+**Chroniony `master`:**
+[`70a9deeceb029379b21b7be7244051959568f81d`](https://github.com/bogkom/GhidrAssist/commit/70a9deeceb029379b21b7be7244051959568f81d),
+po standardowym scaleniu [PR #178](https://github.com/bogkom/GhidrAssist/pull/178).
+Poprzednie checkpointy i kandydaci poniżej są **historią**, nie aktualnym
+stanem otwartych PR-ów. Nie nadpisywano ich dowodów ani SHA.
+
+| Pakiet | Dokładny HEAD PR | Actions na HEAD PR | Merge SHA `master` | Actions na merge SHA |
+|---|---|---|---|---|
+| [#177](https://github.com/bogkom/GhidrAssist/pull/177) — GA-02/03: 8/16/32-bit STORE obejmujący bazę śledzonego MMIO, także z zawinięciem MCU24; jeden/dwa CALL | `4afa69aaba9b13c67abcb3c0f1d850be2793848a` | **37/37 SUCCESS** | `a94c11a3f164524c74230dfc09d62cb67ae34070` | **3/3 SUCCESS** |
+| [#178](https://github.com/bogkom/GhidrAssist/pull/178) — GA-06/10/16: odrzucanie niewidocznych znaków w deklaracjach fizycznych stron PDF | `e1c725192e8d9e4b00d5a4b1e4cba10b312f7e11` | **28/28 SUCCESS** | `70a9deeceb029379b21b7be7244051959568f81d` | **4/4 SUCCESS** |
+
+W obu przypadkach drzewo Git kandydata i scalonego commita jest
+**identyczne** (odpowiednio `0bbb826142f4855395f42ac3888021c32549b7a1`
+oraz `d7e6a97926967a1b452d0090273599dc63803da5`).
+Na HEAD PR i osobnych SHA `master` przeszły pełne kompilacje
+GhidrAssist dla **Ghidry 12.1.4 PUBLIC / Java 25**; na HEAD również
+Java 21 oraz istniejące rzeczywiste, izolowane testy syntetycznej
+Ghidry headless. Checkpointy szczegółowe zachowano w komentarzach PR.
+
+Od ostatniego checkpointu #170 do obecnego `master` scalono również
+[#171](https://github.com/bogkom/GhidrAssist/pull/171) (roadmapa),
+[#172](https://github.com/bogkom/GhidrAssist/pull/172) (pośredni JSR,
+źródło bajtowe bez promocji CALL),
+[#173](https://github.com/bogkom/GhidrAssist/pull/173) (źródłowe
+MC68332 SYNCR),
+[#174](https://github.com/bogkom/GhidrAssist/pull/174) (ograniczony
+NOP/MOVEQ → pośredni JSR),
+[#175](https://github.com/bogkom/GhidrAssist/pull/175) (obcy XREF
+nie zamyka wyliczanego JSR) i
+[#176](https://github.com/bogkom/GhidrAssist/pull/176) (XREF z instrukcji
+nie-CALL nie tworzy osiągalności CALL).
+Wszystkie są `merged=true`; nie należy ich traktować jako nadal
+oczekujących gałęzi produktu.
+
+**Dowody pozostają statyczne / CZĘŚCIOWE:**
+GA-02/03 wykazuje tylko potencjalne aliasy zapisów MMIO w wybranych
+kontekstach funkcji i CALL — nie wykonany RESET, przyjęty bit MM,
+przypisany rozmiar rejestru z samych granic STORE ani fizyczną mapę CS.
+GA-06/10/16 weryfikuje składnię **deklaracji** strony, nie stronę
+konkretnego wydania manuala czy autentyczność PDF. Nie modyfikowano
+oryginalnego firmware ECU411 ani projektu Ghidry. Zachowano
+Review/Apply/Undo i ochronę źródeł.
+
+Issue [#106](https://github.com/bogkom/GhidrAssist/issues/106)
+otwarte, **0 nowych komentarzy produktu** przy rozpoczęciu tury;
+[#98](https://github.com/bogkom/GhidrAssist/issues/98)
+pozostaje osobną luką migracji historycznego profilu CodeBrowser.
+Nie uruchomiono lokalnych Wyse/Precision, zatrzymanych timerów,
+starego Supervisora, sesji workerów ani testów modeli AI.
+
+**GA-01–GA-18 to nadal rozwijane obszary; GA-14 ODŁOŻONE.**
+Najbliższe zależności: GA-01/02/03/11 (bounded CALL/RESET, MMIO alias
+i formalne granice wiedzy), GA-06/10/16 (wydanie i dokładna strona
+manuala), GA-08/12/13 (Review/Apply/Undo, trwałe checkpointy),
+GA-15 (kompletność kontekstu/dowodów) oraz GA-17/18 (deterministyczne
+Ghidra Actions i zintegrowane Automation API v3).
 
 ## Obowiązujący checkpoint — 2026-11-05 (odczyt GitHuba)
 
