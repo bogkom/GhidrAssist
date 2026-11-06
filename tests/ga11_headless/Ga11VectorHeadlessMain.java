@@ -2392,8 +2392,15 @@ public final class Ga11VectorHeadlessMain {
                                 ghidrassist.hardware.HardwareScopedVariableReview
                                     .Decision.READY),
                         "Ghidra failed identity in second row must roll back all names");
+                    // A failed Program transaction may increment Ghidra's
+                    // modification counter even after rollback. Explicit
+                    // re-review is necessary before the successful batch.
+                    var cleanRevision=HardwareAnalysisRevision.capture(
+                        full,full.getModificationNumber(),
+                        full.getLanguageID().toString(),
+                        full.getExecutableSHA256(),true);
                     var out=ghidrassist.hardware.HardwareScopedVariableService.apply(
-                        full,candidates,reviewed);
+                        full,candidates,cleanRevision);
                     check(out.renamed()==2,
                         "Explicit approved Ghidra pointer variable batch must rename both");
                     var after=ghidrassist.hardware.HardwareScopedVariableService.preview(fn);
