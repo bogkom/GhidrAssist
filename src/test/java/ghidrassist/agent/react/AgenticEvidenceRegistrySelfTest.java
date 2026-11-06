@@ -73,6 +73,19 @@ public final class AgenticEvidenceRegistrySelfTest {
         var cancelled=registry.page(programA,17L,"a".repeat(64),0,10,null,null);
         yes(cancelled.state().equals("CANCELLED") && !cancelled.complete(),
             "cancelled work is not completed evidence");
+        // A missing SHA or no actual findings must not make a durable
+        // checkpoint claim complete merely because the task ended.
+        var noSource=new FindingsCache();
+        noSource.addFinding("observed",null,"listing",6);
+        registry.begin(programA,17L,"UNKNOWN",noSource);
+        registry.finish(programA,noSource,"SUCCESS");
+        yes(!registry.page(programA,17L,"UNKNOWN",0,3,null,null).complete(),
+            "unverified import identity cannot certify evidence checkpoint");
+        var noFindings=new FindingsCache();
+        registry.begin(programA,17L,"a".repeat(64),noFindings);
+        registry.finish(programA,noFindings,"SUCCESS");
+        yes(!registry.page(programA,17L,"a".repeat(64),0,3,null,null).complete(),
+            "zero retained findings are not a completed evidence checkpoint");
         registry.invalidate(programA);
         denies(()->registry.page(programA,17L,"a".repeat(64),0,1,null,null),
             "explicit Program invalidation removes prior evidence");
