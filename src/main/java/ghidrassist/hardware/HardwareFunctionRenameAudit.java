@@ -62,7 +62,7 @@ public final class HardwareFunctionRenameAudit {
                 "ghidra_source_type,audit_state,operation_origin\n");
             for(Row r:rows) {
                 var e=r.receipt();
-                for(String value:List.of(
+                List<String> cells=List.of(
                         HardwareFunctionRenameReceipt.optionKey(e.entry()),
                         e.beforeName(),e.afterName(),
                         r.currentName()==null?"(function missing)":r.currentName(),
@@ -70,11 +70,12 @@ public final class HardwareFunctionRenameAudit {
                         Long.toString(programRevision),e.sourceSha256(),
                         programSourceSha256,e.role(),e.registers(),
                         Integer.toString(e.writeSites()),r.sourceType(),
-                        r.state().name(),r.origin())) {
+                        r.state().name(),r.origin());
+                for(int col=0;col<cells.size();col++) {
                     if(b.length()>64_000_000)
                         throw new IllegalStateException("Unbounded audit CSV");
-                    if(!b.toString().endsWith("\n"))b.append(',');
-                    b.append(HardwareChangeProvenance.cell(value));
+                    if(col>0)b.append(',');
+                    b.append(HardwareChangeProvenance.cell(cells.get(col)));
                 }
                 b.append('\n');
             }
