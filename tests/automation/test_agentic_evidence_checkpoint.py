@@ -88,11 +88,60 @@ class LocalAgenticCheckpoint(unittest.TestCase):
             verified=cli.verify_agentic_checkpoint(target)
             self.assertTrue(verified["verified"] and verified["complete"])
             self.assertEqual(verified["retained_count"],3)
+            first_page=cli.read_agentic_checkpoint_page(target,0,2)
+            self.assertEqual([x["fact"] for x in first_page["rows"]],
+                ["first fact","second fact"])
+            self.assertTrue(first_page["has_more"])
+            self.assertFalse(first_page["page_complete"])
+            self.assertTrue(first_page["source_complete"])
+            last_page=cli.read_agentic_checkpoint_page(target,2,2)
+            self.assertEqual(len(last_page["rows"]),1)
+            self.assertFalse(last_page["has_more"])
+            self.assertFalse(last_page["page_complete"])
+            entire=cli.read_agentic_checkpoint_page(target,0,10)
+            self.assertTrue(entire["page_complete"])
+            self.assertTrue(entire["offline"] and entire["read_only"])
+            # Client can browse a saved checkpoint without an active
+            # Ghidra session receipt or network request, even after restart.
+            import subprocess
+            proc=subprocess.run(["python3",str(AGENT),"--session",
+                str(Path(work)/"nonexistent-session.json"),"agentic-read",
+                "--input",str(target),"--offset","1","--limit","1"],
+                capture_output=True,text=True,check=True)
+            offline=json.loads(proc.stdout)
+            self.assertTrue(offline["offline"])
+            self.assertEqual(offline["rows"][0]["fact"],"second fact")
+            for offset,limit in ((-1,1),(0,0),(0,101),(1000001,1)):
+                with self.assertRaises(ValueError):
+                    cli.read_agentic_checkpoint_page(target,offset,limit)
+            self.assertEqual(cli.read_agentic_checkpoint_page(target,999,2)["rows"],[])
             tampered=payload.copy()
             tampered["payload"]=dict(payload["payload"],state="CANCELLED")
             target.write_text(json.dumps(tampered))
             with self.assertRaises(ValueError):
                 cli.verify_agentic_checkpoint(target)
+
+    def test_offline_null_evidence_and_false_complete_forgery_rejected(self):
+        with tempfile.TemporaryDirectory() as work:
+            target=Path(work)/"nullable.json"
+            with patch.object(cli,"rpc",lambda _,__,args:page(
+                    args["offset"],args["limit"])):
+                cli.capture_agentic_checkpoint({},target,3)
+            data=json.loads(target.read_text())
+            data["payload"]["rows"][0]["evidence"]=None
+            canonical=json.dumps(data["payload"],sort_keys=True,
+                separators=(",",":"),ensure_ascii=False).encode()
+            data["payload_sha256"]=hashlib.sha256(canonical).hexdigest()
+            target.write_text(json.dumps(data))
+            self.assertIsNone(cli.read_agentic_checkpoint_page(target,0,1)
+                ["rows"][0]["evidence"])
+            data["payload"]["state"]="CANCELLED"
+            canonical=json.dumps(data["payload"],sort_keys=True,
+                separators=(",",":"),ensure_ascii=False).encode()
+            data["payload_sha256"]=hashlib.sha256(canonical).hexdigest()
+            target.write_text(json.dumps(data))
+            with self.assertRaises(ValueError):
+                cli.read_agentic_checkpoint_page(target,0,1)
 
     def test_cache_revision_change_refuses_partial_checkpoint(self):
         def rpc(_session,_method,args):
@@ -116,6 +165,9 @@ class LocalAgenticCheckpoint(unittest.TestCase):
                     self.assertFalse(json.loads(target.read_text())
                         ["payload"]["complete"])
                     self.assertFalse(cli.verify_agentic_checkpoint(target)["complete"])
+                    offline=cli.read_agentic_checkpoint_page(target,0,100)
+                    self.assertFalse(offline["source_complete"])
+                    self.assertFalse(offline["page_complete"])
 
     def test_no_write_on_invalid_or_unbounded_pages(self):
         with tempfile.TemporaryDirectory() as work:
