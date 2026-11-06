@@ -1,0 +1,52 @@
+name: GA-02/03/11 byte-verified computed JSR SIMCR MM MAY
+
+on:
+  pull_request:
+    paths:
+      - 'src/main/java/ghidrassist/hardware/HardwareIndirectMmMay.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareInterproceduralMmEffects.java'
+      - 'src/main/java/ghidrassist/hardware/GhidraHardwareFlowService.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareIndirectMmMaySelfTest.java'
+      - 'tests/ga11_headless/**'
+      - '.github/workflows/ga02-indirect-simcr-mm-may.yml'
+  push:
+    paths:
+      - 'src/main/java/ghidrassist/hardware/HardwareIndirectMmMay.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareInterproceduralMmEffects.java'
+      - 'src/main/java/ghidrassist/hardware/GhidraHardwareFlowService.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareIndirectMmMaySelfTest.java'
+      - 'tests/ga11_headless/**'
+      - '.github/workflows/ga02-indirect-simcr-mm-may.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  source-may-mm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Compile source-only bounded computed JSR SIMCR/MM MAY
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/ga02-mm-may"
+          javac --release 21 -d "$RUNNER_TEMP/ga02-mm-may" \
+            src/main/java/ghidrassist/hardware/HardwareDataflow.java \
+            src/main/java/ghidrassist/hardware/HardwareCallEffects.java \
+            src/main/java/ghidrassist/hardware/HardwareResetFlow.java \
+            src/main/java/ghidrassist/hardware/HardwareIndirectCallEvidence.java \
+            src/main/java/ghidrassist/hardware/HardwareIndirectMayEffects.java \
+            src/main/java/ghidrassist/hardware/HardwareInterproceduralMmEffects.java \
+            src/main/java/ghidrassist/hardware/HardwareIndirectMmMay.java \
+            src/test/java/ghidrassist/hardware/HardwareIndirectMmMaySelfTest.java
+      - name: Verify MM candidates, unknown alias, bounded source graph and RESET separation
+        shell: bash
+        run: |
+          set -euo pipefail
+          java -cp "$RUNNER_TEMP/ga02-mm-may" \
+            ghidrassist.hardware.HardwareIndirectMmMaySelfTest
