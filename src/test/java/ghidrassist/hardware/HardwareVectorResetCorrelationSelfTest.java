@@ -160,6 +160,15 @@ public final class HardwareVectorResetCorrelationSelfTest {
             "odd pointer rejected");
         bad(() -> new HardwareVectorResetCorrelation.Target(2, 0x100, 0x100, false),
             "entry assertion must match the pointer");
+        bad(() -> new HardwareVectorResetCorrelation.Target(2, 0x100, 0x120, false),
+            "an interior vector pointer cannot precede the claimed function entry");
+        bad(() -> new HardwareVectorResetCorrelation.Target(2, 0x100, 0x120, true),
+            "a later function entry cannot be asserted as an exact vector entry");
+        var validInterior = new HardwareVectorResetCorrelation.Target(
+            2, 0x120, 0x100, false);
+        check(!validInterior.exactEntry() &&
+            validInterior.pointer() > validInterior.functionEntry(),
+            "forward interior pointer remains a candidate, not a function entry");
         bad(() -> HardwareVectorResetCorrelation.inspect(true, false, Set.of(),
                 targets, graph, 0), "zero display cap rejected");
         boolean immutable = false;
