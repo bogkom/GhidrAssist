@@ -86,7 +86,7 @@ public final class Ga11VectorHeadlessMain {
             "mmio-read-reference","csbar-csor-conditional",
             "simcr-mm0-literal","trambar-unknown","csor-alternatives",
             "branch-simcr","call-barrier","leaf-return","call-context","joint-source","two-hop","two-hop-indexed","two-hop-indexed-wrap","indirect-adjacent","indirect-bounded","indirect-reset-xref","branch-leaf","branch-cache","cancel-incomplete",
-            "function-stage-resume","function-rename","scoped-variable","receipt-restart-write",
+            "function-stage-resume","function-rename","scoped-variable","agentic-evidence","receipt-restart-write",
             "receipt-restart-read","apply-preserve","provenance-csv",
             "movec-vbr","vbr-relocation").contains(ga18Mode),
             "Unknown GA-18 acceptance mode");
@@ -2340,6 +2340,54 @@ public final class Ga11VectorHeadlessMain {
                     result.addProperty("function_stage_explicit_clear_invalidated",true);
                     result.addProperty("function_stage_no_partial_rag_or_edits",true);
 
+                } else if("agentic-evidence".equals(ga18Mode)) {
+                    // GA-12/15: genuine isolated Ghidra Program source identity,
+                    // but deterministic synthetic observations: NO AI model.
+                    var evidence=new ghidrassist.agent.react.FindingsCache(2);
+                    evidence.addFinding("register SIMCR at static PC 0x100",
+                        "synthetic listing: 0x100","listing",9);
+                    evidence.addFinding("candidate VBR source 0x200",
+                        "synthetic MOVEC, not executed","listing",6);
+                    var bridge=ghidrassist.agent.react.AgenticEvidenceRegistry.shared();
+                    long rev=full.getModificationNumber();
+                    String importSha=full.getExecutableSHA256();
+                    String run=bridge.begin(full,rev,importSha,evidence);
+                    var first=bridge.page(full,rev,importSha,0,1,null,null);
+                    check(first.run().equals(run) &&
+                        first.state().equals("RUNNING") &&
+                        !first.complete() && first.findings().hasMore(),
+                        "Real Ghidra Program must bind running Agentic evidence");
+                    var second=bridge.page(full,rev,importSha,1,1,
+                        first.run(),first.findings().revision());
+                    check(second.findings().rows().size()==1 &&
+                        second.findings().rows().get(0).fact().contains("VBR") &&
+                        !second.findings().hasMore(),
+                        "Real Ghidra Program must paginate retained findings");
+                    boolean refused=false;
+                    try {
+                        bridge.page(full,rev+1,importSha,0,1,null,null);
+                    } catch(IllegalStateException expected) { refused=true; }
+                    check(refused,"Changed Ghidra Program revision must reject evidence");
+                    bridge.finish(full,evidence,"SUCCESS");
+                    check(bridge.page(full,rev,importSha,0,2,null,null).complete(),
+                        "Completed real Program source may export retained evidence");
+                    evidence.addFinding("later high relevance observation",
+                        "synthetic third source","xref",10);
+                    refused=false;
+                    try {
+                        bridge.page(full,rev,importSha,1,1,
+                            first.run(),first.findings().revision());
+                    } catch(IllegalStateException expected) { refused=true; }
+                    check(refused && !bridge.page(full,rev,importSha,0,2,
+                            null,null).complete(),
+                        "Pruning/stale evidence pages cannot be marked complete");
+                    bridge.invalidate(full);
+                    check(full.getModificationNumber()==rev,
+                        "Agentic evidence bridge must not mutate real Ghidra Program");
+                    result.addProperty("agentic_real_program_bounded_pages",true);
+                    result.addProperty("agentic_real_program_revision_guard",true);
+                    result.addProperty("agentic_source_incomplete_remains_explicit",true);
+                    result.addProperty("agentic_read_only_revision_unchanged",true);
                 } else if("scoped-variable".equals(ga18Mode)) {
                     // GA-05/08: real Ghidra Function DB variables, not decompiler
                     // temporary HighVariables or A-register aliases.
