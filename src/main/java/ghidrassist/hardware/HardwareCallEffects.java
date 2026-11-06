@@ -22,7 +22,9 @@ public final class HardwareCallEffects {
     public record FunctionNode(long entry,boolean memoryStore,boolean vbrWrite,
             boolean unresolvedFlow,List<Long> directCallees) {
         public FunctionNode {
-            if(entry<0 || directCallees==null)
+            if(entry<0 || directCallees==null ||
+                    directCallees.stream().anyMatch(callee ->
+                        callee==null || callee<0))
                 throw new IllegalArgumentException("Invalid call graph node");
             directCallees=List.copyOf(directCallees);
         }
