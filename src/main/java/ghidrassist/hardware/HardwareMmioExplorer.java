@@ -31,6 +31,44 @@ public final class HardwareMmioExplorer {
         }
     }
 
+    /** The same deterministic filter backs the Swing table and Automation API. */
+    public static List<Row> filter(List<Row> rows, String query) {
+        if (rows == null)
+            throw new IllegalArgumentException("Invalid MMIO row inventory");
+        for (Row row : rows)
+            if (row == null)
+                throw new IllegalArgumentException("Null MMIO evidence row");
+        if (query == null || query.isBlank()) return List.copyOf(rows);
+        List<Row> matching = new ArrayList<>();
+        for (Row row : rows)
+            if (row.matches(query)) matching.add(row);
+        return List.copyOf(matching);
+    }
+
+    /** A bounded immutable page; total counts matching sites before paging. */
+    public record Page(int total, int offset, int limit, List<Row> rows) {
+        public Page {
+            if (total < 0 || offset < 0 || limit < 1 || limit > 200 ||
+                    rows == null ||
+                    rows.size() > limit || rows.size() > total)
+                throw new IllegalArgumentException("Invalid MMIO page");
+            for (Row row : rows)
+                if (row == null)
+                    throw new IllegalArgumentException("Null MMIO page row");
+            rows = List.copyOf(rows);
+        }
+    }
+
+    public static Page page(List<Row> rows, String query, int offset, int limit) {
+        if (offset < 0 || limit < 1 || limit > 200)
+            throw new IllegalArgumentException("Invalid MMIO pagination");
+        List<Row> matches = filter(rows, query);
+        if (offset >= matches.size())
+            return new Page(matches.size(), offset, limit, List.of());
+        return new Page(matches.size(), offset, limit,
+            matches.subList(offset, offset + Math.min(limit, matches.size() - offset)));
+    }
+
     public static String hex(long address) {
         return String.format(Locale.ROOT,"0x%08X",address);
     }

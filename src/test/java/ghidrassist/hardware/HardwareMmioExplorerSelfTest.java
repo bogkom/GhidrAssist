@@ -65,6 +65,40 @@ public final class HardwareMmioExplorerSelfTest {
             "maximum valid unsigned word remains a source-only candidate");
         check(badLiteral.stream().allMatch(r->r.deviceScope().contains("USER-SELECTED")),
             "range validation cannot assert dynamic MM mode");
+        // GUI and JSON-RPC must use the identical source ordering/filter.
+        var matching=HardwareMmioExplorer.filter(selected,"simcr");
+        check(matching.size()==1 && matching.get(0).pc()==0x100L,
+            "shared GUI filtering is deterministic and case-insensitive");
+        check(HardwareMmioExplorer.filter(selected,null).equals(selected) &&
+            HardwareMmioExplorer.filter(selected,"   ").equals(selected),
+            "blank query preserves complete source inventory");
+        var firstPage=HardwareMmioExplorer.page(selected,"",0,2);
+        var secondPage=HardwareMmioExplorer.page(selected,"",2,2);
+        check(firstPage.total()==3 && secondPage.total()==3 &&
+            firstPage.rows().size()==2 && secondPage.rows().size()==1 &&
+            firstPage.rows().get(0).pc()==0x100 &&
+            secondPage.rows().get(0).pc()==0x300,
+            "paginated Automation results stitch to exactly the Swing source order");
+        var filteredPage=HardwareMmioExplorer.page(selected,"simcr",0,1);
+        check(filteredPage.total()==1 && filteredPage.rows().equals(matching),
+            "search/page results never differ from visible GUI filter");
+        var beyond=HardwareMmioExplorer.page(selected,"simcr",Integer.MAX_VALUE,5);
+        check(beyond.rows().isEmpty() && beyond.total()==1,
+            "page past end has truthful total and no overflow");
+        boolean pageImmutable=false;
+        try {firstPage.rows().clear();}
+        catch(UnsupportedOperationException expected){pageImmutable=true;}
+        check(pageImmutable,"page snapshot is immutable");
+        for(int[] bad:new int[][]{{-1,1},{0,0},{0,201}}){
+            boolean rejected=false;
+            try {HardwareMmioExplorer.page(selected,"",bad[0],bad[1]);}
+            catch(IllegalArgumentException expected){rejected=true;}
+            check(rejected,"invalid pagination must fail before constructing JSON");
+        }
+        boolean badRows=false;
+        try {HardwareMmioExplorer.filter(java.util.Arrays.asList((HardwareMmioExplorer.Row)null),"");}
+        catch(IllegalArgumentException expected){badRows=true;}
+        check(badRows,"corrupt source row list must fail closed");
         System.out.println("HardwareMmioExplorerSelfTest OK");
     }
 }

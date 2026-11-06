@@ -3,6 +3,46 @@
 Status: **IN PROGRESS — integrated baseline 2026-11-06 (PR #192)**. Scope source: user-approved 2026-10-28 requirements (A–H, additional features 13.1–13.7, PDF/RAG, testing and Codex Supervisor integration).
 
 
+## GA-07 / GA-09 — pakiet odbiorowy: spójny report, MMIO GUI i Automation API (2026-11-06)
+
+**Baza:** `master` `16635c85dce136bf3902ad22bab01c080cf84d06`,
+po zintegrowanym [PR #196](https://github.com/bogkom/GhidrAssist/pull/196)
+(na HEAD `499fda6ffc621ec6acb8e58f758a6cababea62c7`:
+35/35 Actions SUCCESS). GA-04 w przyjętym statycznym zakresie
+MC68332 jest **DONE**; fizyczna mapa i wykonanie pozostają UNKNOWN.
+
+**GA-07 — kandydat do DONE po dowodach CI:** raport 3-częściowy
+i Full Evidence składają się teraz w jeden walidowany kanoniczny
+Markdown używany przez GUI/eksport i pamięć podręczną AI/RAG.
+Brak którejkolwiek części musi zablokować publikację. Eksport ponownie
+sprawdza rewizję Program po modalnym wyborze i potwierdzeniu nadpisania
+pliku, aby nie zapisać starego raportu. Rzeczywista izolowana Ghidra
+w GitHub Actions ma sprawdzić identyczność widocznego Overview,
+Full Evidence i opublikowanego Markdown oraz faktyczne dołączenie
+źródeł SIMCR do kontekstu RAG. Przepływ pozostaje statyczny i
+odczytowy; brak dowodów fizycznego MM/CS/ISR i wykonania.
+
+**GA-09 — kandydat do DONE po dowodach CI:** jeden deterministyczny
+algorytm filtrowania i limitowanej paginacji źródłowych rekordów
+MMIO zasila zarówno sortowalny explorer Swing, jak i JSON-RPC
+Automation API. Wybór w sortowanej tabeli musi być przeliczany
+z indeksu widoku na indeks modelu przed Go To Listing. Filtr
+pozostaje niezależny od wielkości liter, zachowuje całkowitą liczbę
+dopasowań, obsługuje stronę poza końcem oraz odrzuca nieprawidłowe
+limity. Przejście do Listing nadal wymaga tej samej rewizji i
+tego samego Program. Test rzeczywistego CodeBrowsera/Xvfb powinien
+potwierdzić nawigację, odmowę po zmianie programu i zgodność
+MMIO Automation API z widocznym wierszem. Nie uruchamiać
+historycznych testów Wyse/Precision ani Supervisora.
+
+**Kryteria zamknięcia GA-07/09:** deterministyczne regresje Java21,
+pełna kompilacja rozszerzenia Ghidra 12.1.4 PUBLIC / Java25,
+odrębny rzeczywisty syntetyczny CodeBrowser/Xvfb, brak FAILED CI,
+zapisane dokładne HEAD SHA i ograniczenia w PR.
+GA-07/09 otrzymają DONE dopiero po weryfikacji tych dowodów;
+oryginalny firmware ECU411, projekt użytkownika i autoryzacja
+Review/Apply/Undo pozostają nienaruszone.
+
 ## GA-04 / GA-07 — pakiet odbiorowy: kompletna tabela źródłowa CS (2026-11-06)
 
 **GA-04 — zakres odbiorowy DONE po zaliczeniu pełnego CI na HEAD pakietu:** dla
