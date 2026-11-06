@@ -12,6 +12,17 @@ public final class HardwareReportOverview {
 
     public record Site(String register, boolean writeCandidate, boolean literalKnown) {}
 
+    /** Canonical evidence payload shared by GUI, Markdown export and RAG. */
+    public static String combine(String overview, String details) {
+        if(overview==null || details==null || details.isBlank() ||
+                !overview.startsWith("# Hardware Analyze — three-part overview (READ ONLY)") ||
+                !overview.contains("## 1. Initialization candidates") ||
+                !overview.contains("## 2. Register write history") ||
+                !overview.contains("## 3. Chip Select map"))
+            throw new IllegalArgumentException("Incomplete hardware report sections");
+        return overview+"\n\n---\n\n"+details;
+    }
+
     /**
      * The historical Listing/XREF figures stay separately labeled: adding
      * CFG-only sites to them would double-count shared source instructions.
