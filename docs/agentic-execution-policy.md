@@ -85,3 +85,15 @@ Help (?) explains these options in a resizable window. Tool history separately
 shows the latest task's REQUESTED, RUNNING, SUCCEEDED, REJECTED and FAILED events
 and full responses/reasons. These remain production observer events, independent
 of the policy editor and the model's claims.
+
+## GA-12/15: terminal Agentic evidence lifecycle (2026-11-07)
+
+The read-only Agentic evidence registry treats `RUNNING` as its only mutable
+lifecycle state. Once an exact run reaches SUCCESS, CANCELLED, ERROR,
+MAX_ITERATIONS or MAX_TOOLS, later callbacks cannot rewrite its outcome or
+upgrade incomplete evidence. A replacement run atomically becomes the active
+evidence generation before the old run receives its cancellation signal.
+Both `begin` overloads invoke replacement cancellation without holding the
+registry monitor, including synchronous provider re-entry. Identity-bound
+Program and revision/SHA/pagination checks are unchanged. This rule does not
+rollback tool side effects, authorize Apply or resume a model checkpoint.
