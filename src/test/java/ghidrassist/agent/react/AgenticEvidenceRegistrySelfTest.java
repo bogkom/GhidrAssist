@@ -123,6 +123,44 @@ public final class AgenticEvidenceRegistrySelfTest {
         registry.invalidate(programA);
         yes(completedCalls.get()==0,"completed investigation is not cancelled by unload");
 
+        // Replacing a still-running analysis must stop the old model run.
+        // A synchronous completion callback may re-enter this registry, but
+        // may not touch the replacement's pages or terminal state.
+        var oldCache=new FindingsCache();
+        var newCache=new FindingsCache();
+        oldCache.addFinding("old evidence",null,"listing",5);
+        newCache.addFinding("new evidence",null,"listing",6);
+        var replacedCalls=new java.util.concurrent.atomic.AtomicInteger();
+        String oldRun=registry.begin(programA,17L,"a".repeat(64),oldCache,
+            () -> {
+                replacedCalls.incrementAndGet();
+                registry.finish(programA,oldCache,"CANCELLED");
+                var page=registry.page(programA,17L,"a".repeat(64),
+                    0,1,null,null);
+                yes(page.findings().rows().get(0).fact().equals("new evidence") &&
+                    page.state().equals("RUNNING"),
+                    "synchronous old-run cancellation cannot overwrite replacement");
+            });
+        String newRun=registry.begin(programA,17L,"a".repeat(64),newCache);
+        yes(!oldRun.equals(newRun) && replacedCalls.get()==1,
+            "replacing a running analysis cancels the old run exactly once");
+        denies(()->registry.page(programA,17L,"a".repeat(64),1,1,
+            oldRun,0L),"replaced run token must never access new evidence");
+        registry.finish(programA,newCache,"SUCCESS");
+        var finalReplacement=registry.page(programA,17L,"a".repeat(64),
+            0,1,null,null);
+        yes(finalReplacement.state().equals("SUCCESS") &&
+            finalReplacement.run().equals(newRun),
+            "new run remains independently completable");
+        var finishedReplacementCalls=new java.util.concurrent.atomic.AtomicInteger();
+        var completedCache=new FindingsCache();
+        registry.begin(programA,17L,"a".repeat(64),completedCache,
+            finishedReplacementCalls::incrementAndGet);
+        registry.finish(programA,completedCache,"SUCCESS");
+        registry.begin(programA,17L,"a".repeat(64),new FindingsCache());
+        yes(finishedReplacementCalls.get()==0,
+            "replacing an already completed run must not cancel the provider");
+
         System.out.println("AGENTIC REGISTRY PASS assertions="+assertions);
     }
 }
