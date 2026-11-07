@@ -851,6 +851,35 @@ public class TabController {
 
     // ==== Query Operations ====
 
+    /** Import only locally validated evidence data into a *new* explicit Review flow. */
+    public void handleAgenticReviewDraftImport(java.nio.file.Path path) {
+        if (!SwingUtilities.isEventDispatchThread()) {
+            SwingUtilities.invokeLater(() -> handleAgenticReviewDraftImport(path));
+            return;
+        }
+        if (isQueryRunning || isAgentPlanPending || isCancelling) {
+            Msg.showError(getClass(), queryTab, "Agentic Review",
+                "Finish or cancel the current analysis/plan before importing another draft.");
+            return;
+        }
+        try {
+            var program=plugin.getCurrentProgram();
+            var draft=ghidrassist.agent.react.AgenticReviewDraft.load(
+                path, program, ghidrassist.agent.react.AgenticEvidenceRegistry.shared());
+            // Clear any previous conversation-scoped tool policy. A new task
+            // must default to a tightly bounded read-only policy.
+            queryTab.getTaskToolPolicyPanel().resetForImportedReview();
+            queryTab.stageNewAgenticReviewQuery(draft.toReviewQuery());
+            Msg.showInfo(getClass(), queryTab, "New Agentic Review required",
+                "Draft evidence is untrusted, read-only data. Inspect the new objective, "+
+                "press Submit to propose a NEW plan, configure fresh tool limits, "+
+                "then separately approve the plan. No task was started.");
+        } catch (Exception error) {
+            Msg.showError(getClass(), queryTab, "Agentic Review Draft refused",
+                error.getMessage()==null?"Invalid or stale review draft":error.getMessage());
+        }
+    }
+
     public void handleQuerySubmit(String query, boolean useRAG, boolean useMCP, boolean useAgentic) {
         // If cancellation is in progress, ignore the click
         if (isCancelling) {
