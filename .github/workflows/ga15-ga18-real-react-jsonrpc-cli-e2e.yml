@@ -86,6 +86,8 @@ jobs:
                       "changed_language_refused","changed_cfg_refused",
                       "changed_budget_refused","no_production_apply"):
               assert recovered_cfg[key] is True,(key,recovered_cfg)
+          assert recovered_cfg["damaged_partial_fallbacks"]==3,recovered_cfg
+          assert recovered_cfg["damaged_partial_never_complete"] is True,recovered_cfg
           assert prior_cfg["full_input_sha256"]==recovered_cfg["full_input_sha256"],recovered_cfg
           assert prior_cfg["import_sha256"]==recovered_cfg["import_sha256"],recovered_cfg
           print("GA-12 FIRST-JVM INTERRUPTED CFG -> SECOND-JVM VERIFIED FIXED POINT PASS")
