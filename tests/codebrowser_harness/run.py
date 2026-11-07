@@ -233,7 +233,8 @@ def main():
                 "-d",str(work/"classes"),str(SRC),
                 str(SRC.parent/"CodeBrowserAssertionReceipt.java"),
                 str(SRC.parent/"CodeBrowserCuaHold.java"),
-                str(SRC.parent/"Ga15ScriptedReActFixture.java")],
+                str(SRC.parent/"Ga15ScriptedReActFixture.java"),
+                str(SRC.parent/"Ga12InterruptedCfgRestartFixture.java")],
                 work,env,out/"compile.log",120)
             if args.automation_probe:
                 # Exercise the production opt-in HTTP server in the same JVM
@@ -762,10 +763,30 @@ def main():
                             "new_review_still_required",
                             "wrong_program_refused",
                             "new_review_started_only_after_import",
-                            "new_checkpoint_saved_in_new_jvm"):
+                            "new_checkpoint_saved_in_new_jvm",
+                            "ga12_cfg_fixed_point_restored_after_restart"):
                     if verification.get(key) is not True:
                         raise RuntimeError(
                             "GA-12 real Program restart invalid: "+key)
+                before=json.loads((out/"ga12-interrupted-cfg-before-restart.json").read_text())
+                after=json.loads((out/"ga12-interrupted-cfg-after-restart.json").read_text())
+                for key in ("real_first_jvm","deliberately_cancelled",
+                            "partial_worklist_saved","partial_not_review_evidence"):
+                    if before.get(key) is not True:
+                        raise RuntimeError("GA-12 interrupted CFG first JVM: "+key)
+                for key in ("real_second_jvm","real_ghidra_program_reopened",
+                            "source_identity_matches","partial_restored",
+                            "cold_result_exact_match",
+                            "indirect_mmio_static_evidence_retained",
+                            "completed_stage_persisted","changed_input_refused",
+                            "changed_analyzer_refused","changed_profile_refused",
+                            "changed_language_refused","changed_cfg_refused",
+                            "changed_budget_refused","no_production_apply"):
+                    if after.get(key) is not True:
+                        raise RuntimeError("GA-12 CFG restart mismatch: "+key)
+                if (before["full_input_sha256"]!=after["full_input_sha256"] or
+                        before["import_sha256"]!=after["import_sha256"]):
+                    raise RuntimeError("GA-12 CFG source identity changed across JVMs")
                 continued=json.loads((out/"ga15-post-restart-continuation.json").read_text())
                 for key in ("new_review_from_saved_checkpoint",
                             "actual_approve_plan_button","native_readonly_tool_executed",
