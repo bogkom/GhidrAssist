@@ -353,17 +353,13 @@ public final class GhidraHardwareFlowService {
             Long actualPcodeAddress=effects==1?pcodeStore(i):null;
             // The disassembly and P-code must agree when both give an
             // absolute destination. Any disagreement is unknown alias.
-            if(address!=null && actualPcodeAddress!=null &&
-                    !address.equals(actualPcodeAddress))
+            if(!HardwarePcodeStoreSafety.oneConsistentMemoryEffect(
+                    effects,address,actualPcodeAddress))
                 return new HardwareDataflow.Step(pc,
                     HardwareDataflow.Kind.STORE_INDIRECT,null,0,0,
                     null,0,next,full);
             if(address==null && pointer==null && indexed==null)
                 address=actualPcodeAddress;
-            if(effects==0 && (address!=null || pointer!=null || indexed!=null))
-                return new HardwareDataflow.Step(pc,
-                    HardwareDataflow.Kind.STORE_INDIRECT,null,0,0,
-                    null,0,next,full);
             if(indexed!=null)return new HardwareDataflow.Step(pc,
                 indexed.base(),from,indexed.index(),indexed.indexBits(),
                 indexed.scale(),indexed.displacement(),word,width,next,full);
