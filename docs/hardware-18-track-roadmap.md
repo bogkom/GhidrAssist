@@ -1,5 +1,16 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
+## GA-12/15/18 — 2026-11-07 candidate: full live checkpoint content match
+
+The local read-only Agentic preflight now compares every retained evidence
+row with real live ReAct/CodeBrowser JSON-RPC pages under exact Program,
+import SHA, run, terminal state, cache revision and completeness counters.
+Actual synthetic Ghidra 12.1.4 PUBLIC GUI CI verifies CLI success and
+denials of forged-but-rehashed rows, stale runs and invalid Bearer token.
+A matching result remains `NEW_REVIEW_REQUIRED`: no model session replay,
+no inherited tool authorization, no Apply. GA-12 and GA-15 still PARTIAL.
+
+
 ## 2026-11-07 — GA-12/15 resume preflight checkpoint identity
 
 Candidate: explicit authenticated, read-only Agentic preflight compares a
