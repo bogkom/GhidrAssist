@@ -56,18 +56,30 @@ public final class AgenticEvidenceRegistry<K> {
      * registers its own cancel callback; synthetic/static users can omit it.
      * Invalidation removes the source before invoking any callback.
      */
-    public synchronized String begin(K owner,long revision,String importSha,
-                                      FindingsCache findings,Runnable onInvalidated) {
+    public String begin(K owner,long revision,String importSha,
+                        FindingsCache findings,Runnable onInvalidated) {
         if(owner==null || revision<0 || findings==null)
             throw new IllegalArgumentException("Missing evidence Program or revision");
-        Bound<K> existing=programs.get(owner);
-        if(existing!=null && existing.owner.get()!=owner)
-            throw new IllegalStateException(
-                "Equal-but-distinct Program cannot share Agentic evidence");
-        Bound<K> bound=new Bound<>(owner,revision,
-            importSha==null?"UNKNOWN":importSha,findings,onInvalidated);
-        programs.put(owner,bound);
-        return bound.run;
+        Runnable previousCancellation=null;
+        String run;
+        synchronized(this) {
+            Bound<K> existing=programs.get(owner);
+            if(existing!=null && existing.owner.get()!=owner)
+                throw new IllegalStateException(
+                    "Equal-but-distinct Program cannot share Agentic evidence");
+            // Publishing the new generation first prevents re-entrant completion
+            // of the replaced run from overwriting its state or findings.
+            Bound<K> bound=new Bound<>(owner,revision,
+                importSha==null?"UNKNOWN":importSha,findings,onInvalidated);
+            programs.put(owner,bound);
+            run=bound.run;
+            if(existing!=null && "RUNNING".equals(existing.state))
+                previousCancellation=existing.onInvalidated;
+        }
+        // Never invoke provider cancellation while holding the registry lock:
+        // providers may synchronously call finish() on the old run.
+        if(previousCancellation!=null)previousCancellation.run();
+        return run;
     }
 
     /** Finish only the exact previously registered cache, never a later run. */
