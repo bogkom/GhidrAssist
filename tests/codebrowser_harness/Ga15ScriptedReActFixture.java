@@ -616,11 +616,12 @@ public final class Ga15ScriptedReActFixture {
                 var service=(ghidrassist.services.QueryService)
                     getField(controller,"queryService");
                 String plan="- [ ] Independently verify the current Listing address";
-                service.beginReActRun(java.util.UUID.randomUUID().toString(),query.get());
+                String nextRunId=java.util.UUID.randomUUID().toString();
+                service.beginReActRun(nextRunId,query.get());
                 setField(controller,"pendingAgentQuery",query.get());
                 setField(controller,"pendingAgentInitialContext",
                     "New JVM, untrusted past observations require re-verification");
-                setField(controller,"pendingAgentRunId",java.util.UUID.randomUUID().toString());
+                setField(controller,"pendingAgentRunId",nextRunId);
                 setField(controller,"pendingAgentPlan",plan);
                 setField(controller,"pendingAgentUseMCP",false);
                 setField(controller,"isAgentPlanPending",true);
