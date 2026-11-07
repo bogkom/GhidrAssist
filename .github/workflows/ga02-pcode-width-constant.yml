@@ -1,0 +1,35 @@
+name: GA-02/03 CPU32 width-aware P-code MMIO constant semantics
+
+on:
+  pull_request:
+    paths:
+      - 'src/main/java/ghidrassist/hardware/HardwarePcodeConstantMath.java'
+      - 'src/main/java/ghidrassist/hardware/GhidraHardwareFlowService.java'
+      - 'src/test/java/ghidrassist/hardware/HardwarePcodeConstantMathSelfTest.java'
+      - 'tests/codebrowser_harness/Ga12InterruptedCfgRestartFixture.java'
+      - '.github/workflows/ga02-pcode-width-constant.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  java21-source-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Compile bounded P-code constants without Ghidra or model
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/ga02-pcode"
+          javac --release 21 -d "$RUNNER_TEMP/ga02-pcode" \
+            src/main/java/ghidrassist/hardware/HardwareDataflow.java \
+            src/main/java/ghidrassist/hardware/HardwarePcodeConstantMath.java \
+            src/test/java/ghidrassist/hardware/HardwarePcodeConstantMathSelfTest.java
+          java -cp "$RUNNER_TEMP/ga02-pcode" \
+            ghidrassist.hardware.HardwarePcodeConstantMathSelfTest
