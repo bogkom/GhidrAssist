@@ -97,7 +97,8 @@ jobs:
                        "no_inherited_task_policy","no_automatic_plan_or_model_run",
                        "new_review_still_required","wrong_program_refused",
               "new_review_started_only_after_import",
-              "new_checkpoint_saved_in_new_jvm"):
+              "new_checkpoint_saved_in_new_jvm",
+              "ga12_cfg_fixed_point_restored_after_restart"):
               assert restarted.get(name) is True,(name,restarted)
           assert isinstance(restarted["prior_program_revision"],int),restarted
           assert isinstance(restarted["reopened_program_revision"],int),restarted
