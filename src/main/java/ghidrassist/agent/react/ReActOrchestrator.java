@@ -1111,7 +1111,9 @@ public class ReActOrchestrator {
         Instant startTime,
         ReActProgressHandler handler
     ) {
-        ReActResult result = ReActResult.cancelled(findings, Duration.between(startTime, Instant.now()));
+        ReActResult result = ReActResult.cancelled(findings,
+            Duration.between(startTime, Instant.now()),
+            toolRegistry.getInvestigationToolCallCount());
         if (resultFuture.complete(result)) {
             handler.onComplete(result);
         }
@@ -1161,7 +1163,8 @@ public class ReActOrchestrator {
         } finally {
             if(started!=null) {
                 resultFuture.complete(ReActResult.cancelled(findings,
-                    Duration.between(started,Instant.now())));
+                    Duration.between(started,Instant.now()),
+                    toolRegistry.getInvestigationToolCallCount()));
             }
         }
     }
