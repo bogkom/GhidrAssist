@@ -321,7 +321,7 @@ Streaming callbacks from the model provider are untrusted and can deliver
 arbitrarily long updates. `BoundedAgenticStream` caps each iteration's
 accumulated response at 128 KiB UTF-16, the incremental GUI preview at 32 KiB,
 and reflection at 16 KiB. Final synthesis is similarly bounded at 128 KiB
-before verification and display. UTF-16 surrogate pairs are never split
+before verification and display. UTF-16 surrogate pairs (including those spanning separate provider callback chunks) are never split
 at a truncation boundary. No unbounded StringBuilder remains on these
 provider callback paths; full provider completions are independently
 capped even when the stream was short.
