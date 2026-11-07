@@ -303,6 +303,10 @@ def main():
     assert validation.get("live_program_draft_import_pass") is True,validation
     assert validation.get("read_only_historical_data_only") is True,validation
     assert validation.get("forged_draft_refused") is True,validation
+    for key in ("real_gui_new_chat_id","real_gui_old_grants_not_inherited",
+                "real_gui_readonly_tool_limit_8","real_gui_staged_no_model_run",
+                "real_gui_source_program_unchanged"):
+        assert validation.get(key) is True,(key,validation)
     forged_draft.unlink()
 
     # Corruption must be rejected by offline reader, not merely flagged.
@@ -341,6 +345,11 @@ def main():
         "real_cli_forged_draft_source_denied":True,
         "real_ghidra_java_review_import_validated":True,
         "real_ghidra_java_forged_draft_denied":True,
+        "real_gui_new_chat_id":True,
+        "real_gui_old_grants_not_inherited":True,
+        "real_gui_readonly_tool_limit_8":True,
+        "real_gui_staged_no_model_run":True,
+        "real_gui_source_program_unchanged":True,
         "retained":len(all_rows),"tool_calls":result["tool_calls"],
         "checkpoint_sha256":digest,
         "runtime_execution_verified":False,"model_or_oauth_used":False,
