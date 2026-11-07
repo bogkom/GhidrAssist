@@ -1,5 +1,17 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
+## GA-12/15/18 — 2026-11-07: independent follow-up ReAct execution candidate
+
+CI-only explicit fresh-plan approval marker now gates a **second real ReAct
+execution** with the policy captured from the newly created Query chat. A
+synthetic Ghidra 12.1.4 CodeBrowser checks no run before approval; after
+approval it executes exactly one actual read-only native tool, observes new
+Program registry generation, terminal SUCCESS, old-run/checkpoint rejection,
+and unchanged firmware revision via authenticated CLI. This is a deterministic
+CI substitute for the human review action, **not a real user-click approval**
+or restored model conversation. GA-12/15 stay PARTIAL.
+
+
 ## GA-12/15/18 — same-Program Swing Query staging check (2026-11-07)
 
 The read-only Review Draft's full evidence and SHA verification now feed a

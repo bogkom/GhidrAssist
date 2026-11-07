@@ -309,6 +309,47 @@ def main():
         assert validation.get(key) is True,(key,validation)
     forged_draft.unlink()
 
+    # The first real run is terminal but remains the ONLY run before the
+    # NEW test-only approval. Do not mistake imported evidence for authority.
+    before=command(args.session,"agentic-findings","--offset",0,"--limit",1)
+    assert before["agentic"]["run"]==evidence["run"],before
+    assert before["agentic"]["state"]=="SUCCESS",before
+    follow=out/"ga15-independent"
+    assert not (follow/"ga15-react-running").exists()
+    approval={
+        "explicit_test_approval":True,
+        "expected_previous_run":evidence["run"],
+        "approved_plan":"- [ ] Independently verify the current Listing address",
+    }
+    (out/"ga15-independent-review-approved.json").write_text(
+        json.dumps(approval,sort_keys=True)+"\n")
+    wait_path(follow/"ga15-react-running",60)
+    live=command(args.session,"agentic-findings","--offset",0,"--limit",1)
+    assert live["agentic"]["run"]!=evidence["run"],live
+    assert live["agentic"]["state"]=="RUNNING",live
+    assert live["agentic"]["programRevision"]==evidence["programRevision"],live
+    command(args.session,"agentic-findings","--offset",0,"--limit",1,
+            "--expected-run",evidence["run"],success=False)
+    command(args.session,"agentic-resume-check","--input",checkpoint,success=False)
+    (follow/"ga15-react-release").write_text("fresh-authorized-independent-tool")
+    independent=json.loads(wait_path(
+        out/"ga15-independent-result.json",65).read_text())
+    for key in ("explicit_test_approval","different_real_react_run_id",
+                "fresh_run_initially_running","fresh_policy_read_only",
+                "fresh_policy_max_8","new_objective_from_gui",
+                "untrusted_evidence_as_data","fresh_terminal_success",
+                "real_readonly_tool_executed","new_generation_retained_findings",
+                "firmware_revision_unchanged","previous_run_denied"):
+        assert independent.get(key) is True,(key,independent)
+    assert independent["tool_calls"]==1,independent
+    assert independent["original_run"]==evidence["run"],independent
+    assert independent["new_run_id"]!=evidence["run"],independent
+    later=command(args.session,"agentic-findings","--offset",0,"--limit",1)
+    assert later["agentic"]["state"]=="SUCCESS",later
+    assert later["agentic"]["run"]==independent["new_run_id"],later
+    assert later["agentic"]["programRevision"]==evidence["programRevision"],later
+    command(args.session,"agentic-resume-check","--input",checkpoint,success=False)
+
     # Corruption must be rejected by offline reader, not merely flagged.
     tampered=out/"ga15-corrupted-private.json"
     data=json.loads(checkpoint.read_text())
@@ -350,6 +391,12 @@ def main():
         "real_gui_readonly_tool_limit_8":True,
         "real_gui_staged_no_model_run":True,
         "real_gui_source_program_unchanged":True,
+        "second_independent_react_after_test_review":True,
+        "second_react_real_readonly_tool":True,
+        "second_react_new_registry_generation":True,
+        "second_react_stale_checkpoint_denied":True,
+        "second_react_new_policy_readonly":True,
+        "second_react_no_firmware_mutation":True,
         "retained":len(all_rows),"tool_calls":result["tool_calls"],
         "checkpoint_sha256":digest,
         "runtime_execution_verified":False,"model_or_oauth_used":False,

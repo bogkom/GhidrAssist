@@ -192,3 +192,20 @@ evidence. The pending-plan and running flags remain false: operator **Submit**
 and **Approve Plan** are still separate steps. This is a production GUI-state
 integration test, not proof of a human click on the chooser or a restored
 provider session. No persistent permissions from a previous chat are copied.
+
+## GA-12/15/18: independently approved follow-up ReAct E2E (2026-11-07)
+
+A deterministic CI-only approval handshake now tests a **second, distinct real
+ReActOrchestrator execution** in the same genuine isolated Ghidra 12.1.4 PUBLIC
+CodeBrowser. First, completed live findings are exported, checked against the
+active Program, and imported into a new Query chat as untrusted observations
+with a new READ_ONLY/8-call policy. Before the explicit CI-only approval
+marker, the old completed run remains bound and no new native tool is invoked.
+The marker provides a **fresh independently approved test plan**, not one
+copied from the previous checkpoint; the test creates a separate ReAct object
+and runs the actual `ga_get_current_address` tool, checking fresh run ID,
+terminal SUCCESS, one tool call, unchanged Program revision and denial of
+stale prior checkpoints over authenticated CLI. Neither marker nor test
+fixture is packaged as an approval API. The test **does not simulate the
+actual user clicking Approve Plan**, does not restore model state, and does
+not authorize firmware mutation. Human approval remains mandatory in the GUI.
