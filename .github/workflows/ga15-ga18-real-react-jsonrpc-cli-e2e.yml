@@ -80,7 +80,9 @@ jobs:
                        "revision_compared","stale_run_registry_absent",
                        "old_review_draft_rejected","no_inherited_accept_all",
                        "no_inherited_task_policy","no_automatic_plan_or_model_run",
-                       "new_review_still_required"):
+                       "new_review_still_required","wrong_program_refused",
+              "new_review_started_only_after_import",
+              "new_checkpoint_saved_in_new_jvm"):
               assert restarted.get(name) is True,(name,restarted)
           assert isinstance(restarted["prior_program_revision"],int),restarted
           assert isinstance(restarted["reopened_program_revision"],int),restarted
@@ -88,6 +90,13 @@ jobs:
               restarted["prior_program_revision"]==
               restarted["reopened_program_revision"]),restarted
           print("GA-12 TRUE GHIDRA JVM RESTART + SAME SYNTHETIC PROGRAM + NO OLD GRANTS PASS")
+          continued=json.loads((root/"ga15-post-restart-continuation.json").read_text())
+          for key in ("new_review_from_saved_checkpoint",
+                      "actual_approve_plan_button",
+                      "native_readonly_tool_executed","new_react_success",
+                      "distinct_new_run","new_checkpoint_created"):
+              assert continued.get(key) is True,(key,continued)
+          assert continued["fresh_chat_id"]>0,continued
           assert original["status"]=="PASSED_HARDWARE_AUTOMATION_V2",original
           for key in ("actual_ghidra_codebrowser","real_react_execution",
               "real_http_bearer_401","real_cli_in_progress",
@@ -151,6 +160,28 @@ jobs:
           assert verified["verified"] is True and verified["complete"] is True,verified
           assert readable["offline"] is True and readable["read_only"] is True,readable
           assert len(readable["rows"])==1,readable
+          # Verify BOTH old and post-restart checkpoints in independent
+          # local CLI processes, with no live bearer/session.
+          from subprocess import run
+          new=p/"ga15-real-react-e2e"/"ga15-post-restart-checkpoint.json"
+          old=p/"ga15-real-react-e2e"/"ga15-react-local-evidence.json"
+          assert new.is_file() and old.is_file(),new
+          client=Path("tools/ghidrassist-agent")
+          def invoke(action,source):
+              result=run(["python3",str(client),"--session",
+                  str(p/"no-agentic-session.json"),action,"--input",str(source)],
+                  capture_output=True,text=True)
+              assert result.returncode==0,(action,source,result.stderr)
+              return json.loads(result.stdout)
+          old_data=invoke("agentic-verify",old)
+          new_data=invoke("agentic-verify",new)
+          assert old_data["verified"] and old_data["complete"],old_data
+          assert new_data["verified"] and new_data["complete"],new_data
+          new_rows=invoke("agentic-read",new)
+          old_rows=invoke("agentic-read",old)
+          assert new_rows["run"]!=old_rows["run"],(old_rows,new_rows)
+          assert new_rows["read_only"] and len(new_rows["rows"])>0,new_rows
+          print("GA-12 FULL RESTART -> NEW REVIEW -> REAL NATIVE TOOL -> NEW CHECKPOINT PASS")
           print("GA-12 OFFLINE CHECKPOINT AFTER CODEBROWSER EXIT PASS")
           PY
           if python3 tools/ghidrassist-agent --session "$RUNNER_TEMP/missing-agentic-session.json"                agentic-resume-check --input "$RUNNER_TEMP/ga15-real-react-e2e/ga15-react-local-evidence.json"                >"$RUNNER_TEMP/ga15-illicit-resume.out" 2>&1; then
@@ -162,7 +193,7 @@ jobs:
         shell: bash
         run: |
           root="$RUNNER_TEMP/ga15-real-react-e2e"
-          for file in "$root/compile.log" "$root/java.log" "$root/ga15-restart-java.log" "$root/ga15-restarted-ghidra.json" "$root/ga15-react-controller.log" "$root/ga15-react-result.json"; do
+          for file in "$root/compile.log" "$root/java.log" "$root/ga15-restart-java.log" "$root/ga15-restarted-ghidra.json" "$root/ga15-post-restart-continuation.json" "$root/ga15-react-controller.log" "$root/ga15-react-result.json"; do
             if test -f "$file"; then
               echo "=== $(basename "$file") ==="
               tail -n 75 "$file"
