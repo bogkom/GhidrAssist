@@ -4,6 +4,8 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Collection;
 import java.util.List;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.Optional;
 
 /**
@@ -50,6 +52,11 @@ public final class HardwareDurableFunctionStages {
             Collection<HardwareDataflow.Step> steps,Collection<Long> targets){
         HardwareDurableStageStore.Key k=key(full,entry,budget,steps,targets);
         if(directory==null || k==null)return Optional.empty();
+        // A worklist can be structurally valid but refer to an address that
+        // no longer exists in the exact translated CFG. Such data must not
+        // reach the fixed-point solver as an uncaught stale-state exception.
+        Set<Long> addresses=new HashSet<>();
+        for(HardwareDataflow.Step step:steps)addresses.add(step.address);
         // The durable envelope binds the requested graph/budget, but the
         // untrusted typed payload must independently agree. A correctly
         // rehashed, mismatched worklist is a cache miss, not an exception
@@ -57,7 +64,8 @@ public final class HardwareDurableFunctionStages {
         return HardwareDurableStageStore.load(directory,k)
             .flatMap(HardwareFunctionProgressCodec::decode)
             .filter(progress -> progress.entry()==entry &&
-                progress.maxIterations()==budget);
+                progress.maxIterations()==budget &&
+                addresses.containsAll(progress.atEntry().keySet()));
     }
     /** Never store progress unless its typed worklist can be fully encoded. */
     public static boolean saveProgress(Path directory,
