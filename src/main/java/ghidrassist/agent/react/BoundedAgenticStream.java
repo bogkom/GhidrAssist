@@ -31,14 +31,29 @@ public final class BoundedAgenticStream {
      */
     public synchronized boolean append(String chunk) {
         if(chunk==null || chunk.isEmpty())return truncated;
+        // A provider may split a UTF-16 surrogate pair across two callbacks.
+        // Never retain an orphan low surrogate or a high surrogate at the
+        // hard capacity boundary. Overflow is sticky even across callbacks.
+        int offset=0;
+        if(Character.isLowSurrogate(chunk.charAt(0)) &&
+                (value.isEmpty() ||
+                 !Character.isHighSurrogate(value.charAt(value.length()-1)))) {
+            offset=1;
+            truncated=true;
+        }
         int available=capacity-value.length();
-        int add=Math.max(0,Math.min(available,chunk.length()));
-        if(add>0 && add<chunk.length() &&
-                Character.isHighSurrogate(chunk.charAt(add-1)) &&
-                Character.isLowSurrogate(chunk.charAt(add)))
+        int add=Math.max(0,Math.min(available,chunk.length()-offset));
+        if(add>0 && offset+add<chunk.length() &&
+                Character.isHighSurrogate(chunk.charAt(offset+add-1)) &&
+                Character.isLowSurrogate(chunk.charAt(offset+add)))
             add--;
-        if(add>0)value.append(chunk,0,add);
-        if(add!=chunk.length())truncated=true;
+        // If the buffer would finish with a dangling high surrogate,
+        // reserve the last code unit conservatively and mark source loss.
+        if(add>0 && add==available &&
+                Character.isHighSurrogate(chunk.charAt(offset+add-1)))
+            add--;
+        if(add>0)value.append(chunk,offset,offset+add);
+        if(add!=chunk.length()-offset)truncated=true;
         return truncated;
     }
 
