@@ -19,11 +19,12 @@ public final class BoundedAgenticStreamSelfTest {
         check(!tiny.append("abcdefgh") && !tiny.truncated(),"exact cap");
         check(tiny.append("x"),"one extra unit must mark omitted source");
 
+        String smile="a"+new String(Character.toChars(0x1f603));
         var unicode=new BoundedAgenticStream(2);
-        check(unicode.append("a\uD83D\uDE03"),"split surrogate not marked");
+        check(unicode.append(smile),"split surrogate not marked");
         check("a".equals(unicode.text()),"split surrogate pair leaked");
         check("a".equals(BoundedAgenticStream.bounded(
-            "a\uD83D\uDE03",2)),"full callback split surrogate pair");
+            smile,2)),"full callback split surrogate pair");
 
         var cache=new FindingsCache(1);
         cache.addFinding("one complete observation","source","listing",9);
