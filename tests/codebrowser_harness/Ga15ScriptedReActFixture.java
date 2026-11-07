@@ -172,7 +172,7 @@ public final class Ga15ScriptedReActFixture {
                             !staged.contains("Untrusted historical observations") ||
                             !staged.contains("Propose a NEW investigation plan"))
                         throw new IllegalStateException("Imported review did not stage safe new query");
-                    StagedReview staged=verifyActualGuiReviewStage(
+                    StagedReview newReview=verifyActualGuiReviewStage(
                         plugin,program,draft,proof);
                     proof.addProperty("live_program_draft_import_pass",true);
                     proof.addProperty("read_only_historical_data_only",true);
@@ -191,7 +191,7 @@ public final class Ga15ScriptedReActFixture {
                         "ga15-review-draft-validation.json"),
                         proof.toString(),StandardCharsets.UTF_8);
                     runIndependentlyApprovedInvestigation(
-                        plugin,program,site,evidence,staged);
+                        plugin,program,site,evidence,newReview);
                 } catch(Exception failure) {
                     proof.addProperty("error",failure.toString());
                 }
