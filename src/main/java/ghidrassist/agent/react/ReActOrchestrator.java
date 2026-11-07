@@ -366,10 +366,19 @@ public class ReActOrchestrator {
             final ghidra.program.model.listing.Program evidenceProgram=
                 plugin.getCurrentProgram();
             if(evidenceProgram!=null) {
+                // The registry uses weak Program keys. Do not make its
+                // value retain this plugin/run (and thus the Program)
+                // through a strong cancellation closure.
+                var ownerRef=new java.lang.ref.WeakReference<>(this);
+                var runRef=new java.lang.ref.WeakReference<>(resultFuture);
                 AgenticEvidenceRegistry.shared().begin(evidenceProgram,
                     evidenceProgram.getModificationNumber(),
                     evidenceProgram.getExecutableSHA256(),findings,
-                    () -> cancelBound(resultFuture));
+                    () -> {
+                        ReActOrchestrator active=ownerRef.get();
+                        CompletableFuture<ReActResult> run=runRef.get();
+                        if(active!=null && run!=null)active.cancelBound(run);
+                    });
                 resultFuture.whenComplete((result,error) ->
                     AgenticEvidenceRegistry.shared().finish(
                         evidenceProgram,findings,
