@@ -3,6 +3,63 @@
 Status: **IN PROGRESS — integrated baseline 2026-11-06 (PR #198)**. Scope source: user-approved 2026-10-28 requirements (A–H, additional features 13.1–13.7, PDF/RAG, testing and Codex Supervisor integration).
 
 
+
+## GA-12 + GA-15 — odczytowy handoff Agentic przez Automation API (2026-11-06)
+
+**Baza:** scalony PR #202 na `master`
+`3c1ca550ba2a52ddf99043f1ffcc2def4b63c86c`, po 32/32
+GitHub Actions SUCCESS na dokładnym HEAD
+`2962f4df3847ec9d7c1fae7f78892d67a2e3eb1f`.
+
+**GA-15 — PARTIAL:** istniejący `ReActOrchestrator` udostępnia
+własny, rzeczywisty (nie wygenerowany na potrzeby RPC) `FindingsCache`
+do odczytu przez `agentic.findings.page`, z ograniczeniem do
+konkretnego obiektu Ghidra Program, rewizji, SHA importu i unikalnego
+przebiegu analizy. Porządek stron i kompletność źródeł opierają się
+na wersjonowanej paginacji z #202; brak odczytu innych projektów
+i mieszania dwóch przebiegów Agentic. Publiczna modyfikacja rankingu
+oraz dopisywanie wyników unieważniają stare strony. RUNNING,
+CANCELLED, ERROR, MAX_ITERATIONS i MAX_TOOLS nie dają potwierdzenia
+ukończonej analizy. API jest lokalne, Bearer-authenticated i
+`read_only`; nie uruchamia LLM ani Apply.
+
+**Ochrona zmiany aktywnego Program (GA-12/15):** przełączenie
+CodeBrowser na inny Program unieważnia wcześniejsze strony
+Agentic. Nawet ponowne otwarcie pierwotnego Program z tym samym
+SHA i rewizją nie przywraca starych wyników; konieczne jest
+rozpoczęcie nowego przebiegu analizy. Obejmuje to również
+zwalnianie wtyczki. Aktywny proces ReAct nie jest tym
+mechanizmem przerywany, a jedynie przestaje być źródłem
+dostępnych przez API dowodów dla starego Program.
+Regresja powinna korzystać z rzeczywistego CodeBrowser/Xvfb
+z dwoma izolowanymi syntetycznymi programami Ghidry.
+
+**GA-12 — PARTIAL:** polecenie
+`ghidrassist-agent agentic-checkpoint --output ...` pobiera
+spójny komplet *zachowanych* stron rzeczywistego Agentic i
+atomowo tworzy prywatny lokalny plik JSON (0600) z SHA-256,
+licznikami utraty źródeł i jednoznacznym statusem.
+Istniejących plików nie nadpisuje, nie wykonuje uploadu
+i nie wznawia modelu. To trwały **handoff dowodów**,
+nie pełny checkpoint LLM, sesji MCP ani uprawnienie do
+odtworzenia narzędzi bez nowego Review. Zapisane dowody
+można przeglądać offline poleceniem
+`agentic-read --input PLIK --offset N --limit 1..100` po
+sprawdzeniu SHA-256, bez działającego API i bez ponownej
+analizy; status kompletności dotyczy tylko zachowanych źródeł. Dalsze zadania:
+sterowana i bezpieczna kontynuacja pełnych sesji modelu,
+przekazywanie wszystkich długo stronicowanych narzędzi
+oraz weryfikacja kompletności planów poza cache ReAct.
+
+**Bramki:** Java21 brak przecieków między Program, rewizją,
+przebiegiem i ograniczeniem budżetu, Python3 atomowy eksport
+bez nadpisywania i przy zmianie źródeł; pełny build Ghidra
+12.1.4 PUBLIC/Java25 i rzeczywisty syntetyczny Program w
+Ghidrze headless, bez modelu AI. Wyniki przypinać do
+dokładnego commita SHA. Tylko izolowane dane syntetyczne,
+bez Wyse/Precision, bez restartu zatrzymanego Supervisora.
+
+
 ## GA-12 + GA-15 — odrzucanie niepełnych checkpointów i stronicowanie Agentic (2026-11-06)
 
 **Baza:** PR #201 scalony do chronionego `master`

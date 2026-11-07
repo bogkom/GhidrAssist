@@ -55,3 +55,37 @@ findings, but its eviction cannot create a false-complete context.
 Java regression includes the score-10 tie under capacity 1, independent
 summary views, reset behavior, and unchanged bounded finding count.
 No remote model calls, firmware data, Supervisor plans, host or GUI tests.
+
+## Real ReAct cache pages through Automation API (2026-11-06)
+
+The actual `ReActOrchestrator` now publishes its existing findings
+cache for read-only, authenticated loopback Automation paging. This is
+not a separate cache with synthesized results: it is scoped to the
+starting Ghidra Program **object identity**, revision and executable
+source fingerprint, plus an opaque per-investigation run token.
+Result status is captured after completion; a cancelled or unfinished
+ReAct task cannot be represented as a completed analysis. A new
+investigation replaces the previous in-memory read-only snapshot;
+stale pages are rejected. Mutable relevance changes and concurrent
+writes are serialized with read-only page capture.
+
+Switching the live CodeBrowser to a different Program invalidates the
+previous Program's published ReAct evidence, even when its source SHA
+and revision remain unchanged. Returning to the original Program does
+not revive an old run. This protects against mixed evidence when an
+in-flight ReAct task could continue while the GUI switches programs.
+Disposal of the plugin also invalidates the current Program entry.
+A real two-Program CodeBrowser/Xvfb synthetic regression verifies
+this behavior. Invalidation does not cancel a model task, so it is not
+an execution or rollback guarantee.
+
+The CLI's explicit `agentic-checkpoint --output` creates a local
+mode-0600, SHA-256-identified evidence handoff from a coherent sequence
+of retained pages. It is not an automatic background worker, an LLM
+session restart, a full transcript, an authentication signature or
+permission to Apply. Verified offline pages can be browsed with
+`ghidrassist-agent agentic-read --input PATH --offset 0 --limit 25`
+without a Ghidra session; every page rechecks the bounded file and
+SHA-256 and retains incomplete-source counters. The complete flag only describes the source
+coverage **within the retained cache** and the ReAct outcome; it
+does not prove comprehensive analysis of a firmware image.

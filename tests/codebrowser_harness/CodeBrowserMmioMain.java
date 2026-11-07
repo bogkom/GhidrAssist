@@ -526,6 +526,24 @@ public final class CodeBrowserMmioMain {
                 catch(Exception e){throw new RuntimeException(e);}
             },15);
             result.addProperty("listing_navigation",true);
+            // GA-12/15: create an actual fixture Program-bound findings
+            // receipt immediately before switching the live CodeBrowser.
+            // The plugin must invalidate it on programActivated; otherwise
+            // a later switch back can wrongly expose cross-program evidence.
+            var ga15EvidenceRegistry=ghidrassist.agent.react
+                .AgenticEvidenceRegistry.shared();
+            var ga15EvidenceSnapshot=new ghidrassist.agent.react.FindingsCache(3);
+            ga15EvidenceSnapshot.addFinding(
+                "fixture program A static observation",
+                "synthetic Listing only","listing",6);
+            long ga15EvidenceRev=first.getModificationNumber();
+            String ga15EvidenceSha=first.getExecutableSHA256();
+            ga15EvidenceRegistry.begin(first,ga15EvidenceRev,
+                ga15EvidenceSha,ga15EvidenceSnapshot);
+            require(ga15EvidenceRegistry.page(first,ga15EvidenceRev,
+                    ga15EvidenceSha,0,3,null,null)
+                        .findings().retainedCount()==1,
+                "Fixture Program A Agentic evidence was not registered");
             edt(()->{
                 ProgramManager managerService=tool[0].getService(ProgramManager.class);
                 managerService.setCurrentProgram(second);
@@ -535,6 +553,25 @@ public final class CodeBrowserMmioMain {
                     .getService(ProgramManager.class).getCurrentProgram()==second);}
                 catch(Exception e){throw new RuntimeException(e);}
             },10);
+            // Real Swing CodeBrowser program-activation callback must clear
+            // the old source cache even if its Program remains open.
+            until(()->{
+                try {
+                    return evalEdt(()->plugin.getCurrentProgram()==second);
+                } catch(Exception e) {
+                    throw new RuntimeException(e);
+                }
+            },10);
+            boolean ga15OldRejected=false;
+            try {
+                ga15EvidenceRegistry.page(first,ga15EvidenceRev,
+                    ga15EvidenceSha,0,1,null,null);
+            } catch(IllegalStateException expected) {
+                ga15OldRejected=true;
+            }
+            require(ga15OldRejected,
+                "Live Program switch retained previously registered ReAct evidence");
+            result.addProperty("agentic_switch_invalidates_old_program",true);
             // Navigation guard must reject both button and double-click.
             edt(()->go.doClick());
             require(!at(viewer,0x20), "Stale Go To Listing changed the second Listing");
@@ -566,6 +603,19 @@ public final class CodeBrowserMmioMain {
                 try{return evalEdt(()->at(viewer,0x20));}
                 catch(Exception e){throw new RuntimeException(e);}
             },15);
+            // Returning to the original Program must NOT silently revive
+            // the old ReAct evidence, even with the unchanged Program SHA.
+            boolean ga15Revived=false;
+            try {
+                ga15EvidenceRegistry.page(first,ga15EvidenceRev,
+                    ga15EvidenceSha,0,1,null,null);
+                ga15Revived=true;
+            } catch(IllegalStateException expected) {
+                // Expected: user must start a fresh investigation.
+            }
+            require(!ga15Revived,
+                "Reactivated Program revived stale Agentic run from before a switch");
+            result.addProperty("agentic_return_does_not_revive_old_run",true);
             // Now the modal MMIO dialog is gone, so the real CodeBrowser
             // Listing and Decompiler are not hidden by that dialog.
             JsonObject receipt=CodeBrowserAssertionReceipt.capture(

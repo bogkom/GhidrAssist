@@ -49,18 +49,20 @@ public class FindingsCache {
         private int relevance;  // Mutable - can be updated
         /** Cache-owned findings invalidate page revisions on public score edits. */
         private final Runnable onRelevanceChange;
+        private final Object ownerLock;
 
         public Finding(String fact, String evidence, String toolUsed, int relevance) {
-            this(fact,evidence,toolUsed,relevance,null);
+            this(fact,evidence,toolUsed,relevance,null,null);
         }
         private Finding(String fact,String evidence,String toolUsed,
-                int relevance,Runnable onRelevanceChange) {
+                int relevance,Runnable onRelevanceChange,Object ownerLock) {
             this.fact = fact;
             this.evidence = evidence;
             this.toolUsed = toolUsed;
             this.relevance = relevance;
             this.timestamp = System.currentTimeMillis();
             this.onRelevanceChange=onRelevanceChange;
+            this.ownerLock=ownerLock;
         }
 
         public String getFact() { return fact; }
@@ -70,6 +72,13 @@ public class FindingsCache {
         public long getTimestamp() { return timestamp; }
 
         public void setRelevance(int relevance) {
+            if(ownerLock!=null) {
+                synchronized(ownerLock) {
+                    updateRelevance(relevance);
+                }
+            } else updateRelevance(relevance);
+        }
+        private void updateRelevance(int relevance) {
             if(this.relevance!=relevance) {
                 this.relevance=relevance;
                 if(onRelevanceChange!=null)onRelevanceChange.run();
@@ -103,7 +112,7 @@ public class FindingsCache {
      * Refuse stale page stitching. The first page supplies its revision;
      * later pages must use exactly the same cache generation.
      */
-    public FindingsPage page(int offset,int limit,long requiredRevision) {
+    public synchronized FindingsPage page(int offset,int limit,long requiredRevision) {
         if(requiredRevision!=findingsRevision)
             throw new IllegalStateException("Stale findings page / analysis revision");
         return page(offset,limit);
@@ -115,7 +124,7 @@ public class FindingsCache {
      * Page coordinates do not imply stable snapshot identity across updates:
      * the caller must not stitch pages from different cache revisions.
      */
-    public FindingsPage page(int offset,int limit) {
+    public synchronized FindingsPage page(int offset,int limit) {
         if(offset<0 || limit<1 || limit>MAX_PAGE_SIZE)
             throw new IllegalArgumentException("Invalid bounded findings page");
         List<Finding> ordered=new ArrayList<>(findings);
@@ -170,13 +179,13 @@ public class FindingsCache {
     /**
      * Add a finding from tool observation.
      */
-    public void addFinding(String fact, String evidence, String toolUsed, int relevance) {
+    public synchronized void addFinding(String fact, String evidence, String toolUsed, int relevance) {
         if(fact==null || fact.isBlank())return;
         acceptedFindings++;
         findingsRevision++;
         findings.add(new Finding(bounded(fact,MAX_FACT_CHARS),
             bounded(evidence,MAX_EVIDENCE_CHARS),bounded(toolUsed,128),
-            Math.max(0,Math.min(10,relevance)),()->findingsRevision++));
+            Math.max(0,Math.min(10,relevance)),()->findingsRevision++,this));
 
         // Prune old low-relevance findings if we exceed max
         if (findings.size() > maxFindings) {
@@ -195,7 +204,7 @@ public class FindingsCache {
      * Extract key findings from tool output using keyword-based scoring.
      * Enhanced with BinAssist keyword matching for automatic relevance.
      */
-    public void extractFromToolOutput(String toolName, String output) {
+    public synchronized void extractFromToolOutput(String toolName, String output) {
         if (output == null || output.isEmpty()) {
             return;
         }
@@ -417,14 +426,14 @@ public class FindingsCache {
     /**
      * Get all findings.
      */
-    public List<Finding> getAllFindings() {
+    public synchronized List<Finding> getAllFindings() {
         return new ArrayList<>(findings);
     }
 
     /**
      * Clear all findings (for context reset).
      */
-    public void clear() {
+    public synchronized void clear() {
         findingsRevision++;
         findings.clear();
         iterationSummaries.clear();

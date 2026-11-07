@@ -341,6 +341,21 @@ public class ReActOrchestrator {
             FindingsCache findings = new FindingsCache();
             ContextSummarizer summarizer = new ContextSummarizer(contextSummaryThreshold);
             registerActiveAnalysis(resultFuture, startTime, findings);
+            // GA-12/15: publish only this existing ReAct cache for authenticated,
+            // read-only, current-Program Automation pages. No LLM request,
+            // persistence or approval is initiated by the reader.
+            final ghidra.program.model.listing.Program evidenceProgram=
+                plugin.getCurrentProgram();
+            if(evidenceProgram!=null) {
+                AgenticEvidenceRegistry.shared().begin(evidenceProgram,
+                    evidenceProgram.getModificationNumber(),
+                    evidenceProgram.getExecutableSHA256(),findings);
+                resultFuture.whenComplete((result,error) ->
+                    AgenticEvidenceRegistry.shared().finish(
+                        evidenceProgram,findings,
+                        error!=null || result==null ? "ERROR" :
+                            result.getStatus().name()));
+            }
 
             handler.onStart(query);
 

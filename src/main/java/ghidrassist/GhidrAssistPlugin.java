@@ -34,6 +34,9 @@ public class GhidrAssistPlugin extends ProgramPlugin {
     }
     private GhidrAssistProvider provider;
     private ghidrassist.automation.AutomationServer automationServer;
+    // ProgramPlugin.currentProgram may already have been changed by Ghidra
+    // before programActivated() is invoked; track the prior event separately.
+    private Program lastEvidenceProgram;
 
     public GhidrAssistProvider getAutomationProvider() { return provider; }
     private String lastActiveProvider;
@@ -48,6 +51,8 @@ public class GhidrAssistPlugin extends ProgramPlugin {
 
     @Override
     protected void dispose() {
+        ghidrassist.agent.react.AgenticEvidenceRegistry.shared()
+            .invalidate(lastEvidenceProgram);
         if (automationServer != null) { automationServer.close(); automationServer = null; }
         if (provider != null) {
             tool.removeComponentProvider(provider);
@@ -58,6 +63,19 @@ public class GhidrAssistPlugin extends ProgramPlugin {
 
     @Override
     protected void programActivated(Program program) {
+        // GA-12/15: even returning to a previously opened Program must
+        // not expose findings gathered while CodeBrowser displayed another.
+        // A running ReAct job may still finish asynchronously; its cache
+        // cannot be reattached without an entirely new investigation.
+        // Ghidra's ProgramPlugin event machinery can update its inherited
+        // currentProgram BEFORE dispatching this callback. Only our own
+        // last-activation field identifies the previously displayed source.
+        Program previous=lastEvidenceProgram;
+        lastEvidenceProgram=program;
+        if(previous!=null && previous!=program) {
+            ghidrassist.agent.react.AgenticEvidenceRegistry.shared()
+                .invalidate(previous);
+        }
         super.programActivated(program);
         if (provider != null) {
             javax.swing.SwingUtilities.invokeLater(() -> {
