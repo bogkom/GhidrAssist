@@ -1,5 +1,17 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
+## GA-12/15/18 — actual Swing Approve Plan and post-exit evidence test candidate
+
+New deterministic Xvfb/Ghidra 12.1.4 regression covers the *actual*
+JButton → production TabController → independent scripted ReAct route.
+A third real ReAct invocation runs one read-only Ghidra tool after a
+freshly supplied test-only plan; separate process verification of the
+offline checkpoint after Ghidra exits is also checked with an explicit
+nonresumability denial. This does not establish manual end-user approval
+or live model restoration; GA-12/15 remain PARTIAL until all user workflows,
+restart migrations, and source-identity requirements are complete.
+
+
 ## GA-12/15/18 — 2026-11-07: independent follow-up ReAct execution candidate
 
 CI-only explicit fresh-plan approval marker now gates a **second real ReAct
