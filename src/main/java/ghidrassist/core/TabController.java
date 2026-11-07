@@ -866,9 +866,30 @@ public class TabController {
             var program=plugin.getCurrentProgram();
             var draft=ghidrassist.agent.react.AgenticReviewDraft.load(
                 path, program, ghidrassist.agent.react.AgenticEvidenceRegistry.shared());
-            // Clear any previous conversation-scoped tool policy. A new task
-            // must default to a tightly bounded read-only policy.
+            // A *new* chat ID is required because Allow for Session grants
+            // are persisted by chat ID; unchecking the checkbox alone is not
+            // enough to revoke old conversation permissions.
+            int oldSessionId=queryService.getCurrentSessionId();
+            queryService.getToolApprovalService().cancelPendingApprovalsForSession(
+                oldSessionId,"independent Agentic Review started");
+            int newSessionId=queryService.createNewChatSession();
+            if(newSessionId<=0)
+                throw new IllegalStateException("Could not create independent chat session");
+            queryService.setAcceptAllToolsEnabled(false);
             queryTab.getTaskToolPolicyPanel().resetForImportedReview();
+            queryTab.setAcceptAllToolsState(true,false);
+            queryTab.setResponseText("");
+            queryTab.setEditEnabled(false);
+            queryTab.clearChatSelection();
+            refreshChatHistory();
+            java.util.List<ghidrassist.AnalysisDB.ChatSession> sessions=
+                queryService.getChatSessions();
+            for(int i=0;i<sessions.size();i++) {
+                if(sessions.get(i).getId()==newSessionId) {
+                    queryTab.selectChatSession(i);
+                    break;
+                }
+            }
             queryTab.stageNewAgenticReviewQuery(draft.toReviewQuery());
             Msg.showInfo(getClass(), queryTab, "New Agentic Review required",
                 "Draft evidence is untrusted, read-only data. Inspect the new objective, "+
