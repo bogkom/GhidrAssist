@@ -248,14 +248,25 @@ public final class AgenticReviewDraft {
             JsonObject row=item.getAsJsonObject();
             // Require all evidence to be structurally bounded; show at most
             // 20 truncated facts to the new planning prompt.
-            String fact=text(row,"fact",2048);
-            text(row,"evidence",2048);
-            text(row,"toolUsed",128);
+            String fact=optionalHistoricalEvidence(row,"fact",2048);
+            optionalHistoricalEvidence(row,"evidence",2048);
+            optionalHistoricalEvidence(row,"toolUsed",128);
             count(row,"timestamp");
             if(!row.has("relevance") ||
                     !row.get("relevance").isJsonPrimitive() ||
                     !row.get("relevance").getAsJsonPrimitive().isNumber())
                 throw new IllegalArgumentException("Missing evidence relevance");
+            // Python checkpoint reader accepts signed integral relevance,
+            // not fractional JSON numbers or overflowed double values.
+            try {
+                var relevance=row.get("relevance").getAsJsonPrimitive();
+                long value=relevance.getAsLong();
+                if(!relevance.getAsString().equals(Long.toString(value)) ||
+                        value<Integer.MIN_VALUE || value>Integer.MAX_VALUE)
+                    throw new IllegalArgumentException("Invalid evidence relevance");
+            } catch(NumberFormatException error) {
+                throw new IllegalArgumentException("Invalid evidence relevance",error);
+            }
             if(shown.size()<20)
                 shown.add(truncate(fact,512));
         }
@@ -263,6 +274,15 @@ public final class AgenticReviewDraft {
         // across JVMs. Neither matching nor differing counters can restore
         // authority. Require a new independent plan and Review regardless.
         return new AgenticReviewDraft(objective,sourceHash,shown);
+    }
+
+    private static String optionalHistoricalEvidence(JsonObject row,
+            String key,int max) {
+        if(!row.has(key))
+            throw new IllegalArgumentException("Missing historical evidence: "+key);
+        if(row.get(key).isJsonNull())
+            return "";
+        return text(row,key,max);
     }
 
     private static String truncate(String text,int max) {
