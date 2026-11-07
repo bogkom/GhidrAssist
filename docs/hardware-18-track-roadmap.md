@@ -18,7 +18,8 @@ sign extension, zero extension, arithmetic wraps, malformed widths,
 unknowns and 24-bit address boundaries. The existing real synthetic
 Ghidra 12.1.4 PUBLIC/Xvfb CodeBrowser two-JVM test additionally reads
 the actual decoded Listing instruction at 0x20, requires exactly one
-Ghidra PcodeOp.STORE and resolves its static SIMCR candidate through
+real P-code direct COPY-to-RAM effect for each synthetic SIMCR and SYNCR
+write and resolves both source addresses through
 the same production method in each JVM. Full Java25 extension and
 all required exact-head CI must pass before integration.
 
