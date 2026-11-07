@@ -164,16 +164,22 @@ public final class AgenticReviewDraft {
                 n,100,sourceRun,findingsRevision);
             if(!"SUCCESS".equals(page.state()) ||
                     page.findings().retainedCount()!=retained ||
-                    !page.complete() ||
                     page.findings().sourceIncomplete() ||
                     page.findings().evictedCount()!=0 ||
                     page.findings().acceptedCount()!=retained)
                 throw new IllegalArgumentException("Review source incomplete or changed");
+            if(page.findings().rows().isEmpty())
+                throw new IllegalArgumentException("Review source pagination stalled");
             for(var finding:page.findings().rows()) {
-                if(offset<sourceRows.size() &&
-                        !sourceRows.get(offset).equals(
-                            truncate(finding.fact(),512)))
-                    throw new IllegalArgumentException("Review source evidence differs");
+                if(offset<excerpts.size()) {
+                    JsonObject saved=excerpts.get(offset).getAsJsonObject();
+                    if(!text(saved,"fact",512).equals(truncate(finding.fact(),512)) ||
+                            !text(saved,"evidence",512).equals(
+                                truncate(finding.evidence(),512)) ||
+                            !text(saved,"tool_used",128).equals(
+                                truncate(finding.toolUsed(),128)))
+                        throw new IllegalArgumentException("Review source evidence differs");
+                }
                 offset++;
             }
         }
