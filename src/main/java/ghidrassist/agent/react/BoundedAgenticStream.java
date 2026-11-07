@@ -36,7 +36,7 @@ public final class BoundedAgenticStream {
         // hard capacity boundary. Overflow is sticky even across callbacks.
         int offset=0;
         if(Character.isLowSurrogate(chunk.charAt(0)) &&
-                (value.isEmpty() ||
+                (value.length()==0 ||
                  !Character.isHighSurrogate(value.charAt(value.length()-1)))) {
             offset=1;
             truncated=true;
