@@ -279,7 +279,7 @@ class LocalAgenticCheckpoint(unittest.TestCase):
                     cli.create_agentic_review_draft({},
                         original,target,"Independently inspect MMIO references")
                 self.assertEqual(json.loads(target.read_text())["payload"],draft)
-                for invalid in ("", "short", "X"*513, "bad\\x00control"):
+                for invalid in ("", "short", "X"*513, "bad\x00control"):
                     with self.subTest(invalid=invalid),self.assertRaises(ValueError):
                         cli.create_agentic_review_draft({},
                             original,Path(work)/"refused.json",invalid)
