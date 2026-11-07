@@ -342,3 +342,29 @@ ReAct/JSON-RPC/CLI regression remain required; no private firmware,
 OAuth or external LLM is involved. This is a GA-15 long-response safety
 milestone, not proof that every native/MCP tool's separate paging,
 context-budget and cancellation contract is complete.
+
+## GA-12: fixed-point worklist recovery after an actual process restart (2026-11-07)
+
+The Java25/Xvfb synthetic CodeBrowser CI fixture now exercises the
+existing `HardwarePartialStageRunner`,
+`HardwareDurableFunctionStages` and
+`HardwareDurableStageStore` across **two distinct Ghidra JVMs**.
+The first JVM deliberately cancels just after a coherent partial worklist
+has been written. A partial result is never eligible for Review/Apply,
+Agentic complete-source evidence or the completed function-stage codec.
+The second JVM reopens the same disposable Ghidra project and Program,
+recovers the exact worklist and checks the resumed fixed point against an
+independent cold analysis before committing the completed stage.
+
+The synthetic input key is derived from the actual CodeBrowser Program
+SHA-256, all 256 imported fixture bytes, the observed Listing
+instruction and the Ghidra language, with an isolated synthetic test
+analyzer version. Any differing Ghidra input digest, analyzer version,
+MC68332 profile selection, language, translated CFG or solver budget
+fails closed. Historical source identity is not authorization to mutate
+a Program; no real ECU411 firmware or hardware execution is involved.
+
+This is a regression of durable **translated CFG worklist** recovery,
+not proof of authentic P-code extraction for all instruction types or
+an end-user restored work session. New model/Review/Apply permissions
+continue to require independent approval.
