@@ -48,6 +48,32 @@ public final class FindingsCacheBudgetSelfTest {
             large.getAllFindings().get(0).getRelevance()==10,
             "one finding cannot retain excessive fact/evidence or unbounded score");
 
+        // An individually truncated fact, evidence or tool name must
+        // never yield complete-looking exported Agentic evidence.
+        var individuallyTruncated=new FindingsCache(5);
+        individuallyTruncated.addFinding(
+            "F".repeat(FindingsCache.MAX_FACT_CHARS+1),"small","tool",5);
+        yes(individuallyTruncated.page(0,5).sourceIncomplete() &&
+            !individuallyTruncated.page(0,5).complete() &&
+            individuallyTruncated.formatForPrompt().startsWith("SOURCE INCOMPLETE:"),
+            "truncating a fact makes the source explicitly incomplete");
+        individuallyTruncated.clear();
+        individuallyTruncated.addFinding("short",
+            "E".repeat(FindingsCache.MAX_EVIDENCE_CHARS+1),"tool",5);
+        yes(individuallyTruncated.page(0,5).sourceIncomplete() &&
+            !individuallyTruncated.page(0,5).complete(),
+            "truncating evidence cannot certify a full source");
+        individuallyTruncated.clear();
+        individuallyTruncated.addFinding("short","proof","T".repeat(129),5);
+        yes(individuallyTruncated.isSourceIncomplete() &&
+            !individuallyTruncated.page(0,5).complete(),
+            "truncating a tool identifier also signals provenance loss");
+        individuallyTruncated.clear();
+        individuallyTruncated.addFinding("short","proof","tool",5);
+        yes(!individuallyTruncated.isSourceIncomplete() &&
+            individuallyTruncated.page(0,5).complete(),
+            "clean bounded evidence remains complete after explicit reset");
+
         // Tool-output extraction scans only a finite prefix and MUST label
         // missing source; it must never pretend to have read its omitted tail.
         large.extractFromToolOutput("mcp",("register 0xfffa00 = 0x40ca\n")
