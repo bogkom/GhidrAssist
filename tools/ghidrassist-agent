@@ -165,6 +165,44 @@ def load_verified_agentic_payload(source):
     return payload,digest
 
 
+def check_agentic_resume_preflight(session, source):
+    """Compare offline retained evidence with active Ghidra, without replay."""
+    payload, digest = load_verified_agentic_payload(source)
+    if payload["state"] == "RUNNING":
+        raise ValueError("Running checkpoint is not a terminal handoff")
+    # A checkpoint alone is never a source of approval or a replayable task.
+    if payload["import_sha256"] == "UNKNOWN":
+        raise ValueError("Checkpoint lacks verified firmware import identity")
+    reply = rpc(session, "agentic.findings.page", {
+        "offset": 0, "limit": 1,
+        "expected_program_revision": payload["program_revision"],
+    })
+    if reply.get("read_only") is not True:
+        raise ValueError("Live Agentic source is not explicitly read-only")
+    live = reply["agentic"]
+    if (live["programRevision"] != payload["program_revision"] or
+            live["importSha256"] != payload["import_sha256"]):
+        raise ValueError("Active Program revision or firmware SHA differs")
+    if live["run"] != payload["run"]:
+        raise ValueError("Agentic run changed; old evidence cannot be replayed")
+    if (live["state"] != payload["state"] or
+            live["findings"]["revision"] != payload["findings_revision"] or
+            live["findings"]["retainedCount"] != payload["retained_count"] or
+            live["findings"]["acceptedCount"] != payload["accepted_count"] or
+            live["findings"]["evictedCount"] != payload["evicted_count"] or
+            live["findings"]["sourceIncomplete"] != payload["source_incomplete"]):
+        raise ValueError("Active Agentic evidence changed since checkpoint")
+    # Checking matching metadata cannot authenticate a checkpoint author;
+    # never turn this into a tool/model execution authorization.
+    return {
+        "verified_sha256": digest, "identity_matches": True,
+        "evidence_matches": True, "read_only": True,
+        "resumable_ai_session": False, "tool_execution_authorized": False,
+        "apply_authorized": False, "next_action": "NEW_REVIEW_REQUIRED",
+        "notice": "Preflight only; no LLM session, MCP tool or Ghidra Apply resumed",
+    }
+
+
 def verify_agentic_checkpoint(source):
     """Offline SHA-256 integrity check; never authenticates the original actor."""
     payload,digest=load_verified_agentic_payload(source)
@@ -201,7 +239,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--session", default=os.environ.get(
         "GHIDRASSIST_AGENT_SESSION", str(Path.home() / ".local/state/ghidrassist-agent/session.json")))
-    parser.add_argument("action", choices=("status", "snapshot", "analyze", "task", "mmio", "review-preview", "profile-select", "function", "xrefs", "function-xrefs-body", "decompile", "decompile-status", "bundle", "paths", "listing", "listing-range", "goto", "tab-select", "table-select", "program-open", "review-prepare", "review-apply", "review-undo", "cancel", "report", "export", "agentic-findings", "agentic-checkpoint", "agentic-verify", "agentic-read"))
+    parser.add_argument("action", choices=("status", "snapshot", "analyze", "task", "mmio", "review-preview", "profile-select", "function", "xrefs", "function-xrefs-body", "decompile", "decompile-status", "bundle", "paths", "listing", "listing-range", "goto", "tab-select", "table-select", "program-open", "review-prepare", "review-apply", "review-undo", "cancel", "report", "export", "agentic-findings", "agentic-checkpoint", "agentic-verify", "agentic-read", "agentic-resume-check"))
     parser.add_argument("address", nargs="?")
     parser.add_argument("--filter", default="")
     parser.add_argument("--row", type=int, default=None)
@@ -233,6 +271,16 @@ def main():
             print("Agentic offline checkpoint refused: "+str(error),file=sys.stderr)
             return 1
     session = load_session(args.session)
+    if args.action=="agentic-resume-check":
+        if not args.input:
+            parser.error("agentic-resume-check requires explicit --input local file")
+        try:
+            result=check_agentic_resume_preflight(session,args.input)
+            print(json.dumps(result,indent=2))
+            return 0
+        except (ValueError,OSError,HTTPError,KeyError,TypeError,UnicodeError) as error:
+            print("Agentic resume preflight refused: "+str(error),file=sys.stderr)
+            return 1
     if args.action=="agentic-checkpoint":
         if not args.output:
             parser.error("agentic-checkpoint requires explicit --output local file")

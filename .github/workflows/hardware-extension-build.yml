@@ -24,6 +24,7 @@ on:
       - 'src/main/java/ghidrassist/apiprovider/OpenAIOAuthProvider.java'
       - 'src/test/java/ghidrassist/hardware/**'
       - '.github/workflows/hardware-extension-build.yml'
+      - 'tools/ghidrassist-agent'
       - 'tools/ci/ghidra-gradle-ci-network.sh'
   pull_request:
     paths:
@@ -41,6 +42,7 @@ on:
       - 'src/main/java/ghidrassist/services/QueryService.java'
       - 'src/main/java/ghidrassist/apiprovider/OpenAIOAuthProvider.java'
       - '.github/workflows/hardware-extension-build.yml'
+      - 'tools/ghidrassist-agent'
       - 'tools/ci/ghidra-gradle-ci-network.sh'
 
 jobs:

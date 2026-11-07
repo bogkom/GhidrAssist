@@ -169,6 +169,51 @@ class LocalAgenticCheckpoint(unittest.TestCase):
                     self.assertFalse(offline["source_complete"])
                     self.assertFalse(offline["page_complete"])
 
+    def test_resume_preflight_requires_exact_live_source_and_never_replays(self):
+        calls=[]
+        with tempfile.TemporaryDirectory() as work:
+            target=Path(work)/"saved.json"
+            with patch.object(cli,"rpc",lambda _,__,args:page(
+                    args["offset"],args["limit"])):
+                cli.capture_agentic_checkpoint({},target,2)
+            def live(_session,method,args):
+                calls.append((method,dict(args)))
+                response=page(0,1)
+                response["read_only"]=True
+                return response
+            with patch.object(cli,"rpc",live):
+                result=cli.check_agentic_resume_preflight({},target)
+            self.assertTrue(result["identity_matches"])
+            self.assertFalse(result["resumable_ai_session"])
+            self.assertFalse(result["tool_execution_authorized"])
+            self.assertFalse(result["apply_authorized"])
+            self.assertEqual(result["next_action"],"NEW_REVIEW_REQUIRED")
+            self.assertEqual(calls,[("agentic.findings.page",
+                {"offset":0,"limit":1,"expected_program_revision":12})])
+            for mutation in (
+                lambda p:p["agentic"].update(run="replacement"),
+                lambda p:p["agentic"].update(state="CANCELLED"),
+                lambda p:p["agentic"].update(programRevision=13),
+                lambda p:p["agentic"].update(importSha256="b"*64),
+                lambda p:p["agentic"]["findings"].update(revision=8),
+                lambda p:p["agentic"]["findings"].update(acceptedCount=4),
+                lambda p:p.update(read_only=False),
+            ):
+                response=page(0,1)
+                response["read_only"]=True
+                mutation(response)
+                with self.subTest(response=response),patch.object(cli,"rpc",
+                        lambda _s,_m,_a,result=response:result):
+                    with self.assertRaises(ValueError):
+                        cli.check_agentic_resume_preflight({},target)
+            with patch.object(cli,"rpc",side_effect=AssertionError("must not contact")):
+                cancelled=Path(work)/"running.json"
+                with patch.object(cli,"rpc",lambda _,__,args:page(
+                        args["offset"],args["limit"],state="RUNNING")):
+                    cli.capture_agentic_checkpoint({},cancelled,3)
+                with self.assertRaises(ValueError):
+                    cli.check_agentic_resume_preflight({},cancelled)
+
     def test_no_write_on_invalid_or_unbounded_pages(self):
         with tempfile.TemporaryDirectory() as work:
             target=Path(work)/"bad.json"
