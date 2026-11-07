@@ -1,5 +1,17 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
+## GA-12/15/18 — same-Program Swing Query staging check (2026-11-07)
+
+The read-only Review Draft's full evidence and SHA verification now feed a
+real test of the production Query controller on the Swing EDT in isolated
+synthetic Ghidra 12.1.4. The independent chat ID, disabled old session grants,
+READ_ONLY / max 8 tool calls, untrusted Query text, and absence of automatic
+planning or ReAct execution have explicit deterministic assertions. Approval
+continues to require separate GUI Submit and Approve Plan; the fixture does
+not invoke a real LLM or perform privileged Apply. Full CI and exact SHA are
+required before integration; GA-12/15 remain PARTIAL.
+
+
 ## GA-12/15/18 — 2026-11-07: GUI import of independently reviewed Agentic evidence
 
 Candidate: a bounded JSON Review Draft can be loaded via Query → Import

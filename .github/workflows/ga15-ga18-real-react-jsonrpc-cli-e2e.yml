@@ -89,7 +89,12 @@ jobs:
               "real_cli_review_draft_no_overwrite",
               "real_cli_forged_draft_source_denied",
               "real_ghidra_java_review_import_validated",
-              "real_ghidra_java_forged_draft_denied"):
+              "real_ghidra_java_forged_draft_denied",
+              "real_gui_new_chat_id",
+              "real_gui_old_grants_not_inherited",
+              "real_gui_readonly_tool_limit_8",
+              "real_gui_staged_no_model_run",
+              "real_gui_source_program_unchanged"):
               assert receipt.get(key) is True,(key,receipt)
           assert runtime["status"]=="SUCCESS" and runtime["tool_calls"]==1,runtime
           assert runtime["tool_succeeded"] is True,runtime
