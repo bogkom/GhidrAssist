@@ -228,3 +228,26 @@ After CodeBrowser shuts down, separate CLI processes verify and read the
 saved SHA-256 checkpoint with no active session. A live resume attempt with
 no session must be refused. Offline persistence of **read-only evidence**
 does not imply permission to resume a model or reuse Approve Plan.
+
+## GA-12/15/18: actual second Ghidra JVM and reopened synthetic Program (2026-11-07)
+
+The actual Xvfb CodeBrowser/ReAct synthetic E2E now **exits its first Java
+process**, then starts a completely new Ghidra 12.1.4 PUBLIC JVM using the
+same disposable Ghidra project and opens the same synthetic binary in the
+real Swing CodeBrowser. The restarted process checks executable import SHA-256
+against the previous checkpoint and **compares** Ghidra's modification number
+with the recorded Program revision. A revision mismatch is treated as stale,
+not silently coerced into equality: the live Agentic registry must be empty
+regardless of whether the reopened Program has an identical revision.
+A historical Review Draft is rejected because there is no matching live
+registry generation, and no old ReAct run, pending plan, Accept All permission
+or per-task tool policy is restored. A new session cannot inherit old Apply
+or tool permission from the locally saved evidence. Separately the CLI reads
+and verifies old checkpoint facts offline after this actual fresh JVM has also
+terminated, without any live authorization.
+
+**Scope:** the old firmware analysis is *not* automatically resumed. In
+particular, Ghidra's modification counter is an observed value, not an
+independent durable semantic version identifier. This regression does not
+establish migration of a historical user CodeBrowser profile (#98), and
+requires no external LLM, Wyse, Precision or formal Supervisor testing.
