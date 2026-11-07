@@ -689,6 +689,17 @@ public final class Ga15ScriptedReActFixture {
             rows.add(jsonRow);
         }
         payload.add("rows",rows);
+        // Provable linkage between two read-only checkpoint generations:
+        // SHA-256 of the saved prior canonical payload and its exact opaque
+        // run ID. Neither this lineage nor the new file is authorization.
+        var parentEnvelope=com.google.gson.JsonParser.parseString(
+            Files.readString(output.resolve("ga15-react-local-evidence.json"),
+                StandardCharsets.UTF_8)).getAsJsonObject();
+        payload.addProperty("parent_checkpoint_sha256",
+            parentEnvelope.get("payload_sha256").getAsString());
+        payload.addProperty("parent_run",prior.get("run").getAsString());
+        payload.addProperty("continuation_kind",
+            "new-independently-reviewed-run");
         payload.addProperty("notice","New reviewed findings, never restored AI state");
         var gson=new com.google.gson.GsonBuilder().disableHtmlEscaping().create();
         String canonical=gson.toJson(sortCheckpointJson(payload));
