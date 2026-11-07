@@ -95,6 +95,34 @@ public final class AgenticEvidenceRegistrySelfTest {
         denies(()->registry.page(programA,17L,"a".repeat(64),
             0,FindingsCache.MAX_PAGE_SIZE+1,null,null),
             "oversized bounded pages must be rejected");
+        // GA-15/18: invalidate a live source and cancel exactly its run,
+        // with the registry entry removed before a future callback re-enters.
+        var active=new FindingsCache();
+        var cancelCount=new java.util.concurrent.atomic.AtomicInteger();
+        String live=registry.begin(programA,17L,"a".repeat(64),active,()->{
+            cancelCount.incrementAndGet();
+            denies(()->registry.page(programA,17L,"a".repeat(64),
+                0,1,null,null),"source must be absent before cancel callback");
+            registry.finish(programA,active,"CANCELLED");
+        });
+        registry.invalidate(equalButDifferent);
+        yes(cancelCount.get()==0 &&
+            registry.page(programA,17L,"a".repeat(64),0,1,null,null).run().equals(live),
+            "equal-but-distinct Program cannot cancel another source");
+        registry.invalidate(programA);
+        registry.invalidate(programA);
+        yes(cancelCount.get()==1,
+            "Program switch cancels exactly one live registered investigation");
+        denies(()->registry.page(programA,17L,"a".repeat(64),0,1,null,null),
+            "cancelled source is unavailable after switch even with same revision");
+        var finished=new FindingsCache();
+        var completedCalls=new java.util.concurrent.atomic.AtomicInteger();
+        registry.begin(programA,17L,"a".repeat(64),finished,
+            completedCalls::incrementAndGet);
+        registry.finish(programA,finished,"SUCCESS");
+        registry.invalidate(programA);
+        yes(completedCalls.get()==0,"completed investigation is not cancelled by unload");
+
         System.out.println("AGENTIC REGISTRY PASS assertions="+assertions);
     }
 }
