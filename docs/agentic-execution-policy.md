@@ -97,3 +97,15 @@ Both `begin` overloads invoke replacement cancellation without holding the
 registry monitor, including synchronous provider re-entry. Identity-bound
 Program and revision/SHA/pagination checks are unchanged. This rule does not
 rollback tool side effects, authorize Apply or resume a model checkpoint.
+
+## GA-12/15: bounded evidence and consistent read views (2026-11-07)
+
+All live findings summaries and prompt/iteration-history views are serialized
+with cache writes and relevance edits. This prevents concurrent tool callbacks
+from producing inconsistent textual snapshots while the Automation API pages
+retain revision-based stitching. When a single fact, evidence string or tool
+identifier exceeds its local retention cap, the cache marks the originating
+source incomplete even if the retained prefix fits on one page. A terminal
+SUCCESS cannot certify truncated input as a complete checkpoint. Explicit
+`clear()` resets the incompleteness receipt for a newly initialized analysis;
+this does not imply that discarded evidence has been recovered.

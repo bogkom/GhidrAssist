@@ -73,6 +73,20 @@ public final class AgenticEvidenceRegistrySelfTest {
         var cancelled=registry.page(programA,17L,"a".repeat(64),0,10,null,null);
         yes(cancelled.state().equals("CANCELLED") && !cancelled.complete(),
             "cancelled work is not completed evidence");
+        // Loss from a single overlong finding is structural and cannot
+        // be hidden by a terminal SUCCESS state or a one-page snapshot.
+        var cropped=new FindingsCache();
+        cropped.addFinding("F".repeat(FindingsCache.MAX_FACT_CHARS+5),
+            "bounded","listing",6);
+        registry.begin(programA,17L,"a".repeat(64),cropped);
+        registry.finish(programA,cropped,"SUCCESS");
+        var croppedPage=registry.page(programA,17L,"a".repeat(64),
+            0,10,null,null);
+        yes(croppedPage.state().equals("SUCCESS") &&
+            croppedPage.findings().sourceIncomplete() &&
+            !croppedPage.complete(),
+            "SUCCESS cannot certify a truncated Agentic source");
+
         // A missing SHA or no actual findings must not make a durable
         // checkpoint claim complete merely because the task ended.
         var noSource=new FindingsCache();
