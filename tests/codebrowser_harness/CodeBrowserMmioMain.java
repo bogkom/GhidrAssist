@@ -170,6 +170,122 @@ public final class CodeBrowserMmioMain {
         result.addProperty("supervisor_ack",false);
         result.addProperty("application_headless",app.isHeadless());
         result.addProperty("awt_headless",GraphicsEnvironment.isHeadless());
+        if(args.length==3 && "agentic-restore".equals(args[2])) {
+            Tool[] reopened={null};
+            try {
+                require(!app.isHeadless() && !GraphicsEnvironment.isHeadless(),
+                    "Real Swing CodeBrowser required after restart");
+                Path checkpoint=out.resolve("ga15-react-local-evidence.json");
+                Path draft=out.resolve("ga15-new-independent-review.json");
+                require(Files.isRegularFile(checkpoint) &&
+                        Files.isRegularFile(draft),
+                    "Prior process did not save a checkpoint and review draft");
+                var report=com.google.gson.JsonParser.parseString(
+                    Files.readString(checkpoint,java.nio.charset.StandardCharsets.UTF_8))
+                    .getAsJsonObject().getAsJsonObject("payload");
+                require(report!=null && report.get("schema").getAsInt()==1,
+                    "Saved checkpoint schema invalid on reopening");
+                String sourceHash=report.get("import_sha256").getAsString();
+                long sourceRevision=report.get("program_revision").getAsLong();
+                String originalRun=report.get("run").getAsString();
+                require(sourceHash.matches("(?i)[a-f0-9]{64}") &&
+                        originalRun!=null && !originalRun.isBlank(),
+                    "Checkpoint cannot identify previous imported firmware/run");
+                edt(()->{
+                    try {
+                        reopened[0]=new Tool(project);
+                        reopened[0].addPlugins(List.of(
+                            "ghidra.app.plugin.core.progmgr.ProgramManagerPlugin",
+                            "ghidra.app.plugin.core.gotoquery.GoToServicePlugin",
+                            "ghidra.app.plugin.core.clipboard.ClipboardPlugin",
+                            "ghidra.app.plugin.core.codebrowser.CodeBrowserPlugin",
+                            "ghidra.app.plugin.core.decompile.DecompilePlugin",
+                            "ghidrassist.GhidrAssistPlugin"));
+                        ProgramManager pm=reopened[0].getService(ProgramManager.class);
+                        pm.openProgram(first);
+                        pm.setCurrentProgram(first);
+                        reopened[0].setVisible(true);
+                    } catch(Exception error) {
+                        throw new IllegalStateException("Actual restart CodeBrowser failed",error);
+                    }
+                });
+                GhidrAssistPlugin ext=(GhidrAssistPlugin)reopened[0]
+                    .getManagedPlugins().stream()
+                    .filter(p->p instanceof GhidrAssistPlugin).findFirst().orElseThrow();
+                until(()->ext.getCurrentProgram()==first,20);
+                var policyUi=((GhidrAssistProvider)field(ext,"provider")).getUI();
+                var queryTab=(ghidrassist.ui.tabs.QueryTab)field(policyUi,"queryTab");
+                var controller=field(policyUi,"controller");
+                var queryService=(ghidrassist.services.QueryService)
+                    field(controller,"queryService");
+                boolean importIdentical=sourceHash.equalsIgnoreCase(
+                    first.getExecutableSHA256());
+                require(importIdentical,
+                    "Reopened synthetic Program has a different import SHA-256");
+                boolean revisionIdentical=sourceRevision==first.getModificationNumber();
+                // The Ghidra modification counter can change after a new
+                // Program instance is loaded; compare it explicitly and
+                // NEVER infer a restored Agentic generation from SHA alone.
+                boolean registryEmpty=false;
+                try {
+                    ghidrassist.agent.react.AgenticEvidenceRegistry.shared().page(
+                        first,first.getModificationNumber(),
+                        first.getExecutableSHA256(),0,1,null,null);
+                } catch(IllegalStateException expected) {
+                    registryEmpty=true;
+                }
+                require(registryEmpty,
+                    "Old ReAct evidence registry unexpectedly survived JVM restart");
+                boolean staleDraftDenied=false;
+                try {
+                    ghidrassist.agent.react.AgenticReviewDraft.load(
+                        draft,first,
+                        ghidrassist.agent.react.AgenticEvidenceRegistry.shared());
+                } catch(IllegalArgumentException | IllegalStateException expected) {
+                    staleDraftDenied=true;
+                }
+                require(staleDraftDenied,
+                    "Old Review draft bypassed current live source checks after restart");
+                // Assert no old pending plan or executable model state survived.
+                require(!(Boolean)field(controller,"isAgentPlanPending") &&
+                        !(Boolean)field(controller,"isQueryRunning") &&
+                        field(controller,"pendingAgentPlan")==null &&
+                        field(controller,"currentOrchestrator")==null,
+                    "A plan or model run was restored without new approval");
+                require(!queryService.isAcceptAllToolsEnabled(),
+                    "Old Accept All Tools grant survived process restart");
+                var queryPolicy=queryTab.getTaskToolPolicyPanel().snapshot();
+                require(queryPolicy!=null && queryPolicy.readOnly(),
+                    "Reopened Query's default tool policy is not READ_ONLY");
+                JsonObject check=new JsonObject();
+                check.addProperty("schema",1);
+                check.addProperty("synthetic_only",true);
+                check.addProperty("real_new_jvm",true);
+                check.addProperty("real_codebrowser_reopened",true);
+                check.addProperty("real_synthetic_program_reopened",true);
+                check.addProperty("import_sha256_verified",importIdentical);
+                check.addProperty("prior_program_revision",sourceRevision);
+                check.addProperty("reopened_program_revision",
+                    first.getModificationNumber());
+                check.addProperty("revision_identical",revisionIdentical);
+                check.addProperty("revision_compared",true);
+                check.addProperty("stale_run_registry_absent",registryEmpty);
+                check.addProperty("old_review_draft_rejected",staleDraftDenied);
+                check.addProperty("no_inherited_accept_all",true);
+                check.addProperty("read_only_default_policy",true);
+                check.addProperty("no_automatic_plan_or_model_run",true);
+                check.addProperty("new_review_still_required",true);
+                check.addProperty("source_run",originalRun);
+                Files.writeString(out.resolve("ga15-restarted-ghidra.json"),
+                    GSON.toJson(check));
+            } finally {
+                if(reopened[0]!=null) edt(()->reopened[0].shutdown());
+                first.release(consumer);
+                second.release(consumer);
+                project.close();
+            }
+            return;
+        }
         if(args.length==3 && "restore".equals(args[2])) {
             Tool[] restored={null};
             try {
