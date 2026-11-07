@@ -44,6 +44,14 @@ def fixture(path, with_simcr):
     # reachable reset path or executed peripheral clock configuration.
     if with_simcr:
         data[0x30:0x3a]=bytes.fromhex("33fcd08400fffa044e75")
+        # Real CPU32: MOVEA.L #$00FFFA00,A0; MOVE.W #$40CA,(A0); RTS
+        # This is a real two-instruction register-to-MMIO dataflow.
+        data[0x40:0x4c]=bytes.fromhex("207c00fffa0030bc40ca4e75")
+        # Same pointer, then unknown A1 STORE; later A0 write.
+        # An unresolved address must poison earlier MMIO state, not
+        # masquerade as a second confirmed SIMCR configuration.
+        data[0x60:0x70]=bytes.fromhex(
+            "207c00fffa0030bc40ca32bc123430bc48484e75")
     path.write_bytes(data)
 
 
