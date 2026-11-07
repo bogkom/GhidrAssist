@@ -46,8 +46,8 @@ public final class AgenticEvidenceRegistry<K> {
 
     private final Map<K,Bound<K>> programs=new WeakHashMap<>();
 
-    public synchronized String begin(K owner,long revision,String importSha,
-                                      FindingsCache findings) {
+    public String begin(K owner,long revision,String importSha,
+                        FindingsCache findings) {
         return begin(owner,revision,importSha,findings,null);
     }
 
@@ -86,7 +86,8 @@ public final class AgenticEvidenceRegistry<K> {
     public synchronized void finish(K owner,FindingsCache findings,String outcome) {
         if(owner==null || findings==null)return;
         Bound<K> bound=programs.get(owner);
-        if(bound!=null && bound.owner.get()==owner && bound.findings==findings)
+        if(bound!=null && bound.owner.get()==owner && bound.findings==findings &&
+                "RUNNING".equals(bound.state))
             bound.state=switch(outcome==null?"":outcome) {
                 case "SUCCESS" -> "SUCCESS";
                 case "CANCELLED" -> "CANCELLED";
