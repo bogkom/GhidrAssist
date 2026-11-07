@@ -1,5 +1,32 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
+## GA-12/15/18 — 2026-11-07: checkpoint ancestry and schema consistency
+
+**Implementation candidate for independent reviewed task provenance:** new
+`--parent` option on explicit CLI `agentic-checkpoint` records SHA-256 and
+opaque run ID of a complete, verified prior checkpoint; new read-only
+`agentic-lineage-verify` checks both checkpoints and the exact ancestry
+without any live session, model access, tool rights or Apply authorization.
+Reject missing/rewritten parent fields, same-run, incomplete/evicted,
+wrong-firmware and rehashed forged-run cases. The isolated synthetic Ghidra
+12.1.4 PUBLIC / Java25 second-JVM checkpoint must link back to the original
+and the external post-exit CLI must validate that exact relationship.
+Untrusted historical evidence metadata is bounded consistently across the
+Java Saved Checkpoint importer and Python CLI: explicit nullable strings,
+integral relevance and nonnegative timestamp.
+
+**Audit:** checkpoint continuation from merged #218 is complete as a
+read-only review milestone. GA-12 stays **PARTIAL**: interrupted function/
+CFG/P-code stage persistence and recovery, analyzer cache migration across
+schema/profile revisions and durable change provenance beyond Agentic
+snapshots remain to be proved. GA-15 stays **PARTIAL**: broader tool-specific
+pagination and long-context completeness and cancellation recovery still
+need coverage. This package does not restart or restore an old LLM process;
+nor does a checksum authenticate a source actor or establish firmware runtime
+execution. Exact-head Java21/Python3, real synthetic Ghidra/Xvfb and full
+Java25 extension CI are required before integration.
+
+
 ## GA-12/15/18 — 2026-11-07: end-to-end independent checkpoint continuation package
 
 **Implementation candidate:** Import Saved Checkpoint from Query tab;
