@@ -340,6 +340,17 @@ public final class CodeBrowserMmioMain {
                     p->p instanceof GhidrAssistPlugin).findFirst().orElseThrow();
             GhidrAssistUI ui=((GhidrAssistProvider)field(plugin,"provider")).getUI();
             HardwareAnalysisTab tab=(HardwareAnalysisTab)field(ui,"hardwareAnalysisTab");
+            if(conf.has("agentic_react_probe") &&
+                    conf.get("agentic_react_probe").getAsBoolean()) {
+                require(conf.has("automation_probe") &&
+                    conf.get("automation_probe").getAsBoolean(),
+                    "ReAct E2E needs the production authenticated JSON-RPC fixture");
+                require(plugin.getCurrentProgram()==first,
+                    "ReAct E2E did not select the real synthetic Program");
+                ghidrassist.agent.react.Ga15ScriptedReActFixture.start(
+                    plugin,first,site,out);
+                result.addProperty("ga15_real_react_e2e_started",true);
+            }
             // File-transport contract v2: external process drives real Swing.
             // Commands are sequential, bounded and restricted to this fixture.
             if (conf.has("automation_probe") &&
