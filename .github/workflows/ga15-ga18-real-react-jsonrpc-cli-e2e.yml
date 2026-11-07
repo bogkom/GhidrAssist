@@ -78,6 +78,11 @@ jobs:
           recovered_cfg=json.loads((root/"ga12-interrupted-cfg-after-restart.json").read_text())
           assert prior_cfg["real_pcode_memory_effects_verified"] is True,prior_cfg
           assert recovered_cfg["real_pcode_memory_effects_verified"] is True,recovered_cfg
+          assert prior_cfg["real_indirect_mmio_proven"] is True,prior_cfg
+          assert prior_cfg["real_unknown_alias_poisoned"] is True,prior_cfg
+          assert recovered_cfg["real_indirect_checkpoint_restored"] is True,recovered_cfg
+          assert recovered_cfg["real_alias_checkpoint_restored"] is True,recovered_cfg
+          assert prior_cfg["real_translated_flow_sha256"]==recovered_cfg["real_translated_flow_sha256"],recovered_cfg
           assert prior_cfg["deliberately_cancelled"] and prior_cfg["partial_worklist_saved"],prior_cfg
           assert prior_cfg["partial_not_review_evidence"],prior_cfg
           for key in ("real_second_jvm","real_ghidra_program_reopened",

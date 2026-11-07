@@ -145,6 +145,22 @@ public final class GhidraHardwareFlowService {
         return output!=null && output.getAddress()!=null &&
             output.getAddress().isMemoryAddress();
     }
+    /** Count every raw memory write, including direct COPY-to-RAM.
+     * Unknown count (null P-code) is NOT proof of a single memory effect. */
+    static int pcodeMemoryWrites(Instruction instruction) {
+        if(instruction==null)return -1;
+        PcodeOp[] ops=instruction.getPcode();
+        if(ops==null)return -1;
+        int count=0;
+        for(PcodeOp op:ops) {
+            if(op.getOpcode()==PcodeOp.STORE ||
+                    directMemoryOutput(op.getOutput())) {
+                count++;
+                if(count>64)return -1;
+            }
+        }
+        return count;
+    }
     private static boolean hasPcodeStore(Instruction instruction) {
         PcodeOp[] ops=instruction.getPcode();
         if(ops==null)return false;
@@ -231,7 +247,8 @@ public final class GhidraHardwareFlowService {
             default -> false;
         };
     }
-    private static HardwareDataflow.Step translate(Instruction i,Function function){
+    // Package-private read-only translation for real isolated Ghidra CI fixtures.
+    static HardwareDataflow.Step translate(Instruction i,Function function){
         HardwareDataflow.Step modeled=translateCore(i,function);
         // P-code output varnodes expose implicit and multi-register updates
         // invisible to the mnemonic parser (EXG, MOVEM load, LINK/UNLK, etc.).
@@ -314,6 +331,15 @@ public final class GhidraHardwareFlowService {
                 dst,0,0,null,0,next,full);
         }
         if(last>=0&&writesMemory(m)){
+            // One source-level instruction can perform multiple underlying
+            // writes (MOVEM, auto-update or unusual CALLOTHER expansions).
+            // A syntactically visible destination must NOT hide the other
+            // possible writes. Keep a conservative unknown-alias barrier.
+            int effects=pcodeMemoryWrites(i);
+            if(effects<0 || effects>1)
+                return new HardwareDataflow.Step(pc,
+                    HardwareDataflow.Kind.STORE_INDIRECT,null,0,0,
+                    null,0,next,full);
             Long address=absolute(i,last);
             String pointer=indirectReg(i,last);
             HardwareIndexedAddress.Expression indexed =
@@ -324,8 +350,16 @@ public final class GhidraHardwareFlowService {
             if(width==16&&m.equals("CLR"))word=0;
             if(width==16&&m.equals("MOVE")&&imm!=null)word=(int)(imm&0xffff);
             if(!m.equals("MOVE"))from=null;
+            Long actualPcodeAddress=effects==1?pcodeStore(i):null;
+            // The disassembly and P-code must agree when both give an
+            // absolute destination. Any disagreement is unknown alias.
+            if(!HardwarePcodeStoreSafety.oneConsistentMemoryEffect(
+                    effects,address,actualPcodeAddress))
+                return new HardwareDataflow.Step(pc,
+                    HardwareDataflow.Kind.STORE_INDIRECT,null,0,0,
+                    null,0,next,full);
             if(address==null && pointer==null && indexed==null)
-                address=pcodeStore(i);
+                address=actualPcodeAddress;
             if(indexed!=null)return new HardwareDataflow.Step(pc,
                 indexed.base(),from,indexed.index(),indexed.indexBits(),
                 indexed.scale(),indexed.displacement(),word,width,next,full);

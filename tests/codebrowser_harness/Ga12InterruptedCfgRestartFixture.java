@@ -152,6 +152,98 @@ public final class Ga12InterruptedCfgRestartFixture {
         }
     }
 
+    /**
+     * Two genuine CPU32 Listing functions, translated by production code,
+     * with source P-code effects, CFG edges and register propagation.
+     * This is independent of the deliberately translated 96-node worklist.
+     */
+    private record RealFlow(long entry,List<HardwareDataflow.Step> steps,
+                            HardwareDataflow.Result result) {}
+    private static RealFlow realFlow(Program program,long entry,
+                                    long[] instructionOffsets,
+                                    int expectedWrites) throws Exception {
+        var space=program.getAddressFactory().getDefaultAddressSpace();
+        var function=program.getFunctionManager().getFunctionAt(
+            space.getAddress(entry));
+        require(function!=null,"Missing real Ghidra CPU32 function at "+
+            Long.toHexString(entry));
+        List<HardwareDataflow.Step> steps=new ArrayList<>();
+        for(long at:instructionOffsets) {
+            var insn=program.getListing().getInstructionAt(space.getAddress(at));
+            require(insn!=null && function.getBody().contains(insn.getAddress()),
+                "Missing real Ghidra function instruction "+Long.toHexString(at));
+            int memoryWrites=GhidraHardwareFlowService.pcodeMemoryWrites(insn);
+            if(at!=entry && at!=instructionOffsets[instructionOffsets.length-1])
+                require(memoryWrites==1,
+                    "Real CPU32 memory effect count mismatch at "+
+                    Long.toHexString(at)+": "+memoryWrites);
+            steps.add(GhidraHardwareFlowService.translate(insn,function));
+        }
+        require(steps.size()==instructionOffsets.length,
+            "Incomplete translated Ghidra function");
+        var result=HardwareDataflow.analyze(entry,steps,TARGETS,128);
+        require(!result.truncated && result.snapshots.size()==expectedWrites,
+            "Real CPU32 CFG failed to converge with expected STORE sites");
+        return new RealFlow(entry,List.copyOf(steps),result);
+    }
+    private static String verifyRealRegisterAndAliasFlow(Program program,
+            Path output,HardwareDurableStageStore.Key key,
+            boolean resumedJvm) throws Exception {
+        RealFlow indirect=realFlow(program,0x40L,
+            new long[]{0x40L,0x46L,0x4aL},1);
+        var proven=indirect.result().snapshots.get(0);
+        require(proven.indirect && proven.effectiveAddress!=null &&
+                proven.effectiveAddress==0xfffa00L &&
+                proven.writtenWord!=null && proven.writtenWord==0x40ca,
+            "Real CPU32 source A0 constant did not reach indirect SIMCR");
+        RealFlow alias=realFlow(program,0x60L,
+            new long[]{0x60L,0x66L,0x6aL,0x6eL,0x72L},3);
+        var observations=alias.result().snapshots;
+        require(observations.get(0).effectiveAddress!=null &&
+                observations.get(0).effectiveAddress==0xfffa00L &&
+                observations.get(1).effectiveAddress==null &&
+                observations.get(2).effectiveAddress!=null &&
+                observations.get(2).effectiveAddress==0xfffa00L &&
+                observations.get(2).priorUnknownStore,
+            "Unknown A1 alias was promoted or failed to poison provenance");
+        // A1's unknown write must invalidate tracked peripheral values
+        // before the subsequent A0 write, despite the known A0 pointer.
+        require(Integer.valueOf(0x4848).equals(
+                observations.get(2).knownPeripheralWords.get(0xfffa00L)),
+            "Post-alias source must reflect only the last exact SIMCR store");
+        Path dir=output.resolve("ga12-real-pcode-function-stages");
+        Files.createDirectories(dir);
+        StringBuilder hashes=new StringBuilder();
+        for(RealFlow flow:List.of(indirect,alias)) {
+            byte[] serialized=HardwareFunctionResultCodec.encode(flow.result());
+            String digest=HardwareDurableStageStore.hash(serialized);
+            hashes.append(Long.toHexString(flow.entry())).append(':')
+                .append(digest).append(';');
+            if(!resumedJvm) {
+                require(HardwareDurableFunctionStages.save(dir,key,
+                    flow.entry(),128,flow.steps(),TARGETS,flow.result()),
+                    "Could not persist real translated Ghidra function CFG");
+            }else {
+                var loaded=HardwareDurableFunctionStages.load(dir,key,
+                    flow.entry(),128,flow.steps(),TARGETS).orElseThrow(
+                    ()->new IllegalStateException(
+                        "Second JVM rejected real translated CFG stage"));
+                require(Arrays.equals(serialized,
+                    HardwareFunctionResultCodec.encode(loaded)),
+                    "Real P-code translated completed stage drifted after JVM");
+                require(HardwareDurableFunctionStages.load(dir,
+                    changed(key,"analysis-input"),flow.entry(),128,
+                    flow.steps(),TARGETS).isEmpty(),
+                    "Edited source accepted real P-code checkpoint");
+                require(HardwareDurableFunctionStages.load(dir,
+                    changed(key,"profile"),flow.entry(),128,
+                    flow.steps(),TARGETS).isEmpty(),
+                    "Generic CPU32 reused MC68332 P-code checkpoint");
+            }
+        }
+        return HardwareDurableStageStore.hash(hashes.toString());
+    }
+
     /** First genuine Ghidra process deliberately stops just after a saved slice. */
     public static void interruptInFirstJvm(Program program,Path output)
             throws Exception {
@@ -170,6 +262,8 @@ public final class Ga12InterruptedCfgRestartFixture {
                 TaskMonitor.DUMMY);
         verifyRealPcodeMemoryWrites(program);
         var key=identity(program);
+        String realFlowDigest=verifyRealRegisterAndAliasFlow(
+            program,output,key,false);
         var steps=graph();
         require(HardwareDurableFunctionStages.loadProgress(directory,key,
             ENTRY,BUDGET,steps,TARGETS).isEmpty(),"Unexpected saved worklist on first JVM");
@@ -198,6 +292,9 @@ public final class Ga12InterruptedCfgRestartFixture {
         report.addProperty("real_ghidra_program",true);
         report.addProperty("real_first_jvm",true);
         report.addProperty("real_pcode_memory_effects_verified",true);
+        report.addProperty("real_translated_flow_sha256",realFlowDigest);
+        report.addProperty("real_indirect_mmio_proven",true);
+        report.addProperty("real_unknown_alias_poisoned",true);
         report.addProperty("deliberately_cancelled",cancelled);
         report.addProperty("partial_worklist_saved",true);
         report.addProperty("partial_not_review_evidence",true);
@@ -390,6 +487,11 @@ public final class Ga12InterruptedCfgRestartFixture {
         require(first.get("real_pcode_memory_effects_verified").getAsBoolean(),
             "First JVM lacked real P-code evidence");
         var key=identity(program);
+        String realFlowDigest=verifyRealRegisterAndAliasFlow(
+            program,output,key,true);
+        require(realFlowDigest.equals(
+            first.get("real_translated_flow_sha256").getAsString()),
+            "Real CPU32 A0 flow and unknown alias changed across JVMs");
         var steps=graph();
         require(key.importedSha256().equals(first.get("import_sha256").getAsString())
                 && key.inputSha256().equals(first.get("full_input_sha256").getAsString())
@@ -453,6 +555,9 @@ public final class Ga12InterruptedCfgRestartFixture {
         report.addProperty("schema",1);
         report.addProperty("real_ghidra_program_reopened",true);
         report.addProperty("real_second_jvm",true);
+        report.addProperty("real_translated_flow_sha256",realFlowDigest);
+        report.addProperty("real_indirect_checkpoint_restored",true);
+        report.addProperty("real_alias_checkpoint_restored",true);
         report.addProperty("real_pcode_memory_effects_verified",true);
         report.addProperty("source_identity_matches",true);
         report.addProperty("partial_restored",resumed.restoredPartial());

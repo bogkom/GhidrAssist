@@ -20,6 +20,19 @@ public final class HardwarePcodeStoreSafety {
         return target;
     }
 
+    /**
+     * A decoded mnemonic does not authorize ignoring additional P-code
+     * memory effects. An unresolved P-code destination is permitted only
+     * for one modeled register-indirect write; if both Listing and P-code
+     * independently name an address they must agree exactly.
+     */
+    public static boolean oneConsistentMemoryEffect(
+            int effects,Long listingAddress,Long pcodeAddress) {
+        return effects==1 &&
+            (listingAddress==null || pcodeAddress==null ||
+                listingAddress.equals(pcodeAddress));
+    }
+
     /** Any STORE without a provable single address is an MMIO alias barrier. */
     public static boolean unknownAlias(Collection<Long> stores) {
         return stores != null && !stores.isEmpty() && uniqueTarget(stores) == null;

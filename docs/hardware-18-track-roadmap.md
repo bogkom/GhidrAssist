@@ -1,5 +1,40 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
+## GA-02/03/12/18 — 2026-11-07: actual CPU32 indirect MMIO, alias and restart
+
+A cohesive source-only acceptance candidate extends the existing Ghidra
+12.1.4 PUBLIC/Xvfb CodeBrowser fixture with two **real decoded CPU32**
+functions. The first statically writes MOVEA.L #0x00FFFA00,A0, then
+MOVE.W #0x40CA,(A0), then RTS. The second uses the same A0 source,
+writes through an unknown A1 alias, then writes via A0 again. The test
+does not run MCU instructions; it translates real Listing/P-code into
+the existing bounded HardwareDataflow CFG, checks A0 propagation,
+rejects resolution of the A1 write, and requires unknown-alias provenance
+at the later A0 site. No claim of active SIMCR/MM follows.
+
+Production translation now counts both direct output-to-RAM P-code
+effects and indirect STOREs. If a source mnemonic hides multiple
+underlying memory writes, lacks a verifiable memory effect, or its
+independently provable P-code and Listing addresses disagree, the
+instruction becomes a conservative unknown alias, not a published
+single-register write. The pure Java21 suite adds ten source-consistency
+assertions alongside the width-aware P-code constant suite.
+
+Completed results for **both real translated CPU32 functions** are saved
+in separate disposable GA-12 function-stage slots during the first
+CodeBrowser JVM. A second actual CodeBrowser JVM reopens the project,
+retranslates the same instructions, verifies byte-for-byte completed
+stage equivalence, checks source/profile invalidation and compares a
+digest across processes. The existing 96-node *translated synthetic*
+interruptible worklist regression remains independent; this new case
+does not claim full P-code worklist resumption or arbitrary CPU32
+instruction coverage. Acceptance requires full Java25 extension and
+all exact-HEAD GitHub Actions tests. No Wyse/Precision/Supervisor,
+private ECU411 firmware, external AI or Apply is involved.
+
+GA-02/03/12/18 remain PARTIAL after this candidate; GA-14 stays deferred.
+
+
 ## GA-02/03/12/18 — 2026-11-07: size-correct real P-code MMIO addresses
 
 **Implementation candidate:** the existing genuine Ghidra Listing CFG

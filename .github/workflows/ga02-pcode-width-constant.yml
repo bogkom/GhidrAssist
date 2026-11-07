@@ -4,8 +4,10 @@ on:
   pull_request:
     paths:
       - 'src/main/java/ghidrassist/hardware/HardwarePcodeConstantMath.java'
+      - 'src/main/java/ghidrassist/hardware/HardwarePcodeStoreSafety.java'
       - 'src/main/java/ghidrassist/hardware/GhidraHardwareFlowService.java'
       - 'src/test/java/ghidrassist/hardware/HardwarePcodeConstantMathSelfTest.java'
+      - 'src/test/java/ghidrassist/hardware/HardwarePcodeStoreSafetySelfTest.java'
       - 'tests/codebrowser_harness/Ga12InterruptedCfgRestartFixture.java'
       - '.github/workflows/ga02-pcode-width-constant.yml'
   workflow_dispatch:
@@ -30,6 +32,10 @@ jobs:
           javac --release 21 -d "$RUNNER_TEMP/ga02-pcode" \
             src/main/java/ghidrassist/hardware/HardwareDataflow.java \
             src/main/java/ghidrassist/hardware/HardwarePcodeConstantMath.java \
-            src/test/java/ghidrassist/hardware/HardwarePcodeConstantMathSelfTest.java
+            src/main/java/ghidrassist/hardware/HardwarePcodeStoreSafety.java \
+            src/test/java/ghidrassist/hardware/HardwarePcodeConstantMathSelfTest.java \
+            src/test/java/ghidrassist/hardware/HardwarePcodeStoreSafetySelfTest.java
           java -cp "$RUNNER_TEMP/ga02-pcode" \
             ghidrassist.hardware.HardwarePcodeConstantMathSelfTest
+          java -cp "$RUNNER_TEMP/ga02-pcode" \
+            ghidrassist.hardware.HardwarePcodeStoreSafetySelfTest
