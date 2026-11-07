@@ -115,25 +115,41 @@ public final class Ga12InterruptedCfgRestartFixture {
         return output.resolve("ga12-interrupted-cfg-"+suffix+".json");
     }
 
-    /** Actual Listing/P-code proof, not a hand-built solver-only Step. */
-    private static void verifyRealPcodeStore(Program program) {
-        var at=program.getAddressFactory().getDefaultAddressSpace()
-            .getAddress(0x20);
-        var insn=program.getListing().getInstructionAt(at);
-        require(insn!=null,"Ghidra Listing source instruction missing");
-        var ops=insn.getPcode();
-        require(ops!=null && ops.length>0,
-            "Real Ghidra P-code translation missing");
-        int stores=0;
-        for(var op:ops)
-            if(op.getOpcode()==ghidra.program.model.pcode.PcodeOp.STORE)
-                stores++;
-        require(stores==1,"Expected one authentic synthetic Ghidra STORE;"+
-            " actual="+stores+" mnemonic="+insn.getMnemonicString()+
-            " pcode="+java.util.Arrays.toString(ops));
-        Long target=GhidraHardwareFlowService.pcodeStore(insn);
-        require(target!=null && target==0xfffa00L,
-            "Width-aware real Ghidra P-code failed to resolve SIMCR");
+    /**
+     * Ghidra 12.1.4 CPU32 genuinely emits both synthetic absolute writes
+     * as COPY to RAM varnodes, rather than an indirect PcodeOp.STORE.
+     * Exercise the exact production memory-effect resolver on the source
+     * instruction in EACH independent CodeBrowser JVM.
+     */
+    private static void verifyRealPcodeMemoryWrites(Program program) {
+        var space=program.getAddressFactory().getDefaultAddressSpace();
+        for(long[] site:new long[][]{
+                {0x20L,0xfffa00L}, {0x30L,0xfffa04L}}) {
+            var insn=program.getListing().getInstructionAt(
+                space.getAddress(site[0]));
+            require(insn!=null,"Real Ghidra Listing memory write missing");
+            var ops=insn.getPcode();
+            require(ops!=null && ops.length>0,
+                "Real Ghidra P-code translation missing");
+            int direct=0,indirect=0;
+            for(var op:ops) {
+                if(op.getOpcode()==ghidra.program.model.pcode.PcodeOp.STORE)
+                    indirect++;
+                var out=op.getOutput();
+                if(out!=null && out.getAddress()!=null &&
+                        out.getAddress().isMemoryAddress())
+                    direct++;
+            }
+            require(direct==1 && indirect==0,
+                "Expected one real CPU32 COPY-to-RAM memory effect at "+
+                Long.toHexString(site[0])+"; direct="+direct+
+                " indirect="+indirect+
+                " pcode="+java.util.Arrays.toString(ops));
+            Long actual=GhidraHardwareFlowService.pcodeStore(insn);
+            require(actual!=null && actual==site[1],
+                "Real Ghidra direct RAM P-code address mismatch at "+
+                Long.toHexString(site[0])+"; target="+actual);
+        }
     }
 
     /** First genuine Ghidra process deliberately stops just after a saved slice. */
@@ -152,7 +168,7 @@ public final class Ga12InterruptedCfgRestartFixture {
         if(program.isChanged())
             program.save("GA-12 isolated synthetic Listing identity before CFG interruption",
                 TaskMonitor.DUMMY);
-        verifyRealPcodeStore(program);
+        verifyRealPcodeMemoryWrites(program);
         var key=identity(program);
         var steps=graph();
         require(HardwareDurableFunctionStages.loadProgress(directory,key,
@@ -370,7 +386,7 @@ public final class Ga12InterruptedCfgRestartFixture {
         Path directory=store(output);
         var first=JSON.fromJson(Files.readString(
             receipt(output,"before-restart")),JsonObject.class);
-        verifyRealPcodeStore(program);
+        verifyRealPcodeMemoryWrites(program);
         require(first.get("real_pcode_store_verified").getAsBoolean(),
             "First JVM lacked real P-code evidence");
         var key=identity(program);
