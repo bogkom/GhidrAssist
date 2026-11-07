@@ -100,12 +100,18 @@ jobs:
               "second_react_new_registry_generation",
               "second_react_stale_checkpoint_denied",
               "second_react_new_policy_readonly",
-              "second_react_no_firmware_mutation"):
+              "second_react_no_firmware_mutation",
+              "third_react_via_actual_swing_approve_button",
+              "third_react_real_tool_and_terminal_success",
+              "third_react_different_run_and_no_program_change"):
               assert receipt.get(key) is True,(key,receipt)
           independent=json.loads((root/"ga15-independent-result.json").read_text())
           assert independent["new_run_id"]!=independent["original_run"],independent
           assert independent["tool_calls"]==1,independent
           assert independent["fresh_policy_max_8"] and independent["previous_run_denied"],independent
+          third=json.loads((root/"ga15-gui-approved-result.json").read_text())
+          assert third["actual_swing_approve_button"] and third["terminal_success"],third
+          assert third["one_real_native_readonly_tool"] and third["program_revision_unchanged"],third
           assert runtime["status"]=="SUCCESS" and runtime["tool_calls"]==1,runtime
           assert runtime["tool_succeeded"] is True,runtime
           assert receipt["model_or_oauth_used"] is False
@@ -113,6 +119,30 @@ jobs:
           assert receipt["genuine_llm_resumption_verified"] is False
           print("GA-15/18 REAL GHIDRA REACT + AUTHENTICATED RPC + EXTERNAL CLI PASS")
           PY
+      - name: Offline checkpoint must persist across Ghidra process exit, never resume authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s "$RUNNER_TEMP/ga15-real-react-e2e/ga15-react-local-evidence.json"
+          # The CodeBrowser process has exited after the previous step; read
+          # the saved evidence in separate CLI processes with no live session.
+          python3 tools/ghidrassist-agent --session "$RUNNER_TEMP/missing-agentic-session.json"             agentic-verify --input "$RUNNER_TEMP/ga15-real-react-e2e/ga15-react-local-evidence.json"             > "$RUNNER_TEMP/ga15-offline-after-exit.json"
+          python3 tools/ghidrassist-agent --session "$RUNNER_TEMP/missing-agentic-session.json"             agentic-read --input "$RUNNER_TEMP/ga15-real-react-e2e/ga15-react-local-evidence.json"             --offset 0 --limit 1 > "$RUNNER_TEMP/ga15-offline-rows-after-exit.json"
+          python3 - <<'PY'
+          import json,os
+          from pathlib import Path
+          p=Path(os.environ["RUNNER_TEMP"])
+          verified=json.loads((p/"ga15-offline-after-exit.json").read_text())
+          readable=json.loads((p/"ga15-offline-rows-after-exit.json").read_text())
+          assert verified["verified"] is True and verified["complete"] is True,verified
+          assert readable["offline"] is True and readable["read_only"] is True,readable
+          assert len(readable["rows"])==1,readable
+          print("GA-12 OFFLINE CHECKPOINT AFTER CODEBROWSER EXIT PASS")
+          PY
+          if python3 tools/ghidrassist-agent --session "$RUNNER_TEMP/missing-agentic-session.json"                agentic-resume-check --input "$RUNNER_TEMP/ga15-real-react-e2e/ga15-react-local-evidence.json"                >"$RUNNER_TEMP/ga15-illicit-resume.out" 2>&1; then
+             echo "FAIL: offline checkpoint authorized a non-existing live program"
+             exit 1
+          fi
       - name: Bounded failure diagnostics
         if: failure()
         shell: bash
