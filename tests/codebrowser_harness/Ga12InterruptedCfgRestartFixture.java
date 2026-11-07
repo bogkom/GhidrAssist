@@ -2,6 +2,11 @@ package ghidrassist.hardware;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.security.MessageDigest;
 import ghidra.program.model.listing.Program;
 import ghidra.util.exception.CancelledException;
 import ghidra.util.task.TaskMonitor;
@@ -213,6 +218,110 @@ public final class Ga12InterruptedCfgRestartFixture {
         return checked;
     }
 
+    /** Construct malformed typed worklists without relying on model output. */
+    private static byte[] invalidTypedProgress(String fault) throws Exception {
+        ByteArrayOutputStream bytes=new ByteArrayOutputStream();
+        try(DataOutputStream out=new DataOutputStream(bytes)) {
+            out.writeUTF("wrong-schema".equals(fault)
+                ?"GA12-UNKNOWN-PROGRESS":"GA12-CFG-PROGRESS-1");
+            out.writeLong(ENTRY);
+            out.writeInt(BUDGET);
+            out.writeInt("past-budget".equals(fault)?BUDGET:1);
+            out.writeInt(1);
+            out.writeLong(ENTRY);
+            out.writeInt("bad-register".equals(fault)?1:0);
+            if("bad-register".equals(fault)) {
+                out.writeUTF("R0");
+                out.writeLong(0xfffa00L);
+            }
+            out.writeInt("bad-mmio".equals(fault)?1:0);
+            if("bad-mmio".equals(fault)) {
+                out.writeLong(0x1000000L);
+                out.writeInt(1);
+            }
+            out.writeBoolean(false);
+            out.writeByte(0);
+            out.writeByte(0);
+            out.writeBoolean(false);
+            out.writeBoolean(false);
+            out.writeInt("duplicate-pending".equals(fault)?2:1);
+            out.writeLong("unknown-pending".equals(fault)?ENTRY+2:ENTRY);
+            if("duplicate-pending".equals(fault))out.writeLong(ENTRY);
+        }
+        return bytes.toByteArray();
+    }
+
+    /**
+     * Replace only the typed payload of a disposable first-JVM stage and
+     * recompute the outer SHA-256. This exercises schema/semantic validation
+     * rather than just checksum failure. It is NOT attacker authentication.
+     */
+    private static byte[] validDigestEnvelope(byte[] original,byte[] payload)
+            throws Exception {
+        ByteArrayInputStream raw=new ByteArrayInputStream(original);
+        DataInputStream input=new DataInputStream(raw);
+        require(input.readInt()==0x47413132,"Expected GA12 durable envelope");
+        for(int i=0;i<6;i++)input.readUTF();
+        input.readBoolean();
+        int declared=input.readInt();
+        require(declared>0 && declared==raw.available()-32,
+            "Original checkpoint envelope inconsistent");
+        int prefixSize=original.length-raw.available()-4;
+        ByteArrayOutputStream buffer=new ByteArrayOutputStream();
+        try(DataOutputStream out=new DataOutputStream(buffer)) {
+            out.write(original,0,prefixSize);
+            out.writeInt(payload.length);
+            out.write(payload);
+        }
+        byte[] body=buffer.toByteArray();
+        byte[] digest=MessageDigest.getInstance("SHA-256").digest(body);
+        ByteArrayOutputStream result=new ByteArrayOutputStream();
+        result.write(body);
+        result.write(digest);
+        return result.toByteArray();
+    }
+
+    private static int malformedTypedFallback(Path directory,Path output,
+            HardwareDurableStageStore.Key key,
+            List<HardwareDataflow.Step> steps) throws Exception {
+        List<Path> originalFiles;
+        try(var stream=Files.list(directory)) {
+            originalFiles=stream.filter(p->p.getFileName().toString()
+                .endsWith(".chk")).toList();
+        }
+        require(originalFiles.size()==1,"Missing real saved worklist");
+        byte[] original=Files.readAllBytes(originalFiles.get(0));
+        byte[] cold=HardwareFunctionResultCodec.encode(
+            HardwareDataflow.analyze(ENTRY,steps,TARGETS,BUDGET));
+        int tested=0;
+        for(String fault:List.of("wrong-schema","past-budget",
+                "bad-register","bad-mmio","unknown-pending",
+                "duplicate-pending")) {
+            Path copy=Files.createDirectories(output.resolve(
+                "ga12-typed-invalid-"+fault));
+            byte[] payload=invalidTypedProgress(fault);
+            require(HardwareFunctionProgressCodec.decode(payload).isEmpty(),
+                "Malformed typed progress accepted by decoder: "+fault);
+            Files.write(copy.resolve(originalFiles.get(0).getFileName()),
+                validDigestEnvelope(original,payload));
+            require(HardwareDurableFunctionStages.loadProgress(copy,key,
+                    ENTRY,BUDGET,steps,TARGETS).isEmpty(),
+                "Valid-digest malformed progress accepted: "+fault);
+            require(HardwareDurableFunctionStages.load(copy,key,
+                    ENTRY,BUDGET,steps,TARGETS).isEmpty(),
+                "Malformed progress misread as finished source: "+fault);
+            var recomputed=HardwarePartialStageRunner.analyze(
+                ENTRY,steps,TARGETS,BUDGET,copy,key,TaskMonitor.DUMMY,()->true);
+            require(!recomputed.restoredPartial() &&
+                    !recomputed.result().truncated &&
+                    Arrays.equals(cold,HardwareFunctionResultCodec.encode(
+                        recomputed.result())),
+                "Invalid typed progress did not cold-recover: "+fault);
+            tested++;
+        }
+        return tested;
+    }
+
     /** Second genuine Ghidra process restores and completes the exact worklist. */
     public static void resumeInSecondJvm(Program program,Path output)
             throws Exception {
@@ -246,6 +355,9 @@ public final class Ga12InterruptedCfgRestartFixture {
             ENTRY,BUDGET+1,steps,TARGETS).isEmpty(),
             "Changed fixed-point budget reused a worklist");
 
+        int malformedFallbacks=malformedTypedFallback(
+            directory,output,key,steps);
+        require(malformedFallbacks==6,"Missing malformed typed CFG cases");
         int corruptFallbacks=damagedWorklistFallback(
             directory,output,key,steps);
         require(corruptFallbacks==3,"Missing damaged worklist cases");
@@ -287,6 +399,8 @@ public final class Ga12InterruptedCfgRestartFixture {
         report.addProperty("completed_stage_persisted",true);
         report.addProperty("damaged_partial_fallbacks",corruptFallbacks);
         report.addProperty("damaged_partial_never_complete",true);
+        report.addProperty("malformed_typed_fallbacks",malformedFallbacks);
+        report.addProperty("malformed_valid_digest_refused",true);
         report.addProperty("changed_input_refused",true);
         report.addProperty("changed_analyzer_refused",true);
         report.addProperty("changed_profile_refused",true);

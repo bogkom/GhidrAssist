@@ -1,5 +1,25 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
+## GA-12/18 — 2026-11-07: checksum-valid malformed interrupted worklist refusal
+
+The existing two-JVM real synthetic Ghidra 12.1.4 PUBLIC/CodeBrowser
+test now reproduces six malformed typed pending CFG states inside
+**correctly rehashed** copies of the first JVM's real disk envelope:
+unknown schema, iteration counter at the fixed-point budget, invalid
+register, invalid 24-bit MMIO cell, successor absent from the state
+map, and duplicate pending successor. Both pending and completed codecs
+must refuse each file. The real stage runner must cold-recompute a
+nontruncated result byte-identical to independent fixed-point analysis.
+The untouched original worklist must still resume in a second Ghidra
+JVM. This separates structural schema validation from simple SHA-256
+corruption detection: a digest is not authentication of the writer.
+
+This is model-free isolated regression, not an assertion of the complete
+Ghidra P-code translation pipeline, old schema migration, real firmware
+execution, MCU MM activation, or operator authorization. GA-12 remains
+PARTIAL; full Java25 extension and exact-SHA CI are acceptance gates.
+
+
 ## GA-12/18 — 2026-11-07: corrupt interrupted worklist fail-closed regression
 
 After the actual second-JVM restore test, disposable copies of its real
