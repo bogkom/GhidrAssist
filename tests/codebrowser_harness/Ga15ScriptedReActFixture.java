@@ -391,13 +391,16 @@ public final class Ga15ScriptedReActFixture {
                 terminal.findings().retainedCount()>0);
             receipt.addProperty("firmware_revision_unchanged",
                 program.getModificationNumber()==originalRevision);
+            boolean oldRunDenied=false;
             try {
                 registry.page(program,originalRevision,program.getExecutableSHA256(),
                     0,1,prior.run(),null);
-                throw new IllegalStateException("Stale source run was still accepted");
             } catch(IllegalStateException expected) {
-                receipt.addProperty("previous_run_denied",true);
+                oldRunDenied=true;
             }
+            if(!oldRunDenied)
+                throw new IllegalStateException("Stale source run was still accepted");
+            receipt.addProperty("previous_run_denied",true);
             receipt.addProperty("new_run_id",terminal.run());
             receipt.addProperty("tool_calls",result.getToolCallCount());
         } catch(Exception error) {
