@@ -228,7 +228,7 @@ public final class Ga12InterruptedCfgRestartFixture {
             out.writeInt("wrong-budget".equals(fault)?BUDGET+1:BUDGET);
             out.writeInt("past-budget".equals(fault)?BUDGET:1);
             out.writeInt(1);
-            out.writeLong(ENTRY);
+            out.writeLong("wrong-entry".equals(fault)?ENTRY+2:ENTRY);
             out.writeInt("bad-register".equals(fault)?1:0);
             if("bad-register".equals(fault)) {
                 out.writeUTF("R0");
@@ -245,7 +245,8 @@ public final class Ga12InterruptedCfgRestartFixture {
             out.writeBoolean(false);
             out.writeBoolean(false);
             out.writeInt("duplicate-pending".equals(fault)?2:1);
-            out.writeLong("unknown-pending".equals(fault)?ENTRY+2:ENTRY);
+            out.writeLong("unknown-pending".equals(fault) ||
+                "wrong-entry".equals(fault)?ENTRY+2:ENTRY);
             if("duplicate-pending".equals(fault))out.writeLong(ENTRY);
         }
         return bytes.toByteArray();
