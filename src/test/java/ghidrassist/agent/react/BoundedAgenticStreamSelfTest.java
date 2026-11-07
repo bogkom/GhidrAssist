@@ -26,6 +26,22 @@ public final class BoundedAgenticStreamSelfTest {
         check("a".equals(BoundedAgenticStream.bounded(
             smile,2)),"full callback split surrogate pair");
 
+        // Two separate streaming callbacks split a surrogate pair exactly
+        // where the buffer would otherwise store an orphan high surrogate.
+        var splitCap=new BoundedAgenticStream(2);
+        check(splitCap.append(smile.substring(0,2)), "orphan high surrogate not dropped");
+        check("a".equals(splitCap.text()), "unsafe surrogate retained at cap");
+        check(splitCap.append(smile.substring(2)) && "a".equals(splitCap.text()),
+            "orphan low surrogate leaked after full buffer");
+        var splitSafe=new BoundedAgenticStream(4);
+        check(!splitSafe.append(smile.substring(0,2)) &&
+                !splitSafe.append(smile.substring(2)) &&
+                splitSafe.text().equals(smile),
+            "valid surrogate pair spanning callbacks lost before capacity");
+        var orphanLow=new BoundedAgenticStream(3);
+        check(orphanLow.append(smile.substring(2)) && orphanLow.length()==0,
+            "unpaired low surrogate accepted from independent callback");
+
         var cache=new FindingsCache(1);
         cache.addFinding("one complete observation","source","listing",9);
         var baseline=cache.page(0,100);
