@@ -251,3 +251,34 @@ particular, Ghidra's modification counter is an observed value, not an
 independent durable semantic version identifier. This regression does not
 establish migration of a historical user CodeBrowser profile (#98), and
 requires no external LLM, Wyse, Precision or formal Supervisor testing.
+
+## GA-12: continue verified saved evidence after a real Ghidra restart (2026-11-07)
+
+**Import Saved Checkpoint** is an independent Query-tab action. The operator
+selects a locally saved Agentic checkpoint and supplies a NEW investigation
+objective; it does not restore a model's hidden state or any old plan. The
+Java reader limits the input to 8 MiB, verifies the canonical JSON SHA-256,
+the successful/complete retained-evidence contract and source Program
+executable SHA-256, and bounds excerpt lengths and the first 20 untrusted
+observations. It treats the old Ghidra modification number as historical
+metadata, not durable authorizing identity. Rehashed but modified local
+evidence remains untrusted; a local checksum does **not** authenticate
+authorship. The operator must independently verify such facts.
+
+A valid offline import creates a fresh chat ID, disables Accept All, resets
+the tool policy to READ_ONLY/NEXT_TASK/8 calls and stages the new objective
+with historical excerpts explicitly labeled **untrusted**. There is NO
+automatic tool invocation or Apply. New **Submit → independent plan →
+Approve Plan** is required to start a new ReAct generation. An offline
+checkpoint never grants access to the old live registry.
+
+The isolated Xvfb/CodeBrowser acceptance scenario now performs:
+first ReAct + SHA-256 checkpoint → exits first JVM → new Ghidra JVM opens
+the same isolated synthetic Program → rejects old live draft and wrong
+source/incomplete/tampered checkpoints → stages verified historical evidence
+into a new Query chat → drives the actual production Approve Plan button
+with a new deterministic scripted (network-free) plan → executes one real
+native read-only tool → writes a **distinct new checkpoint**. Separate
+CLI processes must verify both old and new snapshots, which remain
+read-only evidence. This does not test private firmware, user profile
+migration (Issue #98), hardware execution, external LLM or manual approval.
