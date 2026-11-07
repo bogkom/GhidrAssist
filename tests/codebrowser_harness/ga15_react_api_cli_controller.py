@@ -213,6 +213,46 @@ def main():
         ensure_ascii=False,sort_keys=True,separators=(",",":")).encode()).hexdigest()
     assert verified["payload_sha256"]==saved["payload_sha256"]==digest
 
+    # Production CLI preflight must compare the entire REAL ReAct evidence
+    # through authenticated Ghidra JSON-RPC, never re-execute model/tools.
+    checked=command(args.session,"agentic-resume-check","--input",checkpoint)
+    assert checked["identity_matches"] and checked["evidence_matches"],checked
+    assert checked["source_complete"] and checked["read_only"],checked
+    assert checked["next_action"]=="NEW_REVIEW_REQUIRED",checked
+    assert checked["resumable_ai_session"] is False,checked
+    assert checked["tool_execution_authorized"] is False,checked
+    assert checked["apply_authorized"] is False,checked
+    # A valid SHA-256 checksum is not evidence that the local content still
+    # matches live Program evidence: rehash a forged row and reject.
+    forged=out/"ga15-forged-checkpoint.json"
+    altered=json.loads(checkpoint.read_text())
+    altered["payload"]["rows"][0]["fact"]="forged synthetic evidence"
+    canonical=json.dumps(altered["payload"],ensure_ascii=False,
+                         sort_keys=True,separators=(",",":")).encode()
+    altered["payload_sha256"]=hashlib.sha256(canonical).hexdigest()
+    forged.write_text(json.dumps(altered))
+    command(args.session,"agentic-resume-check","--input",forged,success=False)
+    forged.unlink()
+    # A replaced run token is denied even when the checkpoint's own hash
+    # has been freshly recomputed by a local caller.
+    stale=out/"ga15-stale-run-checkpoint.json"
+    altered=json.loads(checkpoint.read_text())
+    altered["payload"]["run"]="stale-independent-run"
+    canonical=json.dumps(altered["payload"],ensure_ascii=False,
+                         sort_keys=True,separators=(",",":")).encode()
+    altered["payload_sha256"]=hashlib.sha256(canonical).hexdigest()
+    stale.write_text(json.dumps(altered))
+    command(args.session,"agentic-resume-check","--input",stale,success=False)
+    stale.unlink()
+    # A missing/wrong session token cannot pass the actual HTTP server.
+    wrong=json.loads(args.session.read_text())
+    wrong["token"]="definitely-invalid-authorization"
+    wrong_session=out/"invalid-auth-session.json"
+    wrong_session.write_text(json.dumps(wrong))
+    command(wrong_session,"agentic-resume-check","--input",checkpoint,
+            success=False)
+    wrong_session.unlink()
+
     # Corruption must be rejected by offline reader, not merely flagged.
     tampered=out/"ga15-corrupted-private.json"
     data=json.loads(checkpoint.read_text())
@@ -239,6 +279,11 @@ def main():
         "checkpoint_no_overwrite":True,
         "offline_no_session_verify_and_read":True,
         "tampered_offline_denied":True,
+        "real_cli_resume_preflight_exact_source":True,
+        "real_cli_resume_preflight_forged_row_denied":True,
+        "real_cli_resume_preflight_stale_run_denied":True,
+        "real_cli_resume_preflight_wrong_bearer_denied":True,
+        "no_resume_without_new_review":True,
         "retained":len(all_rows),"tool_calls":result["tool_calls"],
         "checkpoint_sha256":digest,
         "runtime_execution_verified":False,"model_or_oauth_used":False,
