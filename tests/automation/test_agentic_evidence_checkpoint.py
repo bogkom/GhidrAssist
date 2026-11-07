@@ -178,7 +178,7 @@ class LocalAgenticCheckpoint(unittest.TestCase):
                 cli.capture_agentic_checkpoint({},target,2)
             def live(_session,method,args):
                 calls.append((method,dict(args)))
-                response=page(0,1)
+                response=page(args["offset"],args["limit"])
                 response["read_only"]=True
                 return response
             with patch.object(cli,"rpc",live):
