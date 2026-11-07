@@ -1,5 +1,20 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
+## GA-12/15/18 — 2026-11-07: fresh CodeBrowser JVM source-identity regression
+
+Candidate regression runs a complete first ReAct + private evidence snapshot,
+closes its real synthetic CodeBrowser/JVM, and **starts a second Ghidra 12.1.4
+PUBLIC application process** on the *same isolated Ghidra project and Program*.
+In the new Swing tool it compares import SHA-256 and Program revision with
+persisted checkpoint metadata, requires a fresh empty Agentic registry, refuses
+old Review Draft without current live evidence and checks there is no pending
+approved plan, running model or inherited Accept All/task policy. Later offline
+CLI processes must still verify/read the SHA-256 checkpoint without granting
+live resume. The comparison records whether the volatile modification number
+matches or differs; neither outcome grants approval. GA-12/15 remain PARTIAL
+until a deliberate user-driven new Review is re-established after restart.
+
+
 ## GA-12/15/18 — actual Swing Approve Plan and post-exit evidence test candidate
 
 New deterministic Xvfb/Ghidra 12.1.4 regression covers the *actual*
