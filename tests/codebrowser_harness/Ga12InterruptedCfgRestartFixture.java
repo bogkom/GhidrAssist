@@ -53,7 +53,8 @@ public final class Ga12InterruptedCfgRestartFixture {
     private static String hex(Program program) {
         return program.getExecutableSHA256();
     }
-    private static HardwareDurableStageStore.Key identity(Program program) {
+    private static HardwareDurableStageStore.Key identity(Program program)
+            throws ghidra.program.model.mem.MemoryAccessException {
         require(program!=null && program.getDomainFile()!=null,
             "Actual Ghidra Program with project identity required");
         String imported=hex(program);
