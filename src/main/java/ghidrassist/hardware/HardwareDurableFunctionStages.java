@@ -50,8 +50,14 @@ public final class HardwareDurableFunctionStages {
             Collection<HardwareDataflow.Step> steps,Collection<Long> targets){
         HardwareDurableStageStore.Key k=key(full,entry,budget,steps,targets);
         if(directory==null || k==null)return Optional.empty();
+        // The durable envelope binds the requested graph/budget, but the
+        // untrusted typed payload must independently agree. A correctly
+        // rehashed, mismatched worklist is a cache miss, not an exception
+        // thrown later by analyzeSlice() into the caller's analysis.
         return HardwareDurableStageStore.load(directory,k)
-            .flatMap(HardwareFunctionProgressCodec::decode);
+            .flatMap(HardwareFunctionProgressCodec::decode)
+            .filter(progress -> progress.entry()==entry &&
+                progress.maxIterations()==budget);
     }
     /** Never store progress unless its typed worklist can be fully encoded. */
     public static boolean saveProgress(Path directory,
