@@ -116,6 +116,8 @@ def main():
     ap.add_argument("--automation-probe",action="store_true")
     ap.add_argument("--agentic-react-probe",action="store_true",
                     help="Actual ReAct/real Ghidra read-only tool/HTTP CLI model-free CI")
+    ap.add_argument("--agentic-react-scenario",
+                    choices=("normal","cancel","switch"),default="normal")
     ap.add_argument("--review-copy-probe",action="store_true",help="Separate isolated project-copy Review/Apply/Undo HTTP test")
     ap.add_argument("--review-copy-bad-sha",action="store_true",help="Verify invalid copy identity prevents Review before any edit")
     ap.add_argument("--cua-live",action="store_true",
@@ -127,6 +129,8 @@ def main():
     args=ap.parse_args()
     if args.review_copy_bad_sha and not args.review_copy_probe:
         ap.error("--review-copy-bad-sha requires --review-copy-probe")
+    if args.agentic_react_scenario!="normal" and not args.agentic_react_probe:
+        ap.error("non-default ReAct scenario requires --agentic-react-probe")
     if args.agentic_react_probe and (not args.automation_probe or
             args.review_copy_probe or args.bridge_mode!="off" or args.cua_live):
         ap.error("--agentic-react-probe requires --automation-probe, no Review/CUA/bridge")
@@ -219,7 +223,8 @@ def main():
                   "bridge_timeout":args.bridge_timeout if args.bridge_mode!="off" else 0,
                   "cua_hold_seconds":args.cua_timeout if args.cua_live else 0,
                   "automation_probe":args.automation_probe,
-                  "agentic_react_probe":args.agentic_react_probe}
+                  "agentic_react_probe":args.agentic_react_probe,
+                  "agentic_react_scenario":args.agentic_react_scenario}
             conf_path=work/"config.json"
             conf_path.write_text(json.dumps(conf),encoding="utf-8")
             jars=sorted(set(ghidra.rglob("*.jar")) | set(ext.rglob("*.jar")))
@@ -299,11 +304,16 @@ def main():
                                 json.dump({"schema":3,"port":receipt["port"],"token":token},private)
                             subprocess_checked(
                                 [sys.executable,str(SRC.parent/"ga15_react_api_cli_controller.py"),
-                                 "--session",str(private_session),"--output",str(out)],
+                                 "--session",str(private_session),"--output",str(out),
+                                 "--scenario",args.agentic_react_scenario],
                                 work,env,out/"ga15-react-controller.log",180)
                             e2e=json.loads((out/"ga15-react-e2e.json").read_text())
                             if (not e2e.get("real_react_execution") or
                                     not e2e.get("real_http_bearer_401") or
+                                    not e2e.get("scenario_passed") or
+                                    e2e.get("scenario")!=args.agentic_react_scenario):
+                                raise RuntimeError("Actual ReAct+HTTP+CLI source proof incomplete")
+                            if args.agentic_react_scenario=="normal" and (
                                     not e2e.get("offline_no_session_verify_and_read") or
                                     e2e.get("tool_calls")!=1):
                                 raise RuntimeError("Actual ReAct+HTTP+CLI source proof incomplete")
