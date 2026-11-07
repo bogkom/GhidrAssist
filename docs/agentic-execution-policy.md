@@ -134,3 +134,16 @@ checkpoint or a replaced run is refused. The response explicitly states
 new model session or tool execution; it is not an actual resume, rollback,
 operator approval, or identity authentication of the file's creator. No remote
 snapshot import, callback replay or privileged mutation is implemented.
+
+## GA-12/15: real CodeBrowser preflight and content-stable Review (2026-11-07)
+
+The read-only `agentic-resume-check` now compares **every retained finding row**
+against a live, authenticated Agentic source in the current Ghidra Program, not
+just matching run ids, revision and counters. Every bounded page carries the
+same Program/import SHA, run token, terminal state and cache revision; a
+concurrent mutation, shortened page or rehashed locally forged evidence is
+rejected. CI exercises the real CLI over real CodeBrowser/JSON-RPC after an
+actual ReAct native tool call in synthetic Ghidra 12.1.4 PUBLIC, including
+forged-content, stale-run and unauthorized Bearer refusals. A preflight PASS
+only opens an opportunity for **independent human Review**; it cannot resume
+LLM execution, grant tools, reuse approvals or Apply modifications.

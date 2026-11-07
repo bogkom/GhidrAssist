@@ -178,7 +178,7 @@ class LocalAgenticCheckpoint(unittest.TestCase):
                 cli.capture_agentic_checkpoint({},target,2)
             def live(_session,method,args):
                 calls.append((method,dict(args)))
-                response=page(0,1)
+                response=page(args["offset"],args["limit"])
                 response["read_only"]=True
                 return response
             with patch.object(cli,"rpc",live):
@@ -189,7 +189,7 @@ class LocalAgenticCheckpoint(unittest.TestCase):
             self.assertFalse(result["apply_authorized"])
             self.assertEqual(result["next_action"],"NEW_REVIEW_REQUIRED")
             self.assertEqual(calls,[("agentic.findings.page",
-                {"offset":0,"limit":1,"expected_program_revision":12})])
+                {"offset":0,"limit":100,"expected_program_revision":12})])
             for mutation in (
                 lambda p:p["agentic"].update(run="replacement"),
                 lambda p:p["agentic"].update(state="CANCELLED"),
@@ -197,6 +197,10 @@ class LocalAgenticCheckpoint(unittest.TestCase):
                 lambda p:p["agentic"].update(importSha256="b"*64),
                 lambda p:p["agentic"]["findings"].update(revision=8),
                 lambda p:p["agentic"]["findings"].update(acceptedCount=4),
+                lambda p:p["agentic"]["findings"]["rows"][0].update(
+                    fact="forged content with unchanged counters"),
+                lambda p:p["agentic"]["findings"].update(rows=[]),
+                lambda p:p["agentic"]["findings"].update(hasMore=True,rows=[]),
                 lambda p:p.update(read_only=False),
             ):
                 response=page(0,1)
@@ -213,6 +217,36 @@ class LocalAgenticCheckpoint(unittest.TestCase):
                     cli.capture_agentic_checkpoint({},cancelled,3)
                 with self.assertRaises(ValueError):
                     cli.check_agentic_resume_preflight({},cancelled)
+
+    def test_resume_preflight_stitches_all_rows_and_rejects_changed_later_page(self):
+        with tempfile.TemporaryDirectory() as work:
+            target=Path(work)/"saved.json"
+            with patch.object(cli,"rpc",lambda _,__,args:page(
+                    args["offset"],args["limit"])):
+                cli.capture_agentic_checkpoint({},target,2)
+            seen=[]
+            def paginated(_session,method,args):
+                self.assertEqual(method,"agentic.findings.page")
+                seen.append(dict(args))
+                reply=page(args["offset"],1)
+                reply["read_only"]=True
+                return reply
+            # Force a one-row-per-page live transport even though requested
+            # page limit is 100; the server is allowed to return fewer rows.
+            with patch.object(cli,"rpc",paginated):
+                verified=cli.check_agentic_resume_preflight({},target)
+            self.assertTrue(verified["evidence_matches"])
+            self.assertEqual(len(seen),3)
+            self.assertEqual(seen[1]["expected_run"],"test-opaque-run")
+            self.assertEqual(seen[1]["expected_findings_revision"],7)
+            def changed_later(_session,method,args):
+                reply=page(args["offset"],1)
+                reply["read_only"]=True
+                if args["offset"]==1:
+                    reply["agentic"]["findings"]["rows"][0]["fact"]="altered"
+                return reply
+            with patch.object(cli,"rpc",changed_later),self.assertRaises(ValueError):
+                cli.check_agentic_resume_preflight({},target)
 
     def test_no_write_on_invalid_or_unbounded_pages(self):
         with tempfile.TemporaryDirectory() as work:

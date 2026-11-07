@@ -166,40 +166,61 @@ def load_verified_agentic_payload(source):
 
 
 def check_agentic_resume_preflight(session, source):
-    """Compare offline retained evidence with active Ghidra, without replay."""
+    """Compare every saved row to live Ghidra evidence; never authorize replay."""
     payload, digest = load_verified_agentic_payload(source)
     if payload["state"] == "RUNNING":
         raise ValueError("Running checkpoint is not a terminal handoff")
-    # A checkpoint alone is never a source of approval or a replayable task.
     if payload["import_sha256"] == "UNKNOWN":
         raise ValueError("Checkpoint lacks verified firmware import identity")
-    reply = rpc(session, "agentic.findings.page", {
-        "offset": 0, "limit": 1,
-        "expected_program_revision": payload["program_revision"],
-    })
-    if reply.get("read_only") is not True:
-        raise ValueError("Live Agentic source is not explicitly read-only")
-    live = reply["agentic"]
-    if (live["programRevision"] != payload["program_revision"] or
-            live["importSha256"] != payload["import_sha256"]):
-        raise ValueError("Active Program revision or firmware SHA differs")
-    if live["run"] != payload["run"]:
-        raise ValueError("Agentic run changed; old evidence cannot be replayed")
-    if (live["state"] != payload["state"] or
-            live["findings"]["revision"] != payload["findings_revision"] or
-            live["findings"]["retainedCount"] != payload["retained_count"] or
-            live["findings"]["acceptedCount"] != payload["accepted_count"] or
-            live["findings"]["evictedCount"] != payload["evicted_count"] or
-            live["findings"]["sourceIncomplete"] != payload["source_incomplete"]):
-        raise ValueError("Active Agentic evidence changed since checkpoint")
-    # Checking matching metadata cannot authenticate a checkpoint author;
-    # never turn this into a tool/model execution authorization.
+    # Bounded by the checkpoint validator (at most 1000 retained rows).
+    # A page of matching counters is insufficient: require exact observed
+    # row contents and the same source generation on EVERY live page.
+    observed = []
+    page_limit = 100
+    while True:
+        offset = len(observed)
+        params = {"offset": offset, "limit": page_limit,
+                  "expected_program_revision": payload["program_revision"]}
+        if offset:
+            params["expected_run"] = payload["run"]
+            params["expected_findings_revision"] = payload["findings_revision"]
+        reply = rpc(session, "agentic.findings.page", params)
+        if reply.get("read_only") is not True:
+            raise ValueError("Live Agentic source is not explicitly read-only")
+        live = reply["agentic"]
+        current = live["findings"]
+        if (live["programRevision"] != payload["program_revision"] or
+                live["importSha256"] != payload["import_sha256"] or
+                live["run"] != payload["run"] or
+                live["state"] != payload["state"] or
+                current["revision"] != payload["findings_revision"] or
+                current["retainedCount"] != payload["retained_count"] or
+                current["acceptedCount"] != payload["accepted_count"] or
+                current["evictedCount"] != payload["evicted_count"] or
+                current["sourceIncomplete"] != payload["source_incomplete"]):
+            raise ValueError("Active Agentic evidence generation changed")
+        chunk = current["rows"]
+        if (not isinstance(chunk, list) or len(chunk) > page_limit or
+                len(observed) + len(chunk) > payload["retained_count"] or
+                (current["hasMore"] and not chunk)):
+            raise ValueError("Live Agentic pagination inconsistent or stalled")
+        expected_chunk = payload["rows"][offset:offset + len(chunk)]
+        if chunk != expected_chunk:
+            raise ValueError("Active Agentic findings content differs from checkpoint")
+        observed.extend(chunk)
+        if not current["hasMore"]:
+            break
+    if len(observed) != payload["retained_count"]:
+        raise ValueError("Active Agentic findings missing retained rows")
+    # A match only permits a human to review source evidence. No tools,
+    # LLM state or Apply authorizations are copied into the new task.
     return {
         "verified_sha256": digest, "identity_matches": True,
-        "evidence_matches": True, "read_only": True,
-        "resumable_ai_session": False, "tool_execution_authorized": False,
-        "apply_authorized": False, "next_action": "NEW_REVIEW_REQUIRED",
-        "notice": "Preflight only; no LLM session, MCP tool or Ghidra Apply resumed",
+        "evidence_matches": True, "source_complete": payload["complete"],
+        "read_only": True, "resumable_ai_session": False,
+        "tool_execution_authorized": False, "apply_authorized": False,
+        "next_action": "NEW_REVIEW_REQUIRED",
+        "notice": "Preflight only; a new independent, reviewed investigation is required",
     }
 
 
