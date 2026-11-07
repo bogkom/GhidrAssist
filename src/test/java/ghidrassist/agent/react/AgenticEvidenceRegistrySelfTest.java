@@ -161,6 +161,49 @@ public final class AgenticEvidenceRegistrySelfTest {
         yes(finishedReplacementCalls.get()==0,
             "replacing an already completed run must not cancel the provider");
 
+        // A late provider callback must never resurrect or reclassify a
+        // terminal checkpoint. The FIRST terminal outcome wins.
+        var terminalCache=new FindingsCache();
+        terminalCache.addFinding("terminal evidence",null,"listing",6);
+        registry.begin(programA,17L,"a".repeat(64),terminalCache);
+        registry.finish(programA,terminalCache,"CANCELLED");
+        registry.finish(programA,terminalCache,"SUCCESS");
+        registry.finish(programA,terminalCache,"ERROR");
+        yes(registry.page(programA,17L,"a".repeat(64),0,1,null,null)
+            .state().equals("CANCELLED"),
+            "late success/error must not resurrect cancelled run");
+        var successfulCache=new FindingsCache();
+        successfulCache.addFinding("success evidence",null,"listing",6);
+        registry.begin(programA,17L,"a".repeat(64),successfulCache);
+        registry.finish(programA,successfulCache,"SUCCESS");
+        registry.finish(programA,successfulCache,"ERROR");
+        yes(registry.page(programA,17L,"a".repeat(64),0,1,null,null)
+            .state().equals("SUCCESS"),
+            "late provider error must not rewrite a completed run");
+
+        // The three-argument overload must not hold the monitor while its
+        // four-argument delegate invokes cancellation synchronously.
+        var monitorCache=new FindingsCache();
+        var monitorCancelCalls=new java.util.concurrent.atomic.AtomicInteger();
+        registry.begin(programA,17L,"a".repeat(64),monitorCache,()->{
+            monitorCancelCalls.incrementAndGet();
+            yes(!Thread.holdsLock(registry),
+                "replacement cancellation must run without registry monitor");
+            registry.finish(programA,monitorCache,"CANCELLED");
+        });
+        var nextMonitorCache=new FindingsCache();
+        String monitorRun=registry.begin(programA,17L,
+            "a".repeat(64),nextMonitorCache);
+        yes(monitorCancelCalls.get()==1 &&
+            registry.page(programA,17L,"a".repeat(64),0,1,null,null)
+                .run().equals(monitorRun),
+            "three-argument begin replaces and cancels previous active run");
+        registry.finish(programA,nextMonitorCache,"MAX_TOOLS");
+        registry.finish(programA,nextMonitorCache,"SUCCESS");
+        yes(registry.page(programA,17L,"a".repeat(64),0,1,null,null)
+            .state().equals("MAX_TOOLS"),
+            "budget termination must not be promoted by late SUCCESS");
+
         System.out.println("AGENTIC REGISTRY PASS assertions="+assertions);
     }
 }
