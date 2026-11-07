@@ -227,7 +227,7 @@ def check_agentic_resume_preflight(session, source):
 def create_agentic_review_draft(session, source, destination, query):
     """Create a new human-review proposal; never import prior approvals."""
     if not isinstance(query, str) or not 8 <= len(query) <= 512 or any(
-            ord(ch) < 32 and ch not in "\\t\\n" for ch in query):
+            ord(ch) < 32 and ch not in "\t\n" for ch in query):
         raise ValueError("New analysis objective must be 8..512 readable characters")
     # Verify once against actual active Ghidra, then re-read from disk and
     # assert byte-equivalent canonical SHA; a concurrent replacement of the
@@ -266,7 +266,7 @@ def create_agentic_review_draft(session, source, destination, query):
                            ensure_ascii=False).encode("utf-8")
     envelope = {"payload": draft,
                 "payload_sha256": hashlib.sha256(canonical).hexdigest()}
-    data = (json.dumps(envelope, indent=2, ensure_ascii=False)+"\\n").encode()
+    data = (json.dumps(envelope, indent=2, ensure_ascii=False)+"\n").encode()
     if len(data) > 128*1024:
         raise ValueError("Oversized reviewed analysis draft")
     dest = Path(destination).expanduser()
