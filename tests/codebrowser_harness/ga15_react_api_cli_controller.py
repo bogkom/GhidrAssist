@@ -46,6 +46,8 @@ def main():
     ap=argparse.ArgumentParser()
     ap.add_argument("--session",required=True,type=Path)
     ap.add_argument("--output",required=True,type=Path)
+    ap.add_argument("--scenario",choices=("normal","cancel","switch"),
+                    default="normal")
     args=ap.parse_args()
     session=json.loads(args.session.read_text())
     out=args.output
@@ -77,6 +79,86 @@ def main():
             "--expected-revision",r["programRevision"],
             "--expected-findings-revision",r["findings"]["revision"],
             success=False)
+
+    if args.scenario!="normal":
+        # A real running ReAct native tool has finished; the scripted LLM
+        # callback is deliberately withheld. Cancel directly or use the
+        # live Swing ProgramManager A→B→A switching path.
+        (out/"ga15-react-action").write_text(args.scenario)
+        wait_path(out/"ga15-react-action-done",60)
+        if (out/"ga15-react-action-error").exists():
+            raise AssertionError((out/"ga15-react-action-error").read_text())
+        result=json.loads(wait_path(out/"ga15-react-result.json",60).read_text())
+        assert result["scenario"]==args.scenario and result["status"]=="CANCELLED",result
+        assert result["tool_succeeded"] and result["tool_calls"]==1,result
+        assert result["revision_unchanged"] and result["real_react_orchestrator"],result
+        if args.scenario=="cancel":
+            state=command(args.session,"agentic-findings","--offset",0,"--limit",1)
+            bound=state["agentic"]
+            assert bound["run"]==r["run"] and bound["state"]=="CANCELLED"
+            assert not bound["complete"] and bound["findings"]["retainedCount"]==0
+            assert bound["findings"]["revision"]==r["findings"]["revision"]
+            # A cancelled investigation may be saved as INCOMPLETE for
+            # later inspection, but never reopened as successful source.
+            canceled=out/"ga15-react-cancelled-evidence.json"
+            saved=command(args.session,"agentic-checkpoint","--limit",1,
+                          "--output",canceled)
+            assert saved["complete"] is False and saved["retained_count"]==0
+            offline=command(out/"no-live-session.json","agentic-read",
+                            "--input",canceled,"--offset",0,"--limit",1)
+            assert not offline["source_complete"] and offline["rows"]==[]
+        else:
+            # Program B has no Agentic evidence and must not see A's cache.
+            active=command(args.session,"status")
+            assert active["program"]=="guard-other.bin",active
+            command(args.session,"agentic-findings","--offset",0,"--limit",1,
+                    success=False)
+            (out/"ga15-react-return").write_text("return-to-first-Program")
+            wait_path(out/"ga15-react-returned",60)
+            active=command(args.session,"status")
+            assert active["program"]=="synthetic-mmio.bin",active
+            command(args.session,"agentic-findings","--offset",0,"--limit",1,
+                    success=False)
+            # Old run MUST NOT be recoverable by private checkpoint either.
+            command(args.session,"agentic-checkpoint","--limit",1,
+                    "--output",out/"ga15-switch-stale-evidence.json",success=False)
+            assert not (out/"ga15-switch-stale-evidence.json").exists()
+        # Deliver the provider's **delayed** model callback after the
+        # result is terminal. It must not modify UI or resurrect source.
+        (out/"ga15-react-release").write_text("send-delayed-model-callback")
+        late=json.loads(wait_path(out/"ga15-react-late-delivered",60).read_text())
+        assert (late["provider_cancel_calls"]==1 and
+                late["synchronous_cancel_error_callbacks"]==1 and
+                late["late_ui_updates"]==0),late
+        if args.scenario=="cancel":
+            state=command(args.session,"agentic-findings","--offset",0,"--limit",1)
+            bound=state["agentic"]
+            assert bound["state"]=="CANCELLED" and bound["run"]==r["run"]
+            assert bound["findings"]["retainedCount"]==0
+            assert bound["findings"]["revision"]==r["findings"]["revision"]
+        else:
+            command(args.session,"agentic-findings","--offset",0,"--limit",1,
+                    success=False)
+        receipt={
+            "schema":1,"synthetic_only":True,"scenario":args.scenario,
+            "scenario_passed":True,"actual_ghidra_codebrowser":True,
+            "real_react_execution":True,"real_http_bearer_401":True,
+            "real_cli_in_progress":True,"real_cli_completed":True,
+            "real_ghidra_native_tool":True,"tool_calls":result["tool_calls"],
+            "cancellation_receipt":"CANCELLED",
+            "cancelled_after_real_tool":True,
+            "program_switch_invalidation":args.scenario=="switch",
+            "cancel_retained_snapshot":args.scenario=="cancel",
+            "synchronous_cancel_error_preserves_CANCELLED":True,
+            "delayed_callback_no_ui_update":True,
+            "delayed_callback_no_resurrection":True,
+            "source_revision_unchanged":True,
+            "model_or_oauth_used":False,"runtime_execution_verified":False,
+        }
+        (out/"ga15-react-e2e.json").write_text(
+            json.dumps(receipt,indent=2,sort_keys=True)+"\n")
+        print("GA-15/18 REAL REACT CANCEL/SWITCH/DELAYED CALLBACK E2E PASS")
+        return
 
     (out/"ga15-react-release").write_text("external-CLI-verified-running")
     result=json.loads(wait_path(out/"ga15-react-result.json",60).read_text())
@@ -144,7 +226,9 @@ def main():
     all_rows=json.loads(checkpoint.read_text())["payload"]["rows"]
     assert any("00000020" in (row.get("fact") or "") for row in all_rows)
     receipt={
-        "schema":1,"synthetic_only":True,"actual_ghidra_codebrowser":True,
+        "schema":1,"synthetic_only":True,
+        "scenario":"normal","scenario_passed":True,
+        "actual_ghidra_codebrowser":True,
         "real_react_execution":True,"llm_provider":"scripted-no-network",
         "native_readonly_tool":"ga_get_current_address",
         "real_http_bearer_401":True,"real_cli_in_progress":True,

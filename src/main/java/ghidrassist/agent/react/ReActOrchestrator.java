@@ -366,9 +366,19 @@ public class ReActOrchestrator {
             final ghidra.program.model.listing.Program evidenceProgram=
                 plugin.getCurrentProgram();
             if(evidenceProgram!=null) {
+                // The registry uses weak Program keys. Do not make its
+                // value retain this plugin/run (and thus the Program)
+                // through a strong cancellation closure.
+                var ownerRef=new java.lang.ref.WeakReference<>(this);
+                var runRef=new java.lang.ref.WeakReference<>(resultFuture);
                 AgenticEvidenceRegistry.shared().begin(evidenceProgram,
                     evidenceProgram.getModificationNumber(),
-                    evidenceProgram.getExecutableSHA256(),findings);
+                    evidenceProgram.getExecutableSHA256(),findings,
+                    () -> {
+                        ReActOrchestrator active=ownerRef.get();
+                        CompletableFuture<ReActResult> run=runRef.get();
+                        if(active!=null && run!=null)active.cancelBound(run);
+                    });
                 resultFuture.whenComplete((result,error) ->
                     AgenticEvidenceRegistry.shared().finish(
                         evidenceProgram,findings,
@@ -510,6 +520,9 @@ public class ReActOrchestrator {
         CompletableFuture<ReActResult> resultFuture
     ) {
         // Check termination conditions
+        // Late callbacks from an earlier run may arrive after a cancellation
+        // and even after a *new* run resets the shared cancelled flag.
+        if(resultFuture.isDone())return;
         if (cancelled.get() || !handler.shouldContinue()) {
             completeWithCancellation(resultFuture, findings, startTime, handler);
             return;
@@ -576,6 +589,7 @@ public class ReActOrchestrator {
 
             @Override
             public void onUpdate(String partialResponse) {
+                if(resultFuture.isDone() || cancelled.get())return;
                 // Forward ALL conversational updates to the UI immediately
                 if (partialResponse != null && !partialResponse.isEmpty()) {
                     responseBuffer.append(partialResponse);
@@ -589,6 +603,7 @@ public class ReActOrchestrator {
 
             @Override
             public void onToolsExecuted(int toolCount) {
+                if(resultFuture.isDone() || cancelled.get())return;
                 toolsExecutedThisRound = true;
                 hasCalledTools = true;
                 toolCallCount.addAndGet(toolCount);
@@ -697,6 +712,13 @@ public class ReActOrchestrator {
         int toolCallCount,
         ReActResult.Status completionStatus
     ) {
+        // Cancellation may race the previous tool callback. Never dispatch
+        // a final model synthesis after the run has become terminal.
+        if(resultFuture.isDone())return;
+        if(cancelled.get() || !handler.shouldContinue()) {
+            completeWithCancellation(resultFuture,findings,startTime,handler);
+            return;
+        }
         String synthesisPrompt = ReActPrompts.getSynthesisPrompt(
             objective,
             findings.formatDetailed() + "\n" + toolRegistry.getRecentToolEvidence(),
@@ -783,6 +805,11 @@ public class ReActOrchestrator {
         CompletableFuture<ReActResult> resultFuture,
         int currentIteration
     ) {
+        if(resultFuture.isDone())return;
+        if(cancelled.get() || !handler.shouldContinue()) {
+            completeWithCancellation(resultFuture,findings,startTime,handler);
+            return;
+        }
         String reflectionPrompt = ReActPrompts.getReflectionPrompt(
             objective,
             findings.formatForPrompt() + "\n" + toolRegistry.getRecentToolEvidence(),
@@ -801,16 +828,19 @@ public class ReActOrchestrator {
 
             @Override
             public void onUpdate(String partialResponse) {
+                if(resultFuture.isDone() || cancelled.get())return;
                 reflection.append(partialResponse);
             }
 
             @Override
             public void onComplete(String fullResponse) {
-                reflectionFuture.complete(fullResponse);
+                if(!resultFuture.isDone() && !cancelled.get())
+                    reflectionFuture.complete(fullResponse);
             }
 
             @Override
             public void onError(Throwable error) {
+                if(resultFuture.isDone() || cancelled.get())return;
                 // On error, default to continuing
                 Msg.warn(ReActOrchestrator.this, "Reflection failed, continuing investigation: " + error.getMessage());
                 reflectionFuture.complete("CONTINUE: Reflection error, continuing investigation");
@@ -1090,7 +1120,9 @@ public class ReActOrchestrator {
         Instant startTime,
         ReActProgressHandler handler
     ) {
-        ReActResult result = ReActResult.cancelled(findings, Duration.between(startTime, Instant.now()));
+        ReActResult result = ReActResult.cancelled(findings,
+            Duration.between(startTime, Instant.now()),
+            toolRegistry.getInvestigationToolCallCount());
         if (resultFuture.complete(result)) {
             handler.onComplete(result);
         }
@@ -1111,18 +1143,37 @@ public class ReActOrchestrator {
      * Cancel the current analysis.
      */
     public void cancel() {
-        cancelled.set(true);
-        llmApi.cancelCurrentRequest();
+        cancelBound(null);
+    }
 
-        CompletableFuture<ReActResult> resultFuture = activeResultFuture;
-        Instant startTime = activeStartTime;
-        FindingsCache findings = activeFindings;
-        if (resultFuture != null && startTime != null) {
-            ReActResult cancelledResult = ReActResult.cancelled(
-                findings,
-                Duration.between(startTime, Instant.now())
-            );
-            resultFuture.complete(cancelledResult);
+    /**
+     * A late source-invalidation callback cannot cancel a subsequent
+     * analysis owned by this same orchestrator. Capture exactly one run
+     * before asking a model provider to cancel any pending callback.
+     */
+    private void cancelBound(CompletableFuture<ReActResult> expected) {
+        final CompletableFuture<ReActResult> resultFuture;
+        final Instant started;
+        final FindingsCache findings;
+        synchronized(analysisStateLock) {
+            resultFuture=activeResultFuture;
+            if(resultFuture==null || (expected!=null && expected!=resultFuture))
+                return;
+            cancelled.set(true);
+            started=activeStartTime;
+            findings=activeFindings;
+        }
+        // The provider may synchronously invoke onError() from its own
+        // cancelCurrentRequest() call. Publish CANCELLED *first*, so that
+        // error cannot win the race and misreport an intentional stop.
+        // Late provider/tool callbacks then see the terminal future.
+        resultFuture.complete(ReActResult.cancelled(findings,
+            started==null?Duration.ZERO:Duration.between(started,Instant.now()),
+            toolRegistry.getInvestigationToolCallCount()));
+        try {
+            llmApi.cancelCurrentRequest();
+        } catch(RuntimeException providerError) {
+            Msg.warn(this,"Model cancellation failed: "+providerError.getMessage());
         }
     }
 }

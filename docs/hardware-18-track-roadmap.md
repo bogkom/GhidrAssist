@@ -4,6 +4,58 @@ Status: **IN PROGRESS — integrated baseline 2026-11-06 (PR #198)**. Scope sour
 
 
 
+## GA-15/18 — anulowanie, przełączenie Program i spóźniony callback (2026-11-07)
+
+**Baza:** scalony PR #204, `master`
+`2db426688f351fc9eba4675d23b317bcb51345c6`, po
+6/6 workflow GitHub Actions SUCCESS dla dokładnego HEAD
+`6db505a1e11a15c35bd54e1b0a42e5fcd40ef9f0`.
+
+**GA-15 — PARTIAL, fail-closed przy anulowaniu:**
+`ReActOrchestrator` publikuje callback anulowania związany z
+**dokładnym aktywnym przebiegiem** w rejestrze dowodów.
+Zmiana aktywnego Program w CodeBrowser natychmiast usuwa
+jego odczytowy cache i żąda anulowania nadal aktywnego ReAct.
+Stara callback cancellation NIE może anulować kolejnej sesji.
+Zakończonej sesji nie anuluje się ponownie przy unieważnieniu.
+`ReActResult.CANCELLED` raportuje faktyczną liczbę
+wykonanych już narzędzi z dziennika ToolRegistry.
+Anulowanie najpierw zapisuje terminalny wynik `CANCELLED`,
+dopiero później powiadamia dostawcę LLM — dostawca może
+bowiem wywołać `onError` synchronicznie już podczas
+`cancelCurrentRequest()`. W takim wyścigu wynik ma
+pozostać `CANCELLED`, nie `ERROR`.
+Opóźnione callbacki LLM po zakończeniu run nie mogą ponownie
+dopisywać dowodów, aktualizować UI ani wznawiać etapów
+ReAct nawet jeśli inny run zresetował globalną flagę cancel.
+
+**GA-18 — PARTIAL, pełna asercja CI:** dwa nowe scenariusze
+na rzeczywistej, syntetycznej Ghidrze 12.1.4 PUBLIC
+(Java25, CodeBrowser/Swing, Xvfb) testują:
+(1) `RUNNING → CANCELLED → delayed model callback`, gdzie
+wynik narzędzia `ga_get_current_address` jest już
+zweryfikowany, ale ukończenie modelu celowo opóźnione;
+(2) `Program A → Program B → Program A` podczas
+`RUNNING`, gdzie API odmawia starych dowodów w obu
+programach. W obu scenariuszach zewnętrzny proces
+używa produkcyjnego Bearer JSON-RPC i `ghidrassist-agent`,
+sprawdza brak reanimacji dowodów po opóźnionym callbacku,
+status CANCELLED, brak zmian rewizji Program i dokładną
+liczbę już wykonanych narzędzi. W scenariuszu ręcznego
+anulowania wolno zapisać **niekompletny** checkpoint
+do odczytu offline, ale nie podnosić go do statusu SUCCESS.
+Dotychczasowy pozytywny scenariusz sukcesu pozostaje
+regresją porównawczą. Dane wyłącznie syntetyczne; testy
+nie używają prawdziwego modelu LLM ani prywatnego ECU411.
+
+**Granice:** anulowanie nie cofa wcześniej wykonanych operacji
+narzędzi, nie jest odwróceniem transakcji Apply i nie potwierdza
+wykonania instrukcji MCU. ReAct/GA-15 i CI/GA-18 pozostają
+PARTIAL do czasu testów dodatkowych klas narzędzi oraz
+kontrolowanego wznowienia całej sesji modelu. Domyślną
+ścieżką są GitHub Actions, bez starych lokalnych workerów,
+Wyse/Precision i bez wznowienia Supervisora.
+
 ## GA-15 + GA-18 — pełny ReAct → HTTP JSON-RPC → CLI (2026-11-07)
 
 **Baza:** zintegrowany PR #203 na `master`

@@ -596,6 +596,33 @@ The RPC operations do not write Ghidra database content, enable
 12.1.4 CI verifies packaged production classes on synthetic CPU32
 functions, pagination and stale-guard failures.
 
+## GA-15/18 — bounded cancellation and delayed model callbacks (2026-11-07)
+
+Automation API `agentic.findings.page` remains strictly read-only.
+No new endpoint for cancel or arbitrary ReAct execution is exposed.
+Source invalidation through the existing Ghidra `ProgramPlugin`
+activation event now *also* cancels the corresponding active ReAct
+analysis, while retaining the existing fail-closed source and revision
+checks. A manual ReAct cancellation may retain an incomplete
+`CANCELLED` evidence snapshot; its actual Ghidra native tool calls
+are accounted for, and a late model callback cannot promote its
+state to `SUCCESS` or publish more rows. Switching back to the
+previous CodeBrowser Program never revives an invalidated snapshot.
+
+Both scenarios also inject one synchronous provider `onError` during
+cancellation and a deliberately late tool/LLM callback afterward.
+The former must preserve `CANCELLED`; the latter must not update the
+UI or resurrect retained evidence. This is not a real-provider test.
+Real Ghidra 12.1.4 PUBLIC / Java25 CI drives two isolated scenarios
+from a distinct external `ghidrassist-agent` process: direct
+cancellation and GUI Program A→B→A switching, each after one
+read-only native tool call and before releasing the scripted model
+callback. The CI checks `RUNNING`, `CANCELLED`, HTTP denial of
+stale evidence, actual source/tool-call counts, unchanged Ghidra
+Program revision, safe read-only offline incomplete checkpoint and
+no late UI updates or evidence resurrection. The tests do not use
+a real LLM or local Wyse/Precision/Supervisor.
+
 ## GA-15/18 — real ReAct read-only tool → authenticated JSON-RPC → external CLI (2026-11-07)
 
 The isolated CI end-to-end workflow runs actual **Ghidra 12.1.4

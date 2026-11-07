@@ -347,8 +347,28 @@ public final class CodeBrowserMmioMain {
                     "ReAct E2E needs the production authenticated JSON-RPC fixture");
                 require(plugin.getCurrentProgram()==first,
                     "ReAct E2E did not select the real synthetic Program");
-                ghidrassist.agent.react.Ga15ScriptedReActFixture.start(
-                    plugin,first,site,out);
+                String scenario=conf.has("agentic_react_scenario") ?
+                    conf.get("agentic_react_scenario").getAsString() : "normal";
+                ghidrassist.agent.react.Ga15ScriptedReActFixture.startScenario(
+                    plugin,first,site,out,scenario,
+                    () -> {
+                        try {
+                            edt(()->tool[0].getService(ProgramManager.class)
+                                .setCurrentProgram(second));
+                        } catch(Exception failure) {
+                            throw new IllegalStateException(
+                                "Synthetic GUI switch to Program B failed",failure);
+                        }
+                    },
+                    () -> {
+                        try {
+                            edt(()->tool[0].getService(ProgramManager.class)
+                                .setCurrentProgram(first));
+                        } catch(Exception failure) {
+                            throw new IllegalStateException(
+                                "Synthetic GUI switch back to Program A failed",failure);
+                        }
+                    });
                 result.addProperty("ga15_real_react_e2e_started",true);
             }
             // File-transport contract v2: external process drives real Swing.

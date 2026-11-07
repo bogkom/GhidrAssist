@@ -1,0 +1,110 @@
+name: GA-15/18 running ReAct cancel, Program switch and late callback E2E
+on:
+  pull_request:
+    paths:
+      - 'src/main/java/ghidrassist/agent/react/**'
+      - 'src/main/java/ghidrassist/GhidrAssistPlugin.java'
+      - 'tests/codebrowser_harness/**'
+      - '.github/workflows/ga15-ga18-react-cancel-switch-e2e.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  real-ghidra-react-terminal-guards:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: X11 for genuine Ghidra 12.1.4 CodeBrowser
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq xvfb xauth openbox
+      - name: Download SHA-256 pinned Ghidra 12.1.4 PUBLIC
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fLsS --retry 3 --connect-timeout 20 -o "$RUNNER_TEMP/ghidra.zip" \
+            "https://github.com/NationalSecurityAgency/ghidra/releases/download/Ghidra_12.1.4_build/ghidra_12.1.4_PUBLIC_20260921.zip"
+          echo "ddac49f903da9d5bac833e5cc79395098b9c33cfd3279be5f31bd00387d2d4db  $RUNNER_TEMP/ghidra.zip" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/ghidra"
+          unzip -q "$RUNNER_TEMP/ghidra.zip" -d "$RUNNER_TEMP/ghidra"
+          GHIDRA_DIR="$(find "$RUNNER_TEMP/ghidra" -mindepth 1 -maxdepth 1 -type d -name 'ghidra_*' -print -quit)"
+          test -n "$GHIDRA_DIR"
+          echo "GHIDRA_INSTALL_DIR=$GHIDRA_DIR" >> "$GITHUB_ENV"
+      - name: Build actual extension from exact PR HEAD
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$GHIDRA_INSTALL_DIR/support/gradle/gradlew" --no-daemon buildExtension
+          EXTENSION="$(find dist -maxdepth 1 -type f -name 'ghidra_12.1.4_PUBLIC_*_GhidrAssist.zip' -print -quit)"
+          test -s "$EXTENSION"
+          unzip -tq "$EXTENSION"
+          echo "EXTENSION=$EXTENSION" >> "$GITHUB_ENV"
+      - name: Pure Python syntax guards (no model)
+        shell: bash
+        run: |
+          python3 -m py_compile tests/codebrowser_harness/run.py \
+            tests/codebrowser_harness/ga15_react_api_cli_controller.py tools/ghidrassist-agent
+      - name: Real CodeBrowser, real ReAct, source-bound cancellation and delayed callback
+        shell: bash
+        run: |
+          set -euo pipefail
+          for scenario in cancel switch; do
+            echo "=== GA-15/18 test scenario: $scenario ==="
+            xvfb-run -a -s '-screen 0 1400x1050x24' \
+              bash -c 'openbox --sm-disable >/dev/null 2>&1 & wm=$!; trap "kill $wm 2>/dev/null || true" EXIT; sleep 1; python3 tests/codebrowser_harness/run.py "$@"' ga15                 --ghidra "$GHIDRA_INSTALL_DIR" --java-home "$JAVA_HOME" \
+                --extension-zip "$EXTENSION" \
+                --output "$RUNNER_TEMP/ga15-e2e-$scenario" \
+                --automation-probe --agentic-react-probe \
+                --agentic-react-scenario "$scenario" --timeout 300
+          done
+          python3 - <<'PY'
+          import json,os
+          from pathlib import Path
+          root=Path(os.environ["RUNNER_TEMP"])
+          for scenario in ("cancel","switch"):
+              folder=root/("ga15-e2e-"+scenario)
+              receipt=json.loads((folder/"ga15-react-e2e.json").read_text())
+              runtime=json.loads((folder/"ga15-react-result.json").read_text())
+              runner=json.loads((folder/"result.json").read_text())
+              assert runner["status"]=="PASSED_HARDWARE_AUTOMATION_V2",runner
+              assert runtime["status"]=="CANCELLED" and runtime["tool_calls"]==1,runtime
+              assert runtime["tool_succeeded"] and runtime["revision_unchanged"],runtime
+              assert receipt["scenario"]==scenario and receipt["scenario_passed"],receipt
+              for key in ("real_http_bearer_401","real_cli_in_progress",
+                      "synchronous_cancel_error_preserves_CANCELLED",
+                      "delayed_callback_no_ui_update",
+                      "delayed_callback_no_resurrection",
+                      "source_revision_unchanged","cancelled_after_real_tool"):
+                  assert receipt[key] is True,(scenario,key,receipt)
+              assert receipt["model_or_oauth_used"] is False
+              assert receipt["runtime_execution_verified"] is False
+              assert (folder/"ga15-react-late-delivered").is_file()
+          print("GA15/18 CANCEL + PROGRAM SWITCH + DELAYED LLM CALLBACK PASS")
+          PY
+      - name: Short failure diagnostics
+        if: failure()
+        shell: bash
+        run: |
+          for root in "$RUNNER_TEMP"/ga15-e2e-{cancel,switch}; do
+            for file in "$root"/{compile.log,ga15-react-controller.log,ga15-react-action-error,ga15-react-result.json,java.log}; do
+              if test -f "$file"; then
+                echo "=== $(basename "$root") / $(basename "$file") ==="
+                tail -n 70 "$file"
+              fi
+            done
+          done
+      - name: Upload synthetic-only proof; no bearer token
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ga15-react-cancel-switch-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/ga15-e2e-cancel/
+            ${{ runner.temp }}/ga15-e2e-switch/
+          retention-days: 21
+          if-no-files-found: ignore

@@ -27,12 +27,15 @@ public final class AgenticEvidenceRegistry<K> {
         final String importSha;
         final String run;
         final FindingsCache findings;
+        final Runnable onInvalidated;
         String state="RUNNING";
-        Bound(K owner,long revision,String importSha,FindingsCache findings) {
+        Bound(K owner,long revision,String importSha,FindingsCache findings,
+                Runnable onInvalidated) {
             this.owner=new WeakReference<>(owner);
             this.revision=revision;
             this.importSha=importSha;
             this.findings=findings;
+            this.onInvalidated=onInvalidated;
             this.run=UUID.randomUUID().toString();
         }
     }
@@ -45,6 +48,16 @@ public final class AgenticEvidenceRegistry<K> {
 
     public synchronized String begin(K owner,long revision,String importSha,
                                       FindingsCache findings) {
+        return begin(owner,revision,importSha,findings,null);
+    }
+
+    /**
+     * Optional cancellation belongs to this exact run. Production ReAct
+     * registers its own cancel callback; synthetic/static users can omit it.
+     * Invalidation removes the source before invoking any callback.
+     */
+    public synchronized String begin(K owner,long revision,String importSha,
+                                      FindingsCache findings,Runnable onInvalidated) {
         if(owner==null || revision<0 || findings==null)
             throw new IllegalArgumentException("Missing evidence Program or revision");
         Bound<K> existing=programs.get(owner);
@@ -52,7 +65,7 @@ public final class AgenticEvidenceRegistry<K> {
             throw new IllegalStateException(
                 "Equal-but-distinct Program cannot share Agentic evidence");
         Bound<K> bound=new Bound<>(owner,revision,
-            importSha==null?"UNKNOWN":importSha,findings);
+            importSha==null?"UNKNOWN":importSha,findings,onInvalidated);
         programs.put(owner,bound);
         return bound.run;
     }
@@ -95,7 +108,22 @@ public final class AgenticEvidenceRegistry<K> {
                     "(?i)[a-f0-9]{64}"),page);
     }
 
-    public synchronized void invalidate(K owner) {
-        if(owner!=null)programs.remove(owner);
+    public void invalidate(K owner) {
+        Runnable callback=null;
+        synchronized(this) {
+            if(owner!=null) {
+                Bound<K> bound=programs.get(owner);
+                // Do not delete or cancel an equals()-equivalent but
+                // different Program. This guard also protects key identity.
+                if(bound!=null && bound.owner.get()==owner) {
+                    programs.remove(owner);
+                    if("RUNNING".equals(bound.state))
+                        callback=bound.onInvalidated;
+                }
+            }
+        }
+        // No registry lock is held: cancelling a ReAct future synchronously
+        // may trigger a completion handler that re-enters finish().
+        if(callback!=null)callback.run();
     }
 }
