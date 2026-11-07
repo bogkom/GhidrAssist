@@ -576,15 +576,17 @@ public class ReActOrchestrator {
 
         // Create response handler for this iteration
         LlmApi.LlmResponseHandler iterationHandler = new LlmApi.LlmResponseHandler() {
-            private final StringBuilder responseBuffer = new StringBuilder();
-            private final StringBuilder displayBuffer = new StringBuilder();
+            private final BoundedAgenticStream responseBuffer =
+                new BoundedAgenticStream(BoundedAgenticStream.MAX_ITERATION_CHARS);
+            private final BoundedAgenticStream displayBuffer =
+                new BoundedAgenticStream(BoundedAgenticStream.MAX_DISPLAY_CHARS);
             private boolean hasCalledTools = false;
             private boolean toolsExecutedThisRound = false;
 
             @Override
             public void onStart() {
-                responseBuffer.setLength(0);
-                displayBuffer.setLength(0);
+                responseBuffer.reset();
+                displayBuffer.reset();
             }
 
             @Override
@@ -592,12 +594,14 @@ public class ReActOrchestrator {
                 if(resultFuture.isDone() || cancelled.get())return;
                 // Forward ALL conversational updates to the UI immediately
                 if (partialResponse != null && !partialResponse.isEmpty()) {
-                    responseBuffer.append(partialResponse);
+                    if(responseBuffer.append(partialResponse))
+                        findings.markSourceIncomplete();
                     displayBuffer.append(partialResponse);
 
-                    // Pass through to progress handler for real-time display
-                    // This shows tool execution, assistant thinking, etc.
-                    handler.onThought(displayBuffer.toString(), currentIteration);
+                    // UI receives only the bounded untrusted preview;
+                    // omitted bytes make the source non-complete regardless
+                    // of the relevance-ranked retained evidence list.
+                    handler.onThought(displayBuffer.text(), currentIteration);
                 }
             }
 
@@ -621,10 +625,15 @@ public class ReActOrchestrator {
 
                 // Defense-in-depth: if fullResponse is just a status message (e.g. from
                 // max tool rounds), use the responseBuffer which accumulated all streamed content
-                String contentForFindings = fullResponse;
-                if (fullResponse == null || fullResponse.length() < 100 ||
-                    fullResponse.startsWith("Maximum tool")) {
-                    String buffered = responseBuffer.toString();
+                if(fullResponse!=null &&
+                        fullResponse.length()>BoundedAgenticStream.MAX_ITERATION_CHARS)
+                    findings.markSourceIncomplete();
+                String limitedResponse=BoundedAgenticStream.bounded(fullResponse,
+                    BoundedAgenticStream.MAX_ITERATION_CHARS);
+                String contentForFindings = limitedResponse;
+                if (limitedResponse == null || limitedResponse.length() < 100 ||
+                    limitedResponse.startsWith("Maximum tool")) {
+                    String buffered = responseBuffer.text();
                     if (!buffered.isEmpty()) {
                         contentForFindings = buffered;
                     }
@@ -638,7 +647,7 @@ public class ReActOrchestrator {
 
                 // Only mark todo complete if tools were actually executed this round
                 if (toolsExecutedThisRound) {
-                    updateTodosFromResponse(todoManager, fullResponse);
+                    updateTodosFromResponse(todoManager, limitedResponse);
                 } else {
                     Msg.info(ReActOrchestrator.this, "No tools executed this round - not marking todo complete");
                 }
@@ -677,7 +686,7 @@ public class ReActOrchestrator {
                 }
 
                 // Salvage any findings accumulated from tool calls before the error
-                String buffered = responseBuffer.toString();
+                String buffered = responseBuffer.text();
                 if (!buffered.isEmpty()) {
                     findings.extractFromToolOutput("llm_response", buffered);
                     findings.addIterationSummary(buffered);
@@ -731,11 +740,12 @@ public class ReActOrchestrator {
 
         // Get final answer without tool calling
         llmApi.sendRequestAsync(synthesisPrompt, new LlmApi.LlmResponseHandler() {
-            private final StringBuilder answer = new StringBuilder();
+            private final BoundedAgenticStream answer =
+                new BoundedAgenticStream(BoundedAgenticStream.MAX_ITERATION_CHARS);
 
             @Override
             public void onStart() {
-                answer.setLength(0);
+                answer.reset();
             }
 
             @Override
@@ -743,7 +753,8 @@ public class ReActOrchestrator {
                 if (resultFuture.isDone() || cancelled.get()) {
                     return;
                 }
-                answer.append(partialResponse);
+                if(answer.append(partialResponse))
+                    findings.markSourceIncomplete();
                 // Publish only after checking the completed synthesis against dispatcher facts.
                 // Otherwise a denied operation can briefly appear as successful in the UI.
             }
@@ -758,7 +769,13 @@ public class ReActOrchestrator {
                     return;
                 }
 
-                String verifiedAnswer = toolRegistry.getExecutionJournal().verifiedAnswer(fullResponse);
+                if(fullResponse!=null &&
+                        fullResponse.length()>BoundedAgenticStream.MAX_ITERATION_CHARS)
+                    findings.markSourceIncomplete();
+                String limitedResponse=BoundedAgenticStream.bounded(fullResponse,
+                    BoundedAgenticStream.MAX_ITERATION_CHARS);
+                String verifiedAnswer = toolRegistry.getExecutionJournal()
+                    .verifiedAnswer(limitedResponse);
                 handler.onSynthesisChunk(verifiedAnswer);
                 // Build result with the provided completion status
                 ReActResult result = new ReActResult.Builder()
@@ -819,23 +836,30 @@ public class ReActOrchestrator {
         // Ask the LLM to reflect
         CompletableFuture<String> reflectionFuture = new CompletableFuture<>();
         llmApi.sendRequestAsync(reflectionPrompt, new LlmApi.LlmResponseHandler() {
-            private final StringBuilder reflection = new StringBuilder();
+            private final BoundedAgenticStream reflection =
+                new BoundedAgenticStream(BoundedAgenticStream.MAX_REFLECTION_CHARS);
 
             @Override
             public void onStart() {
-                reflection.setLength(0);
+                reflection.reset();
             }
 
             @Override
             public void onUpdate(String partialResponse) {
                 if(resultFuture.isDone() || cancelled.get())return;
-                reflection.append(partialResponse);
+                if(reflection.append(partialResponse))
+                    findings.markSourceIncomplete();
             }
 
             @Override
             public void onComplete(String fullResponse) {
                 if(!resultFuture.isDone() && !cancelled.get())
-                    reflectionFuture.complete(fullResponse);
+                    if(fullResponse!=null &&
+                            fullResponse.length()>BoundedAgenticStream.MAX_REFLECTION_CHARS)
+                        findings.markSourceIncomplete();
+                    reflectionFuture.complete(BoundedAgenticStream.bounded(
+                        fullResponse==null?"":fullResponse,
+                        BoundedAgenticStream.MAX_REFLECTION_CHARS));
             }
 
             @Override

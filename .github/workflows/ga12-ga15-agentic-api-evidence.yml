@@ -4,6 +4,8 @@ on:
     paths:
       - 'src/main/java/ghidrassist/agent/react/AgenticEvidenceRegistry.java'
       - 'src/main/java/ghidrassist/agent/react/FindingsCache.java'
+      - 'src/main/java/ghidrassist/agent/react/BoundedAgenticStream.java'
+      - 'src/test/java/ghidrassist/agent/react/BoundedAgenticStreamSelfTest.java'
       - 'src/main/java/ghidrassist/agent/react/ReActOrchestrator.java'
       - 'src/main/java/ghidrassist/automation/AutomationServer.java'
       - 'src/test/java/ghidrassist/agent/react/AgenticEvidenceRegistrySelfTest.java'
@@ -37,10 +39,13 @@ jobs:
           mkdir -p "$RUNNER_TEMP/agentic"
           javac --release 21 -d "$RUNNER_TEMP/agentic" \
             src/main/java/ghidrassist/agent/react/FindingsCache.java \
+            src/main/java/ghidrassist/agent/react/BoundedAgenticStream.java \
             src/main/java/ghidrassist/agent/react/AgenticEvidenceRegistry.java \
             src/test/java/ghidrassist/agent/react/FindingsCacheBudgetSelfTest.java \
+            src/test/java/ghidrassist/agent/react/BoundedAgenticStreamSelfTest.java \
             src/test/java/ghidrassist/agent/react/AgenticEvidenceRegistrySelfTest.java
           java -ea -cp "$RUNNER_TEMP/agentic" ghidrassist.agent.react.FindingsCacheBudgetSelfTest
+          java -ea -cp "$RUNNER_TEMP/agentic" ghidrassist.agent.react.BoundedAgenticStreamSelfTest
           java -ea -cp "$RUNNER_TEMP/agentic" ghidrassist.agent.react.AgenticEvidenceRegistrySelfTest
       - name: Python3 local Agentic CLI checkpoint and source dispatch contract
         shell: bash

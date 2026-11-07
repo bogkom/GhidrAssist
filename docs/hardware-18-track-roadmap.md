@@ -1,5 +1,25 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
+## GA-15/18 — 2026-11-07: bounded streamed ReAct evidence
+
+**Candidate milestone:** the ReAct LLM callback paths now bound
+stream accumulation to 128 KiB per iteration, 32 KiB for the GUI
+preview and 16 KiB for reflection, and final synthesis is independently
+capped. UTF-16 surrogate pairs, including pairs crossing callback boundaries, are not split. Any overflow marks the
+shared `FindingsCache` as structurally source-incomplete and bumps the
+pagination revision; no successful terminal ReAct result can claim
+a *complete retained-evidence checkpoint* when source text was
+discarded. Java21 deterministic 50k-chunk tests validate bounded
+memory, revision invalidation, eviction survival and source-incomplete
+prompt warnings; Java25 full Ghidra 12.1.4 extension and real
+scripted Xvfb/CodeBrowser ReAct CI required on exact HEAD.
+
+**GA-15 remains PARTIAL**: independent tool-specific paging,
+large-context summarization quality and resumed interrupted
+investigations require further acceptance. This is static and
+model-free deterministic CI, not source completeness of ECU411.
+
+
 ## GA-12/15/18 — 2026-11-07: checkpoint ancestry and schema consistency
 
 **Implementation candidate for independent reviewed task provenance:** new

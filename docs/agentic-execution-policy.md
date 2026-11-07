@@ -314,3 +314,31 @@ now both explicitly accept nullable evidence text fields while requiring
 the keys to be present, with bounded fact/evidence/tool lengths, integral
 relevance and nonnegative timestamp. Rows with missing evidence metadata,
 fractional relevance, or inconsistent source counters are refused.
+
+## GA-15: bounded ReAct model stream and non-complete source guarantee (2026-11-07)
+
+Streaming callbacks from the model provider are untrusted and can deliver
+arbitrarily long updates. `BoundedAgenticStream` caps each iteration's
+accumulated response at 128 KiB UTF-16, the incremental GUI preview at 32 KiB,
+and reflection at 16 KiB. Final synthesis is similarly bounded at 128 KiB
+before verification and display. UTF-16 surrogate pairs (including those spanning separate provider callback chunks) are never split
+at a truncation boundary. No unbounded StringBuilder remains on these
+provider callback paths; full provider completions are independently
+capped even when the stream was short.
+
+Any omitted iteration, synthesis or reflection content invokes
+`FindingsCache.markSourceIncomplete`, invalidating previous page
+revisions and setting `sourceIncomplete=true` even if the warning finding
+would be evicted by a small relevance budget. A truncated source cannot
+produce `FindingsPage.complete=true`, a complete local Agentic checkpoint,
+or an authorized new evidence Review. The UI may show a bounded preview,
+but that is not an assertion that the entire model response was inspected.
+
+The Java21 no-model regression exercises 50,000 synthetic streaming
+updates, a one-character overflow, repeated dropped chunks, reset,
+surrogate boundaries, cache page-revision invalidation and relevance
+pruning. Full Java25 extension build and real Ghidra 12.1.4 scripted
+ReAct/JSON-RPC/CLI regression remain required; no private firmware,
+OAuth or external LLM is involved. This is a GA-15 long-response safety
+milestone, not proof that every native/MCP tool's separate paging,
+context-budget and cancellation contract is complete.

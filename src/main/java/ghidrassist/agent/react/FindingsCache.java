@@ -154,6 +154,18 @@ public class FindingsCache {
         "retrieve the original tool source before claiming completeness.";
     public synchronized boolean isSourceIncomplete() { return sourceIncomplete; }
 
+    /**
+     * Record discarded provider bytes independently from ranked findings.
+     * A tiny result budget must never evict the only evidence of source loss.
+     * Invalidate previously issued pages on the first loss event.
+     */
+    public synchronized void markSourceIncomplete() {
+        if(!sourceIncomplete) {
+            sourceIncomplete=true;
+            findingsRevision++;
+        }
+    }
+
     private static String bounded(String input,int max) {
         if(input==null)return null;
         if(input.length()<=max)return input;
