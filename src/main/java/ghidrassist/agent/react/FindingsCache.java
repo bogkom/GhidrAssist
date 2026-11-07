@@ -152,7 +152,7 @@ public class FindingsCache {
     private static final String SOURCE_INCOMPLETE_WARNING =
         "SOURCE INCOMPLETE: some tool output was not inspected; " +
         "retrieve the original tool source before claiming completeness.";
-    public boolean isSourceIncomplete() { return sourceIncomplete; }
+    public synchronized boolean isSourceIncomplete() { return sourceIncomplete; }
 
     private static String bounded(String input,int max) {
         if(input==null)return null;
@@ -181,6 +181,12 @@ public class FindingsCache {
      */
     public synchronized void addFinding(String fact, String evidence, String toolUsed, int relevance) {
         if(fact==null || fact.isBlank())return;
+        // A bounded local copy is not the full observation. Preserve this
+        // loss independently of the finding relevance budget and pagination.
+        if(fact.length()>MAX_FACT_CHARS ||
+                (evidence!=null && evidence.length()>MAX_EVIDENCE_CHARS) ||
+                (toolUsed!=null && toolUsed.length()>128))
+            sourceIncomplete=true;
         acceptedFindings++;
         findingsRevision++;
         findings.add(new Finding(bounded(fact,MAX_FACT_CHARS),
@@ -312,7 +318,7 @@ public class FindingsCache {
      * @param maxCharsPerFinding Maximum characters per finding (0 = no limit)
      * @return Formatted findings string
      */
-    public String formatForPrompt(int maxShow, int maxCharsPerFinding) {
+    public synchronized String formatForPrompt(int maxShow, int maxCharsPerFinding) {
         if (findings.isEmpty()) {
             return sourceIncomplete ? SOURCE_INCOMPLETE_WARNING :
                 "No significant findings yet.";
@@ -350,7 +356,7 @@ public class FindingsCache {
      * @param includeIterationSummaries Whether to include iteration summaries
      * @return Formatted detailed findings
      */
-    public String formatDetailed(int maxFindings, boolean includeIterationSummaries) {
+    public synchronized String formatDetailed(int maxFindings, boolean includeIterationSummaries) {
         StringBuilder sb = new StringBuilder();
         if(sourceIncomplete)
             sb.append(SOURCE_INCOMPLETE_WARNING).append("\n\n");
@@ -393,7 +399,7 @@ public class FindingsCache {
      * Summarize findings into compact form.
      * Used when context needs to be compressed.
      */
-    public String summarize() {
+    public synchronized String summarize() {
         if (findings.isEmpty()) {
             return sourceIncomplete ? SOURCE_INCOMPLETE_WARNING :
                 "No findings to summarize.";
@@ -419,7 +425,7 @@ public class FindingsCache {
     /**
      * Get count of findings.
      */
-    public int getCount() {
+    public synchronized int getCount() {
         return findings.size();
     }
 
@@ -446,7 +452,7 @@ public class FindingsCache {
     /**
      * Get compact representation for progress tracking.
      */
-    public String toCompactString() {
+    public synchronized String toCompactString() {
         return String.format("%d findings accumulated%s", findings.size(),
             sourceIncomplete?"; SOURCE INCOMPLETE":"");
     }
@@ -455,7 +461,7 @@ public class FindingsCache {
      * Add a summary from an iteration.
      * This captures the LLM's analytical summary after each iteration.
      */
-    public void addIterationSummary(String summary) {
+    public synchronized void addIterationSummary(String summary) {
         if (summary != null && !summary.trim().isEmpty()) {
             iterationSummaries.add(bounded(summary.trim(),
                 MAX_ITERATION_SUMMARY_CHARS));
@@ -476,7 +482,7 @@ public class FindingsCache {
     /**
      * Format iteration summaries with custom limit.
      */
-    public String formatIterationSummaries(int maxIterations) {
+    public synchronized String formatIterationSummaries(int maxIterations) {
         if (iterationSummaries.isEmpty()) {
             return "No iteration summaries available.";
         }
@@ -500,7 +506,7 @@ public class FindingsCache {
      * Get all iteration summaries.
      * @return Copy of iteration summaries list
      */
-    public List<String> getIterationSummaries() {
+    public synchronized List<String> getIterationSummaries() {
         return new ArrayList<>(iterationSummaries);
     }
 }
