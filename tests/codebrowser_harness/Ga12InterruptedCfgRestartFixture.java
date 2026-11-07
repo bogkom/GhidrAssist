@@ -128,7 +128,9 @@ public final class Ga12InterruptedCfgRestartFixture {
         for(var op:ops)
             if(op.getOpcode()==ghidra.program.model.pcode.PcodeOp.STORE)
                 stores++;
-        require(stores==1,"Expected one authentic synthetic Ghidra STORE");
+        require(stores==1,"Expected one authentic synthetic Ghidra STORE;"+
+            " actual="+stores+" mnemonic="+insn.getMnemonicString()+
+            " pcode="+java.util.Arrays.toString(ops));
         Long target=GhidraHardwareFlowService.pcodeStore(insn);
         require(target!=null && target==0xfffa00L,
             "Width-aware real Ghidra P-code failed to resolve SIMCR");
