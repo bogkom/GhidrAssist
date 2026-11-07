@@ -5,7 +5,7 @@
 **Candidate milestone:** the ReAct LLM callback paths now bound
 stream accumulation to 128 KiB per iteration, 32 KiB for the GUI
 preview and 16 KiB for reflection, and final synthesis is independently
-capped. UTF-16 surrogate pairs are not split. Any overflow marks the
+capped. UTF-16 surrogate pairs, including pairs crossing callback boundaries, are not split. Any overflow marks the
 shared `FindingsCache` as structurally source-incomplete and bumps the
 pagination revision; no successful terminal ReAct result can claim
 a *complete retained-evidence checkpoint* when source text was
