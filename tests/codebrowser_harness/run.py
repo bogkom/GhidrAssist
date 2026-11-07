@@ -759,10 +759,24 @@ def main():
                             "old_review_draft_rejected",
                             "no_inherited_accept_all","no_inherited_task_policy",
                             "no_automatic_plan_or_model_run",
-                            "new_review_still_required"):
+                            "new_review_still_required",
+                            "wrong_program_refused",
+                            "new_review_started_only_after_import",
+                            "new_checkpoint_saved_in_new_jvm"):
                     if verification.get(key) is not True:
                         raise RuntimeError(
                             "GA-12 real Program restart invalid: "+key)
+                continued=json.loads((out/"ga15-post-restart-continuation.json").read_text())
+                for key in ("new_review_from_saved_checkpoint",
+                            "actual_approve_plan_button","native_readonly_tool_executed",
+                            "new_react_success","distinct_new_run",
+                            "new_checkpoint_created"):
+                    if continued.get(key) is not True:
+                        raise RuntimeError("GA-12 post-restart ReAct missing: "+key)
+                if continued.get("fresh_chat_id",0)<=0:
+                    raise RuntimeError("No newly reviewed chat after restart")
+                if not (out/"ga15-post-restart-checkpoint.json").is_file():
+                    raise RuntimeError("New checkpoint not saved after reviewed task")
                 (out/"ga15-restarted-python-check.json").write_text(
                     json.dumps({"schema":1,"new_jvm":True,"same_program_sha":True,
                         "revision_identical":verification["revision_identical"],
