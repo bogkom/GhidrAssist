@@ -609,6 +609,10 @@ are accounted for, and a late model callback cannot promote its
 state to `SUCCESS` or publish more rows. Switching back to the
 previous CodeBrowser Program never revives an invalidated snapshot.
 
+Both scenarios also inject one synchronous provider `onError` during
+cancellation and a deliberately late tool/LLM callback afterward.
+The former must preserve `CANCELLED`; the latter must not update the
+UI or resurrect retained evidence. This is not a real-provider test.
 Real Ghidra 12.1.4 PUBLIC / Java25 CI drives two isolated scenarios
 from a distinct external `ghidrassist-agent` process: direct
 cancellation and GUI Program A→B→A switching, each after one
