@@ -368,7 +368,8 @@ public class ReActOrchestrator {
             if(evidenceProgram!=null) {
                 AgenticEvidenceRegistry.shared().begin(evidenceProgram,
                     evidenceProgram.getModificationNumber(),
-                    evidenceProgram.getExecutableSHA256(),findings);
+                    evidenceProgram.getExecutableSHA256(),findings,
+                    this::cancel);
                 resultFuture.whenComplete((result,error) ->
                     AgenticEvidenceRegistry.shared().finish(
                         evidenceProgram,findings,
@@ -510,6 +511,9 @@ public class ReActOrchestrator {
         CompletableFuture<ReActResult> resultFuture
     ) {
         // Check termination conditions
+        // Late callbacks from an earlier run may arrive after a cancellation
+        // and even after a *new* run resets the shared cancelled flag.
+        if(resultFuture.isDone())return;
         if (cancelled.get() || !handler.shouldContinue()) {
             completeWithCancellation(resultFuture, findings, startTime, handler);
             return;
@@ -576,6 +580,7 @@ public class ReActOrchestrator {
 
             @Override
             public void onUpdate(String partialResponse) {
+                if(resultFuture.isDone() || cancelled.get())return;
                 // Forward ALL conversational updates to the UI immediately
                 if (partialResponse != null && !partialResponse.isEmpty()) {
                     responseBuffer.append(partialResponse);
@@ -589,6 +594,7 @@ public class ReActOrchestrator {
 
             @Override
             public void onToolsExecuted(int toolCount) {
+                if(resultFuture.isDone() || cancelled.get())return;
                 toolsExecutedThisRound = true;
                 hasCalledTools = true;
                 toolCallCount.addAndGet(toolCount);
@@ -697,6 +703,13 @@ public class ReActOrchestrator {
         int toolCallCount,
         ReActResult.Status completionStatus
     ) {
+        // Cancellation may race the previous tool callback. Never dispatch
+        // a final model synthesis after the run has become terminal.
+        if(resultFuture.isDone())return;
+        if(cancelled.get() || !handler.shouldContinue()) {
+            completeWithCancellation(resultFuture,findings,startTime,handler);
+            return;
+        }
         String synthesisPrompt = ReActPrompts.getSynthesisPrompt(
             objective,
             findings.formatDetailed() + "\n" + toolRegistry.getRecentToolEvidence(),
@@ -783,6 +796,11 @@ public class ReActOrchestrator {
         CompletableFuture<ReActResult> resultFuture,
         int currentIteration
     ) {
+        if(resultFuture.isDone())return;
+        if(cancelled.get() || !handler.shouldContinue()) {
+            completeWithCancellation(resultFuture,findings,startTime,handler);
+            return;
+        }
         String reflectionPrompt = ReActPrompts.getReflectionPrompt(
             objective,
             findings.formatForPrompt() + "\n" + toolRegistry.getRecentToolEvidence(),
@@ -801,16 +819,19 @@ public class ReActOrchestrator {
 
             @Override
             public void onUpdate(String partialResponse) {
+                if(resultFuture.isDone() || cancelled.get())return;
                 reflection.append(partialResponse);
             }
 
             @Override
             public void onComplete(String fullResponse) {
-                reflectionFuture.complete(fullResponse);
+                if(!resultFuture.isDone() && !cancelled.get())
+                    reflectionFuture.complete(fullResponse);
             }
 
             @Override
             public void onError(Throwable error) {
+                if(resultFuture.isDone() || cancelled.get())return;
                 // On error, default to continuing
                 Msg.warn(ReActOrchestrator.this, "Reflection failed, continuing investigation: " + error.getMessage());
                 reflectionFuture.complete("CONTINUE: Reflection error, continuing investigation");
