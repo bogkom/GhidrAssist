@@ -721,6 +721,53 @@ def main():
                         os.killpg(process.pid,signal.SIGTERM)
                     with contextlib.suppress(ProcessLookupError):
                         os.killpg(process.pid,signal.SIGKILL)
+            if args.automation_probe and args.agentic_react_probe and args.agentic_react_scenario=="normal":
+                # The *original* CodeBrowser JVM is terminated above. Keep
+                # the same isolated project and synthetic binary, but start a
+                # genuinely fresh JVM/process with its own Ghidra application,
+                # Program objects, in-memory Agentic registry and Query UI.
+                # The previous automation Bearer must not enter the reboot.
+                restart_env=dict(env)
+                restart_env.pop("GHIDRASSIST_AUTOMATION_TOKEN",None)
+                restart_env["JAVA_TOOL_OPTIONS"]=restart_env["JAVA_TOOL_OPTIONS"].replace(
+                    " -Dghidrassist.automation.enabled=true","")
+                restart_env["JAVA_TOOL_OPTIONS"]=restart_env["JAVA_TOOL_OPTIONS"].replace(
+                    " -Dghidrassist.automation.ready="+str(out/"api-ready.json"),"")
+                restart_env["JAVA_TOOL_OPTIONS"]=restart_env["JAVA_TOOL_OPTIONS"].replace(
+                    " -Dghidrassist.automation.allowProgramSwitch=true","")
+                restart_env["JAVA_TOOL_OPTIONS"]=restart_env["JAVA_TOOL_OPTIONS"].replace(
+                    " -Dghidrassist.automation.syntheticWrites=true","")
+                with (out/"ga15-restart-java.log").open("x") as log:
+                    reboot=subprocess.Popen(cmd+["agentic-restore"],
+                        cwd=work,env=restart_env,stdout=log,
+                        stderr=subprocess.STDOUT,start_new_session=True)
+                    try:
+                        code=reboot.wait(timeout=min(args.timeout,180))
+                        if code:
+                            raise RuntimeError(
+                                f"New CodeBrowser JVM Agentic restart failed: {code}")
+                    finally:
+                        with contextlib.suppress(ProcessLookupError):
+                            os.killpg(reboot.pid,signal.SIGTERM)
+                        with contextlib.suppress(ProcessLookupError):
+                            os.killpg(reboot.pid,signal.SIGKILL)
+                verification=json.loads((out/"ga15-restarted-ghidra.json").read_text())
+                for key in ("real_new_jvm","real_codebrowser_reopened",
+                            "real_synthetic_program_reopened",
+                            "import_sha256_verified","revision_compared",
+                            "stale_run_registry_absent",
+                            "old_review_draft_rejected",
+                            "no_inherited_accept_all","no_inherited_task_policy",
+                            "no_automatic_plan_or_model_run",
+                            "new_review_still_required"):
+                    if verification.get(key) is not True:
+                        raise RuntimeError(
+                            "GA-12 real Program restart invalid: "+key)
+                (out/"ga15-restarted-python-check.json").write_text(
+                    json.dumps({"schema":1,"new_jvm":True,"same_program_sha":True,
+                        "revision_identical":verification["revision_identical"],
+                        "old_review_rejected":True,
+                        "new_review_required":True},indent=2)+"\\n")
             if args.automation_probe:
                 observed=json.loads((out/"automation-java-result.json").read_text())
                 final=json.loads((out/"automation-4-response.json").read_text())
