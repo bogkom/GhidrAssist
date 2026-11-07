@@ -209,3 +209,22 @@ stale prior checkpoints over authenticated CLI. Neither marker nor test
 fixture is packaged as an approval API. The test **does not simulate the
 actual user clicking Approve Plan**, does not restore model state, and does
 not authorize firmware mutation. Human approval remains mandatory in the GUI.
+
+## GA-12/15/18: actual Approve Plan Swing control + post-exit evidence (2026-11-07)
+
+The isolated CodeBrowser GUI fixture now tests a **third** independent
+ReAct run triggered through the actual `Approve Plan` Swing JButton and
+production `TabController.handleAgentPlanApproved` route, not by calling
+`ReActOrchestrator.analyze` from the harness. The CI-only fixture supplies
+a newly proposed test plan and a non-network deterministic scripted provider;
+the production controller still snapshots its current independent READ_ONLY
+task tool policy. The assertions require a new run generation, a real native
+read-only Listing tool, terminal SUCCESS, and unchanged Program revision.
+No external model or real-user manual approval is claimed. Tests inject the
+scripted ReAct factory via a private, non-API field; normal production uses
+the existing constructor.
+
+After CodeBrowser shuts down, separate CLI processes verify and read the
+saved SHA-256 checkpoint with no active session. A live resume attempt with
+no session must be refused. Offline persistence of **read-only evidence**
+does not imply permission to resume a model or reuse Approve Plan.

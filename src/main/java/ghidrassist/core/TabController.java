@@ -1077,6 +1077,13 @@ public class TabController {
         });
     }
 
+    // CI-only injection seam. Never exposed through GUI, Automation API or
+    // persistent settings; production uses the original real constructor.
+    // Test harness installs a deterministic no-network model via reflection
+    // to exercise the actual Approve Plan Swing event and controller path.
+    private java.util.function.Supplier<ghidrassist.agent.react.ReActOrchestrator>
+        agenticTestOrchestratorFactory;
+
     private void executeApprovedAgenticQuery(String query, String reactInitialContext,
                                              String reactRunId, String approvedPlan, ghidrassist.tools.registry.ToolExecutionPolicy taskPolicy) {
         queryTab.getTaskToolPolicyPanel().beginExecution();
@@ -1106,14 +1113,16 @@ public class TabController {
         initFuture.thenCompose(v -> {
             // Create ReAct orchestrator with new architecture
             int maxToolRounds = getMaxToolCalls();  // Load user's max tool calls setting
-            currentOrchestrator = new ghidrassist.agent.react.ReActOrchestrator(
+            currentOrchestrator = agenticTestOrchestratorFactory == null
+                ? new ghidrassist.agent.react.ReActOrchestrator(
                     ghidrassist.GhidrAssistPlugin.getCurrentProviderConfig(),
                     plugin,
                     18,  // maxIterations
                     8000,  // contextSummaryThreshold
                     maxToolRounds, // maxToolRounds per iteration
                     pendingAgentUseMCP
-                );
+                )
+                : agenticTestOrchestratorFactory.get();
 
             // Wire document chat handler so the agent can create report chats
             currentOrchestrator.setDocumentChatHandler((title, content) -> {

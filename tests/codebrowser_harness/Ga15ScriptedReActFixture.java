@@ -409,6 +409,146 @@ public final class Ga15ScriptedReActFixture {
             Files.writeString(evidence.resolve("ga15-independent-result.json"),
                 receipt.toString(),StandardCharsets.UTF_8);
         }
+        // Separate third run: exercise the REAL production Swing Approve
+        // Plan button -> TabController -> ReAct execution, not merely a
+        // test harness calling analyze() directly.
+        if(receipt.has("fresh_terminal_success") &&
+                receipt.get("fresh_terminal_success").getAsBoolean()) {
+            verifyProductionApprovePlanButton(plugin,program,site,evidence,staged);
+        }
+    }
+
+    private static void verifyProductionApprovePlanButton(
+            GhidrAssistPlugin plugin,Program program,Address site,
+            Path evidence,StagedReview staged) throws Exception {
+        var registry=AgenticEvidenceRegistry.shared();
+        long revision=program.getModificationNumber();
+        var previous=registry.page(program,revision,
+            program.getExecutableSHA256(),0,1,null,null);
+        if(!"SUCCESS".equals(previous.state()))
+            throw new IllegalStateException("Second ReAct not terminal");
+        Path marker=evidence.resolve("ga15-gui-approve-plan.json");
+        waitFor(marker,80);
+        JsonObject command=JsonParser.parseString(
+            Files.readString(marker,StandardCharsets.UTF_8)).getAsJsonObject();
+        String plan=command.get("approved_plan").getAsString();
+        if(!command.get("explicit_test_approval").getAsBoolean() ||
+                !"- [ ] Independently verify the current Listing address".equals(plan) ||
+                !previous.run().equals(command.get("expected_previous_run").getAsString()))
+            throw new IllegalStateException("GUI approval test plan refused");
+
+        JsonObject proof=new JsonObject();
+        proof.addProperty("schema",1);
+        proof.addProperty("synthetic_only",true);
+        proof.addProperty("actual_swing_approve_button",false);
+        proof.addProperty("no_model_or_oauth",true);
+        Path next=evidence.resolve("ga15-gui-approval");
+        Files.createDirectories(next);
+        APIProviderConfig cfg=new APIProviderConfig("GA15 GUI CI offline",
+            APIProvider.ProviderType.OPENAI_PLATFORM_API,
+            "scripted-gui-approval-no-network",128,"http://127.0.0.1:9",
+            "not-a-secret-test-only",false);
+        var scripted=new ScriptedLlm(cfg,plugin,next,site.toString(),
+            new AtomicInteger());
+        var react=new ReActOrchestrator(cfg,plugin,2,8000,1,false,scripted);
+        Field toolsField=ReActOrchestrator.class.getDeclaredField("toolRegistry");
+        toolsField.setAccessible(true);
+        ToolRegistry registryTools=(ToolRegistry)toolsField.get(react);
+        registryTools.setFullContext(program,site);
+        java.util.concurrent.atomic.AtomicReference<Throwable> uiFailure=
+            new java.util.concurrent.atomic.AtomicReference<>();
+        try {
+            javax.swing.SwingUtilities.invokeAndWait(()->{
+                try {
+                    Field providerField=GhidrAssistPlugin.class.getDeclaredField("provider");
+                    providerField.setAccessible(true);
+                    Object provider=providerField.get(plugin);
+                    Object ui=provider.getClass().getMethod("getUI").invoke(provider);
+                    Field controllerField=ui.getClass().getDeclaredField("controller");
+                    controllerField.setAccessible(true);
+                    Object controller=controllerField.get(ui);
+                    Field tabField=ui.getClass().getDeclaredField("queryTab");
+                    tabField.setAccessible(true);
+                    var tab=(ghidrassist.ui.tabs.QueryTab)tabField.get(ui);
+                    Field serviceField=controller.getClass().getDeclaredField("queryService");
+                    serviceField.setAccessible(true);
+                    var service=(ghidrassist.services.QueryService)
+                        serviceField.get(controller);
+                    if(service.getCurrentSessionId()!=staged.chatId() ||
+                            service.isAcceptAllToolsEnabled())
+                        throw new IllegalStateException("GUI session reused previous grants");
+                    // We deliberately seed only a fresh proposed test plan.
+                    // No prior plan or authorization is imported from a draft.
+                    String runId=java.util.UUID.randomUUID().toString();
+                    service.beginReActRun(runId,staged.query());
+                    setField(controller,"pendingAgentPlan",plan);
+                    setField(controller,"pendingAgentQuery",staged.query());
+                    setField(controller,"pendingAgentRunId",runId);
+                    setField(controller,"pendingAgentInitialContext",
+                        "Fresh static synthetic context, no inherited model instructions.");
+                    setField(controller,"pendingAgentUseMCP",false);
+                    setField(controller,"isAgentPlanPending",true);
+                    setField(controller,"agenticTestOrchestratorFactory",
+                        (java.util.function.Supplier<ReActOrchestrator>)(()->react));
+                    tab.setPendingPlan(plan);
+                    Field approve=tab.getClass().getDeclaredField("approvePlanButton");
+                    approve.setAccessible(true);
+                    javax.swing.JButton button=(javax.swing.JButton)approve.get(tab);
+                    if(!button.isEnabled() || !button.isVisible())
+                        throw new IllegalStateException("Approve Plan button not ready");
+                    button.doClick();
+                    if((Boolean)getField(controller,"isAgentPlanPending") ||
+                            getField(controller,"pendingAgentPlan")!=null)
+                        throw new IllegalStateException("Approval did not consume new plan");
+                    proof.addProperty("actual_swing_approve_button",true);
+                    proof.addProperty("fresh_chat_approved",true);
+                    proof.addProperty("controller_factory_injected_ci_only",true);
+                } catch(Throwable err) {
+                    uiFailure.set(err);
+                }
+            });
+            if(uiFailure.get()!=null)
+                throw new IllegalStateException("Real Swing Approve Plan failed",uiFailure.get());
+            waitFor(next.resolve("ga15-react-running"),35);
+            var active=registry.page(program,revision,
+                program.getExecutableSHA256(),0,1,null,null);
+            proof.addProperty("new_run_on_button",!active.run().equals(previous.run()));
+            proof.addProperty("running_after_button","RUNNING".equals(active.state()));
+            waitFor(next.resolve("ga15-react-release"),70);
+            long deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(50);
+            AgenticEvidenceRegistry.EvidencePage observed=null;
+            while(System.nanoTime()<deadline) {
+                observed=registry.page(program,revision,
+                    program.getExecutableSHA256(),0,1,null,null);
+                if(!"RUNNING".equals(observed.state()))break;
+                Thread.sleep(50);
+            }
+            if(observed==null || !"SUCCESS".equals(observed.state()))
+                throw new IllegalStateException("GUI-approved ReAct never reached SUCCESS");
+            proof.addProperty("terminal_success",true);
+            proof.addProperty("one_real_native_readonly_tool",scripted.toolSucceeded);
+            proof.addProperty("new_registry_evidence",observed.findings().retainedCount()>0);
+            proof.addProperty("program_revision_unchanged",
+                program.getModificationNumber()==revision);
+            proof.addProperty("different_run_than_second",!observed.run().equals(previous.run()));
+        } catch(Exception err) {
+            proof.addProperty("error",err.toString());
+        } finally {
+            Files.writeString(evidence.resolve("ga15-gui-approved-result.json"),
+                proof.toString(),StandardCharsets.UTF_8);
+        }
+    }
+
+    private static void setField(Object target,String name,Object value) throws Exception {
+        Field f=target.getClass().getDeclaredField(name);
+        f.setAccessible(true);
+        f.set(target,value);
+    }
+
+    private static Object getField(Object target,String name) throws Exception {
+        Field f=target.getClass().getDeclaredField(name);
+        f.setAccessible(true);
+        return f.get(target);
     }
 
     private static void waitFor(Path marker,int seconds)
