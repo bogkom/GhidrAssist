@@ -76,6 +76,7 @@ jobs:
               assert runtime["tool_succeeded"] and runtime["revision_unchanged"],runtime
               assert receipt["scenario"]==scenario and receipt["scenario_passed"],receipt
               for key in ("real_http_bearer_401","real_cli_in_progress",
+                      "synchronous_cancel_error_preserves_CANCELLED",
                       "delayed_callback_no_ui_update",
                       "delayed_callback_no_resurrection",
                       "source_revision_unchanged","cancelled_after_real_tool"):
