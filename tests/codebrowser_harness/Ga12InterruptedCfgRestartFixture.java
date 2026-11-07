@@ -224,8 +224,8 @@ public final class Ga12InterruptedCfgRestartFixture {
         try(DataOutputStream out=new DataOutputStream(bytes)) {
             out.writeUTF("wrong-schema".equals(fault)
                 ?"GA12-UNKNOWN-PROGRESS":"GA12-CFG-PROGRESS-1");
-            out.writeLong(ENTRY);
-            out.writeInt(BUDGET);
+            out.writeLong("wrong-entry".equals(fault)?ENTRY+2:ENTRY);
+            out.writeInt("wrong-budget".equals(fault)?BUDGET+1:BUDGET);
             out.writeInt("past-budget".equals(fault)?BUDGET:1);
             out.writeInt(1);
             out.writeLong(ENTRY);
@@ -296,12 +296,17 @@ public final class Ga12InterruptedCfgRestartFixture {
         int tested=0;
         for(String fault:List.of("wrong-schema","past-budget",
                 "bad-register","bad-mmio","unknown-pending",
-                "duplicate-pending")) {
+                "duplicate-pending","wrong-entry","wrong-budget")) {
             Path copy=Files.createDirectories(output.resolve(
                 "ga12-typed-invalid-"+fault));
             byte[] payload=invalidTypedProgress(fault);
-            require(HardwareFunctionProgressCodec.decode(payload).isEmpty(),
-                "Malformed typed progress accepted by decoder: "+fault);
+            // Entry/budget are individually well-formed typed progress
+            // records: they must be refused by the caller-bound disk cache.
+            boolean contextMismatch="wrong-entry".equals(fault) ||
+                "wrong-budget".equals(fault);
+            require(HardwareFunctionProgressCodec.decode(payload).isPresent()
+                    ==contextMismatch,
+                "Unexpected standalone progress decode: "+fault);
             Files.write(copy.resolve(originalFiles.get(0).getFileName()),
                 validDigestEnvelope(original,payload));
             require(HardwareDurableFunctionStages.loadProgress(copy,key,
@@ -357,7 +362,7 @@ public final class Ga12InterruptedCfgRestartFixture {
 
         int malformedFallbacks=malformedTypedFallback(
             directory,output,key,steps);
-        require(malformedFallbacks==6,"Missing malformed typed CFG cases");
+        require(malformedFallbacks==8,"Missing malformed/context-invalid CFG cases");
         int corruptFallbacks=damagedWorklistFallback(
             directory,output,key,steps);
         require(corruptFallbacks==3,"Missing damaged worklist cases");
