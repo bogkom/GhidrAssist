@@ -1,5 +1,27 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
+## GA-12/15/18 — 2026-11-07: end-to-end independent checkpoint continuation package
+
+**Implementation candidate:** Import Saved Checkpoint from Query tab;
+strict bounded canonical SHA-256 and complete-source validation with
+the *currently open* Program import SHA; fresh new objective, chat ID
+and READ_ONLY/8 policy; separate Submit and Approve Plan with no old
+run/plan/session restoration. A real synthetic Ghidra 12.1.4 PUBLIC
+CodeBrowser restarts in an independent JVM, then stages old untrusted
+evidence in a new Query chat, separately approves a NEW scripted test
+plan, runs one actual native read-only tool and persists a **new**
+SHA-256-verified checkpoint. It must reject wrong firmware, corrupted
+or incomplete saved evidence and not regrant old permissions. Exact-SHA
+full Java25 extension build, real Ghidra/Xvfb, Java21/Python3 and all
+existing regression workflows are required before merge.
+
+**GA-12 status remains PARTIAL until the broader roadmap's persistent
+analysis state, provenance/history, recovery and user-facing acceptance
+criteria are independently audited.** This checkpoint continuation does
+not restore model context or authorize Apply and does not validate legacy
+CodeBrowser profile migration (#98).
+
+
 ## GA-12/15/18 — 2026-11-07: fresh CodeBrowser JVM source-identity regression
 
 Candidate regression runs a complete first ReAct + private evidence snapshot,

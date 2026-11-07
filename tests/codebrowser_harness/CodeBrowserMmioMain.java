@@ -262,6 +262,68 @@ public final class CodeBrowserMmioMain {
                 // reset its policy, but this stale source cannot be imported.
                 require(evalEdt(()->queryTab.getTaskToolPolicyPanel().snapshot()==null),
                     "A prior per-task tool policy unexpectedly survived restart");
+                // The saved proof is strictly historical data: a
+                // different imported synthetic firmware must fail even if
+                // the checkpoint itself has a valid payload hash.
+                boolean wrongProgramDenied=false;
+                try {
+                    ghidrassist.agent.react.AgenticReviewDraft.loadSavedCheckpoint(
+                        checkpoint,second,
+                        "Fresh independent analysis after reopen");
+                } catch(IllegalArgumentException expected) {
+                    wrongProgramDenied=true;
+                }
+                require(wrongProgramDenied,
+                    "Saved checkpoint accepted a different firmware Program");
+                // Corrupted source checksum must fail even when imported
+                // firmware identity and old run metadata appear unchanged.
+                var corrupt=com.google.gson.JsonParser.parseString(
+                    Files.readString(checkpoint,java.nio.charset.StandardCharsets.UTF_8))
+                    .getAsJsonObject();
+                corrupt.getAsJsonObject("payload").addProperty("state","RUNNING");
+                Path invalid=out.resolve("ga15-restart-tampered-checkpoint.json");
+                Files.writeString(invalid,GSON.toJson(corrupt));
+                boolean corruptedDenied=false;
+                try {
+                    ghidrassist.agent.react.AgenticReviewDraft.loadSavedCheckpoint(
+                        invalid,first,"Independently verify this synthetic firmware");
+                } catch(IllegalArgumentException expected) {
+                    corruptedDenied=true;
+                }
+                require(corruptedDenied,
+                    "Changed persisted evidence without correct checksum accepted");
+                Files.delete(invalid);
+                // A complete checksum alone is not authorization: a
+                // deliberately incomplete but rehashed historical snapshot
+                // also must fail the GA-12 import contract.
+                corrupt.getAsJsonObject("payload").addProperty("complete",false);
+                corrupt.getAsJsonObject("payload").addProperty("state","SUCCESS");
+                Path incomplete=out.resolve("ga15-restart-incomplete-checkpoint.json");
+                Files.writeString(incomplete,GSON.toJson(corrupt));
+                boolean incompleteDenied=false;
+                try {
+                    ghidrassist.agent.react.AgenticReviewDraft.loadSavedCheckpoint(
+                        incomplete,first,"Independently verify this synthetic firmware");
+                } catch(IllegalArgumentException expected) {
+                    incompleteDenied=true;
+                }
+                require(incompleteDenied,"Incomplete historical source was accepted");
+                Files.delete(incomplete);
+                Address resumedSite=first.getAddressFactory()
+                    .getDefaultAddressSpace().getAddress(0x20);
+                edt(()->require(reopened[0].getService(GoToService.class)
+                    .goTo(resumedSite,first),
+                    "New CodeBrowser could not navigate to synthetic Listing"));
+                until(()->{
+                    try{return evalEdt(()->at(
+                        reopened[0].getService(CodeViewerService.class),0x20));}
+                    catch(Exception error){throw new IllegalStateException(error);}
+                },15);
+                ghidrassist.agent.react.Ga15ScriptedReActFixture
+                    .continueSavedCheckpointInFreshJVM(ext,first,resumedSite,out);
+                require(Files.isRegularFile(out.resolve(
+                    "ga15-post-restart-checkpoint.json")),
+                    "New independent approved analysis did not save a new checkpoint");
                 JsonObject check=new JsonObject();
                 check.addProperty("schema",1);
                 check.addProperty("synthetic_only",true);
@@ -280,6 +342,11 @@ public final class CodeBrowserMmioMain {
                 check.addProperty("no_inherited_task_policy",true);
                 check.addProperty("no_automatic_plan_or_model_run",true);
                 check.addProperty("new_review_still_required",true);
+                check.addProperty("wrong_program_refused",wrongProgramDenied);
+                check.addProperty("tampered_source_refused",corruptedDenied);
+                check.addProperty("incomplete_source_refused",incompleteDenied);
+                check.addProperty("new_review_started_only_after_import",true);
+                check.addProperty("new_checkpoint_saved_in_new_jvm",true);
                 check.addProperty("source_run",originalRun);
                 Files.writeString(out.resolve("ga15-restarted-ghidra.json"),
                     GSON.toJson(check));

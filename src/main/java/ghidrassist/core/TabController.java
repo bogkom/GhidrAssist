@@ -851,6 +851,42 @@ public class TabController {
 
     // ==== Query Operations ====
 
+    /**
+     * GA-12: previously saved checkpoint is data, not a restored Agentic
+     * session. Re-check its integrity against the currently open firmware
+     * and stage ONLY a new, independently reviewed Query.
+     */
+    public void handleSavedAgenticCheckpointImport(
+            java.nio.file.Path file, String objective) {
+        if (!SwingUtilities.isEventDispatchThread()) {
+            SwingUtilities.invokeLater(() ->
+                handleSavedAgenticCheckpointImport(file,objective));
+            return;
+        }
+        if(isQueryRunning || isAgentPlanPending || isCancelling) {
+            Msg.showError(getClass(),queryTab,"Saved checkpoint",
+                "Finish or cancel the running task before importing prior evidence.");
+            return;
+        }
+        try {
+            var program=plugin.getCurrentProgram();
+            var draft=ghidrassist.agent.react.AgenticReviewDraft.loadSavedCheckpoint(
+                file,program,objective);
+            // The current Program is checked again before staging. Import
+            // never reconnects the old registry, AI state, plan or approval.
+            if(program==null || program!=plugin.getCurrentProgram())
+                throw new IllegalStateException("Program switched during checkpoint verification");
+            stageImportedAgenticDraft(draft);
+            Msg.showInfo(getClass(),queryTab,"New review required",
+                "Saved evidence is historical, untrusted data. The old run "+
+                "and its permissions cannot be restored. Inspect the NEW "+
+                "objective, Submit a new plan, then separately Approve Plan.");
+        } catch(Exception error) {
+            Msg.showError(getClass(),queryTab,"Checkpoint import refused",
+                error.getMessage()==null?"Invalid or mismatched checkpoint":error.getMessage());
+        }
+    }
+
     /** Import only locally validated evidence data into a *new* explicit Review flow. */
     public void handleAgenticReviewDraftImport(java.nio.file.Path path) {
         if (!SwingUtilities.isEventDispatchThread()) {

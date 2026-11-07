@@ -551,6 +551,187 @@ public final class Ga15ScriptedReActFixture {
         return f.get(target);
     }
 
+
+    /** CI only: a genuinely NEW JVM opens historical offline evidence and
+     * requires a fresh Query session, fresh plan and actual Approve Plan button. */
+    public static void continueSavedCheckpointInFreshJVM(
+            GhidrAssistPlugin plugin,Program program,Address site,Path output)
+            throws Exception {
+        var review=AgenticReviewDraft.loadSavedCheckpoint(
+            output.resolve("ga15-react-local-evidence.json"),program,
+            "New investigation of synthetic MMIO after Ghidra restart");
+        AtomicReference<Throwable> failure=new AtomicReference<>();
+        AtomicInteger freshChat=new AtomicInteger(-1);
+        AtomicReference<String> query=new AtomicReference<>();
+        javax.swing.SwingUtilities.invokeAndWait(()->{
+            try {
+                Object provider=getField(plugin,"provider");
+                Object ui=provider.getClass().getMethod("getUI").invoke(provider);
+                Object controller=getField(ui,"controller");
+                var tab=(ghidrassist.ui.tabs.QueryTab)getField(ui,"queryTab");
+                var service=(ghidrassist.services.QueryService)
+                    getField(controller,"queryService");
+                int before=service.getCurrentSessionId();
+                var method=controller.getClass().getDeclaredMethod(
+                    "stageImportedAgenticDraft",AgenticReviewDraft.class);
+                method.setAccessible(true);
+                method.invoke(controller,review);
+                var area=(javax.swing.JTextArea)getField(tab,"queryTextArea");
+                var policy=tab.getTaskToolPolicyPanel().snapshot();
+                int after=service.getCurrentSessionId();
+                if(after<=0 || after==before || service.isAcceptAllToolsEnabled() ||
+                        policy==null || !policy.readOnly() ||
+                        !Integer.valueOf(8).equals(policy.totalLimit()) ||
+                        !tab.isAgenticSelected() ||
+                        !area.getText().contains("Untrusted historical observations") ||
+                        (Boolean)getField(controller,"isAgentPlanPending"))
+                    throw new IllegalStateException("Offline checkpoint acquired old authority");
+                freshChat.set(after);
+                query.set(area.getText());
+            } catch(Throwable error) { failure.set(error); }
+        });
+        if(failure.get()!=null)throw new IllegalStateException(
+            "Post-restart checkpoint stage failed",failure.get());
+        // This is a separate test-only scripted provider, not restored LLM
+        // state, and is never shipped inside the production extension.
+        Path folder=output.resolve("ga15-post-restart-run");
+        Files.createDirectories(folder);
+        APIProviderConfig cfg=new APIProviderConfig("GA12 synthetic new task",
+            APIProvider.ProviderType.OPENAI_PLATFORM_API,
+            "no-network-new-task",128,"http://127.0.0.1:9",
+            "not-a-secret-test-only",false);
+        var scripted=new ScriptedLlm(cfg,plugin,folder,site.toString(),
+            new AtomicInteger());
+        var react=new ReActOrchestrator(cfg,plugin,2,8000,1,false,scripted);
+        Field toolsField=ReActOrchestrator.class.getDeclaredField("toolRegistry");
+        toolsField.setAccessible(true);
+        ((ToolRegistry)toolsField.get(react)).setFullContext(program,site);
+        failure.set(null);
+        javax.swing.SwingUtilities.invokeAndWait(()->{
+            try {
+                Object provider=getField(plugin,"provider");
+                Object ui=provider.getClass().getMethod("getUI").invoke(provider);
+                Object controller=getField(ui,"controller");
+                var tab=(ghidrassist.ui.tabs.QueryTab)getField(ui,"queryTab");
+                var service=(ghidrassist.services.QueryService)
+                    getField(controller,"queryService");
+                String plan="- [ ] Independently verify the current Listing address";
+                String nextRunId=java.util.UUID.randomUUID().toString();
+                service.beginReActRun(nextRunId,query.get());
+                setField(controller,"pendingAgentQuery",query.get());
+                setField(controller,"pendingAgentInitialContext",
+                    "New JVM, untrusted past observations require re-verification");
+                setField(controller,"pendingAgentRunId",nextRunId);
+                setField(controller,"pendingAgentPlan",plan);
+                setField(controller,"pendingAgentUseMCP",false);
+                setField(controller,"isAgentPlanPending",true);
+                setField(controller,"agenticTestOrchestratorFactory",
+                    (java.util.function.Supplier<ReActOrchestrator>)(()->react));
+                tab.setPendingPlan(plan);
+                var approve=(javax.swing.JButton)getField(tab,"approvePlanButton");
+                if(!approve.isEnabled() || !approve.isVisible())
+                    throw new IllegalStateException("New review approval unavailable");
+                approve.doClick();
+                if((Boolean)getField(controller,"isAgentPlanPending"))
+                    throw new IllegalStateException("Approve Plan did not consume fresh plan");
+            } catch(Throwable error) { failure.set(error); }
+        });
+        if(failure.get()!=null)throw new IllegalStateException(
+            "Post-restart Approve Plan failed",failure.get());
+        waitFor(folder.resolve("ga15-react-running"),45);
+        var running=AgenticEvidenceRegistry.shared().page(program,
+            program.getModificationNumber(),program.getExecutableSHA256(),
+            0,1,null,null);
+        if(!"RUNNING".equals(running.state()))
+            throw new IllegalStateException("No new ReAct run after fresh approval");
+        Files.writeString(folder.resolve("ga15-react-release"),
+            "new independent post-restart task",StandardCharsets.UTF_8);
+        AgenticEvidenceRegistry.EvidencePage terminal=running;
+        long until=System.nanoTime()+TimeUnit.SECONDS.toNanos(60);
+        while(System.nanoTime()<until) {
+            terminal=AgenticEvidenceRegistry.shared().page(program,
+                program.getModificationNumber(),program.getExecutableSHA256(),
+                0,100,null,null);
+            if(!"RUNNING".equals(terminal.state()))break;
+            Thread.sleep(60);
+        }
+        if(!"SUCCESS".equals(terminal.state()) || !terminal.complete() ||
+                !scripted.toolSucceeded)
+            throw new IllegalStateException("Independent post-restart ReAct incomplete");
+        var prior=com.google.gson.JsonParser.parseString(Files.readString(
+            output.resolve("ga15-react-local-evidence.json"),
+            StandardCharsets.UTF_8)).getAsJsonObject().getAsJsonObject("payload");
+        if(terminal.run().equals(prior.get("run").getAsString()))
+            throw new IllegalStateException("The old run ID was incorrectly resurrected");
+
+        // New retained findings are a new, separately persisted checkpoint.
+        JsonObject payload=new JsonObject();
+        payload.addProperty("schema",1);
+        payload.addProperty("kind","ghidrassist-agentic-retained-evidence");
+        payload.addProperty("run",terminal.run());
+        payload.addProperty("program_revision",terminal.programRevision());
+        payload.addProperty("import_sha256",terminal.importSha256());
+        payload.addProperty("state",terminal.state());
+        payload.addProperty("findings_revision",terminal.findings().revision());
+        payload.addProperty("retained_count",terminal.findings().retainedCount());
+        payload.addProperty("accepted_count",terminal.findings().acceptedCount());
+        payload.addProperty("evicted_count",terminal.findings().evictedCount());
+        payload.addProperty("source_incomplete",terminal.findings().sourceIncomplete());
+        payload.addProperty("complete",terminal.complete());
+        com.google.gson.JsonArray rows=new com.google.gson.JsonArray();
+        for(var row:terminal.findings().rows()) {
+            JsonObject jsonRow=new JsonObject();
+            jsonRow.addProperty("fact",row.fact());
+            jsonRow.addProperty("evidence",row.evidence());
+            jsonRow.addProperty("toolUsed",row.toolUsed());
+            jsonRow.addProperty("relevance",row.relevance());
+            jsonRow.addProperty("timestamp",row.timestamp());
+            rows.add(jsonRow);
+        }
+        payload.add("rows",rows);
+        payload.addProperty("notice","New reviewed findings, never restored AI state");
+        var gson=new com.google.gson.GsonBuilder().disableHtmlEscaping().create();
+        String canonical=gson.toJson(sortCheckpointJson(payload));
+        String digest=java.util.HexFormat.of().formatHex(
+            java.security.MessageDigest.getInstance("SHA-256").digest(
+                canonical.getBytes(StandardCharsets.UTF_8)));
+        JsonObject env=new JsonObject();
+        env.add("payload",payload);
+        env.addProperty("payload_sha256",digest);
+        Files.writeString(output.resolve("ga15-post-restart-checkpoint.json"),
+            gson.toJson(env),StandardCharsets.UTF_8,
+            java.nio.file.StandardOpenOption.CREATE_NEW);
+        JsonObject result=new JsonObject();
+        result.addProperty("schema",1);
+        result.addProperty("synthetic_only",true);
+        result.addProperty("fresh_chat_id",freshChat.get());
+        result.addProperty("new_review_from_saved_checkpoint",true);
+        result.addProperty("actual_approve_plan_button",true);
+        result.addProperty("native_readonly_tool_executed",true);
+        result.addProperty("new_react_success",true);
+        result.addProperty("distinct_new_run",true);
+        result.addProperty("new_checkpoint_created",true);
+        Files.writeString(output.resolve("ga15-post-restart-continuation.json"),
+            gson.toJson(result),StandardCharsets.UTF_8);
+    }
+
+    private static com.google.gson.JsonElement sortCheckpointJson(
+            com.google.gson.JsonElement value) {
+        if(value.isJsonObject()) {
+            JsonObject sorted=new JsonObject();
+            value.getAsJsonObject().entrySet().stream()
+                .sorted(java.util.Map.Entry.comparingByKey())
+                .forEach(e->sorted.add(e.getKey(),sortCheckpointJson(e.getValue())));
+            return sorted;
+        }
+        if(value.isJsonArray()) {
+            com.google.gson.JsonArray array=new com.google.gson.JsonArray();
+            for(var item:value.getAsJsonArray())array.add(sortCheckpointJson(item));
+            return array;
+        }
+        return value.deepCopy();
+    }
+
     private static void waitFor(Path marker,int seconds)
             throws Exception {
         long end=System.nanoTime()+TimeUnit.SECONDS.toNanos(seconds);
