@@ -329,6 +329,20 @@ public final class TaskToolPolicyPanel extends JPanel {
         loadDraft(applied); updateSummary();
     }
     /** A conversation boundary clears both lifetimes and the optional latest-task history. */
+    /** Imported historical evidence never inherits a previous conversation's tool rights. */
+    public void resetForImportedReview() {
+        edt();
+        applied = new Settings(Mode.READ_ONLY, Lifetime.NEXT_TASK, Set.of(), Map.of(), 8);
+        running = false;
+        editControls.forEach(c -> c.setEnabled(true));
+        loadDraft(applied);
+        updateSummary();
+        eventRows.clear();
+        events.setRowCount(0);
+        if (dialog != null) dialog.setVisible(false);
+        if (historyDialog != null) historyDialog.setVisible(false);
+    }
+
     public void resetForNewTask() {
         edt(); applied = Settings.defaults(); running = false; editControls.forEach(c -> c.setEnabled(true));
         loadDraft(applied); updateSummary(); eventRows.clear(); events.setRowCount(0);

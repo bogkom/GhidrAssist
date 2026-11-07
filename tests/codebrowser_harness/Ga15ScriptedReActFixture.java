@@ -153,6 +153,45 @@ public final class Ga15ScriptedReActFixture {
                 }
             });
         }
+        if("normal".equals(scenario)) {
+            // A second, independent CI controller now prepares a local
+            // review-only draft from the completed real ReAct evidence. Check
+            // it inside the SAME genuine Ghidra Program/registry generation.
+            CompletableFuture.runAsync(()->{
+                JsonObject proof=new JsonObject();
+                proof.addProperty("schema",1);
+                proof.addProperty("synthetic_only",true);
+                try {
+                    waitFor(evidence.resolve("ga15-review-draft-ready"),80);
+                    var draft=AgenticReviewDraft.load(
+                        evidence.resolve("ga15-new-independent-review.json"),
+                        program,AgenticEvidenceRegistry.shared());
+                    String staged=draft.toReviewQuery();
+                    if(!staged.startsWith("New independent static MMIO reference audit") ||
+                            !staged.contains("Untrusted historical observations") ||
+                            !staged.contains("Propose a NEW investigation plan"))
+                        throw new IllegalStateException("Imported review did not stage safe new query");
+                    proof.addProperty("live_program_draft_import_pass",true);
+                    proof.addProperty("read_only_historical_data_only",true);
+                    try {
+                        AgenticReviewDraft.load(
+                            evidence.resolve("ga15-forged-independent-review.json"),
+                            program,AgenticEvidenceRegistry.shared());
+                        throw new IllegalStateException("Rehashed injected review passed");
+                    } catch(IllegalArgumentException expected) {
+                        proof.addProperty("forged_draft_refused",true);
+                    }
+                } catch(Exception failure) {
+                    proof.addProperty("error",failure.toString());
+                }
+                try {
+                    Files.writeString(evidence.resolve("ga15-review-draft-validation.json"),
+                        proof.toString(),StandardCharsets.UTF_8);
+                } catch(Exception fail) {
+                    throw new IllegalStateException("Failed to emit review validation",fail);
+                }
+            });
+        }
         return future;
     }
 

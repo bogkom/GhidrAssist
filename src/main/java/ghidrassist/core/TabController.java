@@ -851,6 +851,56 @@ public class TabController {
 
     // ==== Query Operations ====
 
+    /** Import only locally validated evidence data into a *new* explicit Review flow. */
+    public void handleAgenticReviewDraftImport(java.nio.file.Path path) {
+        if (!SwingUtilities.isEventDispatchThread()) {
+            SwingUtilities.invokeLater(() -> handleAgenticReviewDraftImport(path));
+            return;
+        }
+        if (isQueryRunning || isAgentPlanPending || isCancelling) {
+            Msg.showError(getClass(), queryTab, "Agentic Review",
+                "Finish or cancel the current analysis/plan before importing another draft.");
+            return;
+        }
+        try {
+            var program=plugin.getCurrentProgram();
+            var draft=ghidrassist.agent.react.AgenticReviewDraft.load(
+                path, program, ghidrassist.agent.react.AgenticEvidenceRegistry.shared());
+            // A *new* chat ID is required because Allow for Session grants
+            // are persisted by chat ID; unchecking the checkbox alone is not
+            // enough to revoke old conversation permissions.
+            int oldSessionId=queryService.getCurrentSessionId();
+            queryService.getToolApprovalService().cancelPendingApprovalsForSession(
+                oldSessionId,"independent Agentic Review started");
+            int newSessionId=queryService.createNewChatSession();
+            if(newSessionId<=0)
+                throw new IllegalStateException("Could not create independent chat session");
+            queryService.setAcceptAllToolsEnabled(false);
+            queryTab.getTaskToolPolicyPanel().resetForImportedReview();
+            queryTab.setAcceptAllToolsState(true,false);
+            queryTab.setResponseText("");
+            queryTab.setEditEnabled(false);
+            queryTab.clearChatSelection();
+            refreshChatHistory();
+            java.util.List<ghidrassist.AnalysisDB.ChatSession> sessions=
+                queryService.getChatSessions();
+            for(int i=0;i<sessions.size();i++) {
+                if(sessions.get(i).getId()==newSessionId) {
+                    queryTab.selectChatSession(i);
+                    break;
+                }
+            }
+            queryTab.stageNewAgenticReviewQuery(draft.toReviewQuery());
+            Msg.showInfo(getClass(), queryTab, "New Agentic Review required",
+                "Draft evidence is untrusted, read-only data. Inspect the new objective, "+
+                "press Submit to propose a NEW plan, configure fresh tool limits, "+
+                "then separately approve the plan. No task was started.");
+        } catch (Exception error) {
+            Msg.showError(getClass(), queryTab, "Agentic Review Draft refused",
+                error.getMessage()==null?"Invalid or stale review draft":error.getMessage());
+        }
+    }
+
     public void handleQuerySubmit(String query, boolean useRAG, boolean useMCP, boolean useAgentic) {
         // If cancellation is in progress, ignore the click
         if (isCancelling) {

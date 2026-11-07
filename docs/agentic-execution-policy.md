@@ -161,3 +161,20 @@ independent ReAct run remain separate future steps: no CLI execution endpoint
 accepts review drafts as authorization. The real synthetic CodeBrowser GUI
 harness validates the exported artifact, refuse-overwrite and forged-evidence
 denial through the production Bearer JSON-RPC client.
+
+## GA-12/15: GUI import and explicit independent Review (2026-11-07)
+
+The Query tab has an **Import Review Draft** action. A draft is a bounded,
+SHA-256-validated, **non-executable** snapshot of a prior verified Agentic run.
+Import checks current Program identity, executable SHA, modification number,
+previous run token, terminal SUCCESS and complete retained evidence, counters,
+and every retained finding against the currently active in-memory registry.
+It populates only a new Query text area, clearly segregating untrusted excerpts,
+sets Agentic mode and resets the in-memory task policy to READ_ONLY with an
+8-call ceiling. It does not submit a query, create a plan, call the LLM, run a
+tool, persist an approval or Apply. The operator must first click **Submit**
+(new planning request) and separately **Approve Plan** with a fresh policy.
+The draft's own boolean flags are not authorization. This import requires the
+same live Program and prior Agentic generation; it fails closed after restart,
+program switch, new run, or modification. Durable offline browsing remains
+available via `agentic-read` and is never treated as executable authority.

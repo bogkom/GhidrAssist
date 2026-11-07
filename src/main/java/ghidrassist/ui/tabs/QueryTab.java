@@ -52,6 +52,7 @@ public class QueryTab extends JPanel {
     private JButton submitButton;
     private JButton newButton;
     private JButton deleteButton;
+    private JButton loadAgenticDraftButton;
     private JTable chatHistoryTable;
     private DefaultTableModel chatHistoryModel;
     private JTextArea contextStatusLabel;
@@ -153,6 +154,8 @@ public class QueryTab extends JPanel {
         submitButton = new JButton("Submit");
         newButton = new JButton("New");
         deleteButton = new JButton("Delete");
+        loadAgenticDraftButton = new JButton("Import Review Draft");
+        loadAgenticDraftButton.setToolTipText("Load a verified local Agentic evidence proposal; never auto-run tools or approve a plan.");
         editSaveButton = new JButton("Edit");
         contextStatusLabel = new JTextArea("Model: No provider / No model | No active context window data");
         contextStatusLabel.setEditable(false);
@@ -332,6 +335,7 @@ public class QueryTab extends JPanel {
         buttonPanel.add(submitButton);
         buttonPanel.add(newButton);
         buttonPanel.add(deleteButton);
+        buttonPanel.add(loadAgenticDraftButton);
         add(buttonPanel, BorderLayout.SOUTH);
     }
 
@@ -349,6 +353,14 @@ public class QueryTab extends JPanel {
         newButton.addActionListener(e -> controller.handleNewChatSession());
 
         deleteButton.addActionListener(e -> controller.handleDeleteCurrentSession());
+
+        loadAgenticDraftButton.addActionListener(e -> {
+            JFileChooser chooser = new JFileChooser();
+            chooser.setDialogTitle("Import read-only Agentic Review Draft");
+            if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
+                controller.handleAgenticReviewDraftImport(chooser.getSelectedFile().toPath());
+            }
+        });
 
         // Edit/Save button handler
         editSaveButton.addActionListener(e -> {
@@ -767,6 +779,18 @@ public class QueryTab extends JPanel {
         setResponseText(html);
     }
     
+    /** Stage only a NEW query. Explicit Submit and Approve Plan remain mandatory. */
+    public void stageNewAgenticReviewQuery(String query) {
+        if (!SwingUtilities.isEventDispatchThread())
+            throw new IllegalStateException("Query tab stage requires EDT");
+        queryTextArea.setText(query);
+        queryTextArea.setForeground(queryTextColor);
+        queryTextArea.setCaretPosition(0);
+        useAgenticCheckBox.setSelected(true);
+        acceptAllToolsCheckBox.setSelected(false);
+        queryTextArea.requestFocusInWindow();
+    }
+
     public void setSubmitButtonText(String text) {
         submitButton.setText(text);
     }
