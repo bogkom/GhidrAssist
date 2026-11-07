@@ -115,6 +115,17 @@ public final class Ga12InterruptedCfgRestartFixture {
             throws Exception {
         Path directory=store(output);
         Files.createDirectories(directory);
+        // A genuine cross-process identity requires the Ghidra Listing
+        // baseline to be committed to the ISOLATED synthetic project.
+        // Otherwise the next JVM would legitimately see only imported
+        // undefined bytes and must reject the stale worklist.
+        require(program.getListing().getInstructionAt(
+            program.getAddressFactory().getDefaultAddressSpace()
+                .getAddress(0x20))!=null,
+            "First synthetic CodeBrowser has no Listing baseline to persist");
+        if(program.isChanged())
+            program.save("GA-12 isolated synthetic Listing identity before CFG interruption",
+                TaskMonitor.DUMMY);
         var key=identity(program);
         var steps=graph();
         require(HardwareDurableFunctionStages.loadProgress(directory,key,
