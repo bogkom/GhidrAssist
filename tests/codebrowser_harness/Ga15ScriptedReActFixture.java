@@ -171,6 +171,7 @@ public final class Ga15ScriptedReActFixture {
                             !staged.contains("Untrusted historical observations") ||
                             !staged.contains("Propose a NEW investigation plan"))
                         throw new IllegalStateException("Imported review did not stage safe new query");
+                    verifyActualGuiReviewStage(plugin,program,draft,proof);
                     proof.addProperty("live_program_draft_import_pass",true);
                     proof.addProperty("read_only_historical_data_only",true);
                     try {
@@ -193,6 +194,77 @@ public final class Ga15ScriptedReActFixture {
             });
         }
         return future;
+    }
+
+    /** Test-only direct EDT staging in the real GhidrAssist Query tab. */
+    private static void verifyActualGuiReviewStage(
+            GhidrAssistPlugin plugin,Program program,AgenticReviewDraft draft,
+            JsonObject proof) throws Exception {
+        java.util.concurrent.atomic.AtomicReference<Throwable> failed=
+            new java.util.concurrent.atomic.AtomicReference<>();
+        javax.swing.SwingUtilities.invokeAndWait(()->{
+            try {
+                var field=GhidrAssistPlugin.class.getDeclaredField("provider");
+                field.setAccessible(true);
+                Object provider=field.get(plugin);
+                if(provider==null)
+                    throw new IllegalStateException("GhidrAssist GUI provider absent");
+                Object ui=provider.getClass().getMethod("getUI").invoke(provider);
+                var controllerField=ui.getClass().getDeclaredField("controller");
+                controllerField.setAccessible(true);
+                Object controller=controllerField.get(ui);
+                var tabField=ui.getClass().getDeclaredField("queryTab");
+                tabField.setAccessible(true);
+                var tab=(ghidrassist.ui.tabs.QueryTab)tabField.get(ui);
+                var serviceField=controller.getClass().getDeclaredField("queryService");
+                serviceField.setAccessible(true);
+                var queryService=(ghidrassist.services.QueryService)
+                    serviceField.get(controller);
+                int oldId=queryService.createNewChatSession();
+                if(oldId<=0)
+                    throw new IllegalStateException("Missing isolated GUI chat");
+                // Simulate a previous conversation's permissive setting.
+                // Staging must never reuse it or its session-scoped grants.
+                queryService.setAcceptAllToolsEnabled(true);
+                var stage=controller.getClass().getDeclaredMethod(
+                    "stageImportedAgenticDraft",AgenticReviewDraft.class);
+                stage.setAccessible(true);
+                stage.invoke(controller,draft);
+                int fresh=queryService.getCurrentSessionId();
+                var policy=tab.getTaskToolPolicyPanel().snapshot();
+                var queryField=tab.getClass().getDeclaredField("queryTextArea");
+                queryField.setAccessible(true);
+                var area=(javax.swing.JTextArea)queryField.get(tab);
+                String query=area.getText();
+                if(fresh==oldId || fresh<=0 ||
+                        queryService.isAcceptAllToolsEnabled() ||
+                        policy==null || !policy.readOnly() ||
+                        !Integer.valueOf(8).equals(policy.totalLimit()) ||
+                        !tab.isAgenticSelected() ||
+                        !query.contains("Untrusted historical observations") ||
+                        !query.startsWith("New independent static MMIO reference audit"))
+                    throw new IllegalStateException(
+                        "Real GUI did not isolate new chat, query, tool permissions");
+                var pending=controller.getClass().getDeclaredField("isAgentPlanPending");
+                pending.setAccessible(true);
+                var running=controller.getClass().getDeclaredField("isQueryRunning");
+                running.setAccessible(true);
+                if(pending.getBoolean(controller) || running.getBoolean(controller))
+                    throw new IllegalStateException(
+                        "Import unexpectedly proposed or started a model run");
+                proof.addProperty("real_gui_new_chat_id",true);
+                proof.addProperty("real_gui_old_grants_not_inherited",true);
+                proof.addProperty("real_gui_readonly_tool_limit_8",true);
+                proof.addProperty("real_gui_staged_no_model_run",true);
+                proof.addProperty("real_gui_source_program_unchanged",
+                    plugin.getCurrentProgram()==program);
+            } catch(Throwable error) {
+                failed.set(error);
+            }
+        });
+        if(failed.get()!=null)
+            throw new IllegalStateException(
+                "Real CodeBrowser Query review staging failed",failed.get());
     }
 
     private static void waitFor(Path marker,int seconds)
