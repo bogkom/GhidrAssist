@@ -196,7 +196,6 @@ public final class GhidraHardwareFlowService {
                     case PcodeOp.INT_SUB -> HardwarePcodeConstantMath.Operation.SUBTRACT;
                     default -> null;
                 };
-                Varnode out=p.getOutput();
                 if(operation!=null && out!=null && p.getNumInputs()>0){
                     Varnode left=p.getInput(0);
                     Varnode right=p.getNumInputs()>1?p.getInput(1):null;
