@@ -596,6 +596,30 @@ The RPC operations do not write Ghidra database content, enable
 12.1.4 CI verifies packaged production classes on synthetic CPU32
 functions, pagination and stale-guard failures.
 
+## GA-15/18 — real ReAct read-only tool → authenticated JSON-RPC → external CLI (2026-11-07)
+
+The isolated CI end-to-end workflow runs actual **Ghidra 12.1.4
+PUBLIC / Java25** CodeBrowser and the **real ReActOrchestrator**, not
+only a manually populated FindingsCache. A strict read-only
+`ToolExecutionPolicy` authorizes exactly one native
+`ga_get_current_address` call through the real ToolRegistry.
+Only the LLM responses are **scripted inside test sources**; no AI
+provider, OAuth or external inference endpoint is contacted.
+The production AutomationServer still runs on authenticated
+`127.0.0.1`, and the external `ghidrassist-agent` is a distinct
+OS process. No test hook allows RPC callers to start ReAct or
+inject findings.
+
+The external CI client checks unauthorized Bearer denial,
+RUNNING source incompleteness, after-completion findings and page
+stitching with exact run/program/cache revision, wrong-revision
+refusals, atomic no-overwrite local checkpoint, and offline
+`agentic-verify`/`agentic-read` without a Ghidra session.
+All evidence is synthetic with static Listing PC 0x00000020;
+no runtime execution, complete reverse engineering or real LLM
+session recovery is claimed. Only real CI acceptance at exact
+commit SHA may establish PASS.
+
 ## GA-12/15 — ReAct evidence read-only pages and explicit local checkpoint (2026-11-06)
 
 `agentic.findings.page` exposes **only the real active/last completed

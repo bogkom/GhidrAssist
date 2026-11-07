@@ -100,13 +100,32 @@ public class ReActOrchestrator {
         int maxToolRounds,
         boolean enableMcpTools
     ) {
+        this(providerConfig,plugin,maxIterations,contextSummaryThreshold,
+             maxToolRounds,enableMcpTools,null);
+    }
+
+    /**
+     * Package-scoped deterministic provider seam for the isolated CI harness.
+     * All production constructors select the normal LlmApi; this does not
+     * create an Automation API endpoint to inject prompts or model results.
+     */
+    ReActOrchestrator(
+        APIProviderConfig providerConfig,
+        GhidrAssistPlugin plugin,
+        int maxIterations,
+        int contextSummaryThreshold,
+        int maxToolRounds,
+        boolean enableMcpTools,
+        LlmApi deterministicProvider
+    ) {
         this.mcpToolsEnabled = enableMcpTools;
         this.plugin = plugin;
         this.maxIterations = maxIterations;
         this.baseMaxIterations = maxIterations;  // Store original limit
         this.contextSummaryThreshold = contextSummaryThreshold;
         this.maxToolRounds = maxToolRounds > 0 ? maxToolRounds : 10;  // Default to 10 if invalid
-        this.llmApi = new LlmApi(providerConfig, plugin);
+        this.llmApi = deterministicProvider != null ? deterministicProvider :
+            new LlmApi(providerConfig, plugin);
         this.mcpToolManager = MCPToolManager.getInstance();
 
         // Apply saved reasoning config

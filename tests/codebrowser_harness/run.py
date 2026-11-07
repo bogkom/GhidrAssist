@@ -114,6 +114,8 @@ def main():
     ap.add_argument("--bridge-mode",choices=("off","ci","host"),default="off")
     ap.add_argument("--bridge-timeout",type=int,default=60)
     ap.add_argument("--automation-probe",action="store_true")
+    ap.add_argument("--agentic-react-probe",action="store_true",
+                    help="Actual ReAct/real Ghidra read-only tool/HTTP CLI model-free CI")
     ap.add_argument("--review-copy-probe",action="store_true",help="Separate isolated project-copy Review/Apply/Undo HTTP test")
     ap.add_argument("--review-copy-bad-sha",action="store_true",help="Verify invalid copy identity prevents Review before any edit")
     ap.add_argument("--cua-live",action="store_true",
@@ -125,6 +127,9 @@ def main():
     args=ap.parse_args()
     if args.review_copy_bad_sha and not args.review_copy_probe:
         ap.error("--review-copy-bad-sha requires --review-copy-probe")
+    if args.agentic_react_probe and (not args.automation_probe or
+            args.review_copy_probe or args.bridge_mode!="off" or args.cua_live):
+        ap.error("--agentic-react-probe requires --automation-probe, no Review/CUA/bridge")
     if args.review_copy_probe and (not args.automation_probe or args.bridge_mode!="off" or args.cua_live):
         ap.error("--review-copy-probe requires --automation-probe, with bridge and CUA disabled")
     if args.timeout<90 or args.timeout>900:
@@ -213,7 +218,8 @@ def main():
                   "index":str(work/"index"),"run_id":run_id,"case_id":case_id,
                   "bridge_timeout":args.bridge_timeout if args.bridge_mode!="off" else 0,
                   "cua_hold_seconds":args.cua_timeout if args.cua_live else 0,
-                  "automation_probe":args.automation_probe}
+                  "automation_probe":args.automation_probe,
+                  "agentic_react_probe":args.agentic_react_probe}
             conf_path=work/"config.json"
             conf_path.write_text(json.dumps(conf),encoding="utf-8")
             jars=sorted(set(ghidra.rglob("*.jar")) | set(ext.rglob("*.jar")))
@@ -221,7 +227,8 @@ def main():
             subprocess_checked([str(java/"bin/javac"),"-cp",cp,
                 "-d",str(work/"classes"),str(SRC),
                 str(SRC.parent/"CodeBrowserAssertionReceipt.java"),
-                str(SRC.parent/"CodeBrowserCuaHold.java")],
+                str(SRC.parent/"CodeBrowserCuaHold.java"),
+                str(SRC.parent/"Ga15ScriptedReActFixture.java")],
                 work,env,out/"compile.log",120)
             if args.automation_probe:
                 # Exercise the production opt-in HTTP server in the same JVM
@@ -282,6 +289,24 @@ def main():
                                 "hardware" not in snapshot.get("ui",{})):
                             raise RuntimeError("Production HTTP Swing snapshot invalid")
                         (out/"api-snapshot.json").write_text(json.dumps(snapshot,indent=2))
+                        if args.agentic_react_probe:
+                            # Create the short-lived bearer receipt only
+                            # inside disposable private fixture workspace;
+                            # never place it in the uploaded evidence output.
+                            private_session=work/"ga15-react-session.json"
+                            fd=os.open(private_session,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
+                            with os.fdopen(fd,"w",encoding="utf-8") as private:
+                                json.dump({"schema":3,"port":receipt["port"],"token":token},private)
+                            subprocess_checked(
+                                [sys.executable,str(SRC.parent/"ga15_react_api_cli_controller.py"),
+                                 "--session",str(private_session),"--output",str(out)],
+                                work,env,out/"ga15-react-controller.log",180)
+                            e2e=json.loads((out/"ga15-react-e2e.json").read_text())
+                            if (not e2e.get("real_react_execution") or
+                                    not e2e.get("real_http_bearer_401") or
+                                    not e2e.get("offline_no_session_verify_and_read") or
+                                    e2e.get("tool_calls")!=1):
+                                raise RuntimeError("Actual ReAct+HTTP+CLI source proof incomplete")
                         def http_call(method,params=None):
                             message=json.dumps({"method":method,"params":params or {}}).encode()
                             call=Request(
