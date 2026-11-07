@@ -127,7 +127,9 @@ def main():
         # result is terminal. It must not modify UI or resurrect source.
         (out/"ga15-react-release").write_text("send-delayed-model-callback")
         late=json.loads(wait_path(out/"ga15-react-late-delivered",60).read_text())
-        assert late["provider_cancel_calls"]==1 and late["late_ui_updates"]==0,late
+        assert (late["provider_cancel_calls"]==1 and
+                late["synchronous_cancel_error_callbacks"]==1 and
+                late["late_ui_updates"]==0),late
         if args.scenario=="cancel":
             state=command(args.session,"agentic-findings","--offset",0,"--limit",1)
             bound=state["agentic"]
@@ -147,6 +149,7 @@ def main():
             "cancelled_after_real_tool":True,
             "program_switch_invalidation":args.scenario=="switch",
             "cancel_retained_snapshot":args.scenario=="cancel",
+            "synchronous_cancel_error_preserves_CANCELLED":True,
             "delayed_callback_no_ui_update":True,
             "delayed_callback_no_resurrection":True,
             "source_revision_unchanged":True,
