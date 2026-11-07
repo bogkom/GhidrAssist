@@ -288,6 +288,23 @@ def main():
     assert not forbidden.exists()
     bad_review_source.unlink()
 
+    # Real Java validator in the SAME running CodeBrowser / Program checks
+    # the new review-only draft. A rehashed forged draft must fail there too.
+    forged_draft=out/"ga15-forged-independent-review.json"
+    forged=json.loads(review_draft.read_text())
+    forged["payload"]["untrusted_source_observations"][0]["fact"]="forged fact in retained evidence"
+    raw=json.dumps(forged["payload"],sort_keys=True,
+                   separators=(",",":"),ensure_ascii=False).encode()
+    forged["payload_sha256"]=hashlib.sha256(raw).hexdigest()
+    forged_draft.write_text(json.dumps(forged))
+    (out/"ga15-review-draft-ready").write_text("verify-in-live-Program")
+    validation=json.loads(wait_path(
+        out/"ga15-review-draft-validation.json",60).read_text())
+    assert validation.get("live_program_draft_import_pass") is True,validation
+    assert validation.get("read_only_historical_data_only") is True,validation
+    assert validation.get("forged_draft_refused") is True,validation
+    forged_draft.unlink()
+
     # Corruption must be rejected by offline reader, not merely flagged.
     tampered=out/"ga15-corrupted-private.json"
     data=json.loads(checkpoint.read_text())
@@ -322,6 +339,8 @@ def main():
         "real_cli_new_review_draft_unapproved":True,
         "real_cli_review_draft_no_overwrite":True,
         "real_cli_forged_draft_source_denied":True,
+        "real_ghidra_java_review_import_validated":True,
+        "real_ghidra_java_forged_draft_denied":True,
         "retained":len(all_rows),"tool_calls":result["tool_calls"],
         "checkpoint_sha256":digest,
         "runtime_execution_verified":False,"model_or_oauth_used":False,
