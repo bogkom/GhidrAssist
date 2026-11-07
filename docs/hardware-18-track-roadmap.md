@@ -1,5 +1,24 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
+## GA-12/18 — 2026-11-07: typed worklist request/CFG identity guard
+
+The existing durable function-stage loader now rejects a structurally valid
+and correctly SHA-256-rehashed pending fixed-point state if its embedded
+function entry or iteration budget differs from the requested one, or any
+recorded state node is absent from the current translated CFG. These are
+cache misses before invoking the solver, not uncaught stale-progress
+exceptions. The valid worklist still resumes after a real second JVM
+restart.
+
+The isolated Ghidra 12.1.4 PUBLIC/Xvfb two-JVM regression uses nine typed
+negative cases (six schema/state corruptions, wrong entry, wrong budget,
+foreign graph node), each with fresh cold analysis checked against the
+independently completed typed result. Checksum is corruption detection, not
+authentication. This does not validate arbitrary genuine Ghidra P-code
+translation or schema migrations; GA-12 remains PARTIAL and merge requires
+full Java25 build and exact-HEAD CI.
+
+
 ## GA-12/18 — 2026-11-07: checksum-valid malformed interrupted worklist refusal
 
 The existing two-JVM real synthetic Ghidra 12.1.4 PUBLIC/CodeBrowser

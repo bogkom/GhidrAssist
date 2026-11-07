@@ -86,7 +86,7 @@ jobs:
                       "changed_language_refused","changed_cfg_refused",
                       "changed_budget_refused","no_production_apply"):
               assert recovered_cfg[key] is True,(key,recovered_cfg)
-          assert recovered_cfg["malformed_typed_fallbacks"]==6,recovered_cfg
+          assert recovered_cfg["malformed_typed_fallbacks"]==9,recovered_cfg
           assert recovered_cfg["malformed_valid_digest_refused"] is True,recovered_cfg
           assert recovered_cfg["damaged_partial_fallbacks"]==3,recovered_cfg
           assert recovered_cfg["damaged_partial_never_complete"] is True,recovered_cfg
