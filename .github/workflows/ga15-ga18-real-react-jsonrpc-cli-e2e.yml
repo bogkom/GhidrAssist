@@ -94,8 +94,18 @@ jobs:
               "real_gui_old_grants_not_inherited",
               "real_gui_readonly_tool_limit_8",
               "real_gui_staged_no_model_run",
-              "real_gui_source_program_unchanged"):
+              "real_gui_source_program_unchanged",
+              "second_independent_react_after_test_review",
+              "second_react_real_readonly_tool",
+              "second_react_new_registry_generation",
+              "second_react_stale_checkpoint_denied",
+              "second_react_new_policy_readonly",
+              "second_react_no_firmware_mutation"):
               assert receipt.get(key) is True,(key,receipt)
+          independent=json.loads((root/"ga15-independent-result.json").read_text())
+          assert independent["new_run_id"]!=independent["original_run"],independent
+          assert independent["tool_calls"]==1,independent
+          assert independent["fresh_policy_max_8"] and independent["previous_run_denied"],independent
           assert runtime["status"]=="SUCCESS" and runtime["tool_calls"]==1,runtime
           assert runtime["tool_succeeded"] is True,runtime
           assert receipt["model_or_oauth_used"] is False
