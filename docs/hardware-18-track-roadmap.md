@@ -1,5 +1,34 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
+## GA-02/03/12/18 — 2026-11-07: size-correct real P-code MMIO addresses
+
+**Implementation candidate:** the existing genuine Ghidra Listing CFG
+translator uses a pure Java, width-aware constant evaluator for COPY,
+INT_ZEXT, INT_SEXT, INT_ADD and INT_SUB. It applies P-code input/output
+varnode widths, computes signed extension from the input sign bit and
+arithmetic overflow at the declared result width, and only then applies
+the CPU32 24-bit external bus mask to a proven four-byte STORE pointer.
+Unsupported operations, unknown values, incompatible widths and truncated
+pointers stay UNKNOWN; a P-code instruction with multiple STOREs is still
+unresolved and conservatively treated as an alias barrier. This does not
+claim MCU MM or hardware execution.
+
+**Regression:** independent Java21 source-only suite exercises 8/16/32/64-bit
+sign extension, zero extension, arithmetic wraps, malformed widths,
+unknowns and 24-bit address boundaries. The existing real synthetic
+Ghidra 12.1.4 PUBLIC/Xvfb CodeBrowser two-JVM test additionally reads
+the actual decoded Listing instruction at 0x20, requires exactly one
+real P-code direct COPY-to-RAM effect for each synthetic SIMCR and SYNCR
+write and resolves both source addresses through
+the same production method in each JVM. Full Java25 extension and
+all required exact-head CI must pass before integration.
+
+**Limits:** this verifies one real synthetic instruction plus general
+width semantics, not the complete P-code translation of every 68332
+instruction, indirect runtime execution, hardware mapping or schema
+migration. GA-02/03, GA-12 and GA-18 remain PARTIAL.
+
+
 ## GA-12/18 — 2026-11-07: typed worklist request/CFG identity guard
 
 The existing durable function-stage loader now rejects a structurally valid
