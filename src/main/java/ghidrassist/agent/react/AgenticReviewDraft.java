@@ -188,6 +188,83 @@ public final class AgenticReviewDraft {
         return new AgenticReviewDraft(objective,sourceHash,sourceRows);
     }
 
+
+    /**
+     * GA-12: after a completely new Ghidra process has started, a previous
+     * completed checkpoint may be inspected as *untrusted offline data*.
+     * It never resurrects a run, old plan, approvals or tool authorization.
+     * The SHA-256 is a corruption check, NOT authenticated authorship.
+     */
+    public static AgenticReviewDraft loadSavedCheckpoint(
+            Path source, Program activeProgram, String objective) throws IOException {
+        if(source==null || activeProgram==null)
+            throw new IllegalArgumentException("Select an active Program and checkpoint");
+        if(objective==null || objective.length()<8 || objective.length()>512 ||
+                objective.codePoints().anyMatch(ch->ch<32 && ch!='\n' && ch!='\t'))
+            throw new IllegalArgumentException("Provide a new 8..512 character objective");
+        byte[] raw;
+        try(InputStream in=Files.newInputStream(source)) {
+            raw=in.readNBytes(8*1024*1024+1);
+        }
+        if(raw.length>8*1024*1024)
+            throw new IllegalArgumentException("Oversized Agentic checkpoint");
+        JsonObject envelope=JsonParser.parseString(new String(raw,
+            StandardCharsets.UTF_8)).getAsJsonObject();
+        JsonObject payload=envelope.getAsJsonObject("payload");
+        if(payload==null || count(payload,"schema")!=1 ||
+                !"ghidrassist-agentic-retained-evidence".equals(
+                    text(payload,"kind",80)))
+            throw new IllegalArgumentException("Unsupported Agentic checkpoint");
+        String sourceHash=text(envelope,"payload_sha256",64);
+        if(!sourceHash.matches("(?i)[a-f0-9]{64}") ||
+                !sourceHash.equalsIgnoreCase(digest(CANONICAL.toJson(sorted(payload)))))
+            throw new IllegalArgumentException("Checkpoint SHA-256 mismatch");
+        String importSha=text(payload,"import_sha256",64);
+        if(!importSha.matches("(?i)[a-f0-9]{64}") ||
+                !importSha.equalsIgnoreCase(activeProgram.getExecutableSHA256()))
+            throw new IllegalArgumentException("Checkpoint belongs to a different firmware import");
+        flag(payload,"complete",true);
+        flag(payload,"source_incomplete",false);
+        if(!"SUCCESS".equals(text(payload,"state",40)))
+            throw new IllegalArgumentException("Only complete successful evidence can seed review");
+        String oldRun=text(payload,"run",128);
+        if(oldRun.isBlank())
+            throw new IllegalArgumentException("Missing previous run identity");
+        long oldRevision=count(payload,"program_revision");
+        long oldFindingsRevision=count(payload,"findings_revision");
+        long accepted=count(payload,"accepted_count");
+        long retained=count(payload,"retained_count");
+        long evicted=count(payload,"evicted_count");
+        if(oldFindingsRevision<0 || oldRevision<0 || retained<1 ||
+                retained>1000 || accepted!=retained || evicted!=0)
+            throw new IllegalArgumentException("Incomplete or lost historical evidence");
+        JsonArray rows=payload.getAsJsonArray("rows");
+        if(rows==null || rows.size()!=retained)
+            throw new IllegalArgumentException("Incomplete checkpoint row count");
+        List<String> shown=new ArrayList<>();
+        for(JsonElement item:rows) {
+            if(!item.isJsonObject())
+                throw new IllegalArgumentException("Invalid checkpoint evidence row");
+            JsonObject row=item.getAsJsonObject();
+            // Require all evidence to be structurally bounded; show at most
+            // 20 truncated facts to the new planning prompt.
+            String fact=text(row,"fact",2048);
+            text(row,"evidence",2048);
+            text(row,"toolUsed",128);
+            count(row,"timestamp");
+            if(!row.has("relevance") ||
+                    !row.get("relevance").isJsonPrimitive() ||
+                    !row.get("relevance").getAsJsonPrimitive().isNumber())
+                throw new IllegalArgumentException("Missing evidence relevance");
+            if(shown.size()<20)
+                shown.add(truncate(fact,512));
+        }
+        // The Ghidra modification counter is not a durable semantic ID
+        // across JVMs. Neither matching nor differing counters can restore
+        // authority. Require a new independent plan and Review regardless.
+        return new AgenticReviewDraft(objective,sourceHash,shown);
+    }
+
     private static String truncate(String text,int max) {
         return text==null?"":text.substring(0,Math.min(text.length(),max));
     }
