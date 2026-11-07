@@ -254,9 +254,15 @@ public final class CodeBrowserMmioMain {
                     "A plan or model run was restored without new approval");
                 require(!queryService.isAcceptAllToolsEnabled(),
                     "Old Accept All Tools grant survived process restart");
+                // The product defaults to ALL (unlimited) for a *new*
+                // manually configured task. Do not incorrectly describe this
+                // as a restored READ_ONLY policy: the prior 8-call policy
+                // must NOT be inherited. Crucially, no task or approval may
+                // be active after restart. A newly imported review would
+                // reset its policy, but this stale source cannot be imported.
                 var queryPolicy=queryTab.getTaskToolPolicyPanel().snapshot();
-                require(queryPolicy!=null && queryPolicy.readOnly(),
-                    "Reopened Query's default tool policy is not READ_ONLY");
+                require(queryPolicy==null,
+                    "A prior per-task tool policy unexpectedly survived restart");
                 JsonObject check=new JsonObject();
                 check.addProperty("schema",1);
                 check.addProperty("synthetic_only",true);
@@ -272,7 +278,7 @@ public final class CodeBrowserMmioMain {
                 check.addProperty("stale_run_registry_absent",registryEmpty);
                 check.addProperty("old_review_draft_rejected",staleDraftDenied);
                 check.addProperty("no_inherited_accept_all",true);
-                check.addProperty("read_only_default_policy",true);
+                check.addProperty("no_inherited_task_policy",true);
                 check.addProperty("no_automatic_plan_or_model_run",true);
                 check.addProperty("new_review_still_required",true);
                 check.addProperty("source_run",originalRun);
