@@ -109,3 +109,14 @@ source incomplete even if the retained prefix fits on one page. A terminal
 SUCCESS cannot certify truncated input as a complete checkpoint. Explicit
 `clear()` resets the incompleteness receipt for a newly initialized analysis;
 this does not imply that discarded evidence has been recovered.
+
+## GA-15: omitted oversized individual tool-output lines (2026-11-07)
+
+The bounded findings extractor does not retain lines longer than 300
+characters. Such deliberately omitted source lines now set the independent
+`sourceIncomplete` receipt even when the original transcript fits in the
+128 KiB scan window and no row-count limit was reached. The warning is
+retained as structural metadata if relevance pruning evicts its text, and
+`SUCCESS` does not certify complete source evidence in a checkpoint. Exact
+300-character lines are still eligible for normal extraction. This is a
+conservative retained-evidence rule, not proof of exhaustive tool semantics.

@@ -1,5 +1,17 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
+## 2026-11-07 — GA-12/15 source completeness follow-up
+
+Merged #206/#207 protect the identity and terminal lifecycle of Agentic runs;
+merged #208 (7/7 exact-head Actions SUCCESS on
+`0876b2b7905ad151e76df465345d3aa879b95558`) synchronizes
+live textual findings views and prevents complete checkpoints after
+single-field truncation. Next the extractor also marks skipped individual
+lines >300 characters as structurally incomplete, not merely transcripts
+exceeding scan/row limits. Java21 and actual isolated Ghidra 12.1.4
+regressions must verify these boundaries on the candidate SHA. All remains
+static/synthetic; no Supervisor or private ECU411 execution.
+
 Status: **IN PROGRESS — integrated baseline 2026-11-06 (PR #198)**. Scope source: user-approved 2026-10-28 requirements (A–H, additional features 13.1–13.7, PDF/RAG, testing and Codex Supervisor integration).
 
 

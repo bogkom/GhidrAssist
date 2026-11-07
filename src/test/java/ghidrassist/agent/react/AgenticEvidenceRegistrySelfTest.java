@@ -87,6 +87,19 @@ public final class AgenticEvidenceRegistrySelfTest {
             !croppedPage.complete(),
             "SUCCESS cannot certify a truncated Agentic source");
 
+        // Omitted long tool-source lines cannot be certified by SUCCESS,
+        // even when the retained evidence occupies only one page.
+        var missingLongLine=new FindingsCache();
+        missingLongLine.extractFromToolOutput("listing",
+            "ordinary valid evidence line\n"+"X".repeat(301));
+        registry.begin(programA,17L,"a".repeat(64),missingLongLine);
+        registry.finish(programA,missingLongLine,"SUCCESS");
+        var omittedLinePage=registry.page(programA,17L,"a".repeat(64),
+            0,100,null,null);
+        yes(omittedLinePage.findings().sourceIncomplete() &&
+            !omittedLinePage.complete(),
+            "omitted long tool lines invalidate complete Agentic checkpoint");
+
         // A missing SHA or no actual findings must not make a durable
         // checkpoint claim complete merely because the task ended.
         var noSource=new FindingsCache();
