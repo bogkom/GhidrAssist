@@ -56,6 +56,20 @@ Java regression includes the score-10 tie under capacity 1, independent
 summary views, reset behavior, and unchanged bounded finding count.
 No remote model calls, firmware data, Supervisor plans, host or GUI tests.
 
+## GA-15/18 deterministic end-to-end evidence regression (2026-11-07)
+
+A separate CI workflow drives the real ReAct state machine and
+native read-only `ga_get_current_address` tool on a synthetic
+Ghidra CodeBrowser Program. Its only test double is the LLM
+response generator, isolated in the test harness and never
+packaged into the extension. An external process invokes the
+production `ghidrassist-agent` through the genuine Bearer-protected
+loopback JSON-RPC server while ReAct is RUNNING and after
+SUCCESS; result pages, stale rejection and offline SHA-256 handoff
+are asserted against the same static Program source.
+This is deterministic integration evidence, not a full model
+simulation or proof of dynamic MCU behavior.
+
 ## Real ReAct cache pages through Automation API (2026-11-06)
 
 The actual `ReActOrchestrator` now publishes its existing findings
