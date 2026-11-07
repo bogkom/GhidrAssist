@@ -9,6 +9,10 @@ on:
       - 'src/test/java/ghidrassist/agent/react/AgenticEvidenceRegistrySelfTest.java'
       - 'tests/automation/test_agentic_evidence_checkpoint.py'
       - 'tools/ghidrassist-agent'
+      - 'src/main/java/ghidrassist/agent/react/AgenticReviewDraft.java'
+      - 'src/main/java/ghidrassist/core/TabController.java'
+      - 'src/main/java/ghidrassist/ui/tabs/QueryTab.java'
+      - 'src/main/java/ghidrassist/ui/common/TaskToolPolicyPanel.java'
       - '.github/workflows/ga12-ga15-agentic-api-evidence.yml'
   workflow_dispatch:
 permissions:
