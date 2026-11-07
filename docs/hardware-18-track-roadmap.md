@@ -20,6 +20,11 @@ Stara callback cancellation NIE może anulować kolejnej sesji.
 Zakończonej sesji nie anuluje się ponownie przy unieważnieniu.
 `ReActResult.CANCELLED` raportuje faktyczną liczbę
 wykonanych już narzędzi z dziennika ToolRegistry.
+Anulowanie najpierw zapisuje terminalny wynik `CANCELLED`,
+dopiero później powiadamia dostawcę LLM — dostawca może
+bowiem wywołać `onError` synchronicznie już podczas
+`cancelCurrentRequest()`. W takim wyścigu wynik ma
+pozostać `CANCELLED`, nie `ERROR`.
 Opóźnione callbacki LLM po zakończeniu run nie mogą ponownie
 dopisywać dowodów, aktualizować UI ani wznawiać etapów
 ReAct nawet jeśli inny run zresetował globalną flagę cancel.
