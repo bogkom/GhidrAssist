@@ -181,6 +181,21 @@ jobs:
           old_rows=invoke("agentic-read",old)
           assert new_rows["run"]!=old_rows["run"],(old_rows,new_rows)
           assert new_rows["read_only"] and len(new_rows["rows"])>0,new_rows
+          lineage=run(["python3",str(client),"--session",
+              str(p/"no-agentic-session.json"),"agentic-lineage-verify",
+              "--input",str(new),"--parent",str(old)],
+              capture_output=True,text=True)
+          assert lineage.returncode==0,lineage.stderr
+          ancestry=json.loads(lineage.stdout)
+          assert ancestry["lineage_matches"] and ancestry["read_only"],ancestry
+          assert ancestry["new_independent_run"] and not ancestry["authorizes_apply"],ancestry
+          assert ancestry["child_run"]==new_rows["run"],ancestry
+          assert ancestry["parent_run"]==old_rows["run"],ancestry
+          bad=run(["python3",str(client),"--session",
+              str(p/"no-agentic-session.json"),"agentic-lineage-verify",
+              "--input",str(new),"--parent",str(new)],
+              capture_output=True,text=True)
+          assert bad.returncode!=0,bad.stdout
           print("GA-12 FULL RESTART -> NEW REVIEW -> REAL NATIVE TOOL -> NEW CHECKPOINT PASS")
           print("GA-12 OFFLINE CHECKPOINT AFTER CODEBROWSER EXIT PASS")
           PY

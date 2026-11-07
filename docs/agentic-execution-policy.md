@@ -282,3 +282,35 @@ native read-only tool → writes a **distinct new checkpoint**. Separate
 CLI processes must verify both old and new snapshots, which remain
 read-only evidence. This does not test private firmware, user profile
 migration (Issue #98), hardware execution, external LLM or manual approval.
+
+## GA-12/15: explicit checkpoint provenance across independent reviewed runs (2026-11-07)
+
+`ghidrassist-agent agentic-checkpoint --output NEW.json --parent PRIOR.json`
+may optionally record **parent_checkpoint_sha256**, **parent_run** and
+`continuation_kind=new-independently-reviewed-run` in the NEW immutable,
+SHA-256-verified retained-evidence checkpoint. Before recording this history,
+the CLI strictly verifies both complete snapshots, identical original import
+SHA-256, different run tokens and no evidence evictions. A corrupt,
+incomplete, wrong-firmware or same-run parent fails closed *before* the output
+file is created; historical files are never overwritten.
+
+`ghidrassist-agent agentic-lineage-verify --input NEW.json --parent PRIOR.json`
+is an **offline, read-only** check: it validates both source payload hashes,
+the declared source hash and run, matching firmware import identities, and a
+distinct new analysis. It does **not** establish authorship of a locally
+rehashed forged file, restore the LLM session or grant access to Ghidra tools,
+Review/Apply/Undo or an existing authorization. No active CodeBrowser,
+session token or OAuth is required. Source lineage is historical provenance,
+not proof the prior run caused the new analysis.
+
+The separate-JVM synthetic Ghidra 12.1.4 ReAct acceptance fixture writes
+exactly these parent fields when saving the independently approved second
+checkpoint; its post-exit CLI process must verify both endpoints and reject
+a reversed/same-file lineage. This is a provenance milestone toward GA-12,
+not completed persistent recovery of partial CFG/P-code processing.
+
+Java `AgenticReviewDraft.loadSavedCheckpoint` and Python offline readers
+now both explicitly accept nullable evidence text fields while requiring
+the keys to be present, with bounded fact/evidence/tool lengths, integral
+relevance and nonnegative timestamp. Rows with missing evidence metadata,
+fractional relevance, or inconsistent source counters are refused.

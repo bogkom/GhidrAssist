@@ -32,7 +32,7 @@ def rpc(session, method, params=None):
         return json.loads(answer.read(1048576))
 
 
-def capture_agentic_checkpoint(session, output, page_size=100):
+def capture_agentic_checkpoint(session, output, page_size=100, parent=None):
     """Explicit local read-only evidence export; never a resumable AI session."""
     if not 1 <= page_size <= 100:
         raise ValueError("Agentic checkpoint page size must be 1..100")
@@ -85,6 +85,18 @@ def capture_agentic_checkpoint(session, output, page_size=100):
         "rows": rows,
         "notice": "Read-only retained evidence, NOT an AI session, approval, runtime ISR or exhaustive firmware proof",
     }
+    if parent is not None:
+        prior, prior_hash = load_verified_agentic_payload(parent)
+        if not prior["complete"] or not complete:
+            raise ValueError("Cannot link incomplete historical or new evidence")
+        if prior["import_sha256"].lower() != payload["import_sha256"].lower():
+            raise ValueError("Source firmware changed between independent analyses")
+        if prior["run"] == payload["run"]:
+            raise ValueError("Cannot link checkpoint to the same run")
+        # This is provenance metadata only, never approval or an AI resume.
+        payload["parent_checkpoint_sha256"] = prior_hash
+        payload["parent_run"] = prior["run"]
+        payload["continuation_kind"] = "new-independently-reviewed-run"
     canonical = json.dumps(payload,sort_keys=True,separators=(",",":"),ensure_ascii=False).encode("utf-8")
     envelope = {"payload":payload,"payload_sha256":hashlib.sha256(canonical).hexdigest()}
     data=(json.dumps(envelope,indent=2,ensure_ascii=False)+"\n").encode("utf-8")
@@ -153,8 +165,21 @@ def load_verified_agentic_payload(source):
     if payload["complete"] and (payload["state"]!="SUCCESS" or kept==0 or
             evicted>0 or payload["source_incomplete"] or not has_identity):
         raise ValueError("False-complete Agentic evidence checkpoint")
+    lineage_keys=("parent_checkpoint_sha256","parent_run","continuation_kind")
+    if any(key in payload for key in lineage_keys):
+        if not all(key in payload for key in lineage_keys):
+            raise ValueError("Incomplete checkpoint ancestry fields")
+        parent_sha=payload["parent_checkpoint_sha256"]
+        if (not isinstance(parent_sha,str) or len(parent_sha)!=64 or
+                any(c not in "0123456789abcdef" for c in parent_sha) or
+                not isinstance(payload["parent_run"],str) or
+                not 1<=len(payload["parent_run"])<=128 or
+                payload["parent_run"]==payload["run"] or
+                payload["continuation_kind"]!="new-independently-reviewed-run"):
+            raise ValueError("Invalid historical checkpoint ancestry")
     for row in rows:
         if (not isinstance(row,dict) or
+                not all(field in row for field in ("fact","evidence","toolUsed")) or
                 not all((row.get(field) is None or
                          (isinstance(row.get(field),str) and len(row[field])<=limit))
                         for field,limit in
@@ -290,6 +315,30 @@ def create_agentic_review_draft(session, source, destination, query):
             "tool_execution_authorized":False, "apply_authorized":False}
 
 
+def verify_agentic_lineage(source, parent):
+    """Compare verified child ancestry against a verified predecessor.
+
+    This neither authenticates authorship nor restores tool/AI permissions.
+    """
+    child, child_sha = load_verified_agentic_payload(source)
+    older, older_sha = load_verified_agentic_payload(parent)
+    if not child["complete"] or not older["complete"]:
+        raise ValueError("Ancestry requires two complete retained-evidence snapshots")
+    if (child.get("parent_checkpoint_sha256") != older_sha or
+            child.get("parent_run") != older["run"] or
+            child.get("continuation_kind") != "new-independently-reviewed-run" or
+            child["run"] == older["run"] or
+            child["import_sha256"].lower() != older["import_sha256"].lower()):
+        raise ValueError("Wrong or missing predecessor checkpoint")
+    return {"verified":True,"lineage_matches":True,
+        "read_only":True,"new_independent_run":True,
+        "child_run":child["run"],"parent_run":older["run"],
+        "child_sha256":child_sha,"parent_sha256":older_sha,
+        "model_state_restored":False,"authorizes_tools":False,
+        "authorizes_apply":False,
+        "notice":"Untrusted historical provenance only; no authenticated author or LLM state"}
+    
+
 def verify_agentic_checkpoint(source):
     """Offline SHA-256 integrity check; never authenticates the original actor."""
     payload,digest=load_verified_agentic_payload(source)
@@ -326,7 +375,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--session", default=os.environ.get(
         "GHIDRASSIST_AGENT_SESSION", str(Path.home() / ".local/state/ghidrassist-agent/session.json")))
-    parser.add_argument("action", choices=("status", "snapshot", "analyze", "task", "mmio", "review-preview", "profile-select", "function", "xrefs", "function-xrefs-body", "decompile", "decompile-status", "bundle", "paths", "listing", "listing-range", "goto", "tab-select", "table-select", "program-open", "review-prepare", "review-apply", "review-undo", "cancel", "report", "export", "agentic-findings", "agentic-checkpoint", "agentic-verify", "agentic-read", "agentic-resume-check", "agentic-review-draft"))
+    parser.add_argument("action", choices=("status", "snapshot", "analyze", "task", "mmio", "review-preview", "profile-select", "function", "xrefs", "function-xrefs-body", "decompile", "decompile-status", "bundle", "paths", "listing", "listing-range", "goto", "tab-select", "table-select", "program-open", "review-prepare", "review-apply", "review-undo", "cancel", "report", "export", "agentic-findings", "agentic-checkpoint", "agentic-verify", "agentic-read", "agentic-resume-check", "agentic-review-draft", "agentic-lineage-verify"))
     parser.add_argument("address", nargs="?")
     parser.add_argument("--filter", default="")
     parser.add_argument("--row", type=int, default=None)
@@ -336,6 +385,7 @@ def main():
     parser.add_argument("--expected-findings-revision", type=int, default=None)
     parser.add_argument("--output", default="")
     parser.add_argument("--input", default="")
+    parser.add_argument("--parent", default="")
     parser.add_argument("--query", default="")
     parser.add_argument("--expected-revision", type=int, default=None)
     parser.add_argument("--expected-entry", default="")
@@ -347,6 +397,16 @@ def main():
     parser.add_argument("--offset", type=int, default=0)
     parser.add_argument("--limit", type=int, default=100)
     args = parser.parse_args()
+    if args.action=="agentic-lineage-verify":
+        if not args.input or not args.parent:
+            parser.error("agentic-lineage-verify requires --input and --parent")
+        try:
+            print(json.dumps(verify_agentic_lineage(args.input,args.parent),
+                             indent=2,ensure_ascii=False))
+            return 0
+        except (OSError,ValueError,KeyError,TypeError,UnicodeError) as error:
+            print("Agentic historical lineage refused: "+str(error),file=sys.stderr)
+            return 1
     if args.action in ("agentic-verify","agentic-read"):
         if not args.input:
             parser.error(args.action+" requires explicit --input local file")
@@ -384,7 +444,8 @@ def main():
         if not args.output:
             parser.error("agentic-checkpoint requires explicit --output local file")
         try:
-            result=capture_agentic_checkpoint(session,args.output,args.limit)
+            result=capture_agentic_checkpoint(session,args.output,args.limit,
+                args.parent or None)
             print(json.dumps(result,indent=2))
             return 0
         except (ValueError, OSError, HTTPError, KeyError) as error:
