@@ -80,7 +80,10 @@ jobs:
               "real_cli_resume_preflight_forged_row_denied",
               "real_cli_resume_preflight_stale_run_denied",
               "real_cli_resume_preflight_wrong_bearer_denied",
-              "no_resume_without_new_review"):
+              "no_resume_without_new_review",
+              "real_cli_new_review_draft_unapproved",
+              "real_cli_review_draft_no_overwrite",
+              "real_cli_forged_draft_source_denied"):
               assert receipt.get(key) is True,(key,receipt)
           assert runtime["status"]=="SUCCESS" and runtime["tool_calls"]==1,runtime
           assert runtime["tool_succeeded"] is True,runtime
