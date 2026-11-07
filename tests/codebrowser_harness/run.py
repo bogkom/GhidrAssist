@@ -50,7 +50,7 @@ def fixture(path, with_simcr):
         # Same pointer, then unknown A1 STORE; later A0 write.
         # An unresolved address must poison earlier MMIO state, not
         # masquerade as a second confirmed SIMCR configuration.
-        data[0x60:0x70]=bytes.fromhex(
+        data[0x60:0x74]=bytes.fromhex(
             "207c00fffa0030bc40ca32bc123430bc48484e75")
     path.write_bytes(data)
 
