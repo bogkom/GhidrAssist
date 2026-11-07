@@ -121,6 +121,77 @@ class LocalAgenticCheckpoint(unittest.TestCase):
             with self.assertRaises(ValueError):
                 cli.verify_agentic_checkpoint(target)
 
+    def test_historical_parent_lineage_is_read_only_and_bound_to_exact_source(self):
+        import subprocess
+        with tempfile.TemporaryDirectory() as work:
+            root=Path(work)
+            parent=root/"previous.json"
+            child=root/"new-independent.json"
+            def report(run):
+                return page(0,100,run=run)
+            with patch.object(cli,"rpc",lambda _s,_m,args:report("historical-run")):
+                cli.capture_agentic_checkpoint({},parent,100)
+            with patch.object(cli,"rpc",lambda _s,_m,args:report("new-run")):
+                saved=cli.capture_agentic_checkpoint({},child,100,parent)
+            self.assertTrue(saved["complete"])
+            linked=cli.verify_agentic_lineage(child,parent)
+            self.assertTrue(linked["verified"] and linked["lineage_matches"])
+            self.assertTrue(linked["new_independent_run"] and linked["read_only"])
+            self.assertFalse(linked["authorizes_tools"])
+            self.assertFalse(linked["authorizes_apply"])
+            self.assertFalse(linked["model_state_restored"])
+            self.assertEqual(linked["parent_run"],"historical-run")
+            self.assertEqual(linked["child_run"],"new-run")
+            self.assertEqual(cli.read_agentic_checkpoint_page(child,0,10)
+                ["rows"][0]["fact"],"first fact")
+            result=subprocess.run(["python3",str(AGENT),"--session",
+                str(root/"absent-session.json"),"agentic-lineage-verify",
+                "--input",str(child),"--parent",str(parent)],
+                capture_output=True,text=True)
+            self.assertEqual(result.returncode,0,result.stderr)
+            self.assertTrue(json.loads(result.stdout)["lineage_matches"])
+            other=root/"unrelated.json"
+            with patch.object(cli,"rpc",lambda _s,_m,args:report("other-run")):
+                cli.capture_agentic_checkpoint({},other,100)
+            with self.assertRaises(ValueError):
+                cli.verify_agentic_lineage(child,other)
+            with self.assertRaises(ValueError):
+                cli.verify_agentic_lineage(child,child)
+            for changed in ("run","import_sha256"):
+                data=json.loads(child.read_text())
+                data["payload"][changed] = ("historical-run" if changed=="run"
+                    else "b"*64)
+                raw=json.dumps(data["payload"],sort_keys=True,
+                    separators=(",",":"),ensure_ascii=False).encode()
+                data["payload_sha256"]=hashlib.sha256(raw).hexdigest()
+                forged=root/("forged-"+changed+".json")
+                forged.write_text(json.dumps(data))
+                with self.assertRaises(ValueError):
+                    cli.verify_agentic_lineage(forged,parent)
+            for bad in ("parent_checkpoint_sha256","parent_run","continuation_kind"):
+                data=json.loads(child.read_text())
+                data["payload"].pop(bad)
+                raw=json.dumps(data["payload"],sort_keys=True,
+                    separators=(",",":"),ensure_ascii=False).encode()
+                data["payload_sha256"]=hashlib.sha256(raw).hexdigest()
+                forged=root/("missing-"+bad+".json")
+                forged.write_text(json.dumps(data))
+                with self.assertRaises(ValueError):
+                    cli.load_verified_agentic_payload(forged)
+            with patch.object(cli,"rpc",lambda _s,_m,args:report("new-run")):
+                with self.assertRaises(ValueError):
+                    cli.capture_agentic_checkpoint({},root/"same-run.json",100,child)
+            # Changed firmware import cannot inherit the older source hash.
+            def changed_firmware(_s,_m,args):
+                current=report("changed-firmware-run")
+                current["agentic"]["importSha256"]="b"*64
+                return current
+            with patch.object(cli,"rpc",changed_firmware):
+                with self.assertRaises(ValueError):
+                    cli.capture_agentic_checkpoint(
+                        {},root/"wrong-firmware.json",100,parent)
+            self.assertFalse((root/"wrong-firmware.json").exists())
+
     def test_offline_null_evidence_and_false_complete_forgery_rejected(self):
         with tempfile.TemporaryDirectory() as work:
             target=Path(work)/"nullable.json"
