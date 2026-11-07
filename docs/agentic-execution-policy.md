@@ -147,3 +147,17 @@ actual ReAct native tool call in synthetic Ghidra 12.1.4 PUBLIC, including
 forged-content, stale-run and unauthorized Bearer refusals. A preflight PASS
 only opens an opportunity for **independent human Review**; it cannot resume
 LLM execution, grant tools, reuse approvals or Apply modifications.
+
+## GA-12/15: new independent investigation review draft (2026-11-07)
+
+`ghidrassist-agent agentic-review-draft --input CHECKPOINT --output DRAFT --query "New objective"`
+requires exact authenticated live evidence matching the offline checkpoint.
+It creates a private, create-no-overwrite, bounded JSON review proposal containing
+a fresh operator-supplied objective and at most 20 **untrusted data** excerpts.
+The proposal has no executable plan, no copied ToolExecutionPolicy, no LLM
+state, no permission to run tools or Apply, and `new_review_approved=false`.
+Its terminal state is `AWAITING_NEW_REVIEW`. Actual approval and a new
+independent ReAct run remain separate future steps: no CLI execution endpoint
+accepts review drafts as authorization. The real synthetic CodeBrowser GUI
+harness validates the exported artifact, refuse-overwrite and forged-evidence
+denial through the production Bearer JSON-RPC client.

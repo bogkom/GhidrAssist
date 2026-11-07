@@ -1,5 +1,17 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
+## GA-12/15 — 2026-11-07 candidate: independently reviewed source handoff
+
+New `agentic-review-draft` prepares a locally bounded, no-overwrite and
+read-only review proposal from **fully matched live** synthetic Agentic
+checkpoint evidence, with an entirely new operator-supplied objective.
+It explicitly refuses inherited approval, tool permissions, plan and
+LLM session state. Python3 regressions and real synthetic CodeBrowser
+ReAct/JSON-RPC/CLI E2E verify safe creation, no-overwrite and forged
+checkpoint rejection. The proposal is NOT an automatic new ReAct run;
+GA-12/15 remain PARTIAL pending an explicit GUI-driven new Review gate.
+
+
 ## GA-12/15/18 — 2026-11-07 candidate: full live checkpoint content match
 
 The local read-only Agentic preflight now compares every retained evidence

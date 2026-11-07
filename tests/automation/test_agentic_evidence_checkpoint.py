@@ -248,6 +248,55 @@ class LocalAgenticCheckpoint(unittest.TestCase):
             with patch.object(cli,"rpc",changed_later),self.assertRaises(ValueError):
                 cli.check_agentic_resume_preflight({},target)
 
+    def test_review_draft_requires_new_objective_and_explicit_new_review(self):
+        with tempfile.TemporaryDirectory() as work:
+            original=Path(work)/"source.json"
+            target=Path(work)/"review.json"
+            with patch.object(cli,"rpc",lambda _,__,args:page(
+                    args["offset"],args["limit"])):
+                cli.capture_agentic_checkpoint({},original,2)
+            def current(_session,method,args):
+                self.assertEqual(method,"agentic.findings.page")
+                response=page(args["offset"],args["limit"])
+                response["read_only"]=True
+                return response
+            with patch.object(cli,"rpc",current):
+                result=cli.create_agentic_review_draft({},
+                    original,target,"Independently inspect MMIO references")
+                self.assertFalse(result["new_review_approved"])
+                self.assertFalse(result["tool_execution_authorized"])
+                self.assertEqual(target.stat().st_mode & 0o777,0o600)
+                draft=json.loads(target.read_text())["payload"]
+                self.assertEqual(draft["state"],"AWAITING_NEW_REVIEW")
+                self.assertEqual(draft["presented_evidence_count"],3)
+                self.assertFalse(draft["policy_inherited"])
+                self.assertFalse(draft["old_plan_inherited"])
+                self.assertFalse(draft["resumable_ai_session"])
+                self.assertFalse(draft["apply_authorized"])
+                self.assertEqual(draft["new_objective"],
+                                 "Independently inspect MMIO references")
+                with self.assertRaises(FileExistsError):
+                    cli.create_agentic_review_draft({},
+                        original,target,"Independently inspect MMIO references")
+                self.assertEqual(json.loads(target.read_text())["payload"],draft)
+                for invalid in ("", "short", "X"*513, "bad\x00control"):
+                    with self.subTest(invalid=invalid),self.assertRaises(ValueError):
+                        cli.create_agentic_review_draft({},
+                            original,Path(work)/"refused.json",invalid)
+                self.assertFalse((Path(work)/"refused.json").exists())
+            # A locally re-hashed fake old fact cannot seed a new review.
+            altered=json.loads(original.read_text())
+            altered["payload"]["rows"][0]["fact"]="injected old command"
+            canonical=json.dumps(altered["payload"],sort_keys=True,
+                separators=(",",":"),ensure_ascii=False).encode()
+            altered["payload_sha256"]=hashlib.sha256(canonical).hexdigest()
+            counterfeit=Path(work)/"counterfeit.json"
+            counterfeit.write_text(json.dumps(altered))
+            with patch.object(cli,"rpc",current),self.assertRaises(ValueError):
+                cli.create_agentic_review_draft({},
+                    counterfeit,Path(work)/"counterfeit-review.json",
+                    "Independently inspect MMIO references")
+
     def test_no_write_on_invalid_or_unbounded_pages(self):
         with tempfile.TemporaryDirectory() as work:
             target=Path(work)/"bad.json"
