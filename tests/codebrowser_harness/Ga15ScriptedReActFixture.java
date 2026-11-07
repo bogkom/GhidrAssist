@@ -174,6 +174,8 @@ public final class Ga15ScriptedReActFixture {
         private final AtomicInteger functionRounds=new AtomicInteger();
         private final AtomicInteger lateThoughts;
         private final AtomicInteger cancellationRequests=new AtomicInteger();
+        private final AtomicInteger synchronousCancelErrors=new AtomicInteger();
+        private volatile LlmResponseHandler activeCallback;
 
         ScriptedLlm(APIProviderConfig config,GhidrAssistPlugin plugin,
                 Path output,String expectedAddress,AtomicInteger lateThoughts) {
@@ -194,6 +196,7 @@ public final class Ga15ScriptedReActFixture {
                 handler.onError(new AssertionError("Expected one real read-only Ghidra tool round"));
                 return;
             }
+            activeCallback=handler;
             handler.onStart();
             registry.execute("ga_get_current_address",new JsonObject())
                 .whenComplete((result,error)->{
@@ -238,6 +241,8 @@ public final class Ga15ScriptedReActFixture {
                                 late.addProperty("late_ui_updates",lateThoughts.get());
                                 late.addProperty("provider_cancel_calls",
                                     cancellationRequests.get());
+                                late.addProperty("synchronous_cancel_error_callbacks",
+                                    synchronousCancelErrors.get());
                                 Files.writeString(output.resolve(
                                     "ga15-react-late-delivered"),
                                     late.toString(),StandardCharsets.UTF_8);
@@ -251,9 +256,16 @@ public final class Ga15ScriptedReActFixture {
 
         @Override
         public void cancelCurrentRequest() {
-            // No network/provider cancellation in the deterministic CI
-            // fixture; record the genuine ReAct cancellation request.
+            // An actual provider can call onError synchronously as soon as
+            // it is cancelled. The ReAct result must already be terminal
+            // CANCELLED before this error is delivered, never ERROR.
             cancellationRequests.incrementAndGet();
+            LlmResponseHandler handler=activeCallback;
+            if(handler!=null) {
+                synchronousCancelErrors.incrementAndGet();
+                handler.onError(new IllegalStateException(
+                    "Expected synchronous cancellation error from scripted provider"));
+            }
         }
 
         @Override
