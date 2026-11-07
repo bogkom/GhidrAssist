@@ -67,6 +67,11 @@ cancel a newer run of the same orchestrator. The registry calls
 cancellation without holding its monitor so the ReAct completion handler
 may safely re-enter. Completed runs are invalidated without cancellation.
 
+A model provider may call `onError` **synchronously** from its
+cancellation method. ReAct now makes the `CANCELLED` result terminal
+*before* invoking provider cancellation, so the late error cannot
+overwrite it with `ERROR`. The deterministic Ghidra fixture verifies
+this in both cancellation and Program-switch scenarios.
 A cancelled ReAct response includes the actual dispatcher-accepted
 tool-call count already observed. Late model updates, tool-count
 callbacks, reflection or synthesis are ignored after the run has
