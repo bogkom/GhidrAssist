@@ -179,6 +179,7 @@ def load_verified_agentic_payload(source):
             raise ValueError("Invalid historical checkpoint ancestry")
     for row in rows:
         if (not isinstance(row,dict) or
+                not all(field in row for field in ("fact","evidence","toolUsed")) or
                 not all((row.get(field) is None or
                          (isinstance(row.get(field),str) and len(row[field])<=limit))
                         for field,limit in
