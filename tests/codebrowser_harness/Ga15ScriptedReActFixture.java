@@ -25,6 +25,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 /** Real ReAct state machine; deterministic scripted LLM adapter, CI ONLY. */
 public final class Ga15ScriptedReActFixture {
@@ -32,6 +33,22 @@ public final class Ga15ScriptedReActFixture {
 
     public static CompletableFuture<ReActResult> start(GhidrAssistPlugin plugin,
             Program program,Address site,Path evidence) throws Exception {
+        return startScenario(plugin,program,site,evidence,"normal",null,null);
+    }
+
+    /**
+     * Test-only handshakes for cancel and A→B→A; the extension never
+     * packages this class or exposes it through AutomationServer.
+     */
+    public static CompletableFuture<ReActResult> startScenario(
+            GhidrAssistPlugin plugin, Program program,Address site,
+            Path evidence,String scenario,Runnable switchAway,
+            Runnable switchBack) throws Exception {
+        if(!java.util.Set.of("normal","cancel","switch").contains(scenario))
+            throw new IllegalArgumentException("Unknown synthetic ReAct scenario");
+        if("switch".equals(scenario) &&
+                (switchAway==null || switchBack==null))
+            throw new IllegalArgumentException("Missing CodeBrowser switch callbacks");
         if(plugin.getCurrentProgram()!=program || site==null ||
                 !program.getMemory().contains(site))
             throw new IllegalStateException("Real CodeBrowser Program or Listing address absent");
@@ -40,7 +57,11 @@ public final class Ga15ScriptedReActFixture {
             APIProvider.ProviderType.OPENAI_PLATFORM_API,
             "no-network-model",128,"http://127.0.0.1:9",
             "not-a-secret-test-only",false);
-        ScriptedLlm deterministic=new ScriptedLlm(cfg,plugin,evidence,site.toString());
+        AtomicInteger lateThoughts=new AtomicInteger();
+        AtomicReference<CompletableFuture<ReActResult>> currentRun=
+            new AtomicReference<>();
+        ScriptedLlm deterministic=new ScriptedLlm(cfg,plugin,evidence,
+            site.toString(),lateThoughts);
         ReActOrchestrator react=new ReActOrchestrator(
             cfg,plugin,2,8000,1,false,deterministic);
         // No new product API just to set a CI cursor; use the actual
@@ -54,7 +75,11 @@ public final class Ga15ScriptedReActFixture {
 
         var handler=new ReActProgressHandler() {
             public void onStart(String objective) {}
-            public void onThought(String text,int iteration) {}
+            public void onThought(String text,int iteration) {
+                CompletableFuture<ReActResult> active=currentRun.get();
+                if(active!=null && active.isDone())
+                    lateThoughts.incrementAndGet();
+            }
             public void onAction(String toolName,JsonObject args) {}
             public void onObservation(String toolName,String result) {}
             public void onFinding(String fact) {}
@@ -70,6 +95,7 @@ public final class Ga15ScriptedReActFixture {
             "Evidence is static; no runtime execution of MCU hardware",
             "ga15-ci-fixture",handler,
             "- [ ] Read the current CodeBrowser Listing address",policy);
+        currentRun.set(future);
         future.whenComplete((result,failure)->{
             JsonObject receipt=new JsonObject();
             receipt.addProperty("schema",1);
@@ -88,6 +114,8 @@ public final class Ga15ScriptedReActFixture {
             receipt.addProperty("findings",result==null ? 0 :
                 result.getFindings().size());
             receipt.addProperty("tool_succeeded",deterministic.toolSucceeded);
+            receipt.addProperty("late_ui_updates_at_completion",lateThoughts.get());
+            receipt.addProperty("scenario",scenario);
             if(failure!=null)receipt.addProperty("error",failure.toString());
             else if(result!=null && result.getErrorMessage()!=null)
                 receipt.addProperty("error",result.getErrorMessage());
@@ -98,7 +126,44 @@ public final class Ga15ScriptedReActFixture {
                 throw new IllegalStateException("Failed to write synthetic ReAct result",writeFailure);
             }
         });
+        if(!"normal".equals(scenario)) {
+            CompletableFuture.runAsync(()->{
+                try {
+                    waitFor(evidence.resolve("ga15-react-action"),60);
+                    String command=Files.readString(
+                        evidence.resolve("ga15-react-action")).trim();
+                    if(!scenario.equals(command))
+                        throw new IllegalStateException(
+                            "Unexpected external ReAct action: "+command);
+                    if("cancel".equals(scenario))react.cancel();
+                    else switchAway.run();
+                    Files.writeString(evidence.resolve("ga15-react-action-done"),
+                        scenario,StandardCharsets.UTF_8);
+                    if("switch".equals(scenario)) {
+                        waitFor(evidence.resolve("ga15-react-return"),60);
+                        switchBack.run();
+                        Files.writeString(evidence.resolve("ga15-react-returned"),
+                            "source-reopened",StandardCharsets.UTF_8);
+                    }
+                } catch(Exception failure) {
+                    try {
+                        Files.writeString(evidence.resolve("ga15-react-action-error"),
+                            failure.toString(),StandardCharsets.UTF_8);
+                    } catch(Exception ignored) {}
+                }
+            });
+        }
         return future;
+    }
+
+    private static void waitFor(Path marker,int seconds)
+            throws Exception {
+        long end=System.nanoTime()+TimeUnit.SECONDS.toNanos(seconds);
+        while(!Files.isRegularFile(marker)) {
+            if(System.nanoTime()>=end)
+                throw new IllegalStateException("Timed out: "+marker.getFileName());
+            Thread.sleep(40);
+        }
     }
 
     /** Scripted callbacks are constrained to an actual read-only tool result. */
@@ -107,12 +172,15 @@ public final class Ga15ScriptedReActFixture {
         private final String expectedAddress;
         private volatile boolean toolSucceeded;
         private final AtomicInteger functionRounds=new AtomicInteger();
+        private final AtomicInteger lateThoughts;
+        private final AtomicInteger cancellationRequests=new AtomicInteger();
 
         ScriptedLlm(APIProviderConfig config,GhidrAssistPlugin plugin,
-                Path output,String expectedAddress) {
+                Path output,String expectedAddress,AtomicInteger lateThoughts) {
             super(config,plugin);
             this.output=output;
             this.expectedAddress=expectedAddress.toLowerCase();
+            this.lateThoughts=lateThoughts;
         }
 
         @Override
@@ -164,8 +232,28 @@ public final class Ga15ScriptedReActFixture {
                             handler.onUpdate(answer);
                             handler.onComplete(answer);
                         } catch(Exception failure) { handler.onError(failure); }
+                        finally {
+                            try {
+                                JsonObject late=new JsonObject();
+                                late.addProperty("late_ui_updates",lateThoughts.get());
+                                late.addProperty("provider_cancel_calls",
+                                    cancellationRequests.get());
+                                Files.writeString(output.resolve(
+                                    "ga15-react-late-delivered"),
+                                    late.toString(),StandardCharsets.UTF_8);
+                            } catch(Exception markerError) {
+                                // Controller will timeout if receipt is missing.
+                            }
+                        }
                     });
                 });
+        }
+
+        @Override
+        public void cancelCurrentRequest() {
+            // No network/provider cancellation in the deterministic CI
+            // fixture; record the genuine ReAct cancellation request.
+            cancellationRequests.incrementAndGet();
         }
 
         @Override
