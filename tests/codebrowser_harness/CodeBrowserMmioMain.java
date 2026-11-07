@@ -260,8 +260,7 @@ public final class CodeBrowserMmioMain {
                 // must NOT be inherited. Crucially, no task or approval may
                 // be active after restart. A newly imported review would
                 // reset its policy, but this stale source cannot be imported.
-                var queryPolicy=queryTab.getTaskToolPolicyPanel().snapshot();
-                require(queryPolicy==null,
+                require(evalEdt(()->queryTab.getTaskToolPolicyPanel().snapshot()==null),
                     "A prior per-task tool policy unexpectedly survived restart");
                 JsonObject check=new JsonObject();
                 check.addProperty("schema",1);
