@@ -86,6 +86,29 @@ public final class FindingsCacheBudgetSelfTest {
                 f.getEvidence().length()<=FindingsCache.MAX_EVIDENCE_CHARS),
             "huge transcript not copied as evidence into each finding");
 
+        // A single line can fit inside the 128 KiB scan yet be omitted
+        // entirely by the 300-character per-finding extractor threshold.
+        // Neither 301 nor 501 characters may appear source-complete.
+        for(int width:new int[]{301,501,1024}) {
+            var skipped=new FindingsCache(2);
+            skipped.extractFromToolOutput("listing","A".repeat(width));
+            var view=skipped.page(0,10);
+            yes(view.sourceIncomplete() && !view.complete() &&
+                skipped.formatDetailed().startsWith("SOURCE INCOMPLETE:"),
+                "oversized omitted tool line marks source incomplete at "+width);
+        }
+        var boundaryLine=new FindingsCache(2);
+        boundaryLine.extractFromToolOutput("listing","A".repeat(300));
+        yes(!boundaryLine.isSourceIncomplete() &&
+            boundaryLine.page(0,10).complete(),
+            "fully retained 300-character line is not falsely omitted");
+        var boundedMixed=new FindingsCache(1);
+        boundedMixed.extractFromToolOutput("listing",
+            "vulnerability high priority observation\n"+"B".repeat(301));
+        yes(boundedMixed.isSourceIncomplete() &&
+            !boundedMixed.page(0,10).complete(),
+            "omission is retained even when the budget evicts its warning");
+
         // A tiny 1-item cache can prune the truncation warning because
         // an earlier top-score finding wins a stable relevance tie. The
         // independent truncation receipt MUST remain visible in every
