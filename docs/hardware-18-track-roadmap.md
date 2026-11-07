@@ -1,5 +1,17 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
+## GA-12/15/18 — 2026-11-07: GUI import of independently reviewed Agentic evidence
+
+Candidate: a bounded JSON Review Draft can be loaded via Query → Import
+Review Draft only when its SHA and all live Program/run/evidence identities
+match. Import stages **only new query text**, resets previous tool policy
+to read-only with finite budget and requires independent **Submit** then
+**Approve Plan**. No checkpoint or draft carries executable rights.
+Java25 full extension + real synthetic CodeBrowser CI and deterministic
+review-draft regression required on exact candidate SHA. Not LLM session
+restore, not firmware runtime evidence. GA-12/15 remain PARTIAL.
+
+
 ## GA-12/15 — 2026-11-07 candidate: independently reviewed source handoff
 
 New `agentic-review-draft` prepares a locally bounded, no-overwrite and
