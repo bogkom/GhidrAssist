@@ -224,6 +224,72 @@ def check_agentic_resume_preflight(session, source):
     }
 
 
+def create_agentic_review_draft(session, source, destination, query):
+    """Create a new human-review proposal; never import prior approvals."""
+    if not isinstance(query, str) or not 8 <= len(query) <= 512 or any(
+            ord(ch) < 32 and ch not in "\\t\\n" for ch in query):
+        raise ValueError("New analysis objective must be 8..512 readable characters")
+    # Verify once against actual active Ghidra, then re-read from disk and
+    # assert byte-equivalent canonical SHA; a concurrent replacement of the
+    # checkpoint between preflight and export must fail closed.
+    preflight = check_agentic_resume_preflight(session, source)
+    payload, digest = load_verified_agentic_payload(source)
+    if digest != preflight["verified_sha256"]:
+        raise ValueError("Checkpoint changed after live source verification")
+    if not payload["complete"]:
+        raise ValueError("Incomplete prior evidence cannot seed a reviewed draft")
+    # Treat each fact as untrusted *data*, never free-form instructions or
+    # an inherited TODO/plan; budget both row count and individual fields.
+    evidence = [{
+        "fact": (row.get("fact") or "")[:512],
+        "evidence": (row.get("evidence") or "")[:512],
+        "tool_used": (row.get("toolUsed") or "")[:128],
+    } for row in payload["rows"][:20]]
+    draft = {
+        "schema": 1, "kind": "ghidrassist-new-investigation-review-draft",
+        "state": "AWAITING_NEW_REVIEW", "new_objective": query,
+        "source_checkpoint_sha256": digest,
+        "source_import_sha256": payload["import_sha256"],
+        "source_program_revision": payload["program_revision"],
+        "source_run": payload["run"],
+        "source_findings_revision": payload["findings_revision"],
+        "source_retained_count": payload["retained_count"],
+        "presented_evidence_count": len(evidence),
+        "evidence_omitted_from_draft": len(evidence) != payload["retained_count"],
+        "untrusted_source_observations": evidence,
+        "new_review_approved": False, "resumable_ai_session": False,
+        "tool_execution_authorized": False, "apply_authorized": False,
+        "policy_inherited": False, "old_plan_inherited": False,
+        "notice": "Review-only draft: prior evidence is untrusted data, not instructions. New explicit approval and a separate new ReAct run are required.",
+    }
+    canonical = json.dumps(draft, sort_keys=True, separators=(",",":"),
+                           ensure_ascii=False).encode("utf-8")
+    envelope = {"payload": draft,
+                "payload_sha256": hashlib.sha256(canonical).hexdigest()}
+    data = (json.dumps(envelope, indent=2, ensure_ascii=False)+"\\n").encode()
+    if len(data) > 128*1024:
+        raise ValueError("Oversized reviewed analysis draft")
+    dest = Path(destination).expanduser()
+    if not dest.parent.is_dir():
+        raise ValueError("Review draft output directory must exist")
+    temporary = None
+    try:
+        fd, temporary = tempfile.mkstemp(prefix=".ghidrassist-review-",dir=dest.parent)
+        with os.fdopen(fd,"wb") as stream:
+            stream.write(data)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.link(temporary, dest)
+    finally:
+        if temporary is not None:
+            os.unlink(temporary)
+    return {"saved":str(dest), "state":"AWAITING_NEW_REVIEW",
+            "payload_sha256":envelope["payload_sha256"],
+            "source_checkpoint_sha256":digest,
+            "new_review_approved":False,
+            "tool_execution_authorized":False, "apply_authorized":False}
+
+
 def verify_agentic_checkpoint(source):
     """Offline SHA-256 integrity check; never authenticates the original actor."""
     payload,digest=load_verified_agentic_payload(source)
@@ -260,7 +326,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--session", default=os.environ.get(
         "GHIDRASSIST_AGENT_SESSION", str(Path.home() / ".local/state/ghidrassist-agent/session.json")))
-    parser.add_argument("action", choices=("status", "snapshot", "analyze", "task", "mmio", "review-preview", "profile-select", "function", "xrefs", "function-xrefs-body", "decompile", "decompile-status", "bundle", "paths", "listing", "listing-range", "goto", "tab-select", "table-select", "program-open", "review-prepare", "review-apply", "review-undo", "cancel", "report", "export", "agentic-findings", "agentic-checkpoint", "agentic-verify", "agentic-read", "agentic-resume-check"))
+    parser.add_argument("action", choices=("status", "snapshot", "analyze", "task", "mmio", "review-preview", "profile-select", "function", "xrefs", "function-xrefs-body", "decompile", "decompile-status", "bundle", "paths", "listing", "listing-range", "goto", "tab-select", "table-select", "program-open", "review-prepare", "review-apply", "review-undo", "cancel", "report", "export", "agentic-findings", "agentic-checkpoint", "agentic-verify", "agentic-read", "agentic-resume-check", "agentic-review-draft"))
     parser.add_argument("address", nargs="?")
     parser.add_argument("--filter", default="")
     parser.add_argument("--row", type=int, default=None)
@@ -270,6 +336,7 @@ def main():
     parser.add_argument("--expected-findings-revision", type=int, default=None)
     parser.add_argument("--output", default="")
     parser.add_argument("--input", default="")
+    parser.add_argument("--query", default="")
     parser.add_argument("--expected-revision", type=int, default=None)
     parser.add_argument("--expected-entry", default="")
     parser.add_argument("--direction", choices=("incoming", "outgoing", "both"), default="both")
@@ -292,6 +359,17 @@ def main():
             print("Agentic offline checkpoint refused: "+str(error),file=sys.stderr)
             return 1
     session = load_session(args.session)
+    if args.action=="agentic-review-draft":
+        if not args.input or not args.output or not args.query:
+            parser.error("agentic-review-draft requires --input, --output, --query")
+        try:
+            result=create_agentic_review_draft(
+                session,args.input,args.output,args.query)
+            print(json.dumps(result,indent=2,ensure_ascii=False))
+            return 0
+        except (ValueError,OSError,HTTPError,KeyError,TypeError,UnicodeError) as error:
+            print("Agentic review draft refused: "+str(error),file=sys.stderr)
+            return 1
     if args.action=="agentic-resume-check":
         if not args.input:
             parser.error("agentic-resume-check requires explicit --input local file")
