@@ -197,7 +197,7 @@ public final class Ga12InterruptedCfgRestartFixture {
         report.addProperty("schema",1);
         report.addProperty("real_ghidra_program",true);
         report.addProperty("real_first_jvm",true);
-        report.addProperty("real_pcode_store_verified",true);
+        report.addProperty("real_pcode_memory_effects_verified",true);
         report.addProperty("deliberately_cancelled",cancelled);
         report.addProperty("partial_worklist_saved",true);
         report.addProperty("partial_not_review_evidence",true);
@@ -387,7 +387,7 @@ public final class Ga12InterruptedCfgRestartFixture {
         var first=JSON.fromJson(Files.readString(
             receipt(output,"before-restart")),JsonObject.class);
         verifyRealPcodeMemoryWrites(program);
-        require(first.get("real_pcode_store_verified").getAsBoolean(),
+        require(first.get("real_pcode_memory_effects_verified").getAsBoolean(),
             "First JVM lacked real P-code evidence");
         var key=identity(program);
         var steps=graph();
@@ -453,7 +453,7 @@ public final class Ga12InterruptedCfgRestartFixture {
         report.addProperty("schema",1);
         report.addProperty("real_ghidra_program_reopened",true);
         report.addProperty("real_second_jvm",true);
-        report.addProperty("real_pcode_store_verified",true);
+        report.addProperty("real_pcode_memory_effects_verified",true);
         report.addProperty("source_identity_matches",true);
         report.addProperty("partial_restored",resumed.restoredPartial());
         report.addProperty("cold_result_exact_match",true);
