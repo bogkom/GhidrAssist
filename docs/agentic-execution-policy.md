@@ -178,3 +178,17 @@ The draft's own boolean flags are not authorization. This import requires the
 same live Program and prior Agentic generation; it fails closed after restart,
 program switch, new run, or modification. Durable offline browsing remains
 available via `agentic-read` and is never treated as executable authority.
+
+## GA-12/15: same-CodeBrowser GUI staging regression (2026-11-07)
+
+The deterministic, model-free Xvfb suite now validates the **actual Swing
+Query controller** on the same synthetic Program as the completed ReAct
+registry. After validating the JSON draft, the test invokes the production
+EDT staging function without launching the file chooser or executing a model:
+a different chat ID is created, the previous chat's permissive authorization
+does not transfer, Accept All remains off, the policy is READ_ONLY with a
+strict 8-call limit, and the Query text contains the explicitly untrusted
+evidence. The pending-plan and running flags remain false: operator **Submit**
+and **Approve Plan** are still separate steps. This is a production GUI-state
+integration test, not proof of a human click on the chooser or a restored
+provider session. No persistent permissions from a previous chat are copied.
