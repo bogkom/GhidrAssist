@@ -1154,18 +1154,17 @@ public class ReActOrchestrator {
             started=activeStartTime;
             findings=activeFindings;
         }
+        // The provider may synchronously invoke onError() from its own
+        // cancelCurrentRequest() call. Publish CANCELLED *first*, so that
+        // error cannot win the race and misreport an intentional stop.
+        // Late provider/tool callbacks then see the terminal future.
+        resultFuture.complete(ReActResult.cancelled(findings,
+            started==null?Duration.ZERO:Duration.between(started,Instant.now()),
+            toolRegistry.getInvestigationToolCallCount()));
         try {
             llmApi.cancelCurrentRequest();
         } catch(RuntimeException providerError) {
-            // Failure to stop the provider is not permission to resurrect
-            // a cancelled analysis. Late callbacks are gated below.
             Msg.warn(this,"Model cancellation failed: "+providerError.getMessage());
-        } finally {
-            if(started!=null) {
-                resultFuture.complete(ReActResult.cancelled(findings,
-                    Duration.between(started,Instant.now()),
-                    toolRegistry.getInvestigationToolCallCount()));
-            }
         }
     }
 }
