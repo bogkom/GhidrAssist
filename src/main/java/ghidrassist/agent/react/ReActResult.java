@@ -233,9 +233,17 @@ public class ReActResult {
      * Create a cancelled result.
      */
     public static ReActResult cancelled(FindingsCache findings, Duration duration) {
+        return cancelled(findings,duration,0);
+    }
+
+    /** Count actual dispatcher calls already observed before cancellation. */
+    public static ReActResult cancelled(FindingsCache findings,Duration duration,
+            int observedToolCalls) {
         return new Builder()
             .status(Status.CANCELLED)
-            .findings(findings != null ? findings.getAllFindings().stream().map(f -> f.getFact()).toList() : new ArrayList<>())
+            .findings(findings != null ? findings.getAllFindings().stream()
+                .map(f -> f.getFact()).toList() : new ArrayList<>())
+            .toolCallCount(Math.max(0,observedToolCalls))
             .duration(duration)
             .build();
     }
