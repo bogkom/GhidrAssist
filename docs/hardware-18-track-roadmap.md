@@ -1,5 +1,18 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
+## 2026-11-07 — GA-12/15 resume preflight checkpoint identity
+
+Candidate: explicit authenticated, read-only Agentic preflight compares a
+locally SHA-256-verified retained-evidence checkpoint to the **currently
+active** Program, import SHA-256, revision, run token, terminal outcome,
+page-generation and completeness counters. The command never resumes
+LLM state, tools or Apply and always requires new Review. Deterministic
+Python3 tests cover matching, mismatched and stale cases. Ghidra 12.1.4
+PUBLIC/Java25 full extension and real synthetic GUI/JSON-RPC CI must pass
+at the candidate SHA before integration. GA-12/15 remain PARTIAL: this
+only prepares a guarded handoff, not a full model-session restore.
+
+
 ## 2026-11-07 — GA-12/15 source completeness follow-up
 
 Merged #206/#207 protect the identity and terminal lifecycle of Agentic runs;
