@@ -350,6 +350,37 @@ def main():
     assert later["agentic"]["programRevision"]==evidence["programRevision"],later
     command(args.session,"agentic-resume-check","--input",checkpoint,success=False)
 
+    # A THIRD run must be started from the production Swing Approve Plan
+    # button, not by the harness invoking ReActOrchestrator.analyze itself.
+    prior_gui=command(args.session,"agentic-findings","--offset",0,"--limit",1)
+    assert prior_gui["agentic"]["run"]==independent["new_run_id"],prior_gui
+    gui_approval={
+        "explicit_test_approval":True,
+        "expected_previous_run":independent["new_run_id"],
+        "approved_plan":"- [ ] Independently verify the current Listing address",
+    }
+    (out/"ga15-gui-approve-plan.json").write_text(
+        json.dumps(gui_approval,sort_keys=True)+"\n")
+    wait_path(out/"ga15-gui-approval"/"ga15-react-running",65)
+    third_live=command(args.session,"agentic-findings","--offset",0,"--limit",1)
+    assert third_live["agentic"]["run"]!=independent["new_run_id"],third_live
+    assert third_live["agentic"]["state"]=="RUNNING",third_live
+    command(args.session,"agentic-resume-check","--input",checkpoint,success=False)
+    (out/"ga15-gui-approval"/"ga15-react-release").write_text(
+        "actual-Swing-Approve-Plan-verified")
+    third=json.loads(wait_path(
+        out/"ga15-gui-approved-result.json",75).read_text())
+    for key in ("actual_swing_approve_button","fresh_chat_approved",
+                "controller_factory_injected_ci_only","new_run_on_button",
+                "running_after_button","terminal_success",
+                "one_real_native_readonly_tool","new_registry_evidence",
+                "program_revision_unchanged","different_run_than_second"):
+        assert third.get(key) is True,(key,third)
+    terminal_third=command(args.session,"agentic-findings","--offset",0,"--limit",1)
+    assert terminal_third["agentic"]["state"]=="SUCCESS",terminal_third
+    assert terminal_third["agentic"]["run"]!=independent["new_run_id"]
+    assert terminal_third["agentic"]["programRevision"]==evidence["programRevision"]
+
     # Corruption must be rejected by offline reader, not merely flagged.
     tampered=out/"ga15-corrupted-private.json"
     data=json.loads(checkpoint.read_text())
@@ -397,6 +428,9 @@ def main():
         "second_react_stale_checkpoint_denied":True,
         "second_react_new_policy_readonly":True,
         "second_react_no_firmware_mutation":True,
+        "third_react_via_actual_swing_approve_button":True,
+        "third_react_real_tool_and_terminal_success":True,
+        "third_react_different_run_and_no_program_change":True,
         "retained":len(all_rows),"tool_calls":result["tool_calls"],
         "checkpoint_sha256":digest,
         "runtime_execution_verified":False,"model_or_oauth_used":False,
