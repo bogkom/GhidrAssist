@@ -319,6 +319,8 @@ public final class CodeBrowserMmioMain {
                         reopened[0].getService(CodeViewerService.class),0x20));}
                     catch(Exception error){throw new IllegalStateException(error);}
                 },15);
+                ghidrassist.hardware.Ga12InterruptedCfgRestartFixture
+                    .resumeInSecondJvm(first,out);
                 ghidrassist.agent.react.Ga15ScriptedReActFixture
                     .continueSavedCheckpointInFreshJVM(ext,first,resumedSite,out);
                 require(Files.isRegularFile(out.resolve(
@@ -347,6 +349,7 @@ public final class CodeBrowserMmioMain {
                 check.addProperty("incomplete_source_refused",incompleteDenied);
                 check.addProperty("new_review_started_only_after_import",true);
                 check.addProperty("new_checkpoint_saved_in_new_jvm",true);
+                check.addProperty("ga12_cfg_fixed_point_restored_after_restart",true);
                 check.addProperty("source_run",originalRun);
                 Files.writeString(out.resolve("ga15-restarted-ghidra.json"),
                     GSON.toJson(check));
@@ -537,6 +540,11 @@ public final class CodeBrowserMmioMain {
                     "ReAct E2E did not select the real synthetic Program");
                 String scenario=conf.has("agentic_react_scenario") ?
                     conf.get("agentic_react_scenario").getAsString() : "normal";
+                if("normal".equals(scenario)) {
+                    ghidrassist.hardware.Ga12InterruptedCfgRestartFixture
+                        .interruptInFirstJvm(first,out);
+                    result.addProperty("ga12_interrupted_cfg_progress_stored",true);
+                }
                 ghidrassist.agent.react.Ga15ScriptedReActFixture.startScenario(
                     plugin,first,site,out,scenario,
                     () -> {

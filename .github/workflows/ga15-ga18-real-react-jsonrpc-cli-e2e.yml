@@ -74,6 +74,21 @@ jobs:
           receipt=json.loads((root/"ga15-react-e2e.json").read_text())
           runtime=json.loads((root/"ga15-react-result.json").read_text())
           original=json.loads((root/"result.json").read_text())
+          prior_cfg=json.loads((root/"ga12-interrupted-cfg-before-restart.json").read_text())
+          recovered_cfg=json.loads((root/"ga12-interrupted-cfg-after-restart.json").read_text())
+          assert prior_cfg["deliberately_cancelled"] and prior_cfg["partial_worklist_saved"],prior_cfg
+          assert prior_cfg["partial_not_review_evidence"],prior_cfg
+          for key in ("real_second_jvm","real_ghidra_program_reopened",
+                      "source_identity_matches","partial_restored",
+                      "cold_result_exact_match","indirect_mmio_static_evidence_retained",
+                      "completed_stage_persisted","changed_input_refused",
+                      "changed_analyzer_refused","changed_profile_refused",
+                      "changed_language_refused","changed_cfg_refused",
+                      "changed_budget_refused","no_production_apply"):
+              assert recovered_cfg[key] is True,(key,recovered_cfg)
+          assert prior_cfg["full_input_sha256"]==recovered_cfg["full_input_sha256"],recovered_cfg
+          assert prior_cfg["import_sha256"]==recovered_cfg["import_sha256"],recovered_cfg
+          print("GA-12 FIRST-JVM INTERRUPTED CFG -> SECOND-JVM VERIFIED FIXED POINT PASS")
           restarted=json.loads((root/"ga15-restarted-ghidra.json").read_text())
           for name in ("real_new_jvm","real_codebrowser_reopened",
                        "real_synthetic_program_reopened","import_sha256_verified",
@@ -82,7 +97,8 @@ jobs:
                        "no_inherited_task_policy","no_automatic_plan_or_model_run",
                        "new_review_still_required","wrong_program_refused",
               "new_review_started_only_after_import",
-              "new_checkpoint_saved_in_new_jvm"):
+              "new_checkpoint_saved_in_new_jvm",
+              "ga12_cfg_fixed_point_restored_after_restart"):
               assert restarted.get(name) is True,(name,restarted)
           assert isinstance(restarted["prior_program_revision"],int),restarted
           assert isinstance(restarted["reopened_program_revision"],int),restarted
@@ -208,7 +224,7 @@ jobs:
         shell: bash
         run: |
           root="$RUNNER_TEMP/ga15-real-react-e2e"
-          for file in "$root/compile.log" "$root/java.log" "$root/ga15-restart-java.log" "$root/ga15-restarted-ghidra.json" "$root/ga15-post-restart-continuation.json" "$root/ga15-react-controller.log" "$root/ga15-react-result.json"; do
+          for file in "$root/compile.log" "$root/java.log" "$root/ga15-restart-java.log" "$root/ga12-interrupted-cfg-before-restart.json" "$root/ga12-interrupted-cfg-after-restart.json" "$root/ga15-restarted-ghidra.json" "$root/ga15-post-restart-continuation.json" "$root/ga15-react-controller.log" "$root/ga15-react-result.json"; do
             if test -f "$file"; then
               echo "=== $(basename "$file") ==="
               tail -n 75 "$file"

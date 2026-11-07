@@ -1,5 +1,38 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
+## GA-12/18 — 2026-11-07: real two-JVM interrupted CFG fixed-point recovery
+
+Acceptance candidate: a real **synthetic Ghidra 12.1.4 PUBLIC/Xvfb
+CodeBrowser** starts a 96-node deterministic translated CFG worklist
+keyed to the same isolated project's original import SHA-256, full
+256-byte synthetic Program image, selected Listing instruction and
+language. The first JVM is deliberately cancelled *after* it persists
+a bounded incomplete fixed-point slice; this progress is **not**
+complete evidence and cannot be loaded through the completed-result
+codec. After first JVM exit, a genuinely new Ghidra process reopens
+the same synthetic project and Program. The second process loads the
+actual pending worklist, continues to a complete fixed point, compares
+its typed result byte-for-byte with a cold analysis, verifies the
+synthetic indirect MMIO address and saves a completed cache stage.
+
+Negative assertions: changes to exact source input, analyzer generation,
+MC68332-vs-generic CPU32 profile, language, translated CFG steps and
+fixed-point iteration budget all **refuse** the old partial stage and
+completed result. The durable stage store is the existing GA-12
+implementation; no new cache system or privileged Apply flow is
+introduced. Deterministic test receipts and extension build are
+pinned to the precise GitHub SHA.
+
+**Scope:** the translated 96-node CFG is synthesized for stable
+fixed-point slicing, not 96 disassembled instructions in firmware;
+the actual CodeBrowser/Program, full disposable 256-byte image and
+Listing identity participate in input verification. This validates
+the cross-JVM durable worklist protocol, not the complete Ghidra
+P-code translation pipeline for arbitrary ECU411 firmware. The
+latter and migration of all legacy analyzer/profile schemas remain
+separate GA-12 acceptance criteria; do not mark GA-12 COMPLETE.
+
+
 ## GA-15/18 — 2026-11-07: bounded streamed ReAct evidence
 
 **Candidate milestone:** the ReAct LLM callback paths now bound
