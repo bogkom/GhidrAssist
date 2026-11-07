@@ -369,7 +369,7 @@ public class ReActOrchestrator {
                 AgenticEvidenceRegistry.shared().begin(evidenceProgram,
                     evidenceProgram.getModificationNumber(),
                     evidenceProgram.getExecutableSHA256(),findings,
-                    this::cancel);
+                    () -> cancelBound(resultFuture));
                 resultFuture.whenComplete((result,error) ->
                     AgenticEvidenceRegistry.shared().finish(
                         evidenceProgram,findings,
@@ -1132,18 +1132,37 @@ public class ReActOrchestrator {
      * Cancel the current analysis.
      */
     public void cancel() {
-        cancelled.set(true);
-        llmApi.cancelCurrentRequest();
+        cancelBound(null);
+    }
 
-        CompletableFuture<ReActResult> resultFuture = activeResultFuture;
-        Instant startTime = activeStartTime;
-        FindingsCache findings = activeFindings;
-        if (resultFuture != null && startTime != null) {
-            ReActResult cancelledResult = ReActResult.cancelled(
-                findings,
-                Duration.between(startTime, Instant.now())
-            );
-            resultFuture.complete(cancelledResult);
+    /**
+     * A late source-invalidation callback cannot cancel a subsequent
+     * analysis owned by this same orchestrator. Capture exactly one run
+     * before asking a model provider to cancel any pending callback.
+     */
+    private void cancelBound(CompletableFuture<ReActResult> expected) {
+        final CompletableFuture<ReActResult> resultFuture;
+        final Instant started;
+        final FindingsCache findings;
+        synchronized(analysisStateLock) {
+            resultFuture=activeResultFuture;
+            if(resultFuture==null || (expected!=null && expected!=resultFuture))
+                return;
+            cancelled.set(true);
+            started=activeStartTime;
+            findings=activeFindings;
+        }
+        try {
+            llmApi.cancelCurrentRequest();
+        } catch(RuntimeException providerError) {
+            // Failure to stop the provider is not permission to resurrect
+            // a cancelled analysis. Late callbacks are gated below.
+            Msg.warn(this,"Model cancellation failed: "+providerError.getMessage());
+        } finally {
+            if(started!=null) {
+                resultFuture.complete(ReActResult.cancelled(findings,
+                    Duration.between(started,Instant.now())));
+            }
         }
     }
 }
