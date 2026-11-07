@@ -76,8 +76,8 @@ jobs:
           original=json.loads((root/"result.json").read_text())
           prior_cfg=json.loads((root/"ga12-interrupted-cfg-before-restart.json").read_text())
           recovered_cfg=json.loads((root/"ga12-interrupted-cfg-after-restart.json").read_text())
-          assert prior_cfg["real_pcode_store_verified"] is True,prior_cfg
-          assert recovered_cfg["real_pcode_store_verified"] is True,recovered_cfg
+          assert prior_cfg["real_pcode_memory_effects_verified"] is True,prior_cfg
+          assert recovered_cfg["real_pcode_memory_effects_verified"] is True,recovered_cfg
           assert prior_cfg["deliberately_cancelled"] and prior_cfg["partial_worklist_saved"],prior_cfg
           assert prior_cfg["partial_not_review_evidence"],prior_cfg
           for key in ("real_second_jvm","real_ghidra_program_reopened",
