@@ -442,6 +442,30 @@ public final class CodeBrowserMmioMain {
                         clockSite,clockSite.add(9)),
                     ghidra.program.model.symbol.SourceType.ANALYSIS)!=null,
                     "Failed to create separate SYNCR synthetic function");
+                // Isolated 68000/CPU32 sources for real register propagation
+                // and unknown-memory-alias effects, exercised across two JVMs.
+                for(long[] cfg:new long[][]{
+                        {0x40L,0x4bL,0x40L,0x46L,0x4aL},
+                        {0x60L,0x73L,0x60L,0x66L,0x6aL,0x6eL,0x72L}}) {
+                    Address entry=first.getAddressFactory()
+                        .getDefaultAddressSpace().getAddress(cfg[0]);
+                    for(int j=2;j<cfg.length;j++) {
+                        Address at=first.getAddressFactory()
+                            .getDefaultAddressSpace().getAddress(cfg[j]);
+                        if(first.getListing().getInstructionAt(at)==null)
+                            require(new DisassembleCommand(at,null,false)
+                                .applyTo(first,TaskMonitor.DUMMY),
+                                "Synthetic register-flow disassembly failed at "+
+                                Long.toHexString(cfg[j]));
+                    }
+                    require(first.getFunctionManager().createFunction(
+                        "FUN_"+String.format("%08X",cfg[0]),entry,
+                        new ghidra.program.model.address.AddressSet(
+                            entry,first.getAddressFactory()
+                                .getDefaultAddressSpace().getAddress(cfg[1])),
+                        ghidra.program.model.symbol.SourceType.ANALYSIS)!=null,
+                        "Synthetic register-flow function was not created");
+                }
             }finally{first.endTransaction(tx,true);}
             Instruction instruction=first.getListing().getInstructionAt(site);
             require(instruction!=null && instruction.toString()
