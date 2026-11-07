@@ -53,6 +53,7 @@ public class QueryTab extends JPanel {
     private JButton newButton;
     private JButton deleteButton;
     private JButton loadAgenticDraftButton;
+    private JButton loadSavedCheckpointButton;
     private JTable chatHistoryTable;
     private DefaultTableModel chatHistoryModel;
     private JTextArea contextStatusLabel;
@@ -155,6 +156,8 @@ public class QueryTab extends JPanel {
         newButton = new JButton("New");
         deleteButton = new JButton("Delete");
         loadAgenticDraftButton = new JButton("Import Review Draft");
+        loadSavedCheckpointButton = new JButton("Import Saved Checkpoint");
+        loadSavedCheckpointButton.setToolTipText("Review previous evidence as untrusted data; new plan and approval required.");
         loadAgenticDraftButton.setToolTipText("Load a verified local Agentic evidence proposal; never auto-run tools or approve a plan.");
         editSaveButton = new JButton("Edit");
         contextStatusLabel = new JTextArea("Model: No provider / No model | No active context window data");
@@ -336,6 +339,7 @@ public class QueryTab extends JPanel {
         buttonPanel.add(newButton);
         buttonPanel.add(deleteButton);
         buttonPanel.add(loadAgenticDraftButton);
+        buttonPanel.add(loadSavedCheckpointButton);
         add(buttonPanel, BorderLayout.SOUTH);
     }
 
@@ -353,6 +357,18 @@ public class QueryTab extends JPanel {
         newButton.addActionListener(e -> controller.handleNewChatSession());
 
         deleteButton.addActionListener(e -> controller.handleDeleteCurrentSession());
+
+        loadSavedCheckpointButton.addActionListener(e -> {
+            JFileChooser chooser = new JFileChooser();
+            chooser.setDialogTitle("Import saved Agentic checkpoint as new investigation");
+            if (chooser.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) return;
+            String objective = JOptionPane.showInputDialog(this,
+                "New independent investigation objective (not a restored AI session):",
+                "New review required", JOptionPane.QUESTION_MESSAGE);
+            if (objective == null) return;
+            controller.handleSavedAgenticCheckpointImport(
+                chooser.getSelectedFile().toPath(), objective);
+        });
 
         loadAgenticDraftButton.addActionListener(e -> {
             JFileChooser chooser = new JFileChooser();
