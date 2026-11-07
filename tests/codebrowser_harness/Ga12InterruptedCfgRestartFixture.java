@@ -115,6 +115,25 @@ public final class Ga12InterruptedCfgRestartFixture {
         return output.resolve("ga12-interrupted-cfg-"+suffix+".json");
     }
 
+    /** Actual Listing/P-code proof, not a hand-built solver-only Step. */
+    private static void verifyRealPcodeStore(Program program) {
+        var at=program.getAddressFactory().getDefaultAddressSpace()
+            .getAddress(0x20);
+        var insn=program.getListing().getInstructionAt(at);
+        require(insn!=null,"Ghidra Listing source instruction missing");
+        var ops=insn.getPcode();
+        require(ops!=null && ops.length>0,
+            "Real Ghidra P-code translation missing");
+        int stores=0;
+        for(var op:ops)
+            if(op.getOpcode()==ghidra.program.model.pcode.PcodeOp.STORE)
+                stores++;
+        require(stores==1,"Expected one authentic synthetic Ghidra STORE");
+        Long target=GhidraHardwareFlowService.pcodeStore(insn);
+        require(target!=null && target==0xfffa00L,
+            "Width-aware real Ghidra P-code failed to resolve SIMCR");
+    }
+
     /** First genuine Ghidra process deliberately stops just after a saved slice. */
     public static void interruptInFirstJvm(Program program,Path output)
             throws Exception {
@@ -131,6 +150,7 @@ public final class Ga12InterruptedCfgRestartFixture {
         if(program.isChanged())
             program.save("GA-12 isolated synthetic Listing identity before CFG interruption",
                 TaskMonitor.DUMMY);
+        verifyRealPcodeStore(program);
         var key=identity(program);
         var steps=graph();
         require(HardwareDurableFunctionStages.loadProgress(directory,key,
@@ -159,6 +179,7 @@ public final class Ga12InterruptedCfgRestartFixture {
         report.addProperty("schema",1);
         report.addProperty("real_ghidra_program",true);
         report.addProperty("real_first_jvm",true);
+        report.addProperty("real_pcode_store_verified",true);
         report.addProperty("deliberately_cancelled",cancelled);
         report.addProperty("partial_worklist_saved",true);
         report.addProperty("partial_not_review_evidence",true);
@@ -347,6 +368,9 @@ public final class Ga12InterruptedCfgRestartFixture {
         Path directory=store(output);
         var first=JSON.fromJson(Files.readString(
             receipt(output,"before-restart")),JsonObject.class);
+        verifyRealPcodeStore(program);
+        require(first.get("real_pcode_store_verified").getAsBoolean(),
+            "First JVM lacked real P-code evidence");
         var key=identity(program);
         var steps=graph();
         require(key.importedSha256().equals(first.get("import_sha256").getAsString())
@@ -411,6 +435,7 @@ public final class Ga12InterruptedCfgRestartFixture {
         report.addProperty("schema",1);
         report.addProperty("real_ghidra_program_reopened",true);
         report.addProperty("real_second_jvm",true);
+        report.addProperty("real_pcode_store_verified",true);
         report.addProperty("source_identity_matches",true);
         report.addProperty("partial_restored",resumed.restoredPartial());
         report.addProperty("cold_result_exact_match",true);
