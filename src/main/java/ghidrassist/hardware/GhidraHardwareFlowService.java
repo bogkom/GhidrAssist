@@ -143,28 +143,49 @@ public final class GhidraHardwareFlowService {
         return false;
     }
 
-    /** Only one fully resolved P-code memory write yields an address. */
-    private static Long pcodeStore(Instruction i){
+    /**
+     * Resolve only one complete real Ghidra P-code STORE. Track the raw
+     * varnode widths through signed/unsigned extensions and modular
+     * arithmetic; masking intermediate values to 24 bits can invent an MMIO
+     * pointer (notably INT_SEXT of a negative .W value).
+     *
+     * Package-private for the isolated genuine CodeBrowser fixture.
+     */
+    static Long pcodeStore(Instruction i){
         Map<Varnode,Long> computed=new HashMap<>();
         List<Long> destinations=new ArrayList<>();
         PcodeOp[] ops=i.getPcode();
         if(ops==null)return null;
         for(PcodeOp p:ops){
-            Long result=null;int k=p.getOpcode();
+            Long result=null;
+            int k=p.getOpcode();
             if(k==PcodeOp.STORE){
-                Long ptr=p.getNumInputs()>=3?value(p.getInput(1),computed):null;
-                destinations.add(ptr==null?null:ptr&HardwareDataflow.MASK24);
-            } else if((k==PcodeOp.COPY||k==PcodeOp.INT_ZEXT||
-                    k==PcodeOp.INT_SEXT) && p.getNumInputs()>0){
-                result=value(p.getInput(0),computed);
-            } else if((k==PcodeOp.INT_ADD||k==PcodeOp.INT_SUB) &&
-                    p.getNumInputs()>1){
-                Long x=value(p.getInput(0),computed),y=value(p.getInput(1),computed);
-                if(x!=null&&y!=null)result=k==PcodeOp.INT_ADD?x+y:x-y;
+                Varnode ptrNode=p.getNumInputs()>=3?p.getInput(1):null;
+                Long ptr=value(ptrNode,computed);
+                destinations.add(HardwarePcodeConstantMath.externalAddress(
+                    ptr,ptrNode==null?0:ptrNode.getSize()));
+            }else{
+                HardwarePcodeConstantMath.Operation operation=switch(k){
+                    case PcodeOp.COPY -> HardwarePcodeConstantMath.Operation.COPY;
+                    case PcodeOp.INT_ZEXT -> HardwarePcodeConstantMath.Operation.ZERO_EXTEND;
+                    case PcodeOp.INT_SEXT -> HardwarePcodeConstantMath.Operation.SIGN_EXTEND;
+                    case PcodeOp.INT_ADD -> HardwarePcodeConstantMath.Operation.ADD;
+                    case PcodeOp.INT_SUB -> HardwarePcodeConstantMath.Operation.SUBTRACT;
+                    default -> null;
+                };
+                Varnode out=p.getOutput();
+                if(operation!=null && out!=null && p.getNumInputs()>0){
+                    Varnode left=p.getInput(0);
+                    Varnode right=p.getNumInputs()>1?p.getInput(1):null;
+                    result=HardwarePcodeConstantMath.evaluate(operation,
+                        value(left,computed),left.getSize(),
+                        value(right,computed),right==null?0:right.getSize(),
+                        out.getSize());
+                }
             }
             Varnode out=p.getOutput();
             if(out!=null){
-                if(result!=null)computed.put(out,result&HardwareDataflow.MASK24);
+                if(result!=null)computed.put(out,result);
                 else computed.remove(out);
             }
         }
