@@ -56,6 +56,31 @@ Java regression includes the score-10 tie under capacity 1, independent
 summary views, reset behavior, and unchanged bounded finding count.
 No remote model calls, firmware data, Supervisor plans, host or GUI tests.
 
+## ReAct cancellation, Program-source invalidation and late callbacks (2026-11-07)
+
+A live ReAct run now registers a per-run cancellation hook with its
+published read-only findings. Changing the active CodeBrowser Program
+invalidates the old entry **before** invoking the hook, so an old source
+cannot be paginated or revived by switching back to it. The hook is bound
+to the exact `CompletableFuture<ReActResult>`: stale callbacks may not
+cancel a newer run of the same orchestrator. The registry calls
+cancellation without holding its monitor so the ReAct completion handler
+may safely re-enter. Completed runs are invalidated without cancellation.
+
+A cancelled ReAct response includes the actual dispatcher-accepted
+tool-call count already observed. Late model updates, tool-count
+callbacks, reflection or synthesis are ignored after the run has
+completed. This is a delivery/status guard, **not** rollback or a claim
+that already executed tools had no effect.
+
+Two model-free real CodeBrowser/Xvfb scenarios verify both manual
+cancellation and the GUI switch A→B→A while a real Ghidra read-only
+tool has already completed but the scripted LLM response is delayed.
+A real external CLI process checks the production JSON-RPC state,
+cancelled/incomplete checkpoints and the lack of late UI/source
+resurrection. The normal SUCCESS path remains independently covered.
+Only the model response is scripted inside unbundled test sources.
+
 ## GA-15/18 deterministic end-to-end evidence regression (2026-11-07)
 
 A separate CI workflow drives the real ReAct state machine and
