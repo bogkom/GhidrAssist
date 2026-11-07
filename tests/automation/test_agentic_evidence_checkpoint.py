@@ -297,6 +297,21 @@ class LocalAgenticCheckpoint(unittest.TestCase):
                     counterfeit,Path(work)/"counterfeit-review.json",
                     "Independently inspect MMIO references")
 
+    def test_gui_review_import_routes_through_explicit_plan_and_policy(self):
+        tab=(ROOT/"src/main/java/ghidrassist/ui/tabs/QueryTab.java").read_text()
+        controller=(ROOT/"src/main/java/ghidrassist/core/TabController.java").read_text()
+        policy=(ROOT/"src/main/java/ghidrassist/ui/common/TaskToolPolicyPanel.java").read_text()
+        bridge=(ROOT/"src/main/java/ghidrassist/agent/react/AgenticReviewDraft.java").read_text()
+        self.assertIn("Import Review Draft",tab)
+        self.assertIn("handleAgenticReviewDraftImport",tab)
+        self.assertIn("stageNewAgenticReviewQuery",controller)
+        self.assertIn("resetForImportedReview()",controller)
+        self.assertIn("Mode.READ_ONLY, Lifetime.NEXT_TASK",policy)
+        self.assertIn("new Settings(Mode.READ_ONLY",policy)
+        self.assertIn("AgenticEvidenceRegistry",bridge)
+        self.assertIn("public void handleAgentPlanApproved()",controller)
+        self.assertNotIn("executeApprovedAgenticQuery(",bridge)
+
     def test_no_write_on_invalid_or_unbounded_pages(self):
         with tempfile.TemporaryDirectory() as work:
             target=Path(work)/"bad.json"
