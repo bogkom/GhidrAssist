@@ -1,5 +1,22 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
+## GA-12/18 — 2026-11-07: corrupt interrupted worklist fail-closed regression
+
+After the actual second-JVM restore test, disposable copies of its real
+first-JVM partial stage are deliberately corrupted in three independent
+ways: a flipped checksum byte, a truncated file and a file exceeding
+the bounded store maximum. Both partial and complete codecs must refuse
+every damaged stage. A real subsequent fixed-point runner invocation must
+start cold, finish without truncation and produce the exact same typed
+result as an independent cold analysis. The original valid checkpoint
+remains untouched and must still resume in the second JVM.
+
+This is isolated synthetic Ghidra 12.1.4 PUBLIC/Xvfb CI, not evidence of
+full Ghidra P-code serialization, legacy schema migration, runtime MCU
+execution or approved Apply. GA-12 and GA-18 remain PARTIAL until the
+independent acceptance criteria in this roadmap are met.
+
+
 ## GA-12/18 — 2026-11-07: real two-JVM interrupted CFG fixed-point recovery
 
 Acceptance candidate: a real **synthetic Ghidra 12.1.4 PUBLIC/Xvfb

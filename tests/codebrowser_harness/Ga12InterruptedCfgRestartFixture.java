@@ -164,6 +164,55 @@ public final class Ga12InterruptedCfgRestartFixture {
         Files.writeString(receipt(output,"before-restart"),JSON.toJson(report));
     }
 
+    /**
+     * Exercise damaged on-disk partial stages in disposable cache copies.
+     * A corrupt worklist must never become complete evidence or prevent a
+     * fresh bounded analysis; the original checkpoint remains untouched.
+     */
+    private static int damagedWorklistFallback(Path directory,Path output,
+            HardwareDurableStageStore.Key key,
+            List<HardwareDataflow.Step> steps) throws Exception {
+        List<Path> files;
+        try(var stream=Files.list(directory)) {
+            files=stream.filter(p->p.getFileName().toString().endsWith(".chk"))
+                .toList();
+        }
+        require(files.size()==1,"Expected exactly one isolated partial CFG slot");
+        byte[] original=Files.readAllBytes(files.get(0));
+        require(original.length>64,"Saved partial checkpoint unexpectedly short");
+        byte[] cold=HardwareFunctionResultCodec.encode(
+            HardwareDataflow.analyze(ENTRY,steps,TARGETS,BUDGET));
+        int checked=0;
+        for(String fault:List.of("digest","truncated","oversized")) {
+            Path copy=Files.createDirectories(output.resolve(
+                "ga12-damaged-stage-"+fault));
+            byte[] damaged;
+            if("digest".equals(fault)) {
+                damaged=original.clone();
+                damaged[damaged.length-1]^=0x01;
+            } else if("truncated".equals(fault)) {
+                damaged=Arrays.copyOf(original,original.length-17);
+            } else {
+                damaged=new byte[HardwareDurableStageStore.MAX_PAYLOAD_BYTES+4097];
+            }
+            Files.write(copy.resolve(files.get(0).getFileName()),damaged);
+            require(HardwareDurableFunctionStages.loadProgress(copy,
+                    key,ENTRY,BUDGET,steps,TARGETS).isEmpty(),
+                "Damaged partial worklist was accepted: "+fault);
+            require(HardwareDurableFunctionStages.load(copy,
+                    key,ENTRY,BUDGET,steps,TARGETS).isEmpty(),
+                "Damaged partial worklist was promoted to completed evidence: "+fault);
+            var result=HardwarePartialStageRunner.analyze(
+                ENTRY,steps,TARGETS,BUDGET,copy,key,TaskMonitor.DUMMY,()->true);
+            require(!result.restoredPartial() && !result.result().truncated &&
+                    Arrays.equals(cold,
+                        HardwareFunctionResultCodec.encode(result.result())),
+                "Damaged stage failed closed-start cold-equivalence: "+fault);
+            checked++;
+        }
+        return checked;
+    }
+
     /** Second genuine Ghidra process restores and completes the exact worklist. */
     public static void resumeInSecondJvm(Program program,Path output)
             throws Exception {
@@ -196,6 +245,10 @@ public final class Ga12InterruptedCfgRestartFixture {
         require(HardwareDurableFunctionStages.loadProgress(directory,key,
             ENTRY,BUDGET+1,steps,TARGETS).isEmpty(),
             "Changed fixed-point budget reused a worklist");
+
+        int corruptFallbacks=damagedWorklistFallback(
+            directory,output,key,steps);
+        require(corruptFallbacks==3,"Missing damaged worklist cases");
 
         var resumed=HardwarePartialStageRunner.analyze(ENTRY,steps,TARGETS,
             BUDGET,directory,key,TaskMonitor.DUMMY,()->true);
@@ -232,6 +285,8 @@ public final class Ga12InterruptedCfgRestartFixture {
         report.addProperty("cold_result_exact_match",true);
         report.addProperty("indirect_mmio_static_evidence_retained",true);
         report.addProperty("completed_stage_persisted",true);
+        report.addProperty("damaged_partial_fallbacks",corruptFallbacks);
+        report.addProperty("damaged_partial_never_complete",true);
         report.addProperty("changed_input_refused",true);
         report.addProperty("changed_analyzer_refused",true);
         report.addProperty("changed_profile_refused",true);
