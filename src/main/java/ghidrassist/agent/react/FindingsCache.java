@@ -222,6 +222,7 @@ public class FindingsCache {
         int length=Math.min(MAX_TOOL_TEXT_SCAN,output.length());
         String[] lines=output.substring(0,length).split("\n");
         int scanned=0;
+        boolean omittedLongLine=false;
         for (String line : lines) {
             if(scanned++>=2000)break;
             line = line.trim();
@@ -231,8 +232,11 @@ public class FindingsCache {
                 continue;
             }
 
-            // Skip lines that are too long (likely raw data)
-            if (line.length() > 500) {
+            // Long lines are deliberately NOT extracted. Track that
+            // omission rather than treating the inspected prefix as proof
+            // that the full tool observation was retained.
+            if (line.length() > 300) {
+                omittedLongLine=true;
                 continue;
             }
 
@@ -244,10 +248,10 @@ public class FindingsCache {
                 addFinding(line, line, toolName, relevance);
             }
         }
-        if(output.length()>length || lines.length>2000) {
+        if(output.length()>length || lines.length>2000 || omittedLongLine) {
             sourceIncomplete=true;
-            addFinding("SOURCE INCOMPLETE: large tool output truncated for finding extraction",
-                "Tool output exceeded bounded local scan; omitted content NOT analyzed",
+            addFinding("SOURCE INCOMPLETE: tool output omitted during bounded finding extraction",
+                "Tool output exceeded scan, line or row bounds; omitted content NOT analyzed",
                 toolName,10); // Kept as a finding where the budget permits.
         }
     }
