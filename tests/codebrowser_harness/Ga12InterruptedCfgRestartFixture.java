@@ -208,7 +208,8 @@ public final class Ga12InterruptedCfgRestartFixture {
             "Unknown A1 alias was promoted or failed to poison provenance");
         // A1's unknown write must invalidate tracked peripheral values
         // before the subsequent A0 write, despite the known A0 pointer.
-        require(observations.get(2).knownPeripheralWords.get(0xfffa00L)==0x4848,
+        require(Integer.valueOf(0x4848).equals(
+                observations.get(2).knownPeripheralWords.get(0xfffa00L)),
             "Post-alias source must reflect only the last exact SIMCR store");
         Path dir=output.resolve("ga12-real-pcode-function-stages");
         Files.createDirectories(dir);
