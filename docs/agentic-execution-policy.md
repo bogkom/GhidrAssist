@@ -120,3 +120,17 @@ retained as structural metadata if relevance pruning evicts its text, and
 `SUCCESS` does not certify complete source evidence in a checkpoint. Exact
 300-character lines are still eligible for normal extraction. This is a
 conservative retained-evidence rule, not proof of exhaustive tool semantics.
+
+## GA-12/15: explicit resume preflight (2026-11-07)
+
+`ghidrassist-agent agentic-resume-check --input FILE` verifies the SHA-256
+integrity and bounded metadata of an offline evidence checkpoint, then queries
+exactly one **read-only** live Agentic page using Bearer JSON-RPC. It requires
+the active Program revision and executable SHA, identical run token, terminal
+status and unchanged retained-evidence generation/counters. A RUNNING offline
+checkpoint or a replaced run is refused. The response explicitly states
+`resumable_ai_session=false`, `tool_execution_authorized=false` and
+`apply_authorized=false`. A matching result requires **new Review** before any
+new model session or tool execution; it is not an actual resume, rollback,
+operator approval, or identity authentication of the file's creator. No remote
+snapshot import, callback replay or privileged mutation is implemented.
