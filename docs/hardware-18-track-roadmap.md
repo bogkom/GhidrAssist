@@ -4,6 +4,52 @@ Status: **IN PROGRESS — integrated baseline 2026-11-06 (PR #198)**. Scope sour
 
 
 
+## GA-15 + GA-18 — pełny ReAct → HTTP JSON-RPC → CLI (2026-11-07)
+
+**Baza:** zintegrowany PR #203 na `master`
+`82169cbaf64c8ba255c8c141d566e7512f95b226` po **41/41
+GitHub Actions SUCCESS** na testowanym HEAD
+`c9e1dfd567e6f27ad567355fd848886b9ad79153`.
+
+**GA-15 — PARTIAL, test end-to-end:** nowa izolowana regresja
+uruchamia **rzeczywisty** `ReActOrchestrator` w pełnym
+CodeBrowserze Ghidry 12.1.4 PUBLIC, z uprzednio zatwierdzonym
+syntetycznym planem i restrykcyjną `ToolExecutionPolicy`.
+ReAct wykonuje rzeczywiste, tylko-odczytowe narzędzie
+`ga_get_current_address` poprzez `ToolRegistry`; jego wynik
+dotyczy statycznego adresu Listing `0x00000020`. Jedynie
+odpowiedź LLM jest deterministyczną atrapą z katalogu
+**testów**, nie wymaga sieci, tokenów modelu ani OAuth.
+Rejestrowany jest faktyczny cache ReAct, a nie ręcznie
+wygenerowane wyniki registry.
+
+**GA-18 — PARTIAL, fizyczne granice procesu:** zewnętrzny
+`ghidrassist-agent` korzysta z produkcyjnego, opt-in,
+Bearer-authenticated `127.0.0.1` JSON-RPC. Testuje stan
+RUNNING (bez fałszywej kompletności), stan SUCCESS i rzeczywiste
+wyniki narzędzia, stronicowanie, odmowę dla złego tokenu,
+run-id i rewizji programu, następnie atomowy lokalny checkpoint
+oraz weryfikację i odczyt offline bez sesji Ghidry.
+Przy każdym kroku porównuje SHA-256 źródła, brak zmiany
+rewizji Program i liczbę faktycznie wykonanych narzędzi
+z raportem ReAct. Wszystkie dowody CI mają pochodzić
+z jednego syntetycznego przebiegu i dokładnego SHA commita.
+
+**Granice dowodu:** to prawdziwy kod ReAct, narzędzie i sieć
+loopback, ale **nie** rzeczywisty model LLM, nie wykonanie
+kodu ECU411, nie potwierdzenie aktywnych IRQ i nie pełne
+wznowienie sesji AI. Dane prywatnego firmware, projekty
+produkcyjne, OAuth, Wyse/Precision i stary Supervisor
+pozostają nietknięte. Testowe konstruktorowe wstrzyknięcie
+sterownika LLM jest package-private i niedostępne przez API.
+
+**Bramki:** pełne `buildExtension` Java25, Ghidra
+12.1.4 PUBLIC + CodeBrowser/Xvfb i rzeczywisty JSON-RPC/CLI,
+istniejące regresje Java21, deterministyczne JSON/JUnit
+i artefakty. GA-15/GA-18 pozostają PARTIAL do czasu
+objęcia kolejnych złożonych narzędzi i rozszerzenia
+kontrolowanego wznowienia sesji.
+
 ## GA-12 + GA-15 — odczytowy handoff Agentic przez Automation API (2026-11-06)
 
 **Baza:** scalony PR #202 na `master`
