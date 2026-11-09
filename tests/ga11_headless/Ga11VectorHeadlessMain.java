@@ -2729,6 +2729,24 @@ public final class Ga11VectorHeadlessMain {
                         full,candidates,cleanRevision);
                     check(scopedOutcome.renamed()==2,
                         "Explicit approved Ghidra pointer variable batch must rename both");
+                    var initialReceipts=ghidrassist.hardware.HardwareScopedVariableService
+                        .audit(full);
+                    check(initialReceipts.rows().size()==2 &&
+                            initialReceipts.rows().stream().allMatch(r->
+                                r.receipt().function()==0x5a0L &&
+                                r.receipt().reviewedModification()==
+                                    cleanRevision.modificationNumber() &&
+                                r.receipt().origin().contains("actor UNKNOWN")),
+                        "Actual Ghidra pointer batch must persist two function-local approvals");
+                    String initialReceiptCsv=ghidrassist.hardware
+                        .HardwareScopedVariableService.auditCsv(full);
+                    check(initialReceiptCsv.lines().count()==3 &&
+                            initialReceiptCsv.contains("PV_000005A0_P_0000") &&
+                            initialReceiptCsv.contains("PV_000005A0_L_0000"),
+                        "Read-only pointer receipt audit must emit exact typed variable keys");
+                    var initialAuditRevision=HardwareAnalysisRevision.capture(
+                        full,full.getModificationNumber(),full.getLanguageID().toString(),
+                        full.getExecutableSHA256(),true);
                     var after=ghidrassist.hardware.HardwareScopedVariableService.preview(fn);
                     check(after.size()==2 && after.stream().allMatch(
                         p->p.decision()==ghidrassist.hardware.HardwareScopedVariableReview
@@ -2736,6 +2754,19 @@ public final class Ga11VectorHeadlessMain {
                         "Renamed pointer types must protect existing user names");
                     check(full.canUndo(),"Native Ghidra Undo missing after pointer Apply");
                     full.undo();
+                    check(ghidrassist.hardware.HardwareScopedVariableService
+                            .audit(full).rows().isEmpty(),
+                        "Native Undo must remove both transactional variable receipts");
+                    boolean oldReceiptStale=false;
+                    try {
+                        initialReceipts.csvRevisionBound(initialAuditRevision,()->
+                            HardwareAnalysisRevision.capture(full,
+                                full.getModificationNumber(),
+                                full.getLanguageID().toString(),
+                                full.getExecutableSHA256(),true));
+                    }catch(IllegalStateException expected){oldReceiptStale=true;}
+                    check(oldReceiptStale,
+                        "Native Undo cannot authorize stale approved-variable CSV");
                     check(ghidrassist.hardware.HardwareScopedVariableService.preview(fn)
                             .stream().allMatch(p->p.decision()==
                                 ghidrassist.hardware.HardwareScopedVariableReview
@@ -2743,6 +2774,11 @@ public final class Ga11VectorHeadlessMain {
                         "Native Undo must restore original argument/local names");
                     check(full.canRedo(),"Native Ghidra Redo missing after pointer Undo");
                     full.redo();
+                    check(ghidrassist.hardware.HardwareScopedVariableService
+                            .audit(full).rows().size()==2 &&
+                            ghidrassist.hardware.HardwareScopedVariableService
+                            .auditCsv(full).lines().count()==3,
+                        "Native Redo must restore both saved variable receipts and current CSV");
                     check(ghidrassist.hardware.HardwareScopedVariableService.preview(fn)
                             .stream().allMatch(p->p.decision()==
                                 ghidrassist.hardware.HardwareScopedVariableReview
@@ -2861,6 +2897,9 @@ public final class Ga11VectorHeadlessMain {
                         full.getExecutableSHA256(),true);
                     var multiApplied=ghidrassist.hardware.HardwareScopedVariableService.apply(
                         full,multiCandidates,freshMultiRevision);
+                    check(ghidrassist.hardware.HardwareScopedVariableService
+                            .audit(full).rows().size()==6,
+                        "Two-function batch must persist four additional distinct receipts");
                     check(multiApplied.renamed()==4 &&
                             ghidrassist.hardware.HardwareScopedVariableService
                                 .preview(pointerFnA).stream().allMatch(p->
@@ -2873,6 +2912,9 @@ public final class Ga11VectorHeadlessMain {
                         "Explicit approved batch did not rename both real Function namespaces");
                     full.undo();
                     check(ghidrassist.hardware.HardwareScopedVariableService
+                            .audit(full).rows().size()==2,
+                        "Native Undo of four-variable batch must preserve older two receipts");
+                    check(ghidrassist.hardware.HardwareScopedVariableService
                             .preview(pointerFnA).stream().allMatch(p->
                                 p.decision()==ghidrassist.hardware
                                     .HardwareScopedVariableReview.Decision.READY) &&
@@ -2882,6 +2924,9 @@ public final class Ga11VectorHeadlessMain {
                                     .HardwareScopedVariableReview.Decision.READY),
                         "Native Undo failed to restore all four names");
                     full.redo();
+                    check(ghidrassist.hardware.HardwareScopedVariableService
+                            .audit(full).rows().size()==6,
+                        "Native Redo must restore all four independent function-owner receipts");
                     check(ghidrassist.hardware.HardwareScopedVariableService
                             .preview(pointerFnA).stream().allMatch(p->
                                 p.decision()==ghidrassist.hardware
@@ -2898,6 +2943,10 @@ public final class Ga11VectorHeadlessMain {
                     }catch(IllegalStateException expected){staleMultiRefused=true;}
                     check(staleMultiRefused,
                         "Pre-Undo reviewed source revision must not permit replay");
+                    result.addProperty("scoped_variable_approval_receipts",true);
+                    result.addProperty("scoped_variable_receipt_undo_redo",true);
+                    result.addProperty("scoped_variable_receipt_revision_stale",true);
+                    result.addProperty("scoped_multifunction_receipt_rollback",true);
                     result.addProperty("scoped_multi_function_namespace_independent",true);
                     result.addProperty("scoped_multi_function_duplicate_ordinal_rejected",true);
                     result.addProperty("scoped_multi_function_atomic_failure",true);
