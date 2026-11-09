@@ -15,6 +15,15 @@ and **STALE_REVISION**. Every result retains source CALL/STORE
 provenance; even unanimous sampled contexts are explicitly MAY-source
 observations, not universal callee effects or runtime execution.
 
+The existing GhidraHardwareFlowService Hardware Analysis markdown now
+includes a bounded, read-only Cross-CALL reconciliation section. It
+reuses the already sampled decoded CALL/callee contexts and reports
+only pairs with at least two sampled direct callsites; incomplete global
+caller inventory suppresses agreement, and a 24-row budget is labeled
+explicitly. The genuine Ghidra 12.1.4 PUBLIC headless call-context
+fixture must show an INCOMPLETE row for a third caller with an
+unproved A0, never sampled/global agreement.
+
 A process-local HardwareAnalysisRevision gate must match both before
 and after reconciliation. If Ghidra changes its analysis revision
 while the reconciliation runs, it returns only STALE_REVISION, with
