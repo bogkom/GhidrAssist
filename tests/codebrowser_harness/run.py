@@ -52,10 +52,10 @@ def fixture(path, with_simcr):
         # masquerade as a second confirmed SIMCR configuration.
         data[0x60:0x74]=bytes.fromhex(
             "207c00fffa0030bc40ca32bc123430bc48484e75")
-        # CPU32: A0=SIMCR, byte write to SIMCR high byte, then full word
+        # CPU32: A0=SIMCR, full SIMCR word, then overlapping high byte, then full word
         # write to SIMCR. A byte write is a candidate, not a known word.
-        data[0x80:0x90]=bytes.fromhex(
-            "207c00fffa0010bc00aa30bc40ca4e75")
+        data[0x80:0x94]=bytes.fromhex(
+            "207c00fffa0030bc40ca10bc00aa30bc48484e75")
         # Real 22-instruction Listing CFG. The first JVM interrupts after
         # one 16-iteration slice; the second JVM resumes the worklist.
         # MOVEA.L #$00FFFA00,A0; 17*NOP; MOVE.W #$4848,(A0); RTS.
