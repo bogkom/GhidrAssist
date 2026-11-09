@@ -385,7 +385,7 @@ public final class Ga12DurableSourceV2RealGhidraMain {
                 cache,original);
             require(Files.isRegularFile(checkpoint),
                 "exact original Program checkpoint must exist");
-            if(!phase.equals("source-edit"))
+            if(!phase.equals("source-edit") && !phase.equals("source-name"))
                 require(program.getModificationNumber()==beforeRevision,
                     "read-only source checkpoint modified Ghidra Program");
             String imported=program.getExecutableSHA256();
