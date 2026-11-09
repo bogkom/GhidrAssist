@@ -527,8 +527,9 @@ public final class CodeBrowserMmioMain {
                         0x144L,0x148L,0x14aL,0x180L,0x188L,
                         0x200L,0x206L,0x208L,0x20cL,0x240L,0x242L}) {
                         var address=space.getAddress(pc);
-                        require(new DisassembleCommand(address,null,false)
-                            .applyTo(sourceProgram,TaskMonitor.DUMMY),
+                        require(sourceProgram.getListing().getInstructionAt(address)!=null ||
+                            new DisassembleCommand(address,null,false)
+                                .applyTo(sourceProgram,TaskMonitor.DUMMY),
                             "Native source-page CPU32 decode failed 0x"+
                                 Long.toHexString(pc));
                     }
@@ -1171,6 +1172,7 @@ public final class CodeBrowserMmioMain {
             if(tool[0]!=null)edt(()->tool[0].shutdown());
             first.release(consumer);
             second.release(consumer);
+            if(sourceProgram!=null)sourceProgram.release(consumer);
             project.close();
         }
     }
