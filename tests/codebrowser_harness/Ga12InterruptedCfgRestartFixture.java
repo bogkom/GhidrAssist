@@ -345,6 +345,108 @@ public final class Ga12InterruptedCfgRestartFixture {
             "Real translated fixed point was not committed atomically");
     }
 
+    /**
+     * Two distinct, real translated CPU32 functions share one durable
+     * directory, but have independent typed pending worklists and slots.
+     * Both are deliberately interrupted before their first STORE is
+     * complete. One stale-key probe must never disturb the other slot.
+     */
+    private static List<RealFlow> parallelTranslatedSources(Program program)
+            throws Exception {
+        return List.of(
+            realFlow(program,0x60L,
+                new long[]{0x60L,0x66L,0x6aL,0x6eL,0x72L},3),
+            realFlow(program,0x80L,
+                new long[]{0x80L,0x86L,0x8aL,0x8eL,0x92L},3));
+    }
+    private static Path multiPendingDirectory(Path output) {
+        return output.resolve("ga12-multiple-real-translated-pending");
+    }
+    private static String storeParallelTranslatedWorklists(Program program,
+            Path output,HardwareDurableStageStore.Key key) throws Exception {
+        Path dir=multiPendingDirectory(output);
+        Files.createDirectories(dir);
+        StringBuilder receipt=new StringBuilder();
+        for(RealFlow source:parallelTranslatedSources(program)) {
+            var slice=HardwareDataflow.analyzeSlice(source.entry(),
+                source.steps(),TARGETS,128,null,2);
+            require(slice.complete()==null && slice.progress()!=null &&
+                    slice.progress().iterations()==2 &&
+                    !slice.progress().pending().isEmpty(),
+                "Distinct real CPU32 worklist did not stop at 2 iterations");
+            require(HardwareDurableFunctionStages.saveProgress(dir,key,
+                    source.entry(),128,source.steps(),TARGETS,slice.progress()),
+                "Could not save independent real translated worklist");
+            require(HardwareDurableFunctionStages.load(dir,key,
+                    source.entry(),128,source.steps(),TARGETS).isEmpty(),
+                "Independent partial function was published as complete");
+            receipt.append(Long.toHexString(source.entry())).append(':')
+                .append(HardwareDurableStageStore.hash(
+                    HardwareFunctionProgressCodec.encode(slice.progress())))
+                .append(';');
+        }
+        try(var files=Files.list(dir)) {
+            require(files.filter(p->p.getFileName().toString().endsWith(".chk"))
+                    .count()==2,
+                "Independent real function worklists collided on disk");
+        }
+        return HardwareDurableStageStore.hash(receipt.toString());
+    }
+    private static void resumeParallelTranslatedWorklists(Program program,
+            Path output,HardwareDurableStageStore.Key key,String expected)
+            throws Exception {
+        Path dir=multiPendingDirectory(output);
+        var sources=parallelTranslatedSources(program);
+        StringBuilder receipt=new StringBuilder();
+        for(RealFlow source:sources) {
+            var p=HardwareDurableFunctionStages.loadProgress(dir,key,
+                    source.entry(),128,source.steps(),TARGETS).orElseThrow(
+                ()->new IllegalStateException(
+                    "Missing independent typed real CPU32 pending slot"));
+            require(p.iterations()==2,
+                "Incorrect independent progress iteration count");
+            receipt.append(Long.toHexString(source.entry())).append(':')
+                .append(HardwareDurableStageStore.hash(
+                    HardwareFunctionProgressCodec.encode(p))).append(';');
+            require(HardwareDurableFunctionStages.loadProgress(dir,
+                    changed(key,"analysis-input"),source.entry(),128,
+                    source.steps(),TARGETS).isEmpty(),
+                "Stale source accepted for independent function");
+            require(HardwareDurableFunctionStages.loadProgress(dir,
+                    changed(key,"profile"),source.entry(),128,
+                    source.steps(),TARGETS).isEmpty(),
+                "Stale profile accepted for independent function");
+        }
+        require(expected.equals(HardwareDurableStageStore.hash(
+                receipt.toString())),
+            "Cross-JVM independent typed worklists differed");
+        // Same source hash is insufficient if a different function's
+        // translated graph is requested at the first function's address.
+        RealFlow first=sources.get(0),second=sources.get(1);
+        require(HardwareDurableFunctionStages.loadProgress(dir,key,
+                first.entry(),128,second.steps(),TARGETS).isEmpty(),
+            "One function's typed worklist was reused for a foreign graph");
+        for(RealFlow source:sources) {
+            var resumed=HardwarePartialStageRunner.analyze(source.entry(),
+                source.steps(),TARGETS,128,dir,key,TaskMonitor.DUMMY,()->true);
+            require(resumed.restoredPartial() && !resumed.result().truncated &&
+                    Arrays.equals(HardwareFunctionResultCodec.encode(
+                        source.result()),
+                        HardwareFunctionResultCodec.encode(resumed.result())),
+                "Parallel CPU32 function resume was cold or diverged");
+            require(HardwareDurableFunctionStages.save(dir,key,source.entry(),
+                    128,source.steps(),TARGETS,resumed.result()),
+                "Independent completed stage could not be committed");
+        }
+        for(RealFlow source:sources) {
+            require(HardwareDurableFunctionStages.loadProgress(dir,key,
+                    source.entry(),128,source.steps(),TARGETS).isEmpty() &&
+                    HardwareDurableFunctionStages.load(dir,key,
+                    source.entry(),128,source.steps(),TARGETS).isPresent(),
+                "One completed function corrupted another function slot");
+        }
+    }
+
     /** First genuine Ghidra process deliberately stops just after a saved slice. */
     public static void interruptInFirstJvm(Program program,Path output)
             throws Exception {
@@ -366,6 +468,8 @@ public final class Ga12InterruptedCfgRestartFixture {
         String realFlowDigest=verifyRealRegisterAndAliasFlow(
             program,output,key,false);
         int realPendingIterations=interruptRealTranslatedSource(
+            program,output,key);
+        String parallelWorklists=storeParallelTranslatedWorklists(
             program,output,key);
         var steps=graph();
         require(HardwareDurableFunctionStages.loadProgress(directory,key,
@@ -401,6 +505,9 @@ public final class Ga12InterruptedCfgRestartFixture {
         report.addProperty("real_translated_partial_iterations",
             realPendingIterations);
         report.addProperty("real_translated_partial_not_review",true);
+        report.addProperty("real_parallel_worklists_sha256",
+            parallelWorklists);
+        report.addProperty("real_parallel_worklists_isolated",true);
         report.addProperty("real_unknown_alias_poisoned",true);
         report.addProperty("deliberately_cancelled",cancelled);
         report.addProperty("partial_worklist_saved",true);
@@ -601,6 +708,8 @@ public final class Ga12InterruptedCfgRestartFixture {
             "Real CPU32 A0 flow and unknown alias changed across JVMs");
         resumeRealTranslatedSource(program,output,key,
             first.get("real_translated_partial_iterations").getAsInt());
+        resumeParallelTranslatedWorklists(program,output,key,
+            first.get("real_parallel_worklists_sha256").getAsString());
         var steps=graph();
         require(key.importedSha256().equals(first.get("import_sha256").getAsString())
                 && key.inputSha256().equals(first.get("full_input_sha256").getAsString())
@@ -670,6 +779,9 @@ public final class Ga12InterruptedCfgRestartFixture {
         report.addProperty("real_byte_overlap_checkpoint_restored",true);
         report.addProperty("real_translated_partial_restored",true);
         report.addProperty("real_translated_cold_byte_equal",true);
+        report.addProperty("real_parallel_worklists_restored",true);
+        report.addProperty("real_parallel_results_cold_byte_equal",true);
+        report.addProperty("real_parallel_stale_keys_refused",true);
         report.addProperty("real_pcode_memory_effects_verified",true);
         report.addProperty("source_identity_matches",true);
         report.addProperty("partial_restored",resumed.restoredPartial());
