@@ -447,7 +447,7 @@ public final class CodeBrowserMmioMain {
                 for(long[] cfg:new long[][]{
                         {0x40L,0x4bL,0x40L,0x46L,0x4aL},
                         {0x60L,0x73L,0x60L,0x66L,0x6aL,0x6eL,0x72L},
-                        {0x80L,0x8fL,0x80L,0x86L,0x8aL,0x8eL}}) {
+                        {0x80L,0x93L,0x80L,0x86L,0x8aL,0x8eL,0x92L}}) {
                     Address entry=first.getAddressFactory()
                         .getDefaultAddressSpace().getAddress(cfg[0]);
                     for(int j=2;j<cfg.length;j++) {
