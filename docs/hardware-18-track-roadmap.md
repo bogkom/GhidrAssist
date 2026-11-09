@@ -1,5 +1,40 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
+## GA-12/13/15/18 — 2026-11-09: bounded rooted Agentic checkpoint ancestry and Review handoff
+
+The previous Agentic history supported only adjacent parent-child
+checkpoint verification. New `agentic-lineage-chain-verify` performs
+bounded **2–16** checkpoint root-to-leaf checks with exact source
+SHA-256, every digest/parent run edge, complete retained evidence,
+no repeated run or checkpoint, original imported firmware identity,
+and a deterministic SHA-256 chain digest. The root must be unlinked;
+a valid isolated pair is not proof that an older multi-run history
+has no missing ancestors. This is an integrity/provenance claim
+only, **not** authenticated actor identity or model/session replay.
+
+A checkpoint with ancestry may now seed only a **fresh, unapproved**
+Review draft, and only when all ancestors are explicitly supplied
+oldest first (`--ancestor` repeated) and the chain remains unchanged
+across the existing live Ghidra Program/Agentic evidence preflight.
+New review drafts record bounded ancestry depth and digest;
+`AWAITING_NEW_REVIEW`, no old plan, no tools, no Apply, and no
+inherited authorization remain mandatory. Root checkpoints preserve
+the existing Review draft path without `--ancestor`.
+
+Python3 deterministically covers three generations, missing,
+skipped or reversed links, wrong firmware, rehashed forged nodes,
+repeated run, over-limit history, race and no live session, including
+false-complete and no inherited approval gates. The existing actual
+synthetic Ghidra 12.1.4 PUBLIC Java25 two-JVM CodeBrowser/JSON-RPC
+ReAct test now also verifies the *rooted two-entry chain offline
+after both Ghidra processes exit*; it does not claim that this test
+ran a third native Agentic investigation. GitHub Actions exact
+SHA gates include full extension compile and source-specific
+regressions. No private ECU411, user Program, OAuth, stopped
+Wyse/Precision or Supervisor processes. GA-12/13/15/18 remain
+PARTIAL, with GA-14 deferred.
+
+
 ## GA-12/18 — 2026-11-09: V2 RESET inventory cross-counters and source completeness separation
 
 A typed `GA12-CFG-REPORT-2` checkpoint now requires the **full
