@@ -372,12 +372,12 @@ def main():
                                     data=json.loads(reply.read())
                                 if args.source_pairs_probe:
                                     with (out/"source-pairs-rpc-methods.log").open("a") as trace:
-                                        trace.write(method+" OK\\n")
+                                        trace.write(method+" OK"+chr(10))
                                 return data
                             except HTTPError as failure:
                                 if args.source_pairs_probe:
                                     with (out/"source-pairs-rpc-methods.log").open("a") as trace:
-                                        trace.write(method+" HTTP "+str(failure.code)+"\\n")
+                                        trace.write(method+" HTTP "+str(failure.code)+chr(10))
                                 raise
                         # Idempotent same-project open, with no reload/DB edit.
                         current_open=http_call("project.program.open",
