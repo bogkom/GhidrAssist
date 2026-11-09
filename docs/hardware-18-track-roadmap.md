@@ -1,5 +1,44 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
+## GA-01/02/03/11/18 — 2026-11-09: real same-Program RESET / byte-witnessed JSR / MOVEC source correlation
+
+The native CPU32 Listing CFG fixture from #246 verified Ghidra's
+instruction flow with representative addresses, but not the **whole
+production source join**. This package adds an exact isolated CPU32
+binary with a plausible image-zero RESET PC at 0x100, an exact direct
+JSR to function 0x130, byte-proven MOVEA.L #0x180,A0 + JSR (A0)
+at 0x132/0x138, and a separate MOVEC D0,VBR at 0x144. A decoded
+BNE/BRA diamond places the JSR and MOVEC sites in mutually exclusive
+static arms. The synthetic indirect target at 0x180 contains a
+literal source candidate STORE to MC68332 SIMCR 0xFFFA00.
+A second independent function at 0x200 contains an indirect JSR
+at 0x206 and a MOVEC at 0x208 in a forward CFG path but is **outside**
+the bounded observed RESET direct-call subset. Both source functions
+share the same indirect target; they do not create new RESET edges.
+
+The new native headless GhidraScript reads original opcode words,
+validates decoded instructions, exact Function bodies and real Listing
+branch successors, then uses the actual packaged GhidrAssist JAR to
+call production GhidraHardwareFlowService.analyze on the **same**
+synthetic Program in generic CPU32 and explicitly selected MC68332
+modes. The generic-device report must refuse MCU-specific claims.
+The selected report must preserve two distinct same-function source
+pairs, the RESET-subset distinction, MAY-to-MM source classification
+and separate CFG relations NO_OBSERVED_ORDERED_ROUTE and
+POSSIBLE_JSR_BEFORE_MOVEC. GitHub Actions requires a native PASS
+banner after the complete Java25 extension build and preceding
+synthetic tests. Existing independent Java21 and hardware gates remain
+applicable. No alternate toy implementation supplies the production
+join output.
+
+A static JSR path does not prove an executed call or return;
+branch separation is not a runtime proof; a source MMIO write does
+not establish latched MM, and MOVEC does not establish selected VBR,
+ISR activity, physical chip-select map, or Review/Apply entitlement.
+The synthetic data is not ECU411 firmware. No production Ghidra
+project, profile/OAuth or stopped Wyse/Precision/Supervisor test
+worker is modified. GA-01/02/03/11/18 remain PARTIAL; GA-14 deferred.
+
 ## GA-01/02/03/11/18 — 2026-11-09: real Ghidra CPU32 branch/cycle CFG source-route acceptance
 
 The Java21 pure CFG site-order regression already covers diamond and
