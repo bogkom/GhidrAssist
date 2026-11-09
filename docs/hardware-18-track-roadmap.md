@@ -1,5 +1,34 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
+## GA-12/13/15/18 — 2026-11-09: gated creation of full-Program-bound Agentic Review evidence
+
+The previously integrated optional `Import Bound Checkpoint` path
+is complemented by explicit `Create Bound Checkpoint` on the real
+Query-tab GUI, with source file, NEW destination, new objective,
+MC68332/CPU32 choice and human confirmation. Background fingerprint
+scans must not freeze Swing EDT or auto-submit an analysis.
+
+Automation API v3 also offers the explicitly disabled-by-default
+`agentic.review.binding.create` operation: Bearer authorization PLUS
+operator opt-in, synthetic-only or separately authorized isolated
+review-copy write policy, exact Program path/import SHA/revision,
+bounded objective/profile and one safe filename inside an already
+configured local sidecar directory. No arbitrary paths, symlinks,
+overwrite, firmware writes, inherited old model, tools or Apply.
+
+The source file is checked before, after and at sidecar publication;
+the same is true of the full persisted Program/Listing fingerprint.
+A deterministic real Ghidra 12.1.4 PUBLIC synthetic TaskMonitor
+changes bytes **during** this inspection and must refuse both
+historical Review load and binding publication. The two-independent-
+JVM Xvfb/CodeBrowser/JSON-RPC/CLI lane checks actual GUI creation
+and authenticated server output after re-opening the Program,
+including missing consent, SHA/revision/auth/path/refusal.
+The checkpoint and manifested evidence remain statically observed
+and untrusted: SHA is not an author's signature, no saved grant
+or old approval transfers. GA-12/13/15/18 remain PARTIAL.
+
+
 ## GA-12/13/15/18 — 2026-11-09: opted-in bound Review in actual CodeBrowser
 
 The GA-12 full Program/Listing + source + project + installed analyzer

@@ -5,6 +5,7 @@ import hashlib
 import tempfile
 import json
 import os
+import re
 from pathlib import Path
 import sys
 from urllib.request import Request, urlopen
@@ -635,7 +636,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--session", default=os.environ.get(
         "GHIDRASSIST_AGENT_SESSION", str(Path.home() / ".local/state/ghidrassist-agent/session.json")))
-    parser.add_argument("action", choices=("status", "snapshot", "analyze", "task", "mmio", "review-preview", "profile-select", "function", "xrefs", "function-xrefs-body", "decompile", "decompile-status", "bundle", "paths", "listing", "listing-range", "goto", "tab-select", "table-select", "program-open", "review-prepare", "review-apply", "review-undo", "cancel", "report", "export", "agentic-findings", "agentic-checkpoint", "agentic-verify", "agentic-read", "agentic-resume-check", "agentic-review-draft", "agentic-lineage-verify", "agentic-lineage-chain-verify", "source-pairs", "source-pairs-checkpoint", "source-pairs-verify"))
+    parser.add_argument("action", choices=("status", "snapshot", "analyze", "task", "mmio", "review-preview", "profile-select", "function", "xrefs", "function-xrefs-body", "decompile", "decompile-status", "bundle", "paths", "listing", "listing-range", "goto", "tab-select", "table-select", "program-open", "review-prepare", "review-apply", "review-undo", "cancel", "report", "export", "agentic-findings", "agentic-checkpoint", "agentic-verify", "agentic-read", "agentic-resume-check", "agentic-review-draft", "agentic-lineage-verify", "agentic-lineage-chain-verify", "agentic-binding-create", "source-pairs", "source-pairs-checkpoint", "source-pairs-verify"))
     parser.add_argument("address", nargs="?")
     parser.add_argument("--filter", default="")
     parser.add_argument("--row", type=int, default=None)
@@ -650,6 +651,10 @@ def main():
                         help="Ordered oldest-to-newest local chain ancestor; repeat")
     parser.add_argument("--query", default="")
     parser.add_argument("--expected-revision", type=int, default=None)
+    parser.add_argument("--expected-import-sha256", default="")
+    parser.add_argument("--expected-program-path", default="")
+    parser.add_argument("--profile",choices=("CPU32_SURVEY","MC68332_USER_SELECTED"))
+    parser.add_argument("--confirm-local-sidecar",action="store_true")
     parser.add_argument("--expected-generation", default="")
     parser.add_argument("--page-size", type=int, default=32)
     parser.add_argument("--expected-entry", default="")
@@ -752,7 +757,8 @@ def main():
               "analyze": "hardware.analyze", "task": "hardware.task",
               "mmio": "hardware.mmio.rows", "review-preview": "hardware.review.preview", "profile-select": "hardware.profile.select", "function": "function.snapshot", "xrefs": "function.xrefs", "function-xrefs-body": "function.xrefs.body", "decompile": "decompiler.start", "decompile-status": "decompiler.status", "bundle": "analysis.bundle", "paths": "analysis.paths", "listing": "listing.snapshot", "listing-range": "listing.range",
               "goto": "listing.goto", "tab-select": "ui.tab.select", "table-select": "ui.table.select", "program-open": "project.program.open", "review-prepare": "hardware.review.prepare", "review-apply": "hardware.review.apply", "review-undo": "hardware.review.undo", "cancel": "hardware.cancel", "report": "analysis.report", "export": "analysis.export",
-              "source-pairs": "hardware.source_pairs.page"}[args.action]
+              "source-pairs": "hardware.source_pairs.page",
+              "agentic-binding-create": "agentic.review.binding.create"}[args.action]
     if method == "analysis.paths" and args.origin == "entry" and not args.address:
         parser.error("paths --origin entry requires an address")
     if method == "ui.tab.select" and not args.address:
@@ -763,7 +769,16 @@ def main():
         parser.error("program-open requires project-relative /path")
     if method == "hardware.review.prepare" and (args.row is None or args.row<0):
         parser.error("review-prepare requires --row nonnegative-index")
-    if args.expected_revision is not None and method not in ("listing.range", "function.xrefs.body","agentic.findings.page","hardware.source_pairs.page"):
+    if method=="agentic.review.binding.create":
+        if (not args.input or not args.output or not args.query or
+                args.expected_revision is None or
+                not re.fullmatch(r"[0-9a-fA-F]{64}",args.expected_import_sha256) or
+                not args.expected_program_path.startswith("/") or
+                not args.profile or not args.confirm_local_sidecar):
+            parser.error("agentic-binding-create requires --input/--output filename, --query, --profile, "
+                         "--expected-revision, --expected-import-sha256, --expected-program-path "
+                         "and --confirm-local-sidecar")
+    if args.expected_revision is not None and method not in ("listing.range", "function.xrefs.body","agentic.findings.page","hardware.source_pairs.page","agentic.review.binding.create"):
         parser.error("--expected-revision is only valid with listing-range, function-xrefs-body or agentic-findings")
     if args.expected_generation and method!="hardware.source_pairs.page":
         parser.error("--expected-generation is only valid with source-pairs")
@@ -786,7 +801,14 @@ def main():
     if method == "hardware.profile.select" and args.address not in ("CPU32_SURVEY", "MC68332_USER_SELECTED"):
         parser.error("profile-select requires CPU32_SURVEY or MC68332_USER_SELECTED")
     try:
-        params = ({"tab":args.address} if method=="ui.tab.select" else
+        params = ({"source_file":args.input,"output_file":args.output,
+                   "objective":args.query,"profile":args.profile,
+                   "expected_program_revision":args.expected_revision,
+                   "expected_import_sha256":args.expected_import_sha256,
+                   "expected_program_path":args.expected_program_path,
+                   "confirm_local_sidecar":args.confirm_local_sidecar}
+                  if method=="agentic.review.binding.create" else
+                  {"tab":args.address} if method=="ui.tab.select" else
                   {"table":args.address, "row":args.row} if method=="ui.table.select" else
                   {"path":args.address} if method=="project.program.open" else
                   {"index":args.row} if method=="hardware.review.prepare" else

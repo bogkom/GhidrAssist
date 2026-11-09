@@ -6,6 +6,8 @@ on:
       - 'src/main/java/ghidrassist/agent/react/ReActOrchestrator.java'
       - 'src/main/java/ghidrassist/agent/react/AgenticEvidenceRegistry.java'
       - 'src/main/java/ghidrassist/automation/AutomationServer.java'
+      - 'src/main/java/ghidrassist/automation/AutomationAgenticBinding.java'
+      - 'src/main/java/ghidrassist/agent/react/AgenticReviewProgramBinding.java'
       - 'src/main/java/ghidrassist/agent/react/FindingsCache.java'
       - 'tests/codebrowser_harness/**'
       - 'tools/ghidrassist-agent'
@@ -142,6 +144,10 @@ jobs:
                        "bound_review_source_tamper_refused",
                        "bound_review_new_chat_readonly",
                        "bound_review_no_auto_run_or_apply",
+                       "bound_review_gui_created_after_restart",
+                       "bound_review_gui_creation_no_staged_plan",
+                       "bound_review_api_created_first_jvm_verified_after_restart",
+                       "bound_review_api_capability_revoked_after_restart",
               "new_review_started_only_after_import",
               "new_checkpoint_saved_in_new_jvm",
               "ga12_cfg_fixed_point_restored_after_restart"):
@@ -171,6 +177,12 @@ jobs:
               "real_cli_resume_preflight_wrong_bearer_denied",
               "no_resume_without_new_review",
               "real_cli_new_review_draft_unapproved",
+              "real_cli_gated_sidecar_created",
+              "real_cli_sidecar_denied_invalid_revision",
+              "real_cli_sidecar_denied_invalid_sha",
+              "real_cli_sidecar_denied_no_consent",
+              "real_cli_sidecar_denied_path_traversal",
+              "real_cli_sidecar_denied_unauthorized",
               "real_cli_review_draft_no_overwrite",
               "real_cli_forged_draft_source_denied",
               "real_ghidra_java_review_import_validated",
