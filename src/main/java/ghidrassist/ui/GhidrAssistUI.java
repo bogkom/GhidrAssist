@@ -135,6 +135,12 @@ public class GhidrAssistUI extends JPanel {
         return hardwareAnalysisTab.automationCancel();
     }
 
+    public com.google.gson.JsonObject automationJointSourcePage(
+            int offset,int limit,Long expectedRevision,String expectedGeneration) {
+        return hardwareAnalysisTab.automationJointSourcePage(
+            offset,limit,expectedRevision,expectedGeneration);
+    }
+
     public com.google.gson.JsonObject automationReport(String format,int offset,int limit) {
         return hardwareAnalysisTab.automationReport(format,offset,limit);
     }
