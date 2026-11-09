@@ -136,7 +136,10 @@ public final class AutomationAgenticBinding {
                 Files.exists(destination,LinkOption.NOFOLLOW_LINKS))
             throw new IllegalArgumentException("Source missing or destination already exists");
         AgenticReviewProgramBinding.save(
-            source,destination,program,objective,mc68332,TaskMonitor.DUMMY);
+            source,destination,program,objective,mc68332,TaskMonitor.DUMMY,
+            ()->plugin.getCurrentProgram()==program &&
+                program.getModificationNumber()==revision &&
+                Boolean.getBoolean("ghidrassist.automation.agenticBindingCreate"));
         if(plugin.getCurrentProgram()!=program ||
                 program.getModificationNumber()!=revision)
             throw new IllegalStateException(
