@@ -3,8 +3,10 @@ on:
   pull_request:
     paths:
       - 'src/main/java/ghidrassist/hardware/HardwareResetIndirectVbrCorrelation.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareCfgSiteOrder.java'
       - 'src/main/java/ghidrassist/hardware/GhidraHardwareFlowService.java'
       - 'src/test/java/ghidrassist/hardware/HardwareResetIndirectVbrCorrelationSelfTest.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareCfgSiteOrderSelfTest.java'
       - '.github/workflows/ga01-ga11-reset-indirect-mm-vbr-correlation.yml'
   workflow_dispatch:
 permissions:
@@ -26,6 +28,10 @@ jobs:
           mkdir -p "$RUNNER_TEMP/ga01-indirect-vbr"
           javac --release 21 -d "$RUNNER_TEMP/ga01-indirect-vbr" \
             src/main/java/ghidrassist/hardware/HardwareResetIndirectVbrCorrelation.java \
-            src/test/java/ghidrassist/hardware/HardwareResetIndirectVbrCorrelationSelfTest.java
+            src/main/java/ghidrassist/hardware/HardwareCfgSiteOrder.java \
+            src/test/java/ghidrassist/hardware/HardwareResetIndirectVbrCorrelationSelfTest.java \
+            src/test/java/ghidrassist/hardware/HardwareCfgSiteOrderSelfTest.java
           java -cp "$RUNNER_TEMP/ga01-indirect-vbr" \
             ghidrassist.hardware.HardwareResetIndirectVbrCorrelationSelfTest
+          java -cp "$RUNNER_TEMP/ga01-indirect-vbr" \
+            ghidrassist.hardware.HardwareCfgSiteOrderSelfTest

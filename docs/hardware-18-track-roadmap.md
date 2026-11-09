@@ -1,5 +1,35 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
+## GA-01/02/03/11/18 — 2026-11-09: bounded same-function JSR/MOVEC CFG route evidence
+
+The source-only indirect-JSR ↔ MOVEC-to-VBR same-function report now
+adds a **separate** static instruction CFG order annotation based on
+actual Ghidra Listing successors. Distinct source sites receive one
+of POSSIBLE_JSR_BEFORE_MOVEC, POSSIBLE_MOVEC_BEFORE_JSR,
+POSSIBLE_BOTH_ORDERS, NO_OBSERVED_ORDERED_ROUTE or UNKNOWN. The
+bounded graph refuses incomplete decoding, missing or unreachable
+source PCs, off-graph edges, duplicate PCs, unmodeled computed jumps,
+CALLOTHER, outside-function jumps, truncated dataflow, over-budget
+functions and out-of-domain nodes. A computed JSR itself remains a
+CALL barrier with only **potential** fallthrough; neither call return
+nor any hardware side effect is established. Site co-location remains
+independent from CFG order; no indirect RESET edge is invented.
+
+The Java21 deterministic tests cover branch-separated sites, forward
+and reverse paths, loops, incomplete/unreachable/malformed CFG,
+source-list immutability, 24-bit bounds and the 1500-node cap. The
+existing real synthetic Ghidra 12.1.4 PUBLIC RESET/VBR script now
+requires the new source-only CFG section in the device-selected
+production report, plus generic CPU32 profile refusal. Acceptance:
+exact final SHA Java21 test, full Java25 Ghidra extension build,
+and genuine synthetic headless GitHub Actions. This is NOT evidence
+of executed instruction order, active MM, selected VBR, active ISR,
+physical device mapping or Review/Apply entitlement. No original
+ECU411 firmware, user projects/profile/OAuth or stopped
+Wyse/Precision/Supervisor tests touched. GA-01/02/03/11/18 PARTIAL;
+GA-14 deferred.
+
+
 ## GA-01/02/03/11/18 — 2026-11-09: bounded RESET / indirect SIMCR-MM / MOVEC-VBR co-location
 
 The production hardware flow previously emitted independent static

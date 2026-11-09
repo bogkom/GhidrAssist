@@ -95,9 +95,12 @@ public class GA18VerifyVectorResetCorrelation extends GhidraScript {
             if(!selectedText.contains(joinTitle) ||
                     !selectedText.contains("STATIC SAME-FUNCTION SOURCE CO-LOCATION ONLY") ||
                     !selectedText.contains("NOT proof of absent indirect MMIO or VBR") ||
-                    !selectedText.contains("selected VBR"))
+                    !selectedText.contains("selected VBR") ||
+                    !selectedText.contains("Bounded same-function JSR / MOVEC CFG routes") ||
+                    !selectedText.contains("CFG relation"))
                 throw new IllegalStateException(
                     "GA18 RESET-MM-VBR FAIL: selected MC68332 bounded static report");
+            println("GA18 CFG JSR MOVEC ROUTE REPORT PASS: bounded Listing CFG source only");
             println("GA18 RESET INDIRECT MM VBR PASS: selected-device gate, "+
                 "bounded same-Program evidence, no hardware execution claim");
         }
