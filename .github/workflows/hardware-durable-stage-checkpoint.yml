@@ -4,6 +4,7 @@ on:
     paths:
       - 'src/main/java/ghidrassist/hardware/HardwareDurableStageStore.java'
       - 'src/main/java/ghidrassist/hardware/HardwareDurableCfgReport.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareResetIndirectVbrCorrelation.java'
       - 'src/test/java/ghidrassist/hardware/HardwareDurableStageStoreSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/HardwareDurableCfgReportSelfTest.java'
       - '.github/workflows/hardware-durable-stage-checkpoint.yml'
@@ -28,6 +29,7 @@ jobs:
           javac --release 21 -d "$RUNNER_TEMP/ga12" \
             src/main/java/ghidrassist/hardware/HardwareDurableStageStore.java \
             src/main/java/ghidrassist/hardware/HardwareDurableCfgReport.java \
+            src/main/java/ghidrassist/hardware/HardwareResetIndirectVbrCorrelation.java \
             src/test/java/ghidrassist/hardware/HardwareDurableStageStoreSelfTest.java \
             src/test/java/ghidrassist/hardware/HardwareDurableCfgReportSelfTest.java
           java -cp "$RUNNER_TEMP/ga12" \
