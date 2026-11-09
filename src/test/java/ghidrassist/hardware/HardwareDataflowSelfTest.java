@@ -386,6 +386,66 @@ public final class HardwareDataflowSelfTest {
         }catch(IllegalArgumentException expected){deniedLongDisplacement=true;}
         ok(deniedLongDisplacement,
             "negative below signed 32-bit displacement also fails closed");
+        // CPU32 24-bit boundary: each candidate uses the source write
+        // width and byte intersection, never a guessed physical map.
+        // Byte at FFFFFF does not overlap tracked word 000000..000001;
+        // word at FFFFFF does (wrapped second byte), as does a 32-bit
+        // write at FFFFFD (wrapped fourth byte).
+        var boundary=HardwareDataflow.analyze(0,List.of(
+            st(0,STORE_DIRECT,null,0,0,0x1111,16,2L),
+            st(2,STORE_DIRECT,null,0xffffffL,0,null,8,4L),
+            st(4,STORE_DIRECT,null,0xffffffL,0,null,16,6L),
+            st(6,STORE_DIRECT,null,0,0,0x2222,16,8L),
+            st(8,STORE_DIRECT,null,0xfffffdL,0,null,32,10L),
+            st(10,STORE_DIRECT,null,0,0,0x3333,16)
+        ),Set.of(0L),100);
+        ok(boundary.snapshots.size()==6 &&
+            Integer.valueOf(0x1111).equals(boundary.snapshots.get(1)
+                .knownPeripheralWords.get(0L)) &&
+            !boundary.snapshots.get(2).knownPeripheralWords.containsKey(0L) &&
+            Integer.valueOf(0x2222).equals(boundary.snapshots.get(3)
+                .knownPeripheralWords.get(0L)) &&
+            !boundary.snapshots.get(4).knownPeripheralWords.containsKey(0L) &&
+            Integer.valueOf(0x3333).equals(boundary.snapshots.get(5)
+                .knownPeripheralWords.get(0L)),
+            "8/16/32-bit wrap invalidates only intersecting tracked words");
+        // A byte at FFFFFF DOES overlap the LOW byte of word FFFFFE.
+        var highBoundary=HardwareDataflow.analyze(0,List.of(
+            st(0,STORE_DIRECT,null,0xfffffeL,0,0xaaaa,16,2L),
+            st(2,STORE_DIRECT,null,0xffffffL,0,null,8,4L),
+            st(4,STORE_DIRECT,null,0xfffffeL,0,0xbbbb,16,6L),
+            st(6,STORE_DIRECT,null,0xfffffcL,0,null,32)
+        ),Set.of(0xfffffeL),100);
+        ok(!highBoundary.snapshots.get(1).knownPeripheralWords
+                .containsKey(0xfffffeL) &&
+            Integer.valueOf(0xbbbb).equals(
+                highBoundary.snapshots.get(2).knownPeripheralWords
+                    .get(0xfffffeL)) &&
+            !highBoundary.snapshots.get(3).knownPeripheralWords
+                .containsKey(0xfffffeL),
+            "high-edge byte and 32-bit overlapping write poison full word");
+        // Long crossing FFFFFE->000001 invalidates TWO independently
+        // tracked words, while an unrelated SIMCR word remains known.
+        var doubleWrap=HardwareDataflow.analyze(0,List.of(
+            st(0,STORE_DIRECT,null,0xfffffeL,0,0xaaaa,16,2L),
+            st(2,STORE_DIRECT,null,0,0,0xbbbb,16,4L),
+            st(4,STORE_DIRECT,null,simcr,0,0x40ca,16,6L),
+            st(6,STORE_DIRECT,null,0xfffffeL,0,null,32)
+        ),Set.of(0xfffffeL,0L,simcr),100);
+        ok(!doubleWrap.snapshots.get(3).knownPeripheralWords
+                .containsKey(0xfffffeL) &&
+            !doubleWrap.snapshots.get(3).knownPeripheralWords
+                .containsKey(0L) &&
+            Integer.valueOf(0x40ca).equals(
+                doubleWrap.snapshots.get(3).knownPeripheralWords.get(simcr)),
+            "32-bit wrapped write invalidates both edge words only");
+        ok(HardwareDataflow.mayTouchTrackedAddress(
+                0xffffffL,16,Set.of(0L)) &&
+            HardwareDataflow.mayTouchTrackedAddress(
+                0xfffffdL,32,Set.of(0L)) &&
+            !HardwareDataflow.mayTouchTrackedAddress(
+                0xffffffL,8,Set.of(0L)),
+            "tracked byte-level overlap at modulo-24 boundary");
         System.out.println("HardwareDataflowSelfTest OK");
     }
 }

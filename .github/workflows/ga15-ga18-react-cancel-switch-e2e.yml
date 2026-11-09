@@ -27,7 +27,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          curl -fLsS --retry 3 --connect-timeout 20 -o "$RUNNER_TEMP/ghidra.zip" \
+          curl -fLsS --retry 10 --retry-all-errors --retry-delay 5 --retry-max-time 360 --connect-timeout 20 --max-time 240 -o "$RUNNER_TEMP/ghidra.zip" \
             "https://github.com/NationalSecurityAgency/ghidra/releases/download/Ghidra_12.1.4_build/ghidra_12.1.4_PUBLIC_20260921.zip"
           echo "ddac49f903da9d5bac833e5cc79395098b9c33cfd3279be5f31bd00387d2d4db  $RUNNER_TEMP/ghidra.zip" | sha256sum -c -
           mkdir -p "$RUNNER_TEMP/ghidra"
@@ -39,6 +39,19 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # Ghidra's isolated wrapper defaults to a 10s Gradle-download timeout.
+          # Increase only this CI copy; preserve Ghidra/extension SHA checks.
+          wrapper="$(find "$GHIDRA_INSTALL_DIR/support/gradle" \
+            -type f -name 'gradle-wrapper.properties' -print -quit)"
+          if test -n "$wrapper"; then
+            if grep -q '^networkTimeout=' "$wrapper"; then
+              sed -i 's/^networkTimeout=.*/networkTimeout=120000/' "$wrapper"
+            else
+              printf '\nnetworkTimeout=120000\n' >> "$wrapper"
+            fi
+          else
+            echo "No editable Gradle wrapper properties; use the original verified Ghidra launcher."
+          fi
           "$GHIDRA_INSTALL_DIR/support/gradle/gradlew" --no-daemon buildExtension
           EXTENSION="$(find dist -maxdepth 1 -type f -name 'ghidra_12.1.4_PUBLIC_*_GhidrAssist.zip' -print -quit)"
           test -s "$EXTENSION"
