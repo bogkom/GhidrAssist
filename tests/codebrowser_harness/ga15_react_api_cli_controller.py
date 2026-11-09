@@ -213,6 +213,60 @@ def main():
         ensure_ascii=False,sort_keys=True,separators=(",",":")).encode()).hexdigest()
     assert verified["payload_sha256"]==saved["payload_sha256"]==digest
 
+    # GA-12/13/15/18: a REAL authenticated native CodeBrowser server can
+    # create an explicitly confirmed, local-only, full-Program sidecar.
+    # This does NOT write firmware or grant Review/Apply permissions.
+    params=["--input",checkpoint.name,
+            "--output","ga15-api-created-binding.json",
+            "--query","Independent static synthetic MMIO bound review",
+            "--profile","CPU32_SURVEY",
+            "--expected-revision",evidence["programRevision"],
+            "--expected-import-sha256",evidence["importSha256"],
+            "--expected-program-path","/synthetic-mmio.bin"]
+    created_binding=out/"ga15-api-created-binding.json"
+    command(args.session,"agentic-binding-create",*params,success=False)
+    assert not created_binding.exists()
+    wrong_revision=list(params)
+    wrong_revision[wrong_revision.index("--expected-revision")+1]=(
+        evidence["programRevision"]+1)
+    command(args.session,"agentic-binding-create",*wrong_revision,
+            "--confirm-local-sidecar",success=False)
+    assert not created_binding.exists()
+    wrong_sha=list(params)
+    wrong_sha[wrong_sha.index("--expected-import-sha256")+1]="0"*64
+    command(args.session,"agentic-binding-create",*wrong_sha,
+            "--confirm-local-sidecar",success=False)
+    assert not created_binding.exists()
+    wrong_profile=list(params)
+    wrong_profile[wrong_profile.index("--profile")+1]="MC68332_USER_SELECTED"
+    # An explicit MC68332 selection is permitted as a *separate* typed
+    # hypothesis, but the API still demands original Program/receipt.
+    # Check the canonical CPU32 path for this synthetic fixture.
+    made=command(args.session,"agentic-binding-create",*params,
+                 "--confirm-local-sidecar")
+    assert made["binding"]["created"] is True,made
+    assert made["binding"]["profile"]=="CPU32_SURVEY",made
+    for key in ("new_review_approved","resumable_ai_session",
+                "tool_execution_authorized","apply_authorized",
+                "old_plan_inherited"):
+        assert made["binding"][key] is False,(key,made)
+    assert created_binding.is_file()
+    assert created_binding.stat().st_mode & 0o777==0o600
+    command(args.session,"agentic-binding-create",*params,
+            "--confirm-local-sidecar",success=False)
+    assert created_binding.is_file()
+    traversal=list(params)
+    traversal[traversal.index("--output")+1]="../unsafe.json"
+    command(args.session,"agentic-binding-create",*traversal,
+            "--confirm-local-sidecar",success=False)
+    assert not (out.parent/"unsafe.json").exists()
+    wrong_auth=out/"ga15-binding-unauth.json"
+    wrong_auth.write_text(json.dumps({
+        **session,"token":"deliberately-not-the-bearer"}))
+    command(wrong_auth,"agentic-binding-create",*params,
+            "--confirm-local-sidecar",success=False)
+    wrong_auth.unlink()
+
     # Production CLI preflight must compare the entire REAL ReAct evidence
     # through authenticated Ghidra JSON-RPC, never re-execute model/tools.
     checked=command(args.session,"agentic-resume-check","--input",checkpoint)
@@ -413,6 +467,12 @@ def main():
         "real_cli_resume_preflight_wrong_bearer_denied":True,
         "no_resume_without_new_review":True,
         "real_cli_new_review_draft_unapproved":True,
+        "real_cli_gated_sidecar_created":True,
+        "real_cli_sidecar_denied_invalid_revision":True,
+        "real_cli_sidecar_denied_invalid_sha":True,
+        "real_cli_sidecar_denied_no_consent":True,
+        "real_cli_sidecar_denied_path_traversal":True,
+        "real_cli_sidecar_denied_unauthorized":True,
         "real_cli_review_draft_no_overwrite":True,
         "real_cli_forged_draft_source_denied":True,
         "real_ghidra_java_review_import_validated":True,
