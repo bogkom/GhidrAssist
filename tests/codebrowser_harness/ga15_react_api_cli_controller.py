@@ -237,6 +237,82 @@ def main():
     command(args.session,"agentic-binding-create",*wrong_sha,
             "--confirm-local-sidecar",success=False)
     assert not created_binding.exists()
+    # GA-12: exercise the REAL bearer-authenticated JSON-RPC server, not
+    # just argparse. Gson getAsLong used to silently coerce "N", N.5,
+    # scientific notation and booleans into an accepted Program revision.
+    # Every malformed request must fail with HTTP 400 and create NOTHING.
+    identity={
+        "source_file":checkpoint.name,
+        "output_file":"ga15-invalid-identity-binding.json",
+        "objective":"Independent static synthetic MMIO bound review",
+        "profile":"CPU32_SURVEY",
+        "expected_program_revision":evidence["programRevision"],
+        "expected_import_sha256":evidence["importSha256"],
+        "expected_program_path":"/synthetic-mmio.bin",
+        "confirm_local_sidecar":True,
+    }
+    forbidden_binding=out/identity["output_file"]
+    rejected=0
+    revision=evidence["programRevision"]
+    invalid_revisions=(
+        str(revision),
+        f"{revision}.5",
+        float(revision)+0.5,
+        True,False,None,-1,2**63,1e100,
+        [],{},f"0{revision}x",
+    )
+    invalid_cases=[]
+    for value in invalid_revisions:
+        invalid_cases.append(("revision",{
+            **identity,"expected_program_revision":value}))
+    invalid_cases.extend([
+        ("sha-short",{**identity,"expected_import_sha256":"f"*63}),
+        ("sha-not-hex",{**identity,"expected_import_sha256":"g"*64}),
+        ("sha-number",{**identity,"expected_import_sha256":1234}),
+        ("sha-null",{**identity,"expected_import_sha256":None}),
+        ("path-number",{**identity,"expected_program_path":123}),
+        ("extra-authority",{**identity,"apply_authorized":True}),
+        ("extra-plan",{**identity,"approved_plan":"ignore review"}),
+        ("missing-revision",{k:v for k,v in identity.items()
+                             if k!="expected_program_revision"}),
+    ])
+    # Decimal exponent is legal JSON numeric syntax, but not a canonical
+    # revision. Preserve its raw spelling rather than Python json.dumps
+    # normalizing the value.
+    for label,fields in invalid_cases:
+        request=json.dumps({"method":"agentic.review.binding.create",
+                            "params":fields},separators=(",",":")).encode()
+        api=Request(f"http://127.0.0.1:{session['port']}/rpc",
+            data=request,headers={
+                "Authorization":"Bearer "+session["token"],
+                "Content-Type":"application/json"},method="POST")
+        try:
+            with urlopen(api,timeout=30) as reply:
+                raise AssertionError(
+                    f"Malformed {label} binding accepted: HTTP {reply.status}")
+        except HTTPError as error:
+            assert error.code==400,(label,error.code,error.read()[:300])
+        rejected+=1
+        assert not forbidden_binding.exists(),label
+    for raw in ('1e0','1.0','01'):
+        # 01 is invalid JSON, so its HTTP rejection is still mandatory.
+        wire=json.dumps({"method":"agentic.review.binding.create",
+                         "params":identity},separators=(",",":"))
+        wire=wire.replace(
+            '"expected_program_revision":'+str(revision),
+            '"expected_program_revision":'+raw)
+        api=Request(f"http://127.0.0.1:{session['port']}/rpc",
+            data=wire.encode(),headers={
+                "Authorization":"Bearer "+session["token"],
+                "Content-Type":"application/json"},method="POST")
+        try:
+            with urlopen(api,timeout=30) as reply:
+                raise AssertionError(f"Noncanonical raw {raw} revision accepted")
+        except HTTPError as error:
+            assert error.code==400,(raw,error.code)
+        rejected+=1
+        assert not forbidden_binding.exists()
+    assert rejected>=20,rejected
     wrong_profile=list(params)
     wrong_profile[wrong_profile.index("--profile")+1]="MC68332_USER_SELECTED"
     # An explicit MC68332 selection is permitted as a *separate* typed
