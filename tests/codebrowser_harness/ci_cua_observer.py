@@ -9,6 +9,20 @@ import subprocess
 import time
 from gui06_protocol import CLASS,TITLE,PROGRAM,ADDRESS,FUNCTION
 
+def read_complete_ready(ready: Path, deadline: float):
+    """Observe one complete CI host handshake; never accept partial JSON."""
+    while True:
+        if time.monotonic() > deadline:
+            raise RuntimeError("NO_COMPLETE_LIVE_CUA_READY")
+        try:
+            obj=json.loads(ready.read_text())
+            if not isinstance(obj,dict):
+                raise RuntimeError("INVALID_LIVE_CUA_READY")
+            return obj
+        except (FileNotFoundError,UnicodeError,json.JSONDecodeError):
+            time.sleep(.1)
+
+
 def main():
     p=argparse.ArgumentParser()
     p.add_argument("--workspace",required=True)
@@ -26,16 +40,7 @@ def main():
     # one-shot json.loads then races the writer, turning the expected
     # window-changed BLOCKED test into an unrelated observer crash.
     # Wait only until the original bounded deadline, never synthesize ACK.
-    obj=None
-    while obj is None:
-        if time.monotonic()>end:
-            raise RuntimeError("NO_COMPLETE_LIVE_CUA_READY")
-        try:
-            obj=json.loads(ready.read_text())
-            if not isinstance(obj,dict):
-                raise RuntimeError("INVALID_LIVE_CUA_READY")
-        except (FileNotFoundError,UnicodeError,json.JSONDecodeError):
-            time.sleep(.1)
+    obj=read_complete_ready(ready,end)
     assert obj["action"]=="GA18_NATIVE_CUA_LIVE_READY"
     assert obj["run_id"]==a.run_id
     assert obj["window_class"]==CLASS and obj["window_title"]==TITLE
