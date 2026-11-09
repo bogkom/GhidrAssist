@@ -198,6 +198,18 @@ public final class HardwareFlowStageCache {
         return new Result(calculated,false);
     }
 
+    /** Read-only generation used by Automation source-page cursors.
+     * A clear invalidates the generation even if the Program revision is unchanged.
+     */
+    public static long sourcePageEpoch(Program program) {
+        if(program==null)throw new IllegalArgumentException("Missing Program");
+        synchronized(COMPLETED){return EPOCHS.begin(program);}
+    }
+    public static boolean sourcePageEpochCurrent(Program program,long generation) {
+        if(program==null)return false;
+        synchronized(COMPLETED){return EPOCHS.current(program,generation);}
+    }
+
     public static void clear(Program program){
         if(program==null)return;
         synchronized(COMPLETED){
