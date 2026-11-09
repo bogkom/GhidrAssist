@@ -32,6 +32,9 @@ def build():
         "4e90"                # JSR (A0)
         "4e7b0801"            # MOVEC D0,VBR
         "4e75")              # RTS
+    # Disconnected unresolved computed JSR (A1): no bounded MOVEA proof.
+    # It is an omitted/UNKNOWN source, never an absent-call conclusion.
+    b[0x240:0x244]=bytes.fromhex("4e914e75")
     return bytes(b)
 
 def main():
@@ -51,6 +54,8 @@ def main():
         "disconnected_function":"00000200",
         "disconnected_indirect_jsr":"00000206",
         "disconnected_movec":"00000208",
+        "unresolved_indirect_site":"00000240",
+        "unresolved_indirect_evidence":"UNKNOWN",
         "indirect_target":"00000180",
         "mmio_source_candidate":"00fffa00",
         "sha256":hashlib.sha256(data).hexdigest(),
