@@ -127,6 +127,99 @@ public final class HardwareTwoHopConsensus {
             first.effectiveAddress(),first.writtenWord(),first.bits(),rows);
     }
 
+    /**
+     * Scope one independent source cohort to the *verified outer bridge*
+     * and an exact leaf STORE. Other bridge/leaf functions do not become
+     * alleged missing CALLs for this particular leaf. Every caller entering
+     * the same bridge must still have one decoded source row per STORE.
+     *
+     * Solver-global uncertainty (including pagination or other unknown
+     * CALLs) conservatively suppresses sampled agreement even in a
+     * seemingly complete independent cohort.
+     */
+    public static Finding inspectScoped(
+            Collection<HardwareCallsiteRegisterFlow.Call> outer,
+            HardwareTwoHopRegisterFlow.Summary summary,
+            long bridge,long leaf,long store) {
+        if(outer==null || summary==null || bridge<0 || leaf<0 || store<0 ||
+                outer.size()>HardwareTwoHopRegisterFlow.MAX_OUTER_CALLS)
+            throw new IllegalArgumentException("Invalid two-hop source cohort");
+        List<HardwareCallsiteRegisterFlow.Call> selected=new ArrayList<>();
+        Set<String> identities=new HashSet<>();
+        for(var c:outer) {
+            if(c==null || !identities.add(c.caller()+":"+c.callPc()))
+                throw new IllegalArgumentException("Duplicate/null outer CALL");
+            if(Objects.equals(c.directCallee(),bridge))selected.add(c);
+        }
+        selected.sort(Comparator.comparingLong(
+            HardwareCallsiteRegisterFlow.Call::caller)
+            .thenComparingLong(HardwareCallsiteRegisterFlow.Call::callPc));
+        if(selected.isEmpty())
+            return blank(State.NO_SAMPLED_CALLS,leaf,store,0,List.of());
+        List<HardwareTwoHopRegisterFlow.Candidate> rows=new ArrayList<>();
+        for(var hit:summary.rows())
+            if(hit.bridgeEntry()==bridge && hit.leafEntry()==leaf &&
+                    hit.storePc()==store)
+                rows.add(hit);
+        rows.sort(Comparator.comparingLong(
+            HardwareTwoHopRegisterFlow.Candidate::outerCaller)
+            .thenComparingLong(HardwareTwoHopRegisterFlow.Candidate::outerCallPc));
+        boolean incomplete=summary.sampled()!=outer.size() ||
+            summary.displayTruncated() ||
+            summary.possibleStores()!=summary.rows().size() ||
+            summary.rejectedOuter()!=0 || summary.rejectedBridge()!=0 ||
+            summary.unresolvedInner()!=0 || summary.rejectedLeaf()!=0 ||
+            summary.unknownInnerRegisters()!=0 || summary.solverTruncated()!=0 ||
+            summary.unknownAliases()!=0 || rows.size()!=selected.size();
+        // A bridge is validated as exactly one direct inner CALL. Rows
+        // from the same bridge targeting a different leaf are inconsistent.
+        for(var r:summary.rows())
+            if(r.bridgeEntry()==bridge && r.leafEntry()!=leaf)
+                incomplete=true;
+        for(var c:selected) {
+            if(c.callerIncomplete() || c.agreedRegisters().isEmpty() ||
+                    c.agreedRegisters().keySet().stream().allMatch("A7"::equals))
+                incomplete=true;
+            int found=0;
+            for(var r:rows)
+                if(r.outerCaller()==c.caller() && r.outerCallPc()==c.callPc()) {
+                    found++;
+                    if(r.innerCallPc()<bridge ||
+                            r.effectiveAddress()==null ||
+                            (r.bits()!=8 && r.bits()!=16 && r.bits()!=32) ||
+                            r.priorUnknownCall() || r.priorUnknownStore())
+                        incomplete=true;
+                }
+            if(found!=1)incomplete=true;
+        }
+        if(incomplete)return blank(State.INCOMPLETE,leaf,store,selected.size(),rows);
+        var first=rows.get(0);
+        boolean agreed=rows.stream().allMatch(r->
+            Objects.equals(r.effectiveAddress(),first.effectiveAddress()) &&
+            Objects.equals(r.writtenWord(),first.writtenWord()) &&
+            r.bits()==first.bits());
+        if(!agreed)
+            return blank(State.SAMPLED_DIVERGENCE,leaf,store,
+                selected.size(),rows);
+        return new Finding(State.SAMPLED_AGREEMENT,leaf,store,
+            selected.size(),first.effectiveAddress(),first.writtenWord(),
+            first.bits(),rows);
+    }
+
+    public static Finding inspectScopedRevisionBound(
+            HardwareAnalysisRevision captured,
+            Supplier<HardwareAnalysisRevision> current,
+            Collection<HardwareCallsiteRegisterFlow.Call> outer,
+            HardwareTwoHopRegisterFlow.Summary summary,
+            long bridge,long leaf,long store) {
+        if(captured==null || current==null)
+            throw new IllegalArgumentException("Missing revision guard");
+        if(!captured.same(current.get()))return stale(leaf,store);
+        Finding finding=inspectScoped(outer,summary,bridge,leaf,store);
+        if(!captured.same(current.get()))return stale(leaf,store);
+        return finding;
+    }
+
     private static String hex(long x){
         return String.format(java.util.Locale.ROOT,"0x%08X",x);
     }
@@ -145,40 +238,52 @@ public final class HardwareTwoHopConsensus {
         b.append("## Two-hop cross-CALL MMIO source agreement (GA-02/03)\n\n")
          .append("- **SOURCE-ONLY MAY-CANDIDATES; NOT HARDWARE PROOF**. ")
          .append("Sampled direct outer CALL -> bridge CALL -> leaf STORE. ")
+         .append("Each bridge/leaf/STORE cohort is independent; other ")
+         .append("leaf functions or distinct STORE PCs are not borrowed. ")
          .append("An agreement does NOT prove all callers, actual execution, ")
          .append("SIMCR/MM, ISR, physical bus mapping or Review/Apply.\n");
         if(omittedOuter>0)
             b.append("- **INCOMPLETE INPUT:** ").append(omittedOuter)
              .append(" omitted outer CALL sites; sampled agreement withheld.\n");
-        TreeMap<Long,TreeSet<Long>> sites=new TreeMap<>();
+        // Separate exact bridge/leaf/store cohorts. Multiple leaf
+        // functions or multiple STORE PCs do not borrow one another's
+        // caller identities or create spurious missing-source counts.
+        TreeMap<Long,TreeMap<Long,TreeSet<Long>>> sites=new TreeMap<>();
         for(var r:summary.rows())
-            sites.computeIfAbsent(r.leafEntry(),k->new TreeSet<>()).add(r.storePc());
-        b.append("\n| Leaf | STORE PC | Outer CALLs | Status | Address | Word | Bits |\n")
-         .append("|---|---|---:|---|---|---|---:|\n");
+            sites.computeIfAbsent(r.bridgeEntry(),k->new TreeMap<>())
+                .computeIfAbsent(r.leafEntry(),k->new TreeSet<>())
+                .add(r.storePc());
+        b.append("\n| Bridge | Leaf | STORE PC | Outer CALLs | Status | Address | Word | Bits |\n")
+         .append("|---|---|---|---:|---|---|---|---:|\n");
         int displayed=0;
-        for(var target:sites.entrySet())
-            for(long store:target.getValue()) {
-                if(displayed>=maxRows){
-                    b.append("- **INCOMPLETE DISPLAY:** extra leaf STORE ")
-                     .append("sites omitted by report budget.\n\n");
-                    return b.toString();
+        for(var group:sites.entrySet())
+            for(var leaf:group.getValue().entrySet())
+                for(long store:leaf.getValue()) {
+                    if(displayed>=maxRows){
+                        b.append("- **INCOMPLETE DISPLAY:** extra leaf STORE ")
+                         .append("sites omitted by report budget.\n\n");
+                        return b.toString();
+                    }
+                    Finding hit=inspectScopedRevisionBound(captured,current,
+                        outer,summary,group.getKey(),leaf.getKey(),store);
+                    if(omittedOuter>0 && hit.state()==State.SAMPLED_AGREEMENT)
+                        hit=blank(State.INCOMPLETE,leaf.getKey(),store,
+                            hit.sampledOuterCalls(),hit.provenance());
+                    b.append("| ").append(hex(group.getKey()))
+                     .append(" | ").append(hex(leaf.getKey()))
+                     .append(" | ").append(hex(store))
+                     .append(" | ").append(hit.sampledOuterCalls())
+                     .append(" | ").append(hit.state())
+                     .append(" | ").append(hit.address()==null?
+                        "UNKNOWN":hex(hit.address()))
+                     .append(" | ").append(hit.word()==null?
+                        "UNKNOWN":hex(hit.word()&0xffffL))
+                     .append(" | ").append(hit.bits()==0?
+                        "UNKNOWN":hit.bits())
+                     .append(" |\n");
+                    displayed++;
                 }
-                Finding hit=inspectRevisionBound(captured,current,outer,summary,
-                    target.getKey(),store);
-                if(omittedOuter>0 && hit.state()==State.SAMPLED_AGREEMENT)
-                    hit=blank(State.INCOMPLETE,target.getKey(),store,
-                        hit.sampledOuterCalls(),hit.provenance());
-                b.append("| ").append(hex(target.getKey())).append(" | ")
-                 .append(hex(store)).append(" | ").append(hit.sampledOuterCalls())
-                 .append(" | ").append(hit.state()).append(" | ")
-                 .append(hit.address()==null?"UNKNOWN":hex(hit.address()))
-                 .append(" | ").append(hit.word()==null?"UNKNOWN":
-                    hex(hit.word()&0xffffL))
-                 .append(" | ").append(hit.bits()==0?"UNKNOWN":hit.bits())
-                 .append(" |\n");
-                displayed++;
-            }
-        if(displayed==0)b.append("| — | — | 0 | NO_SAMPLED_CALLS | ")
+        if(displayed==0)b.append("| — | — | — | 0 | NO_SAMPLED_CALLS | ")
             .append("UNKNOWN | UNKNOWN | UNKNOWN |\n");
         return b.append("\n").toString();
     }
