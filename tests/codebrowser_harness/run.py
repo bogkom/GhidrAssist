@@ -367,8 +367,18 @@ def main():
                                 headers={"Authorization":"Bearer "+token,
                                          "Content-Type":"application/json"},
                                 method="POST")
-                            with urlopen(call,timeout=30) as reply:
-                                return json.loads(reply.read())
+                            try:
+                                with urlopen(call,timeout=30) as reply:
+                                    data=json.loads(reply.read())
+                                if args.source_pairs_probe:
+                                    with (out/"source-pairs-rpc-methods.log").open("a") as trace:
+                                        trace.write(method+" OK\\n")
+                                return data
+                            except HTTPError as failure:
+                                if args.source_pairs_probe:
+                                    with (out/"source-pairs-rpc-methods.log").open("a") as trace:
+                                        trace.write(method+" HTTP "+str(failure.code)+"\\n")
+                                raise
                         # Idempotent same-project open, with no reload/DB edit.
                         current_open=http_call("project.program.open",
                             {"path":"/synthetic-mmio.bin"})
