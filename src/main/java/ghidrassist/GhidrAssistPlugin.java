@@ -75,6 +75,12 @@ public class GhidrAssistPlugin extends ProgramPlugin {
         if(previous!=null && previous!=program) {
             ghidrassist.agent.react.AgenticEvidenceRegistry.shared()
                 .invalidate(previous);
+            // GA-12/18: returning to the same Program must not revive a
+            // source-page generation captured before a CodeBrowser switch.
+            // Retire the completed CFG stage too, even if its Ghidra
+            // modification number and original executable SHA are unchanged.
+            ghidrassist.hardware.HardwareFlowStageCache.clear(previous);
+            ghidrassist.hardware.HardwareEvidenceCache.clear(previous);
         }
         super.programActivated(program);
         if (provider != null) {
