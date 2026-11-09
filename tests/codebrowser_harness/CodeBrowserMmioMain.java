@@ -332,6 +332,20 @@ public final class CodeBrowserMmioMain {
                         !(Boolean)field(controller,"isQueryRunning") &&
                         field(controller,"currentOrchestrator")==null,
                     "Historical bound Review mutated Program or started old AI");
+                // The first JVM's explicit API creation capability MUST NOT
+                // survive the independent second Ghidra process, even though
+                // the local sidecar remains valid read-only data.
+                boolean creationDisabledAfterRestart=false;
+                try {
+                    ghidrassist.automation.AutomationAgenticBinding.create(
+                        ext,first,new JsonObject());
+                }catch(IllegalStateException expected){
+                    creationDisabledAfterRestart=
+                        expected.getMessage()!=null &&
+                        expected.getMessage().contains("not enabled");
+                }
+                require(creationDisabledAfterRestart,
+                    "Old Automation sidecar creation capability survived restart");
                 // The FIRST JVM also published a separately authenticated,
                 // operator-directory-scoped Automation API sidecar. The
                 // SECOND JVM must independently validate it against the same
@@ -479,6 +493,8 @@ public final class CodeBrowserMmioMain {
                 check.addProperty("bound_review_gui_created_after_restart",true);
                 check.addProperty("bound_review_gui_creation_no_staged_plan",true);
                 check.addProperty("bound_review_api_created_first_jvm_verified_after_restart",true);
+                check.addProperty("bound_review_api_capability_revoked_after_restart",
+                    creationDisabledAfterRestart);
                 check.addProperty("wrong_program_refused",wrongProgramDenied);
                 check.addProperty("tampered_source_refused",corruptedDenied);
                 check.addProperty("incomplete_source_refused",incompleteDenied);
