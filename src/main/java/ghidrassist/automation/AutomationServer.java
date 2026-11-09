@@ -421,6 +421,14 @@ public final class AutomationServer implements AutoCloseable {
                             "Subsequent source page requires Program revision and generation");
                     result.add("source_pairs",provider.getUI().automationJointSourcePage(
                         offset,limit,expectedRevision,generation));
+                } else if ("analysis.report.manifest".equals(method)) {
+                    if(args.size()!=0)
+                        throw new IllegalArgumentException(
+                            "Read-only report manifest takes no request arguments");
+                    GhidrAssistProvider provider=plugin.getAutomationProvider();
+                    if(provider==null)
+                        throw new IllegalStateException("GhidrAssist UI unavailable");
+                    result.add("manifest",provider.getUI().automationReportManifest());
                 } else if ("analysis.report".equals(method) || "analysis.export".equals(method)) {
                     GhidrAssistProvider provider=plugin.getAutomationProvider();
                     if(provider==null) throw new IllegalStateException("GhidrAssist UI unavailable");
