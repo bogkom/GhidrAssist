@@ -126,6 +126,29 @@ public final class HardwareFunctionRenameService {
         return snapshot;
     }
 
+    /**
+     * Safe default for live read-only GA-13 CSV export. The existing
+     * `audit()` takes a consistent snapshot; this method additionally
+     * rejects edits, Undo/Redo and Program switches that occur while the
+     * CSV is being assembled. No persistent state and no Apply.
+     */
+    public static String auditCsv(Program program) {
+        if(program==null)
+            throw new IllegalArgumentException("No Program for rename CSV");
+        long revision=program.getModificationNumber();
+        String sha=program.getExecutableSHA256();
+        if(sha==null)sha="UNKNOWN";
+        var fence=HardwareAnalysisRevision.capture(program,revision,
+            program.getLanguageID().toString(),sha,true);
+        var snapshot=audit(program);
+        return snapshot.csvRevisionBound(fence,
+            ()->HardwareAnalysisRevision.capture(program,
+                program.getModificationNumber(),
+                program.getLanguageID().toString(),
+                program.getExecutableSHA256()==null?
+                    "UNKNOWN":program.getExecutableSHA256(),true));
+    }
+
     public static Outcome apply(Program program,
             List<HardwareFunctionNamingReview.Proposal> accepted,
             HardwareAnalysisRevision reviewedRevision) throws Exception {
