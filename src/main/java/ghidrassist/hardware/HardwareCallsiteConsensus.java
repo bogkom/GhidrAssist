@@ -44,6 +44,82 @@ public final class HardwareCallsiteConsensus {
         }
     }
 
+    /**
+     * Production report section: bounded, never a program-wide side-effect
+     * claim. Unsampled caller inputs suppress any apparently unanimous row.
+     */
+    public static String markdown(
+            Collection<HardwareCallsiteRegisterFlow.Call> calls,
+            HardwareCallsiteRegisterFlow.Summary summary,
+            int omittedCallSites,int maxPairs,
+            HardwareAnalysisRevision captured,
+            Supplier<HardwareAnalysisRevision> current){
+        if(calls==null || summary==null || omittedCallSites<0 ||
+                maxPairs<1 || maxPairs>48 || captured==null || current==null)
+            throw new IllegalArgumentException("Invalid CALL reconciliation report");
+        StringBuilder out=new StringBuilder();
+        out.append("## Cross-CALL MMIO source agreement (GA-02/03)\n\n")
+            .append("- **SOURCE-ONLY MAY-CANDIDATES, NEVER HARDWARE PROOF**: ")
+            .append("an agreement covers only distinct sampled direct CALL ")
+            .append("sites for one callee STORE, not all callers, execution, ")
+            .append("active SIMCR/MM, or Review/Apply. Unknown input remains ")
+            .append("UNKNOWN.\n");
+        if(omittedCallSites>0)
+            out.append("- **INCOMPLETE SOURCE INVENTORY:** ")
+                .append(omittedCallSites)
+                .append(" caller contexts not analyzed; agreement withheld.\n");
+        java.util.TreeMap<Long,java.util.TreeSet<Long>> locations=
+            new java.util.TreeMap<>();
+        for(var row:summary.candidates())
+            locations.computeIfAbsent(row.callee(),k->new java.util.TreeSet<>())
+                .add(row.storePc());
+        out.append("\n| Callee | STORE PC | Sampled CALLs | Status | ")
+            .append("Candidate address | Word | Bits |\n")
+            .append("|---|---|---:|---|---|---|---:|\n");
+        int reported=0;
+        for(var target:locations.entrySet())
+            for(long storePc:target.getValue()){
+                int count=0;
+                for(var call:calls)
+                    if(call!=null && Objects.equals(call.directCallee(),
+                            target.getKey()))
+                        count++;
+                if(count<2)continue;
+                if(reported>=maxPairs){
+                    out.append("- **INCOMPLETE DISPLAY:** additional CALL ")
+                        .append("sites omitted by reconciliation row budget.\n");
+                    return out.append("\n").toString();
+                }
+                Finding observation=inspectRevisionBound(captured,current,
+                    calls,summary,target.getKey(),storePc);
+                if(omittedCallSites>0 &&
+                        observation.state()==State.SAMPLED_AGREEMENT)
+                    observation=incomplete(target.getKey(),storePc,
+                        observation.sampledCallSites(),
+                        observation.provenance());
+                out.append("| ").append(hex(target.getKey()))
+                    .append(" | ").append(hex(storePc))
+                    .append(" | ").append(observation.sampledCallSites())
+                    .append(" | ").append(observation.state())
+                    .append(" | ").append(observation.address()==null?
+                        "UNKNOWN":hex(observation.address()))
+                    .append(" | ").append(observation.word()==null?
+                        "UNKNOWN":hex(observation.word()&0xffffL))
+                    .append(" | ").append(observation.bits()==0?
+                        "UNKNOWN":observation.bits())
+                    .append(" |\n");
+                reported++;
+            }
+        if(reported==0)
+            out.append("| — | — | 0 | NO_SAMPLED_CALLS | UNKNOWN | ")
+                .append("UNKNOWN | UNKNOWN |\n");
+        return out.append("\n").toString();
+    }
+
+    private static String hex(long value) {
+        return String.format(java.util.Locale.ROOT,"0x%08X",value);
+    }
+
     /** Fail closed if the caller's Ghidra revision changed while evaluating. */
     public static Finding inspectRevisionBound(
             HardwareAnalysisRevision captured,
