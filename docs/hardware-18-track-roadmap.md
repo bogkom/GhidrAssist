@@ -1,5 +1,38 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
+## GA-12/13/15/18 — 2026-11-09: opted-in bound Review in actual CodeBrowser
+
+The GA-12 full Program/Listing + source + project + installed analyzer
+fingerprint binding from #257 is now wired to a **separate, explicitly
+selected** Query-tab `Import Bound Checkpoint` GUI action. The operator
+chooses both local source checkpoint and local schema-1 sidecar, and
+explicitly chooses `CPU32 generic` or `MC68332` (never inferred).
+Asynchronous background fingerprinting prevents Swing EDT stalls.
+The original import route remains available as **unbound historical
+data**, never implicitly considered provenance-verified.
+
+The real controller refuses replaced Program objects, revised Program
+contents, changed chat session, running queries and pending plans
+while a binding is checked; it reuses the existing new-chat-only
+`stageImportedAgenticDraft` contract: no inherited session grants,
+Accept All disabled, read-only tool budget 8, no reused plan,
+no automatically started AI/Apply, independent new Submit and
+Approve Plan required. No local sidecar or checksum constitutes actor
+authentication, past execution, or original analysis-state proof.
+
+An existing two-independent-JVM real Ghidra 12.1.4 PUBLIC /
+CodeBrowser Xvfb / deterministic native ReAct / Bearer JSON-RPC CI
+lane now writes a local binding in the first JVM and uses the
+real **Swing controller entrypoint** after reopening the synthetic
+Program in the second JVM. It asserts the button is installed,
+fresh chat and read-only policy appear, no Program revision changes
+or new model run are triggered, plus wrong Program, wrong MCU and
+modified checkpoint fail closed. Existing GUI and CLI regression
+checks remain active. No production ECU411 firmware, user project,
+OAuth or stopped Wyse/Precision/Supervisor workers. GA-12/13/15/18
+remain PARTIAL, GA-14 remains deferred.
+
+
 ## GA-12/13/15/18 — 2026-11-09: full Program-bound saved Agentic Review across JVMs
 
 An additional **explicit opt-in** Java helper creates a local read-only
