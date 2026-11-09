@@ -139,8 +139,8 @@ public final class AutomationServer implements AutoCloseable {
                     if(requiredRevision!=null && requiredRevision.longValue()!=revision)
                         throw new IllegalStateException(
                             "Agentic Program revision changed during pagination");
-                    int offset=args.has("offset")?args.get("offset").getAsInt():0;
-                    int limit=args.has("limit")?args.get("limit").getAsInt():25;
+                    int offset=AutomationRpcPagination.pageInt(args,"offset",0,0,1000);
+                    int limit=AutomationRpcPagination.pageInt(args,"limit",25,1,100);
                     String expectedRun=AutomationRpcPagination.optionalUuid(
                         args,"expected_run");
                     Long expectedPageRevision=AutomationRpcPagination.optionalRevision(
@@ -184,8 +184,8 @@ public final class AutomationServer implements AutoCloseable {
                 } else if ("listing.range".equals(method)) {
                     var viewer=plugin.getTool().getService(ghidra.app.services.CodeViewerService.class);
                     ProgramLocation location=viewer==null ? null : viewer.getCurrentLocation();
-                    int offset=args.has("offset") ? args.get("offset").getAsInt() : 0;
-                    int limit=args.has("limit") ? args.get("limit").getAsInt() : 32;
+                    int offset=AutomationRpcPagination.pageInt(args,"offset",0,0,4096);
+                    int limit=AutomationRpcPagination.pageInt(args,"limit",32,1,64);
                     Long expectedRevision=AutomationRpcPagination.optionalRevision(
                         args,"expected_revision");
                     if(offset>0 && expectedRevision==null)
@@ -210,17 +210,17 @@ public final class AutomationServer implements AutoCloseable {
                         program.getFunctionManager().getFunctionContaining(location.getAddress());
                     result.add("decompiler",decompiler.start(program,function));
                 } else if ("decompiler.status".equals(method)) {
-                    int offset=args.has("offset") ? args.get("offset").getAsInt() : 0;
-                    int limit=args.has("limit") ? args.get("limit").getAsInt() : 4096;
+                    int offset=AutomationRpcPagination.pageInt(args,"offset",0,0,2147483647);
+                    int limit=AutomationRpcPagination.pageInt(args,"limit",4096,0,8192);
                     String taskId=args.has("task_id") ? args.get("task_id").getAsString() : "";
                     result.add("decompiler",decompiler.status(program,taskId,offset,limit));
                 } else if ("analysis.paths".equals(method)) {
                     if (program == null) throw new IllegalStateException("No active program");
                     String origin = args.has("origin") ? args.get("origin").getAsString() : "reset";
                     String entry = args.has("entry") ? args.get("entry").getAsString() : "";
-                    int depth = args.has("max_depth") ? args.get("max_depth").getAsInt() : 8;
-                    int offset = args.has("offset") ? args.get("offset").getAsInt() : 0;
-                    int limit = args.has("limit") ? args.get("limit").getAsInt() : 50;
+                    int depth=AutomationRpcPagination.pageInt(args,"max_depth",8,0,32);
+                    int offset=AutomationRpcPagination.pageInt(args,"offset",0,0,50000);
+                    int limit=AutomationRpcPagination.pageInt(args,"limit",50,1,100);
                     result.add("paths", AutomationCallPaths.query(program, origin, entry, depth, offset, limit));
                 } else if ("analysis.bundle".equals(method)) {
                     if(program==null) throw new IllegalStateException("No active program");
@@ -294,8 +294,8 @@ public final class AutomationServer implements AutoCloseable {
                         throw new IllegalStateException("Stale function location belongs to another program");
                     var function=location==null || location.getAddress()==null ? null :
                         program.getFunctionManager().getFunctionContaining(location.getAddress());
-                    int offset=args.has("offset") ? args.get("offset").getAsInt() : 0;
-                    int limit=args.has("limit") ? args.get("limit").getAsInt() : 50;
+                    int offset=AutomationRpcPagination.pageInt(args,"offset",0,0,4096);
+                    int limit=AutomationRpcPagination.pageInt(args,"limit",50,1,100);
                     String direction=args.has("direction") ? args.get("direction").getAsString() : "both";
                     String entry=args.has("expected_entry") ? args.get("expected_entry").getAsString() : "";
                     Long revision=AutomationRpcPagination.optionalRevision(
@@ -311,8 +311,8 @@ public final class AutomationServer implements AutoCloseable {
                     var function=activeLocation==null || activeLocation.getAddress()==null
                         ? null : program.getFunctionManager().getFunctionContaining(activeLocation.getAddress());
                     if(function==null) throw new IllegalStateException("No active function");
-                    int offset=args.has("offset") ? args.get("offset").getAsInt() : 0;
-                    int limit=args.has("limit") ? args.get("limit").getAsInt() : 100;
+                    int offset=AutomationRpcPagination.pageInt(args,"offset",0,0,1000000);
+                    int limit=AutomationRpcPagination.pageInt(args,"limit",100,1,200);
                     if(offset<0 || limit<1 || limit>200)
                         throw new IllegalArgumentException("Invalid XREF pagination");
                     com.google.gson.JsonArray refs=new com.google.gson.JsonArray();
@@ -410,8 +410,8 @@ public final class AutomationServer implements AutoCloseable {
                     if(program==null)throw new IllegalStateException("No active program");
                     GhidrAssistProvider provider=plugin.getAutomationProvider();
                     if(provider==null)throw new IllegalStateException("GhidrAssist UI unavailable");
-                    int offset=args.has("offset")?args.get("offset").getAsInt():0;
-                    int limit=args.has("limit")?args.get("limit").getAsInt():32;
+                    int offset=AutomationRpcPagination.pageInt(args,"offset",0,0,65536);
+                    int limit=AutomationRpcPagination.pageInt(args,"limit",32,1,32);
                     Long expectedRevision=AutomationRpcPagination.optionalRevision(
                         args,"expected_revision");
                     String generation=AutomationRpcPagination.optionalUuid(
@@ -425,11 +425,22 @@ public final class AutomationServer implements AutoCloseable {
                     GhidrAssistProvider provider=plugin.getAutomationProvider();
                     if(provider==null) throw new IllegalStateException("GhidrAssist UI unavailable");
                     String format=args.has("format") ? args.get("format").getAsString() : "markdown";
-                    int offset=args.has("offset") ? args.get("offset").getAsInt() : 0;
-                    int limit=args.has("limit") ? args.get("limit").getAsInt() : 4096;
+                    int offset=AutomationRpcPagination.pageInt(args,"offset",0,0,2147483647);
+                    int limit=AutomationRpcPagination.pageInt(args,"limit",4096,1,8192);
                     // Export is a paginated transfer to the authenticated client,
                     // never arbitrary server-side writes to files or the project.
-                    result.add("report",provider.getUI().automationReport(format,offset,limit));
+                    // A second HTTP page must belong to the identical completed
+                    // scan, not just a Program with unchanged imported bytes.
+                    String expectedReportRevision=AutomationRpcPagination.optionalReportRevision(
+                        args,"expected_revision");
+                    String expectedReportGeneration=AutomationRpcPagination.optionalUuid(
+                        args,"expected_generation");
+                    if(offset>0 && (expectedReportRevision==null ||
+                            expectedReportGeneration==null))
+                        throw new IllegalArgumentException(
+                            "Subsequent report page requires revision and generation");
+                    result.add("report",provider.getUI().automationReport(
+                        format,offset,limit,expectedReportRevision,expectedReportGeneration));
                 } else if ("hardware.profile.select".equals(method)) {
                     GhidrAssistProvider provider = plugin.getAutomationProvider();
                     if (provider == null) throw new IllegalStateException("GhidrAssist UI unavailable");
@@ -442,13 +453,13 @@ public final class AutomationServer implements AutoCloseable {
                     if ("hardware.task".equals(method)) {
                         result.add("task",provider.getUI().automationTask());
                     } else if ("hardware.review.preview".equals(method)) {
-                        int offset = args.has("offset") ? args.get("offset").getAsInt() : 0;
-                        int limit = args.has("limit") ? args.get("limit").getAsInt() : 50;
+                        int offset=AutomationRpcPagination.pageInt(args,"offset",0,0,1000000);
+                        int limit=AutomationRpcPagination.pageInt(args,"limit",50,1,100);
                         result.add("review",provider.getUI().automationReviewPreview(offset,limit));
                     } else {
                         String filter = args.has("filter") ? args.get("filter").getAsString() : "";
-                        int offset = args.has("offset") ? args.get("offset").getAsInt() : 0;
-                        int limit = args.has("limit") ? args.get("limit").getAsInt() : 100;
+                        int offset=AutomationRpcPagination.pageInt(args,"offset",0,0,1000000);
+                        int limit=AutomationRpcPagination.pageInt(args,"limit",100,1,200);
                         result.add("table",provider.getUI().automationMmioRows(filter,offset,limit));
                     }
                 } else if ("ui.snapshot".equals(method) || "hardware.analyze".equals(method)) {
