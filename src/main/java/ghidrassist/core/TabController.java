@@ -926,7 +926,12 @@ public class TabController {
             @Override protected Boolean doInBackground()throws Exception {
                 ghidrassist.agent.react.AgenticReviewProgramBinding.save(
                     checkpoint,binding,program,objective,mc68332,
-                    ghidra.util.task.TaskMonitor.DUMMY);
+                    ghidra.util.task.TaskMonitor.DUMMY,
+                    ()->plugin.getCurrentProgram()==program &&
+                        program.getModificationNumber()==revision &&
+                        queryService.getCurrentSessionId()==session &&
+                        !isQueryRunning && !isAgentPlanPending &&
+                        !isCancelling);
                 return true;
             }
             @Override protected void done() {
