@@ -80,15 +80,13 @@ public final class HardwareSimD2RegisterWitnessSelfTest {
         check(swapped.matched()==0 && swapped.incomplete()==10,
             "Swapped source pages never validate opposite physical folio");
         var misleading=HardwareSimD2RegisterWitness.inspect(profile,
-            Map.of(218,d4().replace("SYSTEM PROTECTION CONTROL\n                            (SYPCR)",
-                    "SYSTEM PROTECTION CONTROL\n                            (NOT_SYPCR)"),
+            Map.of(218,d4().replace("(SYPCR)","(NOT_SYPCR)"),
                 219,d5()));
         check(row(misleading,"SYPCR").state()==
                 HardwareSimD2RegisterWitness.State.TABLE_ROW_MISSING,
             "Missing register name next to address cannot pass by substring");
         var wrapped=HardwareSimD2RegisterWitness.inspect(profile,
-            Map.of(218,d4().replace("S $YFFA20 NOT USED SYSTEM PROTECTION CONTROL\n                            (SYPCR)",
-                "S $YFFA20 NOT USED SYSTEM PROTECTION CONTROL\n                            (SYPCR)"),
+            Map.of(218,d4().replace("(SYPCR)","          (SYPCR)"),
                 219,d5()));
         check(wrapped.completeSample(),
             "Wrapped SYPCR description belongs to same Table D-2 address row");
