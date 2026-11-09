@@ -5,6 +5,7 @@ import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Supplier;
 
 /**
  * GA-13: read-only, revision-snapshot audit of existing transactional
@@ -81,6 +82,33 @@ public final class HardwareFunctionRenameAudit {
             }
             return b.toString();
         }
+        /**
+         * A saved read-only Options audit must never be exported as CURRENT
+         * after an intervening Ghidra edit/Undo/Redo or Program switch.
+         * A process-local modification token cannot be persisted across JVMs.
+         *
+         * Fail closed before and after CSV assembly: one stale row must not
+         * leak as a partially built export. The caller supplies a fresh
+         * Program-bound revision snapshot each time.
+         */
+        public String csvRevisionBound(HardwareAnalysisRevision captured,
+                Supplier<HardwareAnalysisRevision> current) {
+            if(captured==null || current==null ||
+                    captured.modificationNumber()!=programRevision ||
+                    !java.util.Objects.equals(captured.sourceSha256(),
+                        programSourceSha256))
+                throw new IllegalArgumentException(
+                    "Rename audit export has no matching revision fence");
+            if(!captured.same(current.get()))
+                throw new IllegalStateException(
+                    "STALE_REVISION: rename audit CSV no longer current");
+            String payload=csv();
+            if(!captured.same(current.get()))
+                throw new IllegalStateException(
+                    "STALE_REVISION: rename audit changed during CSV export");
+            return payload;
+        }
+
         public long count(State state) {
             return rows.stream().filter(r->r.state()==state).count();
         }

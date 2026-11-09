@@ -31,6 +31,7 @@ jobs:
             src/main/java/ghidrassist/hardware/HardwareChangeProvenance.java \
             src/main/java/ghidrassist/hardware/HardwareFunctionRenameReceipt.java \
             src/main/java/ghidrassist/hardware/HardwareFunctionRenameAudit.java \
+            src/main/java/ghidrassist/hardware/HardwareAnalysisRevision.java \
             src/test/java/ghidrassist/hardware/HardwareFunctionRenameAuditSelfTest.java \
             src/test/java/ghidrassist/hardware/HardwareFunctionRenameReceiptSelfTest.java \
             src/test/java/ghidrassist/hardware/HardwareChangeProvenanceSelfTest.java

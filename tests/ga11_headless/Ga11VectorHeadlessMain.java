@@ -2909,6 +2909,26 @@ public final class Ga11VectorHeadlessMain {
                     long auditRevision=full.getModificationNumber();
                     var approvedAudit=ghidrassist.hardware.HardwareFunctionRenameService
                         .audit(full);
+                    // A genuine approved receipt snapshot is safe to export
+                    // only at the same live Program revision. Preserve the
+                    // in-memory revision fence across native Undo/Redo.
+                    var approvedRevisionFence=
+                        ghidrassist.hardware.HardwareAnalysisRevision.capture(
+                            full,auditRevision,full.getLanguageID().toString(),
+                            full.getExecutableSHA256(),true);
+                    final Program revisionAuditProgram=full;
+                    java.util.function.Supplier<HardwareAnalysisRevision> liveRenameRevision=
+                        ()->HardwareAnalysisRevision.capture(revisionAuditProgram,
+                            revisionAuditProgram.getModificationNumber(),
+                            revisionAuditProgram.getLanguageID().toString(),
+                            revisionAuditProgram.getExecutableSHA256(),true);
+                    String guardedCsv=ghidrassist.hardware.HardwareFunctionRenameService
+                        .auditCsv(full);
+                    check(guardedCsv.equals(approvedAudit.csvRevisionBound(
+                                approvedRevisionFence,liveRenameRevision)) &&
+                            guardedCsv.contains("actor UNKNOWN") &&
+                            full.getModificationNumber()==auditRevision,
+                        "Real Ghidra approved receipt export was not revision bound");
                     check(approvedAudit.rows().size()==2 &&
                           approvedAudit.count(ghidrassist.hardware
                             .HardwareFunctionRenameAudit.State.CURRENT_APPROVED_NAME)==2 &&
@@ -2930,6 +2950,16 @@ public final class Ga11VectorHeadlessMain {
                     check(ghidrassist.hardware.HardwareFunctionRenameService.audit(full)
                             .rows().isEmpty(),
                         "Native Undo must remove reverted operation receipts from current audit");
+                    boolean staleCsvAfterUndo=false;
+                    try {approvedAudit.csvRevisionBound(
+                        approvedRevisionFence,liveRenameRevision);}
+                    catch(IllegalStateException expected) {
+                        staleCsvAfterUndo=true;
+                    }
+                    check(staleCsvAfterUndo &&
+                            ghidrassist.hardware.HardwareFunctionRenameService
+                                .auditCsv(full).lines().count()==1,
+                        "Real native Undo leaked formerly approved rename CSV");
                     check(full.canRedo(),"Ghidra Redo unavailable for receipt transaction");
                     full.redo();
                     check(fn1.getName().equals(first.proposedName) &&
@@ -2942,6 +2972,12 @@ public final class Ga11VectorHeadlessMain {
                     check(ghidrassist.hardware.HardwareFunctionRenameService.audit(full)
                             .rows().equals(approvedAudit.rows()),
                         "Redo must restore exact persistent audit snapshot");
+                    var redoneCsv=ghidrassist.hardware.HardwareFunctionRenameService
+                        .auditCsv(full);
+                    check(redoneCsv.contains(first.proposedName) &&
+                            redoneCsv.contains(second.proposedName) &&
+                            redoneCsv.lines().count()==3,
+                        "Real native Redo lost current receipt evidence after fresh audit");
                     full.undo();
                     check(fn1.getName().equals(firstName) &&
                           fn2.getName().equals(secondName) &&
@@ -2953,6 +2989,9 @@ public final class Ga11VectorHeadlessMain {
                     check(ghidrassist.hardware.HardwareFunctionRenameService.audit(full)
                             .rows().isEmpty(),
                         "Second Undo must not leave a false durable audit event");
+                    result.addProperty("ga13_rename_audit_csv_live_revision",true);
+                    result.addProperty("ga13_rename_audit_csv_undo_refusal",true);
+                    result.addProperty("ga13_rename_audit_csv_redo_fresh",true);
                     result.addProperty("ga13_rename_audit_undo_redo_correlated",true);
                     result.addProperty("rename_real_functions_and_collision",true);
                     result.addProperty("rename_atomic_rollback",true);

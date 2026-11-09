@@ -2,6 +2,7 @@ package ghidrassist.hardware;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /** GA-13 deterministic, Ghidra-free saved operation consistency audit. */
 public final class HardwareFunctionRenameAuditSelfTest {
@@ -53,6 +54,47 @@ public final class HardwareFunctionRenameAuditSelfTest {
             "read-only CSV identifies operator, original/current name and state");
         check(!csv.contains("author VERIFIED"),
             "SourceType USER_DEFINED cannot prove a human or model actor");
+        // Source-only revision guards around a CSV snapshot. This is a
+        // read-only audit, not new Apply authorization or durable Undo log.
+        Object sameProgram=new Object();
+        var captured=HardwareAnalysisRevision.capture(sameProgram,43L,
+            "68000:BE:32:CPU32","a".repeat(64),true);
+        var current=HardwareAnalysisRevision.capture(sameProgram,43L,
+            "68000:BE:32:CPU32","a".repeat(64),true);
+        var changed=HardwareAnalysisRevision.capture(sameProgram,44L,
+            "68000:BE:32:CPU32","a".repeat(64),true);
+        var otherOwner=HardwareAnalysisRevision.capture(new Object(),43L,
+            "68000:BE:32:CPU32","a".repeat(64),true);
+        var otherProfile=HardwareAnalysisRevision.capture(sameProgram,43L,
+            "68000:BE:32:CPU32","a".repeat(64),false);
+        check(audit.csvRevisionBound(captured,()->current).equals(csv),
+            "Same Program/analysis snapshot exports the exact original CSV");
+        for(var invalid:List.of(changed,otherOwner,otherProfile)){
+            boolean refused=false;
+            try{audit.csvRevisionBound(captured,()->invalid);}
+            catch(IllegalStateException expected){refused=true;}
+            check(refused,"Changed revision/owner/profile must not export stale CSV");
+        }
+        AtomicInteger reads=new AtomicInteger();
+        boolean raceRefused=false;
+        try{audit.csvRevisionBound(captured,
+            ()->reads.getAndIncrement()==0?current:changed);}
+        catch(IllegalStateException expected){raceRefused=true;}
+        check(raceRefused && reads.get()==2,
+            "Revision edit during CSV building discards the entire report");
+        rejects(()->audit.csvRevisionBound(null,()->current),
+            "Missing source revision token rejected");
+        rejects(()->audit.csvRevisionBound(captured,null),
+            "Missing current Program revision supplier rejected");
+        var wrongSnapshot=HardwareAnalysisRevision.capture(sameProgram,42L,
+            "68000:BE:32:CPU32","a".repeat(64),true);
+        rejects(()->audit.csvRevisionBound(wrongSnapshot,()->wrongSnapshot),
+            "Capture from different audit revision cannot legitimize snapshot");
+        var wrongSha=HardwareAnalysisRevision.capture(sameProgram,43L,
+            "68000:BE:32:CPU32","b".repeat(64),true);
+        rejects(()->audit.csvRevisionBound(wrongSha,()->wrongSha),
+            "Source checksum mismatch cannot legitimize audit export");
+
         var diverged=HardwareFunctionRenameAudit.inspect(
             List.of(row(0x5a0,"MANUAL_EDIT","USER_DEFINED")),44,"a".repeat(64));
         check(diverged.count(

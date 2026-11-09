@@ -421,7 +421,10 @@ def main():
                         "rename_real_functions_and_collision",
                         "rename_atomic_rollback",
                         "rename_transactional_two_function_apply",
-                        "rename_native_undo_restored"),
+                        "rename_native_undo_restored",
+                        "ga13_rename_audit_csv_live_revision",
+                        "ga13_rename_audit_csv_undo_refusal",
+                        "ga13_rename_audit_csv_redo_fresh"),
                     "agentic-evidence":(
                         "agentic_real_program_bounded_pages",
                         "agentic_real_program_revision_guard",
