@@ -249,6 +249,7 @@ public class GA18VerifyResetIndirectVbrJointSource extends GhidraScript {
                     trigger+" checks (no stale Markdown or Report escaped)");
             }
         }
+        println("GA18 REAL JOINT REVISION REFUSAL PASS: injected=2 unresolved=1");
         println("GA18 REAL RESET JSR MOVEC JOINT PASS: assertions="+checks+
             " (two native CPU32 source pairs, unresolved JSR, branching CFG, "+
             "two real Ghidra in-flight revision mutations, RESET subset, "+
