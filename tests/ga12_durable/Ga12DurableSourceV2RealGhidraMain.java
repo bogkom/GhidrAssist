@@ -294,6 +294,34 @@ public final class Ga12DurableSourceV2RealGhidraMain {
             }catch(IllegalArgumentException denied){
                 bindingRefused=true;
             }
+            if(phase.equals("source-read")) {
+                byte[] originalBinding=Files.readAllBytes(reviewBinding);
+                boolean overwriteRefused=false;
+                try {
+                    AgenticReviewProgramBinding.save(reviewSource,reviewBinding,
+                        program,REVIEW_OBJECTIVE,true,TaskMonitor.DUMMY);
+                }catch(java.nio.file.FileAlreadyExistsException expected){
+                    overwriteRefused=true;
+                }
+                require(overwriteRefused &&
+                    Arrays.equals(originalBinding,Files.readAllBytes(reviewBinding)),
+                    "saved Review binding never overwritten on restart");
+                Path changedSource=proofs.resolve("ga12-tampered-review-source.json");
+                // Adding whitespace preserves JSON payload SHA but changes
+                // the bound exact source bytes: stale Review must fail closed.
+                Files.writeString(changedSource,
+                    Files.readString(reviewSource)+" ",
+                    java.nio.file.StandardOpenOption.CREATE_NEW);
+                boolean tamperRefused=false;
+                try {
+                    AgenticReviewProgramBinding.load(changedSource,reviewBinding,
+                        program,true,TaskMonitor.DUMMY);
+                }catch(IllegalArgumentException expected){
+                    tamperRefused=true;
+                }
+                require(tamperRefused,
+                    "byte-changed source checkpoint cannot inherit saved binding");
+            }
             boolean expectBindingRefusal=phase.equals("source-edit")||
                 phase.equals("source-name")||phase.equals("source-profile");
             require(bindingRefused==expectBindingRefusal,
