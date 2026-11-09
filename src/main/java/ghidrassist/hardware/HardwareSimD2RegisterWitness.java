@@ -110,7 +110,7 @@ public final class HardwareSimD2RegisterWitness {
         String address=Pattern.quote(reference.tableAddress());
         String token=Pattern.quote(reference.name());
         return Pattern.compile(address+
-            "(?:(?!\\$YFFA[0-9A-F]{2})[\\s\\S]){0,160}?"+
+            "(?:(?!\\$YFFA[0-9A-F]{2})[\\s\\S]){0,256}?"+
             "(?<![A-Z0-9_])"+token+"(?![A-Z0-9_])")
             .matcher(normalized).find();
     }
