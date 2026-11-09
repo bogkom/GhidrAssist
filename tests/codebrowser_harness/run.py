@@ -777,6 +777,61 @@ def main():
                             if duplicate_report.returncode==0:
                                 raise RuntimeError("Report checkpoint unexpectedly overwritten")
                             print("GA-12 REAL GHIDRA MULTIPAGE ATOMIC REPORT SNAPSHOT PASS")
+                            # Atomic cross-format snapshot: all three
+                            # report SHA digests are captured in one Ghidra
+                            # EDT call before and after the paged extraction.
+                            shared_manifest=http_call(
+                                "analysis.report.manifest",{})["manifest"]
+                            if (shared_manifest["program_path"]!=
+                                    "/synthetic-reset-indirect-vbr.bin" or
+                                    set(shared_manifest["formats"])!=
+                                    {"markdown","config_csv","names_csv"} or
+                                    shared_manifest["formats"]["markdown"]["generation"]!=
+                                    source_report_first["generation"]):
+                                raise RuntimeError(
+                                    "Hardware three-format manifest lacks source identity")
+                            try:
+                                http_call("analysis.report.manifest",{"apply_authorized":True})
+                            except HTTPError as error:
+                                if error.code!=400:raise
+                            else:
+                                raise RuntimeError(
+                                    "Read-only manifest accepted privileged request")
+                            report_set=out/"real-hardware-report-set.json"
+                            subprocess_checked([sys.executable,agent,"--session",
+                                str(private),"report-set-checkpoint",
+                                "--output",str(report_set),"--page-size","128"],
+                                work,env,out/"report-set-cli-capture.log",70)
+                            subprocess_checked([sys.executable,agent,"--session",
+                                str(out/"nonexistent-report-set-session.json"),
+                                "report-set-verify","--input",str(report_set)],
+                                work,env,out/"report-set-cli-verify.log",30)
+                            checked_set=json.loads(
+                                (out/"report-set-cli-verify.log").read_text())
+                            saved_set=json.loads(report_set.read_text())
+                            if (not checked_set["verified"] or
+                                    checked_set["apply_authorized"] or
+                                    checked_set["model_state_restored"] or
+                                    checked_set["program_path"]!=
+                                    "/synthetic-reset-indirect-vbr.bin" or
+                                    set(checked_set["formats"])!=
+                                    {"markdown","config_csv","names_csv"} or
+                                    saved_set["payload"]["manifest"]!=shared_manifest or
+                                    not all(isinstance(
+                                        saved_set["payload"]["reports"][fmt],str)
+                                        for fmt in checked_set["formats"])):
+                                raise RuntimeError(
+                                    "Actual Ghidra combined report receipt incomplete")
+                            duplicate_set=subprocess.run(
+                                [sys.executable,agent,"--session",str(private),
+                                 "report-set-checkpoint","--output",str(report_set),
+                                 "--page-size","128"],
+                                cwd=work,env=env,capture_output=True,text=True,
+                                timeout=70)
+                            if duplicate_set.returncode==0:
+                                raise RuntimeError("Report-set snapshot overwritten")
+                            print("GA-12 REAL GHIDRA THREE-REPORT ATOMIC SET PASS")
+
                             offline=json.loads((out/"source-pairs-cli-verify.log").read_text())
                             if (offline.get("verified") is not True or
                                     offline.get("total_pairs")!=2 or
@@ -793,6 +848,13 @@ def main():
                             # Program selection itself must retire a cursor
                             # even when the original source bytes are unchanged.
                             http_call("project.program.open",{"path":"/guard-other.bin"})
+                            try:
+                                http_call("analysis.report.manifest",{})
+                            except HTTPError as error:
+                                if error.code!=400:raise
+                            else:
+                                raise RuntimeError(
+                                    "Manifest leaked after switching Ghidra Program")
                             try:
                                 http_call("analysis.export",{
                                     "format":"markdown","offset":1,"limit":64,
@@ -824,6 +886,14 @@ def main():
                                 {"offset":0,"limit":1})["source_pairs"]
                             fresh_report=http_call("analysis.report",
                                 {"format":"markdown","offset":0,"limit":64})["report"]
+                            fresh_manifest=http_call(
+                                "analysis.report.manifest",{})["manifest"]
+                            if (fresh_manifest["program_revision"]!=
+                                    shared_manifest["program_revision"] or
+                                    fresh_manifest["formats"]["markdown"]["generation"]==
+                                    shared_manifest["formats"]["markdown"]["generation"]):
+                                raise RuntimeError(
+                                    "Same-input Analyze resurrected a previous report manifest")
                             if (fresh_report["program_revision"]!=
                                     source_report_first["program_revision"] or
                                     fresh_report["generation"]==
@@ -1071,6 +1141,14 @@ def main():
                         prepare_method=("hardware.review.prepare" if args.review_copy_probe else "hardware.apply.prepare")
                         apply_method=("hardware.review.apply" if args.review_copy_probe else "hardware.apply.commit")
                         undo_method=("hardware.review.undo" if args.review_copy_probe else "hardware.apply.undo")
+                        # A previously valid report cursor must never
+                        # survive an actual isolated synthetic Apply/Undo.
+                        report_before_apply=http_call(
+                            "analysis.report.manifest",{})["manifest"]
+                        if (report_before_apply["program_path"]!="/synthetic-mmio.bin" or
+                                set(report_before_apply["formats"])!=
+                                {"markdown","config_csv","names_csv"}):
+                            raise RuntimeError("Missing pre-Apply native report manifest")
                         prepared=http_call(prepare_method,{"index":chosen["index"]})["approval"]
                         if args.review_copy_probe:
                             if (prepared.get("project_program_path")!="/synthetic-mmio.bin" or
@@ -1100,6 +1178,20 @@ def main():
                                           {"token":prepared["token"],"name":prepared["name"]})["apply"]
                         if applied.get("changed")!=1 or applied.get("skipped")!=0:
                             raise RuntimeError("Synthetic Apply outcome mismatch")
+                        for method,payload in (
+                            ("analysis.report.manifest",{}),
+                            ("analysis.export",{
+                                "format":"markdown","offset":1,"limit":64,
+                                "expected_revision":report_before_apply["revision"],
+                                "expected_generation":
+                                    report_before_apply["formats"]["markdown"]["generation"]})):
+                            try:
+                                http_call(method,payload)
+                            except HTTPError as error:
+                                if error.code!=400:raise
+                            else:
+                                raise RuntimeError(
+                                    "Actual Ghidra Apply retained stale report: "+method)
                         if args.review_copy_probe and (
                                 applied.get("revision_before")!=prepared.get("revision") or
                                 applied.get("revision_after")==applied.get("revision_before") or
@@ -1121,6 +1213,21 @@ def main():
                         undid=http_call(undo_method)["undo"]
                         if undid.get("undone") is not True:
                             raise RuntimeError("Synthetic Ghidra Undo unsuccessful")
+                        for method,payload in (
+                            ("analysis.report.manifest",{}),
+                            ("analysis.export",{
+                                "format":"markdown","offset":1,"limit":64,
+                                "expected_revision":report_before_apply["revision"],
+                                "expected_generation":
+                                    report_before_apply["formats"]["markdown"]["generation"]})):
+                            try:
+                                http_call(method,payload)
+                            except HTTPError as error:
+                                if error.code!=400:raise
+                            else:
+                                raise RuntimeError(
+                                    "Ghidra Undo revived retired report token: "+method)
+                        print("GA-08/12 REAL SYNTHETIC APPLY/UNDO RETIRED ALL REPORT CURSORS PASS")
                         if args.review_copy_probe and (
                                 undid.get("revision_before")!=applied.get("revision_after") or
                                 undid.get("revision_after")==undid.get("revision_before") or

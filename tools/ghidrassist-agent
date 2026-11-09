@@ -380,6 +380,197 @@ def verify_report_checkpoint(source):
             "payload_sha256":digest}
 
 
+REPORT_SET_FORMATS=("markdown","config_csv","names_csv")
+REPORT_SET_MAX_BYTES=7500000
+
+
+def _report_set_manifest(response):
+    """Strict shared Program and per-format identity from one Ghidra EDT turn."""
+    if not isinstance(response,dict):
+        raise ValueError("Missing report-set manifest")
+    base={"schema","kind","revision","program_revision","stage_epoch",
+          "program_path","import_sha256","profile","scope","formats"}
+    if (set(response)!=base or type(response["schema"])!=int
+            or response["schema"]!=1
+            or response["kind"]!="ghidrassist-hardware-report-set-manifest"
+            or not isinstance(response["formats"],dict)
+            or set(response["formats"])!=set(REPORT_SET_FORMATS)):
+        raise ValueError("Invalid report-set manifest schema")
+    generations=[]
+    for fmt in REPORT_SET_FORMATS:
+        fmt_data=response["formats"][fmt]
+        if not isinstance(fmt_data,dict) or set(fmt_data)!={
+                "generation","total_characters","sha256_utf8"}:
+            raise ValueError("Wrong per-format manifest fields")
+        digest=fmt_data["sha256_utf8"]
+        if not isinstance(digest,str) or not re.fullmatch(
+                r"[0-9a-f]{64}",digest):
+            raise ValueError("Invalid manifest content hash")
+        values={k:response[k] for k in (
+            "revision","program_revision","stage_epoch","import_sha256",
+            "profile","program_path","scope")}
+        values.update(format=fmt,generation=fmt_data["generation"],
+                      total_characters=fmt_data["total_characters"])
+        _report_identity(values)
+        generations.append(fmt_data["generation"])
+    if len(set(generations))!=len(generations):
+        raise ValueError("Report formats reused generation token")
+    return response
+
+
+def _collect_report_set_section(session,fmt,manifest,page_size):
+    """One complete report, bound to the full multi-format scan manifest."""
+    section=manifest["formats"][fmt]
+    first=rpc(session,"analysis.export",{
+        "format":fmt,"offset":0,"limit":page_size})["report"]
+    meta=_report_identity(first)
+    for field in ("revision","program_revision","stage_epoch","import_sha256",
+                  "profile","program_path","scope"):
+        if meta[field]!=manifest[field]:
+            raise ValueError("Report Program or analysis changed between formats")
+    if (meta["format"]!=fmt or
+            meta["generation"]!=section["generation"] or
+            meta["total_characters"]!=section["total_characters"]):
+        raise ValueError("Wrong report generation or content size")
+    offset=0
+    fragments=[]
+    current=first
+    while True:
+        units=_report_page_check(current,meta,offset,page_size)
+        fragments.append(current["text"])
+        offset+=units
+        if not current["more"]:
+            if offset!=meta["total_characters"]:
+                raise ValueError("Truncated report section")
+            break
+        current=rpc(session,"analysis.export",{
+            "format":fmt,"offset":offset,"limit":page_size,
+            "expected_revision":meta["revision"],
+            "expected_generation":meta["generation"]})["report"]
+    content="".join(fragments).encode(
+        "utf-16-le","surrogatepass").decode("utf-16-le")
+    if (_utf16_units(content)!=meta["total_characters"] or
+            hashlib.sha256(content.encode("utf-8")).hexdigest()!=
+            section["sha256_utf8"]):
+        raise ValueError("Report section content SHA or UTF-16 size changed")
+    return content,meta,offset
+
+
+def _confirm_report_set_terminal(session,fmt,meta,offset,page_size):
+    terminal=rpc(session,"analysis.export",{
+        "format":fmt,"offset":offset,"limit":page_size,
+        "expected_revision":meta["revision"],
+        "expected_generation":meta["generation"]})["report"]
+    if (_report_page_check(terminal,meta,offset,page_size)!=0 or
+            terminal["more"] or terminal["text"]):
+        raise ValueError("Report generation changed before final publication")
+
+
+def capture_report_set_checkpoint(session,output,page_size=4096):
+    """Capture three complete formats as ONE bounded, read-only transaction."""
+    if type(page_size)!=int or not 1<=page_size<=8192:
+        raise ValueError("Invalid report-set page size")
+    initial=_report_set_manifest(
+        rpc(session,"analysis.report.manifest",{})["manifest"])
+    reports={}
+    cursors={}
+    for fmt in REPORT_SET_FORMATS:
+        content,meta,offset=_collect_report_set_section(
+            session,fmt,initial,page_size)
+        reports[fmt]=content
+        cursors[fmt]=(meta,offset)
+    # An intermediate Apply/Undo/Redo or new Analyze cannot publish a set
+    # with one new member or an old generation, even when the input SHA
+    # and apparent Ghidra Program revision happen to match again.
+    for fmt in REPORT_SET_FORMATS:
+        meta,offset=cursors[fmt]
+        _confirm_report_set_terminal(session,fmt,meta,offset,page_size)
+    final=_report_set_manifest(
+        rpc(session,"analysis.report.manifest",{})["manifest"])
+    if final!=initial:
+        raise ValueError("Program, scan or report manifest changed during export")
+    payload={"schema":1,"kind":"ghidrassist-readonly-hardware-report-set",
+             "manifest":initial,"reports":reports,"complete":True,
+             "read_only":True,"apply_authorized":False,
+             "model_state_restored":False,
+             "notice":"STATIC REPORT EVIDENCE ONLY: no firmware execution, trusted actor, Review/Apply or model continuation"}
+    raw=json.dumps(payload,sort_keys=True,separators=(",",":"),
+                   ensure_ascii=True).encode("utf-8")
+    digest=hashlib.sha256(raw).hexdigest()
+    data=(json.dumps({"payload":payload,"payload_sha256":digest},
+                     indent=2,ensure_ascii=True)+"\n").encode("utf-8")
+    if len(data)>REPORT_SET_MAX_BYTES:
+        raise ValueError("Combined report checkpoint exceeds byte cap")
+    dest=Path(output).expanduser()
+    if not dest.parent.is_dir() or dest.parent.is_symlink():
+        raise ValueError("Report-set directory must already exist and not be symlink")
+    temp=None
+    try:
+        fd,temp=tempfile.mkstemp(prefix=".ghidrassist-report-set-",dir=dest.parent)
+        with os.fdopen(fd,"wb") as stream:
+            stream.write(data)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.link(temp,dest)
+    finally:
+        if temp is not None:
+            os.unlink(temp)
+    return {"saved":str(dest),"payload_sha256":digest,"complete":True,
+            "read_only":True,"apply_authorized":False,
+            "formats":list(REPORT_SET_FORMATS),
+            "program_revision":initial["program_revision"],
+            "stage_epoch":initial["stage_epoch"]}
+
+
+def verify_report_set_checkpoint(source):
+    """Offline bounded content SHA, metadata and disabled authorization check."""
+    with Path(source).expanduser().open("rb") as stream:
+        raw=stream.read(REPORT_SET_MAX_BYTES+1)
+    if not raw or len(raw)>REPORT_SET_MAX_BYTES:
+        raise ValueError("Missing or oversized report-set checkpoint")
+    obj=json.loads(raw.decode("utf-8"))
+    if not isinstance(obj,dict) or set(obj)!={"payload","payload_sha256"}:
+        raise ValueError("Invalid report-set envelope")
+    data=obj["payload"]
+    if not isinstance(data,dict) or set(data)!={
+            "schema","kind","manifest","reports","complete",
+            "read_only","apply_authorized","model_state_restored","notice"}:
+        raise ValueError("Wrong report-set fields")
+    if (type(data["schema"])!=int or data["schema"]!=1
+            or data["kind"]!="ghidrassist-readonly-hardware-report-set"
+            or data["complete"] is not True
+            or data["read_only"] is not True
+            or data["apply_authorized"] is not False
+            or data["model_state_restored"] is not False
+            or not isinstance(data["notice"],str) or
+            not data["notice"].startswith("STATIC REPORT EVIDENCE ONLY")):
+        raise ValueError("Untrusted or authorized report-set payload")
+    manifest=_report_set_manifest(data["manifest"])
+    reports=data["reports"]
+    if not isinstance(reports,dict) or set(reports)!=set(REPORT_SET_FORMATS):
+        raise ValueError("Report set has missing or extra formats")
+    for fmt in REPORT_SET_FORMATS:
+        text=reports[fmt]
+        if (not isinstance(text,str) or
+                _utf16_units(text)!=manifest["formats"][fmt]["total_characters"] or
+                hashlib.sha256(text.encode("utf-8")).hexdigest()!=
+                manifest["formats"][fmt]["sha256_utf8"]):
+            raise ValueError("Invalid report section integrity: "+fmt)
+    canon=json.dumps(data,sort_keys=True,separators=(",",":"),
+                     ensure_ascii=True).encode("utf-8")
+    digest=hashlib.sha256(canon).hexdigest()
+    if digest!=obj["payload_sha256"]:
+        raise ValueError("Report-set SHA256 changed")
+    return {"verified":True,"complete":True,"read_only":True,
+            "apply_authorized":False,"model_state_restored":False,
+            "formats":list(REPORT_SET_FORMATS),
+            "report_generations":{
+                fmt:manifest["formats"][fmt]["generation"] for fmt in REPORT_SET_FORMATS},
+            "program_path":manifest["program_path"],
+            "program_revision":manifest["program_revision"],
+            "payload_sha256":digest}
+
+
 def capture_agentic_checkpoint(session, output, page_size=100, parent=None):
     """Explicit local read-only evidence export; never a resumable AI session."""
     if not 1 <= page_size <= 100:
@@ -808,7 +999,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--session", default=os.environ.get(
         "GHIDRASSIST_AGENT_SESSION", str(Path.home() / ".local/state/ghidrassist-agent/session.json")))
-    parser.add_argument("action", choices=("status", "snapshot", "analyze", "task", "mmio", "review-preview", "profile-select", "function", "xrefs", "function-xrefs-body", "decompile", "decompile-status", "bundle", "paths", "listing", "listing-range", "goto", "tab-select", "table-select", "program-open", "review-prepare", "review-apply", "review-undo", "cancel", "report", "export", "agentic-findings", "agentic-checkpoint", "agentic-verify", "agentic-read", "agentic-resume-check", "agentic-review-draft", "agentic-lineage-verify", "agentic-lineage-chain-verify", "agentic-binding-create", "source-pairs", "source-pairs-checkpoint", "source-pairs-verify", "report-checkpoint", "report-checkpoint-verify"))
+    parser.add_argument("action", choices=("status", "snapshot", "analyze", "task", "mmio", "review-preview", "profile-select", "function", "xrefs", "function-xrefs-body", "decompile", "decompile-status", "bundle", "paths", "listing", "listing-range", "goto", "tab-select", "table-select", "program-open", "review-prepare", "review-apply", "review-undo", "cancel", "report", "export", "agentic-findings", "agentic-checkpoint", "agentic-verify", "agentic-read", "agentic-resume-check", "agentic-review-draft", "agentic-lineage-verify", "agentic-lineage-chain-verify", "agentic-binding-create", "source-pairs", "source-pairs-checkpoint", "source-pairs-verify", "report-checkpoint", "report-checkpoint-verify", "report-set-checkpoint", "report-set-verify"))
     parser.add_argument("address", nargs="?")
     parser.add_argument("--filter", default="")
     parser.add_argument("--row", type=int, default=None)
@@ -840,6 +1031,27 @@ def main():
     parser.add_argument("--offset", type=int, default=0)
     parser.add_argument("--limit", type=int, default=100)
     args = parser.parse_args()
+    if args.action=="report-set-verify":
+        if not args.input:
+            parser.error("report-set-verify requires --input")
+        try:
+            print(json.dumps(verify_report_set_checkpoint(args.input),
+                             indent=2,ensure_ascii=False))
+            return 0
+        except (OSError,ValueError,KeyError,TypeError,UnicodeError) as error:
+            print("Report set refused: "+str(error),file=sys.stderr)
+            return 1
+    if args.action=="report-set-checkpoint":
+        if not args.output or not 1<=args.page_size<=8192:
+            parser.error("report-set-checkpoint needs --output and page-size 1..8192")
+        try:
+            session=load_session(args.session)
+            print(json.dumps(capture_report_set_checkpoint(
+                session,args.output,args.page_size),indent=2))
+            return 0
+        except (OSError,ValueError,KeyError,TypeError,UnicodeError,HTTPError) as error:
+            print("Report set refused: "+str(error),file=sys.stderr)
+            return 1
     if args.action=="report-checkpoint-verify":
         if not args.input:
             parser.error("report-checkpoint-verify requires --input")

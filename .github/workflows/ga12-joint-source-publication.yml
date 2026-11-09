@@ -10,6 +10,8 @@ on:
       - 'tools/ghidrassist-agent'
       - 'tools/tests/test_source_pair_checkpoint.py'
       - 'tools/tests/test_report_checkpoint.py'
+      - 'tools/tests/test_report_set_checkpoint.py'
+      - 'src/main/java/ghidrassist/ui/GhidrAssistUI.java'
       - 'src/main/java/ghidrassist/hardware/HardwareFlowStageCache.java'
       - 'src/main/java/ghidrassist/ui/tabs/HardwareAnalysisTab.java'
       - 'src/main/java/ghidrassist/automation/AutomationServer.java'
@@ -43,4 +45,5 @@ jobs:
           set -euo pipefail
           python3 -m unittest discover -s tools/tests -p 'test_source_pair_checkpoint.py' -v
           python3 -m unittest discover -s tools/tests -p 'test_report_checkpoint.py' -v
+          python3 -m unittest discover -s tools/tests -p 'test_report_set_checkpoint.py' -v
           python3 -m py_compile tools/ghidrassist-agent
