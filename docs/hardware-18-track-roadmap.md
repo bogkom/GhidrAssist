@@ -1,5 +1,44 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
+## GA-01/02/03/11/12/18 — 2026-11-09: real cross-JVM V2 source report restore, V1 conservative migration
+
+An additional GA-12 acceptance lane expands the existing **three**
+independent actual Ghidra 12.1.4 PUBLIC Java25 CFG restart processes
+with **five independent JVMs** operating on a SECOND isolated,
+byte-exact CPU32 RESET/JSR/MOVEC synthetic Program. A real Ghidra
+headless bootstrap disassembles each source witness and creates the
+same five defined functions used by the native-source tests; only
+this disposable synthetic project is saved.
+
+The V2 phases verify cold computed (source-write), exact same-input
+reopen (source-read), historical GA12-CFG-REPORT-1 legacy restore
+(source-v1), changed synthetic byte input (source-edit) and generic
+CPU32 without explicit MC68332 selection (source-profile). The
+full analysis-input fingerprint is independently captured in each
+new JVM, including Program/Listing, imported SHA, language, selected
+profile and extension identity. The V2 read must be **reused** with
+both typed JSR/MOVEC source pairs and the unresolved JSR omission
+count preserved; an in-place changed byte must yield a different
+full-input hash and **recompute**, without reusing stale evidence.
+Selecting CPU32 generic instead of MC68332 must not restore or
+publish device-specific source rows. The historic V1 snapshot is
+written under the same exact existing disk key for the isolated
+fixture; it may restore CFG evidence only and MUST NOT synthesize
+missing JSR/MOVEC witness pages. V2 inventory incompleteness is
+still explicit, never promoted to complete firmware coverage.
+
+CI requires the distinct true synthetic Ghidra bootstrap PASS
+marker and **all eight independent JVM phase JSON receipts**,
+plus full Java25 extension build. No AI model, host Supervisor,
+running worker, Wyse/Precision project, original ECU411 firmware,
+user profile or OAuth secret participates. Results are per exact
+PR commit; merely decoding V1/V2 bytes in Java21 is not a substitute
+for this real Ghidra restart check. Safety interpretation remains
+static-only, not executed JSR, latched SIMCR/MM, selected VBR/ISR,
+hardware address map or Review/Apply approval. GA-01/02/03/11/
+12/18 remain PARTIAL; GA-14 remains deferred.
+
+
 ## GA-01/02/03/11/12/18 — 2026-11-09: real CodeBrowser RPC source pages, V2 durable source inventories
 
 The previously merged bounded source-pair API now has an
