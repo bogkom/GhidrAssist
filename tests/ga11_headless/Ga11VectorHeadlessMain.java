@@ -1178,6 +1178,19 @@ public final class Ga11VectorHeadlessMain {
                         source.contains("unknown STORE alias: "),
                         "Two-hop candidate was promoted to actual MM "+
                         "execution or unconditional Apply evidence");
+                    // Real 68000:BE:32:CPU32 source has two conflicting
+                    // outer CALLs and an additional missing-A0 caller.
+                    // The grouped two-hop source cannot become consensus.
+                    check(source.contains(
+                        "## Two-hop cross-CALL MMIO source agreement (GA-02/03)") &&
+                        source.contains(
+                        "SOURCE-ONLY MAY-CANDIDATES; NOT HARDWARE PROOF") &&
+                        source.contains(
+                        "| 0x00000700 | 0x00000700 |") &&
+                        source.contains("INCOMPLETE") &&
+                        !source.contains("SAMPLED_AGREEMENT"),
+                        "Real nested CPU32 JSR candidates were falsely "+
+                        "promoted from incomplete source inventory");
                     check(source.contains(
                         "### MC68332 register-byte coverage for two-hop CALL evidence") &&
                         source.contains("SIM.SIMCR / 0xFFFA00 / 16") &&
