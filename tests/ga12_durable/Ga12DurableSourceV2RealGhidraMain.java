@@ -169,6 +169,29 @@ public final class Ga12DurableSourceV2RealGhidraMain {
                 .orElseThrow(),bytes),
             "validly checksummed but incomplete V2 must remain untrusted");
     }
+    /** Deterministically mutate ONLY this isolated synthetic Program from
+     * inside a real GA-12 Ghidra fingerprint read. The test never edits
+     * user firmware or relies on a wall-clock race. */
+    private static TaskMonitor editDuringFingerprint(
+            Program program,long address,
+            java.util.concurrent.atomic.AtomicBoolean fired) {
+        return (TaskMonitor)java.lang.reflect.Proxy.newProxyInstance(
+            TaskMonitor.class.getClassLoader(),new Class<?>[]{TaskMonitor.class},
+            (proxy,method,args)->{
+                if("checkCancelled".equals(method.getName()) &&
+                        fired.compareAndSet(false,true)){
+                    int tx=program.startTransaction(
+                        "GA12 synthetic in-flight fingerprint edit");
+                    try {
+                        var at=program.getAddressFactory()
+                            .getDefaultAddressSpace().getAddress(address);
+                        byte prior=program.getMemory().getByte(at);
+                        program.getMemory().setByte(at,(byte)(prior^0x45));
+                    }finally{program.endTransaction(tx,true);}
+                }
+                return method.invoke(TaskMonitor.DUMMY,args);
+            });
+    }
     private static final String REVIEW_OBJECTIVE=
         "Independently inspect saved synthetic CPU32 source observations";
     private static void createSyntheticReviewSource(Path file,Program program)
@@ -281,6 +304,36 @@ public final class Ga12DurableSourceV2RealGhidraMain {
                     program,TaskMonitor.DUMMY,true).orElseThrow();
                 require(!changed.inputSha256().equals(original.inputSha256()),
                     "actual changed Program has distinct complete input fingerprint");
+                // Create a fresh, complete bound artifact for the already
+                // changed synthetic Program, then mutate Program while a
+                // real Ghidra full-input fingerprint is being read.
+                Path fresh=proofs.resolve("ga12-inflight-load-base.json");
+                AgenticReviewProgramBinding.save(reviewSource,fresh,
+                    program,REVIEW_OBJECTIVE,true,TaskMonitor.DUMMY);
+                var loadFired=new java.util.concurrent.atomic.AtomicBoolean();
+                boolean loadRefused=false;
+                try {
+                    AgenticReviewProgramBinding.load(reviewSource,fresh,
+                        program,true,editDuringFingerprint(
+                            program,0x501L,loadFired));
+                }catch(IllegalStateException|IllegalArgumentException denied){
+                    loadRefused=true;
+                }
+                require(loadFired.get() && loadRefused,
+                    "real Ghidra Program edit DURING binding load must refuse");
+                Path forbidden=proofs.resolve("ga12-inflight-create-refused.json");
+                var saveFired=new java.util.concurrent.atomic.AtomicBoolean();
+                boolean saveRefused=false;
+                try {
+                    AgenticReviewProgramBinding.save(reviewSource,forbidden,
+                        program,REVIEW_OBJECTIVE,true,editDuringFingerprint(
+                            program,0x502L,saveFired));
+                }catch(IllegalStateException|IllegalArgumentException denied){
+                    saveRefused=true;
+                }
+                require(saveFired.get() && saveRefused &&
+                    !Files.exists(forbidden),
+                    "real Ghidra Program edit DURING binding save may not publish");
             }
             var actual=HardwareGhidraInputFingerprint.capture(
                 program,TaskMonitor.DUMMY,selected).orElseThrow();
