@@ -1,5 +1,39 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
+## GA-08/13/18 — 2026-11-09: live revision-bound approved-rename audit CSV
+
+The existing GA-13 transactional Program Options receipt and
+Review/Apply/Undo machinery is retained unchanged. A new
+`HardwareFunctionRenameAudit.Snapshot.csvRevisionBound` requires a
+matching process-local `HardwareAnalysisRevision` for the source
+Program and approved revision before **and after** assembling the
+read-only CSV. It throws `STALE_REVISION` if the Program, profile,
+import SHA or modification number changes while the report is being
+built; no partial receipt export can be presented as current. The
+production `HardwareFunctionRenameService.auditCsv(Program)`
+performs the existing full Options + live Function/SourceType audit,
+then exports through this guard, with no writes or changed Apply
+authorization.
+
+Deterministic Java21 source tests cover accepted same Program/source,
+changed revision, different Program owner, profile changes, import
+source SHA changes and an edit *between* the two CSV checks. The
+existing real Ghidra 12.1.4 PUBLIC Java25 headless two-function
+approved-renames fixture now requires a current CSV containing the
+two GhidrAssist transactional receipts, rejects the previous CSV
+after genuine native Undo, and regenerates a new current receipt CSV
+after genuine Redo. The Python CI harness requires distinct proof
+flags. All existing collision, rollback and corrupt-receipt gates
+stay in place. SourceType USER_DEFINED still identifies no human/AI
+actor; no append-only history is invented, and native Undo can
+remove transactional receipts. Arbitrary local user Ghidra profiles,
+ECU411 projects, OAuth and automated Apply remain untouched.
+
+Acceptance is exact-head Java21 + full Ghidra 12.1.4 PUBLIC extension
+build and actual synthetic Ghidra CI. No Wyse/Precision/Supervisor
+timer or worker. GA-08/13/18 remain PARTIAL; GA-14 deferred.
+
+
 ## GA-06/10/16 — 2026-11-09: exact MC68332UM physical PDF folio field-name witnesses
 
 The 15 previously modeled MC68332 SIMCR/SYNCR bitfield
