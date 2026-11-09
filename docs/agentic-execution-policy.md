@@ -283,6 +283,41 @@ CLI processes must verify both old and new snapshots, which remain
 read-only evidence. This does not test private firmware, user profile
 migration (Issue #98), hardware execution, external LLM or manual approval.
 
+## GA-12/13/15/18: explicit Program-bound CodeBrowser Review import (2026-11-09)
+
+The Query tab now exposes a **separate** `Import Bound Checkpoint`
+button alongside the unchanged legacy `Import Saved Checkpoint`.
+The new action requires the operator to select BOTH the historical
+Agentic evidence file and the previously created GA-12 full-Program
+binding sidecar. A third dialog requires explicit `CPU32 generic
+survey` or `MC68332 explicitly selected` selection; no device
+profile is inferred from the language ID, import SHA or old file.
+
+The new asynchronous `TabController.handleBoundSavedAgenticCheckpointImport`
+runs full persisted Ghidra input fingerprint inspection on a
+SwingWorker, not the EDT. It refuses a missing/mismatched/modified
+Program, selected profile, source checkpoint, installed analyzer or
+stale chat/Program revision; it checks again before staging the
+independently reviewed Query on the EDT. A concurrent running
+task/pending plan/import cannot bypass that guard. Success uses the
+**existing** `stageImportedAgenticDraft` transition: a fresh chat,
+all prior session-scoped grants revoked, Accept All disabled,
+read-only 8-call policy, no tool execution, no approved plan, no
+Apply, and no AI state replay. The old unbound import remains visible
+and is **not** implicitly upgraded to provenance-verified.
+
+In the real Ghidra 12.1.4 PUBLIC/Xvfb two-JVM CodeBrowser/Agentic
+CI, the first Java process records a bounded sidecar from actual
+synthetic live evidence and the installed analyzer. The second
+process verifies it on the reopened persisted Program and stages
+an actual Query through the public controller entrypoint. The
+regression checks that the new UI button exists, a NEW chat and
+read-only limits are enforced, and changed source bytes, another
+Program or mismatched profile are refused. This is an opt-in UI
+workflow, NOT automatic approval of archived evidence. The
+sidecar SHA authenticates neither the author nor the time of the
+original historical evidence.
+
 ## GA-12/13/15 — exact Program-bound saved Review after Ghidra restart (2026-11-09)
 
 A new **opt-in Java review binding helper**

@@ -135,6 +135,13 @@ jobs:
                        "old_review_draft_rejected","no_inherited_accept_all",
                        "no_inherited_task_policy","no_automatic_plan_or_model_run",
                        "new_review_still_required","wrong_program_refused",
+                       "bound_review_real_gui_button",
+                       "bound_review_verified_after_restart",
+                       "bound_review_wrong_profile_refused",
+                       "bound_review_wrong_program_refused",
+                       "bound_review_source_tamper_refused",
+                       "bound_review_new_chat_readonly",
+                       "bound_review_no_auto_run_or_apply",
               "new_review_started_only_after_import",
               "new_checkpoint_saved_in_new_jvm",
               "ga12_cfg_fixed_point_restored_after_restart"):

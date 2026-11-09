@@ -863,7 +863,8 @@ public class TabController {
                 handleSavedAgenticCheckpointImport(file,objective));
             return;
         }
-        if(isQueryRunning || isAgentPlanPending || isCancelling) {
+        if(isQueryRunning || isAgentPlanPending || isCancelling ||
+                boundAgenticReviewPending) {
             Msg.showError(getClass(),queryTab,"Saved checkpoint",
                 "Finish or cancel the running task before importing prior evidence.");
             return;
@@ -887,13 +888,86 @@ public class TabController {
         }
     }
 
+    // GA-12/13/15: a separate, EXPLICIT opt-in path for versioned
+    // Program-bound historical evidence. The legacy unbound import remains
+    // available; this route never bypasses the fresh Review/Approve flow.
+    private boolean boundAgenticReviewPending;
+
+    public void handleBoundSavedAgenticCheckpointImport(
+            java.nio.file.Path checkpoint, java.nio.file.Path binding,
+            boolean mc68332) {
+        if (!SwingUtilities.isEventDispatchThread()) {
+            SwingUtilities.invokeLater(() ->
+                handleBoundSavedAgenticCheckpointImport(
+                    checkpoint,binding,mc68332));
+            return;
+        }
+        if(isQueryRunning || isAgentPlanPending || isCancelling ||
+                boundAgenticReviewPending) {
+            Msg.showError(getClass(),queryTab,"Program-bound Review",
+                "Finish the active task, plan or import before staging a new review.");
+            return;
+        }
+        var program=plugin.getCurrentProgram();
+        if(program==null) {
+            Msg.showError(getClass(),queryTab,"Program-bound Review",
+                "Open an isolated Program before importing saved evidence.");
+            return;
+        }
+        final long revision=program.getModificationNumber();
+        final int initialSession=queryService.getCurrentSessionId();
+        boundAgenticReviewPending=true;
+        new javax.swing.SwingWorker<
+                ghidrassist.agent.react.AgenticReviewDraft,Void>() {
+            @Override
+            protected ghidrassist.agent.react.AgenticReviewDraft doInBackground()
+                    throws Exception {
+                // Full GA-12 fingerprinting may inspect up to 64 MiB of
+                // initialized memory; never compute it on Swing EDT.
+                return ghidrassist.agent.react.AgenticReviewProgramBinding.load(
+                    checkpoint,binding,program,mc68332,
+                    ghidra.util.task.TaskMonitor.DUMMY);
+            }
+            @Override
+            protected void done() {
+                try {
+                    var draft=get();
+                    if(program!=plugin.getCurrentProgram() ||
+                            program.getModificationNumber()!=revision ||
+                            queryService.getCurrentSessionId()!=initialSession ||
+                            isQueryRunning || isAgentPlanPending || isCancelling)
+                        throw new IllegalStateException(
+                            "Program or review state changed during verification");
+                    stageImportedAgenticDraft(draft);
+                    // Visible Query editor contains the staged NEW review.
+                    // Do not block Swing EDT with a modal success dialog.
+                    Msg.info(this,"Program-bound historical observations staged "+
+                        "as NEW unapproved Review; fresh plan and approval "+
+                        "required, no inherited tools or Apply.");
+                }catch(Exception error){
+                    Throwable reason=error instanceof
+                        java.util.concurrent.ExecutionException &&
+                        error.getCause()!=null ? error.getCause() : error;
+                    Msg.showError(getClass(),queryTab,
+                        "Program-bound checkpoint refused",
+                        reason.getMessage()==null ?
+                        "Checkpoint or Program fingerprint mismatch" :
+                        reason.getMessage());
+                }finally{
+                    boundAgenticReviewPending=false;
+                }
+            }
+        }.execute();
+    }
+
     /** Import only locally validated evidence data into a *new* explicit Review flow. */
     public void handleAgenticReviewDraftImport(java.nio.file.Path path) {
         if (!SwingUtilities.isEventDispatchThread()) {
             SwingUtilities.invokeLater(() -> handleAgenticReviewDraftImport(path));
             return;
         }
-        if (isQueryRunning || isAgentPlanPending || isCancelling) {
+        if (isQueryRunning || isAgentPlanPending || isCancelling ||
+                boundAgenticReviewPending) {
             Msg.showError(getClass(), queryTab, "Agentic Review",
                 "Finish or cancel the current analysis/plan before importing another draft.");
             return;
@@ -948,6 +1022,11 @@ public class TabController {
     }
 
     public void handleQuerySubmit(String query, boolean useRAG, boolean useMCP, boolean useAgentic) {
+        if(boundAgenticReviewPending) {
+            Msg.showError(getClass(),queryTab,"Program-bound Review",
+                "Finish Program verification before starting another Query.");
+            return;
+        }
         // If cancellation is in progress, ignore the click
         if (isCancelling) {
             Msg.info(this, "Cancellation in progress, please wait...");

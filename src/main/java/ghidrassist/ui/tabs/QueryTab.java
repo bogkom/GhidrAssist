@@ -54,6 +54,7 @@ public class QueryTab extends JPanel {
     private JButton deleteButton;
     private JButton loadAgenticDraftButton;
     private JButton loadSavedCheckpointButton;
+    private JButton loadBoundCheckpointButton;
     private JTable chatHistoryTable;
     private DefaultTableModel chatHistoryModel;
     private JTextArea contextStatusLabel;
@@ -157,6 +158,9 @@ public class QueryTab extends JPanel {
         deleteButton = new JButton("Delete");
         loadAgenticDraftButton = new JButton("Import Review Draft");
         loadSavedCheckpointButton = new JButton("Import Saved Checkpoint");
+        loadBoundCheckpointButton = new JButton("Import Bound Checkpoint");
+        loadBoundCheckpointButton.setToolTipText(
+            "Explicit GA-12 full Program fingerprint binding; always a NEW Review and Approve Plan.");
         loadSavedCheckpointButton.setToolTipText("Review previous evidence as untrusted data; new plan and approval required.");
         loadAgenticDraftButton.setToolTipText("Load a verified local Agentic evidence proposal; never auto-run tools or approve a plan.");
         editSaveButton = new JButton("Edit");
@@ -340,6 +344,7 @@ public class QueryTab extends JPanel {
         buttonPanel.add(deleteButton);
         buttonPanel.add(loadAgenticDraftButton);
         buttonPanel.add(loadSavedCheckpointButton);
+        buttonPanel.add(loadBoundCheckpointButton);
         add(buttonPanel, BorderLayout.SOUTH);
     }
 
@@ -368,6 +373,34 @@ public class QueryTab extends JPanel {
             if (objective == null) return;
             controller.handleSavedAgenticCheckpointImport(
                 chooser.getSelectedFile().toPath(), objective);
+        });
+
+        loadBoundCheckpointButton.addActionListener(e -> {
+            // Unlike the legacy import, this path REQUIRES a separately
+            // saved GA-12 Program binding and an explicit device selection.
+            // It does not silently create trust for an old checkpoint.
+            JFileChooser checkpointChooser=new JFileChooser();
+            checkpointChooser.setDialogTitle(
+                "Select saved Agentic evidence checkpoint (read-only)");
+            if(checkpointChooser.showOpenDialog(this)!=JFileChooser.APPROVE_OPTION)
+                return;
+            JFileChooser bindingChooser=new JFileChooser();
+            bindingChooser.setDialogTitle(
+                "Select matching GA-12 full Program Review binding");
+            if(bindingChooser.showOpenDialog(this)!=JFileChooser.APPROVE_OPTION)
+                return;
+            Object choice=JOptionPane.showInputDialog(this,
+                "Select the EXACT device profile used to bind this Program. " +
+                "A new investigation and approval are still required:",
+                "Program-bound Review — explicit profile",
+                JOptionPane.QUESTION_MESSAGE,null,
+                new Object[]{"CPU32 generic survey","MC68332 explicitly selected"},
+                null);
+            if(choice==null)return;
+            controller.handleBoundSavedAgenticCheckpointImport(
+                checkpointChooser.getSelectedFile().toPath(),
+                bindingChooser.getSelectedFile().toPath(),
+                "MC68332 explicitly selected".equals(choice));
         });
 
         loadAgenticDraftButton.addActionListener(e -> {
