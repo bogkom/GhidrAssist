@@ -1,5 +1,6 @@
 package ghidrassist.hardware;
 
+import ghidra.framework.options.Options;
 import ghidra.program.model.data.Pointer;
 import ghidra.program.model.listing.Function;
 import ghidra.program.model.listing.Parameter;
@@ -50,6 +51,83 @@ public final class HardwareScopedVariableService {
             v.getDataType() instanceof Pointer,
             v.getSource()==SourceType.USER_DEFINED,
             v instanceof Parameter p && (p.isAutoParameter() || p.isForcedIndirect()));
+    }
+
+    /** Exact Function/kind/ordinal selection, to detect stale storage in audits. */
+    private static Variable byOrdinal(Function fn,
+            HardwareScopedVariableReview.Kind kind,int ordinal) {
+        if(fn==null || kind==null)return null;
+        Variable[] vars=kind==HardwareScopedVariableReview.Kind.PARAMETER?
+            fn.getParameters():fn.getLocalVariables();
+        for(int i=0;i<vars.length;i++) {
+            Variable v=vars[i];
+            int index=v instanceof Parameter p?p.getOrdinal():i;
+            if(index==ordinal)return v;
+        }
+        return null;
+    }
+
+    /**
+     * Read-only correlation of receipts stored in the Program's own Ghidra
+     * Options, without fabricating an append-only user or model actor log.
+     * Native Ghidra Undo can remove the receipt with the corresponding name.
+     */
+    public static HardwareScopedVariableReceipt.Snapshot audit(Program program) {
+        if(program==null)throw new IllegalArgumentException("Missing Program");
+        long before=program.getModificationNumber();
+        String sha=program.getExecutableSHA256();
+        if(sha==null)sha="UNKNOWN";
+        List<HardwareScopedVariableReceipt.Observation> rows=new ArrayList<>();
+        if(program.getOptionsNames().contains(
+                HardwareScopedVariableReceipt.OPTIONS_CATEGORY)) {
+            Options receipts=program.getOptions(
+                HardwareScopedVariableReceipt.OPTIONS_CATEGORY);
+            List<String> keys=receipts.getOptionNames();
+            if(keys.size()>HardwareScopedVariableReceipt.MAX_ROWS)
+                throw new IllegalStateException("Unbounded variable receipts");
+            for(String key:keys) {
+                if(key==null || !key.matches("PV_[0-9A-F]{8}_[PL]_[0-9]{4}"))
+                    throw new IllegalStateException("Unexpected variable receipt key");
+                String stored=receipts.getString(key,null);
+                if(stored==null)
+                    throw new IllegalStateException("Missing persisted variable receipt");
+                var entry=HardwareScopedVariableReceipt.decode(stored);
+                if(!entry.optionKey().equals(key))
+                    throw new IllegalStateException("Mismatched variable receipt owner");
+                Function fn=program.getFunctionManager().getFunctionAt(
+                    program.getAddressFactory().getDefaultAddressSpace()
+                        .getAddress(entry.function()));
+                Variable live=byOrdinal(fn,entry.kind(),entry.ordinal());
+                rows.add(new HardwareScopedVariableReceipt.Observation(
+                    key,stored,live==null?null:live.getName(),
+                    live==null || live.getVariableStorage()==null?
+                        null:live.getVariableStorage().toString(),
+                    live!=null && live.getDataType() instanceof Pointer,
+                    live!=null && live.getSource()==SourceType.USER_DEFINED));
+            }
+        }
+        if(program.getModificationNumber()!=before)
+            throw new IllegalStateException("Stale variable receipt audit");
+        var result=HardwareScopedVariableReceipt.inspect(rows,before,sha);
+        if(program.getModificationNumber()!=before)
+            throw new IllegalStateException("Changed variable audit Program");
+        return result;
+    }
+
+    /** Current-only CSV, never a rename approval or source of actor identity. */
+    public static String auditCsv(Program program) {
+        if(program==null)throw new IllegalArgumentException("Missing Program");
+        long revision=program.getModificationNumber();
+        String sha=program.getExecutableSHA256();
+        if(sha==null)sha="UNKNOWN";
+        var captured=HardwareAnalysisRevision.capture(program,revision,
+            program.getLanguageID().toString(),sha,true);
+        var snapshot=audit(program);
+        return snapshot.csvRevisionBound(captured,()->
+            HardwareAnalysisRevision.capture(program,
+                program.getModificationNumber(),program.getLanguageID().toString(),
+                program.getExecutableSHA256()==null?
+                    "UNKNOWN":program.getExecutableSHA256(),true));
     }
 
     /** Read-only proposals for actual typed pointer arguments and locals. */
@@ -117,10 +195,38 @@ public final class HardwareScopedVariableService {
                 if(!newNames.add(p.original().functionEntry()+"/"+
                         p.proposedName().toUpperCase(java.util.Locale.ROOT)))
                     throw new IllegalStateException("Duplicate proposed function variable name");
+            // Prepare ALL versioned receipts before the first variable
+            // modification. Never silently overwrite a prior approved name.
+            // Persist every receipt inside the SAME native undoable Program
+            // transaction as its corresponding variable rename.
+            Options receipts=program.getOptions(
+                HardwareScopedVariableReceipt.OPTIONS_CATEGORY);
+            List<String> prepared=new ArrayList<>();
+            for(var p:accepted) {
+                var o=p.original();
+                var entry=new HardwareScopedVariableReceipt.Entry(
+                    o.functionEntry(),o.kind(),o.ordinal(),o.storage(),
+                    o.currentName(),p.proposedName(),
+                    reviewed.modificationNumber(),
+                    reviewed.sourceSha256()==null?"UNKNOWN":
+                        reviewed.sourceSha256());
+                String key=entry.optionKey();
+                if(receipts.getString(key,null)!=null)
+                    throw new IllegalStateException(
+                        "Existing variable approval receipt at "+key);
+                prepared.add(HardwareScopedVariableReceipt.encode(entry));
+            }
             for(int i=0;i<targets.size();i++){
                 Variable v=targets.get(i);
                 var p=accepted.get(i);
                 v.setName(p.proposedName(),SourceType.USER_DEFINED);
+                String key=HardwareScopedVariableReceipt.optionKey(
+                    p.original().functionEntry(),p.original().kind(),
+                    p.original().ordinal());
+                receipts.setString(key,prepared.get(i));
+                if(!prepared.get(i).equals(receipts.getString(key,null)))
+                    throw new IllegalStateException(
+                        "GhidrAssist pointer receipt write failed");
                 changed.add(p.original().currentName()+" -> "+p.proposedName());
             }
             commit=true;
