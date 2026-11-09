@@ -90,7 +90,7 @@ public final class AutomationFunctionXrefs {
         result.add("rows",rows);
         result.addProperty("evidence","Static Ghidra function-body references; no dynamic CALL or execution proof");
         if(program.getModificationNumber()!=revision ||
-                program.getFunctionManager().getFunctionAt(function.getEntryPoint())!=function)
+                program.getFunctionManager().getFunctionAt(function.getEntryPoint())==null)
             throw new IllegalStateException(
                 "STALE_REVISION: Program or function changed during XREF collection");
         return result;
