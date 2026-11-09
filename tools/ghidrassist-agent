@@ -543,7 +543,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--session", default=os.environ.get(
         "GHIDRASSIST_AGENT_SESSION", str(Path.home() / ".local/state/ghidrassist-agent/session.json")))
-    parser.add_argument("action", choices=("status", "snapshot", "analyze", "task", "mmio", "review-preview", "profile-select", "function", "xrefs", "function-xrefs-body", "decompile", "decompile-status", "bundle", "paths", "listing", "listing-range", "goto", "tab-select", "table-select", "program-open", "review-prepare", "review-apply", "review-undo", "cancel", "report", "export", "agentic-findings", "agentic-checkpoint", "agentic-verify", "agentic-read", "agentic-resume-check", "agentic-review-draft", "agentic-lineage-verify", "source-pairs"))
+    parser.add_argument("action", choices=("status", "snapshot", "analyze", "task", "mmio", "review-preview", "profile-select", "function", "xrefs", "function-xrefs-body", "decompile", "decompile-status", "bundle", "paths", "listing", "listing-range", "goto", "tab-select", "table-select", "program-open", "review-prepare", "review-apply", "review-undo", "cancel", "report", "export", "agentic-findings", "agentic-checkpoint", "agentic-verify", "agentic-read", "agentic-resume-check", "agentic-review-draft", "agentic-lineage-verify", "source-pairs", "source-pairs-checkpoint", "source-pairs-verify"))
     parser.add_argument("address", nargs="?")
     parser.add_argument("--filter", default="")
     parser.add_argument("--row", type=int, default=None)
@@ -567,6 +567,29 @@ def main():
     parser.add_argument("--offset", type=int, default=0)
     parser.add_argument("--limit", type=int, default=100)
     args = parser.parse_args()
+    if args.action=="source-pairs-verify":
+        if not args.input:
+            parser.error("source-pairs-verify requires --input")
+        try:
+            print(json.dumps(verify_source_pairs_checkpoint(args.input),
+                             indent=2,ensure_ascii=False))
+            return 0
+        except (OSError,ValueError,KeyError,TypeError,UnicodeError) as error:
+            print("Source checkpoint refused: "+str(error),file=sys.stderr)
+            return 1
+    if args.action=="source-pairs-checkpoint":
+        if not args.output:
+            parser.error("source-pairs-checkpoint requires --output")
+        if not 1<=args.page_size<=32:
+            parser.error("source-pairs-checkpoint page-size must be 1..32")
+        try:
+            session=load_session(args.session)
+            print(json.dumps(capture_source_pairs_checkpoint(
+                session,args.output,args.page_size),indent=2))
+            return 0
+        except (OSError,ValueError,KeyError,TypeError,HTTPError) as error:
+            print("Source checkpoint refused: "+str(error),file=sys.stderr)
+            return 1
     if args.action=="agentic-lineage-verify":
         if not args.input or not args.parent:
             parser.error("agentic-lineage-verify requires --input and --parent")
