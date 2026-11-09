@@ -28,7 +28,11 @@ public final class HardwareSimD2RegisterWitness {
                 throw new IllegalArgumentException("Bad reviewed SIM row");
         }
         public String tableAddress(){
-            return String.format(Locale.ROOT,"$YFF%03X",offset);
+            // Table D-2 prints aligned 16-bit ROW addresses, even when
+            // only the lower byte at offset+1 implements an 8-bit register.
+            // The profile must retain the real odd byte address.
+            return String.format(Locale.ROOT,"$YFF%03X",
+                widthBits==8?offset&~1:offset);
         }
     }
     public static final List<Reference> REVIEWED=List.of(
