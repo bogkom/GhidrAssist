@@ -3,6 +3,8 @@ on:
   pull_request:
     paths:
       - 'tests/ga12_durable/**'
+      - 'src/main/java/ghidrassist/agent/react/AgenticReviewProgramBinding.java'
+      - 'src/main/java/ghidrassist/agent/react/AgenticReviewDraft.java'
       - 'tools/ghidra_scripts/GA12BootstrapDurableSourceV2.java'
       - 'tools/generate-synthetic-reset-indirect-vbr.py'
       - 'src/main/java/ghidrassist/hardware/HardwareDurableCfgReport.java'
@@ -42,7 +44,7 @@ jobs:
           bash tools/ci/ghidra-gradle-ci-network.sh "$GHIDRA_INSTALL_DIR"
           "$GHIDRA_INSTALL_DIR/support/gradle/gradlew" \
             --no-daemon --stacktrace buildExtension
-      - name: Verify 3 CFG and 8 JSR MOVEC V2/V1 real independent JVM phases
+      - name: Verify 3 CFG and 9 JSR MOVEC V2/V1 Review-binding JVM phases
         shell: bash
         run: |
           set -euo pipefail
@@ -61,7 +63,11 @@ jobs:
           expected={
               "status":"PASSED_SYNTHETIC_REAL_GHIDRA_HEADLESS",
               "restart_processes":3,
-              "v2_source_processes":8,
+              "v2_source_processes":9,
+              "saved_review_binding_cross_jvm":True,
+              "saved_review_changed_bytes_denied":True,
+              "saved_review_renamed_function_denied":True,
+              "saved_review_wrong_mc68332_profile_denied":True,
               "v2_source_cold_computed":True,
               "v2_corrupt_semantic_checksum_refused":True,
               "v2_mismatched_reset_provenance_refused":True,
@@ -77,13 +83,13 @@ jobs:
           }
           for k,v in expected.items():
               assert p.get(k)==v, (k,p.get(k),v)
-          print("GA12 REAL GHIDRA V2 SOURCE RESTART PASS: phases=11 native_pairs=2 omissions=1")
+          print("GA12 REAL GHIDRA V2 SOURCE RESTART PASS: phases=12 native_pairs=2 omissions=1")
           PY
       - name: Bounded diagnostic tail for synthetic-only failures
         if: failure()
         shell: bash
         run: |
-          for f in "$RUNNER_TEMP"/ga12-v2-real/{source-import-bootstrap,source-compile,integration-source-write,integration-source-read,integration-source-corrupt,integration-source-mismatch,integration-source-incomplete,integration-source-v1,integration-source-edit,integration-source-profile}.log; do
+          for f in "$RUNNER_TEMP"/ga12-v2-real/{source-import-bootstrap,source-compile,integration-source-write,integration-source-read,integration-source-corrupt,integration-source-mismatch,integration-source-incomplete,integration-source-v1,integration-source-edit,integration-source-name,integration-source-profile}.log; do
             if test -f "$f"; then
               echo "=== $(basename "$f") ==="
               tail -n 65 "$f"
