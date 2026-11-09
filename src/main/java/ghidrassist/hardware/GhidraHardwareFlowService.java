@@ -1460,7 +1460,7 @@ public final class GhidraHardwareFlowService {
             resetIndirectVbr=HardwareResetIndirectVbrCorrelation.inspect(
                 indirectSources,movecSources,reset.visited(),
                 reset.recognized(),reset.incomplete(),
-                indirectMmEvidence.omittedWitnesses(),
+                indirectMmEvidence.omittedWitnesses()+indirectCandidatesOmitted,
                 vbrSourceSitesOmitted+vbrSourceSites.size()-vbrPlan.rows().size(),
                 HardwareResetIndirectVbrCorrelation.MAX_DISPLAY).markdown();
         }else
