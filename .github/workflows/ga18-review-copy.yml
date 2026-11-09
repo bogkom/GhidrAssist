@@ -85,6 +85,66 @@ jobs:
           assert apply["second_undo_rejected"] is True,apply
           print("GA18 REVIEW COPY NATIVE PASS: single-item apply=1 undo=1 invalid_token_rejected=1")
           PY
+      - name: Real CodeBrowser source-pair JSON-RPC paging + CLI snapshot + stale cursor regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile tests/codebrowser_harness/run.py tools/ghidrassist-agent
+          xvfb-run -a -s '-screen 0 1400x1050x24' \
+            bash -c 'openbox --sm-disable >/dev/null 2>&1 & wm=$!; trap "kill $wm 2>/dev/null || true" EXIT; sleep 1; python3 tests/codebrowser_harness/run.py "$@"' source-pairs \
+              --ghidra "$GHIDRA_INSTALL_DIR" --java-home "$JAVA_HOME" \
+              --extension-zip "$EXTENSION" \
+              --output "$RUNNER_TEMP/source-pairs-evidence" \
+              --automation-probe --source-pairs-probe --timeout 300
+          python3 - <<'PY'
+          import json,os
+          from pathlib import Path
+          root=Path(os.environ["RUNNER_TEMP"])/"source-pairs-evidence"
+          evidence=json.loads((root/"source-pairs-real-rpc.json").read_text())
+          assert evidence["schema"]==1,evidence
+          assert evidence["real_codebrowser"] and evidence["real_bearer_jsonrpc"],evidence
+          assert evidence["native_program"]=="synthetic-reset-indirect-vbr.bin",evidence
+          assert evidence["total_pairs"]==2 and len(evidence["all_observed_rows"])==2,evidence
+          assert evidence["all_observed_rows"][0]["indirectPc"]==0x138,evidence
+          assert evidence["all_observed_rows"][1]["indirectPc"]==0x206,evidence
+          for key in ("generic_cpu32_denied","malformed_cursors_denied",
+                      "switched_program_denied","source_generation_changed",
+                      "no_production_write"):
+              assert evidence[key] is True,(key,evidence)
+          assert evidence["omitted_indirect"]==1,evidence
+          assert evidence["local_checkpoint_complete"] is False,evidence
+          assert len(evidence["local_checkpoint_sha256"])==64,evidence
+          print("GA12 REAL CODEBROWSER SOURCE PAIRS HTTP + CLI PASS: pairs=2 stale=DENIED")
+          PY
+      - name: Verify local source checkpoint after actual CodeBrowser exit; tampering denied
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/source-pairs-evidence"
+          python3 tools/ghidrassist-agent --session "$RUNNER_TEMP/nonexistent-session.json" \
+            source-pairs-verify --input "$root/source-pairs-v1-checkpoint.json" \
+            > "$RUNNER_TEMP/source-pairs-offline-verified.json"
+          python3 - <<'PY'
+          import json,os,subprocess
+          from pathlib import Path
+          root=Path(os.environ["RUNNER_TEMP"])/"source-pairs-evidence"
+          verified=json.loads((Path(os.environ["RUNNER_TEMP"])/
+              "source-pairs-offline-verified.json").read_text())
+          assert verified["verified"] and verified["total_pairs"]==2,verified
+          assert not verified["bounded_source_complete"] and not verified["resume_authorized"],verified
+          original=root/"source-pairs-v1-checkpoint.json"
+          altered=root/"tampered-offline.json"
+          envelope=json.loads(original.read_text())
+          envelope["payload"]["rows"][0]["indirectPc"]=0x999
+          altered.write_text(json.dumps(envelope))
+          result=subprocess.run(["python3","tools/ghidrassist-agent",
+              "--session",str(root/"missing-token.json"),
+              "source-pairs-verify","--input",str(altered)],
+              capture_output=True,text=True)
+          assert result.returncode!=0,result.stdout
+          assert "SHA-256 mismatch" in result.stderr,result.stderr
+          print("GA12 OFFLINE SOURCE CHECKPOINT AFTER CODEBROWSER EXIT PASS")
+          PY
       - name: Reject mismatched source SHA-256 before any copy write
         shell: bash
         run: |
@@ -114,5 +174,6 @@ jobs:
           path: |
             ${{ runner.temp }}/review-copy-evidence/
             ${{ runner.temp }}/review-copy-negative/
+            ${{ runner.temp }}/source-pairs-evidence/
           if-no-files-found: ignore
           retention-days: 14
