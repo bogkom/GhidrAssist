@@ -187,6 +187,43 @@ public final class Ga12InterruptedCfgRestartFixture {
             "Real CPU32 CFG failed to converge with expected STORE sites");
         return new RealFlow(entry,List.copyOf(steps),result);
     }
+    /**
+     * A real decoded conditional branch has two distinct sources for A0 at
+     * the same later STORE. A source reachable from RESET/CFG is not proof
+     * that either path executes or that either MMIO register is written.
+     */
+    private static RealFlow divergentRealCpu32Source(Program program)
+            throws Exception {
+        var space=program.getAddressFactory().getDefaultAddressSpace();
+        var function=program.getFunctionManager().getFunctionAt(
+            space.getAddress(0xd0L));
+        require(function!=null,"Real divergent CPU32 function missing");
+        long[] pcs={0xd0L,0xd6L,0xd8L,0xdeL,0xe0L,0xe6L,0xeaL};
+        List<HardwareDataflow.Step> steps=new ArrayList<>();
+        for(long pc:pcs) {
+            var insn=program.getListing().getInstructionAt(
+                space.getAddress(pc));
+            require(insn!=null && function.getBody().contains(insn.getAddress()),
+                "Real divergent Ghidra instruction missing: "+
+                Long.toHexString(pc));
+            steps.add(GhidraHardwareFlowService.translate(insn,function));
+        }
+        require(steps.get(1).successors.contains(0xd8L) &&
+                steps.get(1).successors.contains(0xe0L) &&
+                steps.get(3).successors.contains(0xe6L) &&
+                steps.get(4).successors.contains(0xe6L),
+            "Real Ghidra branch CFG did not preserve both paths");
+        var result=HardwareDataflow.analyze(0xd0L,steps,
+            Set.of(0xfffa00L,0xfffa68L),128);
+        require(!result.truncated && result.reachedNodes==7 &&
+                result.snapshots.size()==1 &&
+                result.snapshots.get(0).instruction==0xe6L &&
+                result.snapshots.get(0).effectiveAddress==null &&
+                result.snapshots.get(0).knownPeripheralWords.isEmpty(),
+            "Divergent branch fabricated a proven SIMCR/CSBAR write");
+        return new RealFlow(0xd0L,List.copyOf(steps),result);
+    }
+
     private static String verifyRealRegisterAndAliasFlow(Program program,
             Path output,HardwareDurableStageStore.Key key,
             boolean resumedJvm) throws Exception {
@@ -231,10 +268,11 @@ public final class Ga12InterruptedCfgRestartFixture {
                 o.get(2).knownPeripheralWords.get(0xfffa00L)) &&
                 o.get(2).writeBits==16,
             "Real following complete word did not reestablish SIMCR evidence");
+        RealFlow divergent=divergentRealCpu32Source(program);
         Path dir=output.resolve("ga12-real-pcode-function-stages");
         Files.createDirectories(dir);
         StringBuilder hashes=new StringBuilder();
-        for(RealFlow flow:List.of(indirect,alias,overlap)) {
+        for(RealFlow flow:List.of(indirect,alias,overlap,divergent)) {
             byte[] serialized=HardwareFunctionResultCodec.encode(flow.result());
             String digest=HardwareDurableStageStore.hash(serialized);
             hashes.append(Long.toHexString(flow.entry())).append(':')
