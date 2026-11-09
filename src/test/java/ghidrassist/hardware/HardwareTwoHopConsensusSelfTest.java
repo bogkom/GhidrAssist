@@ -258,6 +258,29 @@ public final class HardwareTwoHopConsensusSelfTest {
                     HardwareTwoHopConsensus.State.INCOMPLETE,
             "Truncated source pagination cannot imply local convergence");
 
+        // A mid-render Listing revision invalidates the ENTIRE report,
+        // including rows completed before the edit was observed.
+        AtomicInteger reportReads=new AtomicInteger();
+        var discardedReport=HardwareTwoHopConsensus.markdown(
+            allOuter,multiple,0,24,rev,
+            ()->reportReads.getAndIncrement()<3?equal:changed);
+        ok(discardedReport.contains("STALE_REVISION") &&
+                !discardedReport.contains("SAMPLED_AGREEMENT") &&
+                !discardedReport.contains("0x00FFFA00") &&
+                !discardedReport.contains("0x00FFFA68"),
+            "Ghidra edit during multi-row report discards prior valid rows");
+        // One bridge's callers are not exchangeable with another bridge's
+        // leaf, even when both may reach the same tracked MCU registers.
+        var missingForeign=HardwareTwoHopConsensus.inspectScoped(
+            allOuter,multiple,0x640L,0x780L,0x780L);
+        ok(missingForeign.state()==HardwareTwoHopConsensus.State.INCOMPLETE ||
+                missingForeign.state()==HardwareTwoHopConsensus.State.NO_SAMPLED_CALLS,
+            "Foreign leaf rows never become cross-bridge agreement");
+        var missingBridge=HardwareTwoHopConsensus.inspectScoped(
+            allOuter,multiple,0x7f0L,0x780L,0x780L);
+        ok(missingBridge.state()==HardwareTwoHopConsensus.State.NO_SAMPLED_CALLS,
+            "Unobserved bridge is not interpreted as globally absent effect");
+
         // One branch assigns a DIFFERENT A1, so no exact effective
         // address survives the fixed-point join at inner JSR.
         var divergentBranch=new HardwareTwoHopRegisterFlow.Bridge(
