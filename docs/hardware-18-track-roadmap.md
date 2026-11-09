@@ -1,5 +1,35 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
+## GA-12/13/15/18 — 2026-11-09: full Program-bound saved Agentic Review across JVMs
+
+An additional **explicit opt-in** Java helper creates a local read-only
+sidecar that binds a historical complete Agentic evidence checkpoint
+and new objective to the existing GA-12 complete input fingerprint,
+not merely the old firmware import SHA or transient modification
+number. It covers the actual persisted Ghidra Program identity,
+Listing, memory, functions, references and installed analyzer build,
+with explicit MC68332/CPU32 selection. Only an unchanged Program may
+reload this untrusted historical Review source in a fresh JVM;
+any change to bytes, function name, imported source file, project
+identity, profile or sidecar/checkpoint contents refuses the binding.
+Both captures around the read must agree.
+
+A private 0600 create-no-overwrite sidecar records only versioned
+identity digests, objective and explicit **false** approval/Apply/
+tool/model-restoration flags. This is **not** an approved Review
+token, not a true old AI session or an actor signature; source
+evidence must still be independently reviewed. It neither changes
+existing GUI policy nor silently activates this opt-in binding for
+historical legacy files. The real synthetic 12.1.4 PUBLIC Java25
+CI repeats the existing three CFG JVMs and nine source JVM phases,
+including a saved/reopened unchanged binding, synthetic function
+rename, edited byte, different selected MCU, byte-edited source
+checkpoint and no-overwrite. Java21/Python and normal extension
+regressions remain mandatory. No ECU411, private Ghidra project,
+user profile/OAuth or stopped local worker is accessed. GA-12/13/
+15/18 remain PARTIAL; GA-14 remains deferred.
+
+
 ## GA-12/13/15/18 — 2026-11-09: bounded rooted Agentic checkpoint ancestry and Review handoff
 
 The previous Agentic history supported only adjacent parent-child
