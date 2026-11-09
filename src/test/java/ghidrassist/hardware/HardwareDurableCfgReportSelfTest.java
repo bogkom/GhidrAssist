@@ -73,6 +73,52 @@ public final class HardwareDurableCfgReportSelfTest {
             "partial analysis and interrupted checkpoint never restored complete");
         ok(!eligibleForCompletedRestore(null),
             "null checkpoint is not evidence");
+        // V2 persists only bounded immutable typed source witnesses, not
+        // a Markdown-parsed approximation or an Apply/GUI authorization.
+        var sources=new HardwareResetIndirectVbrCorrelation.SourceInventory(
+            List.of(new HardwareResetIndirectVbrCorrelation.Indirect(
+                0x130L,0x138L,0x180L,true,false),
+                new HardwareResetIndirectVbrCorrelation.Indirect(
+                0x200L,0x206L,0x180L,true,false)),
+            List.of(new HardwareResetIndirectVbrCorrelation.Vbr(
+                0x130L,0x144L,null,true),
+                new HardwareResetIndirectVbrCorrelation.Vbr(
+                0x200L,0x208L,null,true)),
+            Set.of(0x100L,0x130L),true,false,1,2);
+        var typed=new Snapshot(complete.markdown(),complete.csv(),
+            complete.functions(),complete.indirect(),complete.vbr(),
+            complete.unresolved(),complete.visited(),
+            complete.limited(),complete.resetRecognized(),
+            complete.resetIncomplete(),complete.cfgReviewComplete(),
+            complete.cfgOmitted(),complete.pointersOmitted(),
+            complete.sites(),complete.roles(),complete.resetFunctions(),sources);
+        var decoded=decode(encode(typed)).orElseThrow();
+        ok(decoded.equals(typed) &&
+            decoded.sourceInventory()!=null &&
+            decoded.sourceInventory().page(0,1).colocatedPairs()==2 &&
+            decoded.sourceInventory().page(1,1).rows().size()==1 &&
+            decoded.sourceInventory().page(2,1).rows().isEmpty() &&
+            decoded.sourceInventory().omittedIndirect()==1 &&
+            decoded.sourceInventory().omittedVbr()==2,
+            "V2 typed JSR/MOVEC full source inventory survives binary roundtrip");
+        ok(eligibleForCompletedRestore(decoded),
+            "V2 complete CFG keeps strict original restore eligibility");
+        byte[] v2=encode(complete); // No optional source inventory.
+        byte[] v1=Arrays.copyOf(v2,v2.length-1);
+        byte[] schema=SCHEMA.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        v1[4+schema.length-1]=(byte)'1';
+        var old=decode(v1).orElseThrow();
+        ok(old.sourceInventory()==null && old.markdown().equals(complete.markdown()) &&
+            eligibleForCompletedRestore(old),
+            "Legacy GA12-CFG-REPORT-1 decodes as CFG only without fabricated JSR sources");
+        ok(decode(Arrays.copyOf(encode(typed),encode(typed).length-1)).isEmpty(),
+            "Truncated V2 typed sources must never decode as complete");
+        byte[] corrupt=encode(typed);
+        corrupt[4+schema.length-1]='3';
+        ok(decode(corrupt).isEmpty(),
+            "Unknown future report schema must fail closed");
+        byte[] v1Extra=Arrays.copyOf(v1,v1.length+1);
+        ok(decode(v1Extra).isEmpty(),"V1 extra fields refused");
         System.out.println("HardwareDurableCfgReportSelfTest OK");
     }
 }
