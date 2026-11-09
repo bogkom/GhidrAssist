@@ -15,6 +15,19 @@ independent 0x200 function has computed JSR 0x206 before MOVEC
 UNKNOWN source and must increase omitted witness count, never
 erase the two established pairs.
 
+The native CodeBrowser scenario caught a stale-generation regression:
+switching from synthetic Program A to B and then back to A could
+reuse the old completed UI evidence because the Program modification
+number had not changed. GhidrAssistPlugin.programActivated now
+invalidates the departing Program's HardwareFlowStageCache and
+HardwareEvidenceCache; HardwareAnalysisTab.currentScan requires
+its exact stage epoch for **all** reports, including generic CPU32
+and legacy-restored reports. This prevents old JSR/MOVEC page cursors,
+checkpoint-derived CFG evidence and previous GUI report exports from
+reviving across a CodeBrowser context switch. The API's existing
+unsaved-Program switch refusal stays in force; the isolated native
+fixture saves ONLY its synthetic Ghidra bootstrap before switching.
+
 The real CodeBrowser test exercises authenticated production
 `hardware.source_pairs.page` over HTTP: explicit generic CPU32
 refusal; MCU-selected first, second and end pages; deterministic
