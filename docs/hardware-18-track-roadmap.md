@@ -1,5 +1,44 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
+## GA-02/03/11/12/18 — 2026-11-09: real branch join and live Ghidra revision
+
+The existing isolated Ghidra 12.1.4 PUBLIC/Xvfb synthetic source
+gains an actual decoded CPU32 function with conditional/unconditional
+branch edges and conflicting A0 provenance: one path points to SIMCR
+0xFFFA00, the other to CSBAR7 0xFFFA68. A single later indirect
+MOVE.W does not prove either destination; the actual production
+Listing/P-code CFG translator and the existing conservative join must
+produce one unresolved source effect. The complete branch result is
+persisted in JVM 1 and byte-compared with the retranslated result
+after re-opening in JVM 2. CFG reachability remains a static
+possibility, not a runtime branch choice or executed MMIO write.
+
+Revision invalidation is exercised against a **real Ghidra Program
+modification**, not an artificial increment: after independently
+restoring durable function-stage evidence, the second CodeBrowser JVM
+captures the existing process-local HardwareAnalysisRevision,
+changes an annotation inside a transaction on the disposable source,
+and verifies that the original revision no longer matches the
+Program's actual modification counter. The production
+HardwarePartialStageRunner is invoked with that revision-bound
+stillCurrent gate: it must throw CancelledException and leave no
+complete or incomplete stage for the changed Program. The transaction
+is rolled back and the original branch CFG is checked again.
+
+Deliberately do NOT inject ephemeral Ghidra modification numbers into
+durable cross-JVM cache identifiers: they are not guaranteed stable
+across process restart. Retain SHA-256, source/profile/CFG/budget
+binding for disk stages; use the process-local revision for
+in-flight analysis cancellation. This does not claim comprehensive
+invalidation of every long-lived cache on arbitrary annotation edits.
+
+Acceptance requires real Ghidra Java25 extension, actual Xvfb
+CodeBrowser two-JVM regression, deterministic Java21 coverage and
+all exact-HEAD GitHub Actions. No private firmware, original projects,
+Wyse/Precision/Supervisor, or automatic Apply. GA-02/03/11/12/18
+remain PARTIAL; GA-14 remains deferred.
+
+
 ## GA-02/03/12/18 — 2026-11-09: wrap-width overlap and multi-function pending CFG
 
 **Candidate:** use the existing CPU32 modulo-24-bit byte intersection
