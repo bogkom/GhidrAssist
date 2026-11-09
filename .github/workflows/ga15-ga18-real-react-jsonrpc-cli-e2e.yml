@@ -88,6 +88,11 @@ jobs:
           assert recovered_cfg["real_byte_overlap_checkpoint_restored"] is True,recovered_cfg
           assert recovered_cfg["real_translated_partial_restored"] is True,recovered_cfg
           assert recovered_cfg["real_translated_cold_byte_equal"] is True,recovered_cfg
+          assert prior_cfg["real_parallel_worklists_isolated"] is True,prior_cfg
+          assert len(prior_cfg["real_parallel_worklists_sha256"])==64,prior_cfg
+          assert recovered_cfg["real_parallel_worklists_restored"] is True,recovered_cfg
+          assert recovered_cfg["real_parallel_results_cold_byte_equal"] is True,recovered_cfg
+          assert recovered_cfg["real_parallel_stale_keys_refused"] is True,recovered_cfg
           assert prior_cfg["real_translated_flow_sha256"]==recovered_cfg["real_translated_flow_sha256"],recovered_cfg
           assert prior_cfg["deliberately_cancelled"] and prior_cfg["partial_worklist_saved"],prior_cfg
           assert prior_cfg["partial_not_review_evidence"],prior_cfg
