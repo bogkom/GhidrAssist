@@ -424,18 +424,31 @@ def check_agentic_resume_preflight(session, source):
     }
 
 
-def create_agentic_review_draft(session, source, destination, query):
+def create_agentic_review_draft(session, source, destination, query, ancestors=None):
     """Create a new human-review proposal; never import prior approvals."""
     if not isinstance(query, str) or not 8 <= len(query) <= 512 or any(
             ord(ch) < 32 and ch not in "\t\n" for ch in query):
         raise ValueError("New analysis objective must be 8..512 readable characters")
+    # Linked historical data must carry every predecessor back to an
+    # unlinked root. A single rehashed child file is not verified ancestry.
+    ancestry = list(ancestors or [])
+    candidate, candidate_digest = load_verified_agentic_payload(source)
+    has_parent = "parent_checkpoint_sha256" in candidate
+    if has_parent != bool(ancestry):
+        raise ValueError("Historical review source requires its full ancestor chain")
+    provenance = (verify_agentic_lineage_chain(source, ancestry)
+                  if has_parent else None)
     # Verify once against actual active Ghidra, then re-read from disk and
     # assert byte-equivalent canonical SHA; a concurrent replacement of the
     # checkpoint between preflight and export must fail closed.
     preflight = check_agentic_resume_preflight(session, source)
     payload, digest = load_verified_agentic_payload(source)
-    if digest != preflight["verified_sha256"]:
+    if digest != preflight["verified_sha256"] or digest != candidate_digest:
         raise ValueError("Checkpoint changed after live source verification")
+    if provenance is not None:
+        after = verify_agentic_lineage_chain(source, ancestry)
+        if after["chain_sha256"] != provenance["chain_sha256"]:
+            raise ValueError("Historical chain changed during live review preflight")
     if not payload["complete"]:
         raise ValueError("Incomplete prior evidence cannot seed a reviewed draft")
     # Treat each fact as untrusted *data*, never free-form instructions or
@@ -449,6 +462,11 @@ def create_agentic_review_draft(session, source, destination, query):
         "schema": 1, "kind": "ghidrassist-new-investigation-review-draft",
         "state": "AWAITING_NEW_REVIEW", "new_objective": query,
         "source_checkpoint_sha256": digest,
+        "historical_chain_verified": provenance is not None,
+        "historical_chain_length": (provenance["chain_length"]
+                                    if provenance else 1),
+        "historical_chain_sha256": (provenance["chain_sha256"]
+                                     if provenance else None),
         "source_import_sha256": payload["import_sha256"],
         "source_program_revision": payload["program_revision"],
         "source_run": payload["run"],
@@ -514,6 +532,73 @@ def verify_agentic_lineage(source, parent):
         "notice":"Untrusted historical provenance only; no authenticated author or LLM state"}
     
 
+def verify_agentic_lineage_chain(source, ancestors):
+    """Verify a bounded, complete historical chain oldest -> newest offline.
+
+    Every checkpoint is independently SHA-256 integrity checked, every edge
+    must reference the EXACT previous payload SHA and opaque run, and the
+    oldest checkpoint must be a self-contained root without missing ancestry.
+    This neither signs an author nor resumes any model, tool, or approval.
+    """
+    if not isinstance(ancestors, (list, tuple)) or not 1 <= len(ancestors) <= 15:
+        raise ValueError("Historical chain requires 1..15 ordered ancestors")
+    checkpoints = list(ancestors) + [source]
+    verified = []
+    identities = set()
+    runs = set()
+    imported = None
+    for index, path in enumerate(checkpoints):
+        payload, digest = load_verified_agentic_payload(path)
+        if not payload["complete"]:
+            raise ValueError("Incomplete evidence in historical chain")
+        if digest in identities or payload["run"] in runs:
+            raise ValueError("Historical chain repeats a checkpoint or run")
+        identities.add(digest)
+        runs.add(payload["run"])
+        if imported is None:
+            imported = payload["import_sha256"].lower()
+        elif payload["import_sha256"].lower() != imported:
+            raise ValueError("Historical chain switched firmware import")
+        if index == 0:
+            if any(key in payload for key in
+                   ("parent_checkpoint_sha256", "parent_run",
+                    "continuation_kind")):
+                raise ValueError("Historical root has missing ancestors")
+        else:
+            prior, prior_digest = verified[-1]
+            if (payload.get("parent_checkpoint_sha256") != prior_digest or
+                    payload.get("parent_run") != prior["run"] or
+                    payload.get("continuation_kind") !=
+                    "new-independently-reviewed-run"):
+                raise ValueError("Broken historical checkpoint edge")
+        verified.append((payload, digest))
+    metadata = [{
+        "run": payload["run"],
+        "program_revision": payload["program_revision"],
+        "findings_revision": payload["findings_revision"],
+        "retained_count": payload["retained_count"],
+        "payload_sha256": digest,
+    } for payload, digest in verified]
+    identity = {"schema": 1, "import_sha256": imported,
+                "checkpoints": metadata}
+    fingerprint = hashlib.sha256(json.dumps(
+        identity, sort_keys=True, separators=(",",":"),
+        ensure_ascii=False).encode("utf-8")).hexdigest()
+    return {
+        "verified": True, "read_only": True,
+        "lineage_matches": True, "root_self_contained": True,
+        "chain_length": len(verified),
+        "import_sha256": imported,
+        "chain_sha256": fingerprint,
+        "runs": [entry["run"] for entry in metadata],
+        "checkpoints": metadata,
+        "model_state_restored": False,
+        "authorizes_tools": False, "authorizes_apply": False,
+        "old_approvals_inherited": False,
+        "notice": "Untrusted historical SHA-256 provenance, NOT actor authentication or permission to resume AI/Apply",
+    }
+
+
 def verify_agentic_checkpoint(source):
     """Offline SHA-256 integrity check; never authenticates the original actor."""
     payload,digest=load_verified_agentic_payload(source)
@@ -550,7 +635,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--session", default=os.environ.get(
         "GHIDRASSIST_AGENT_SESSION", str(Path.home() / ".local/state/ghidrassist-agent/session.json")))
-    parser.add_argument("action", choices=("status", "snapshot", "analyze", "task", "mmio", "review-preview", "profile-select", "function", "xrefs", "function-xrefs-body", "decompile", "decompile-status", "bundle", "paths", "listing", "listing-range", "goto", "tab-select", "table-select", "program-open", "review-prepare", "review-apply", "review-undo", "cancel", "report", "export", "agentic-findings", "agentic-checkpoint", "agentic-verify", "agentic-read", "agentic-resume-check", "agentic-review-draft", "agentic-lineage-verify", "source-pairs", "source-pairs-checkpoint", "source-pairs-verify"))
+    parser.add_argument("action", choices=("status", "snapshot", "analyze", "task", "mmio", "review-preview", "profile-select", "function", "xrefs", "function-xrefs-body", "decompile", "decompile-status", "bundle", "paths", "listing", "listing-range", "goto", "tab-select", "table-select", "program-open", "review-prepare", "review-apply", "review-undo", "cancel", "report", "export", "agentic-findings", "agentic-checkpoint", "agentic-verify", "agentic-read", "agentic-resume-check", "agentic-review-draft", "agentic-lineage-verify", "agentic-lineage-chain-verify", "source-pairs", "source-pairs-checkpoint", "source-pairs-verify"))
     parser.add_argument("address", nargs="?")
     parser.add_argument("--filter", default="")
     parser.add_argument("--row", type=int, default=None)
@@ -561,6 +646,8 @@ def main():
     parser.add_argument("--output", default="")
     parser.add_argument("--input", default="")
     parser.add_argument("--parent", default="")
+    parser.add_argument("--ancestor", action="append", default=[],
+                        help="Ordered oldest-to-newest local chain ancestor; repeat")
     parser.add_argument("--query", default="")
     parser.add_argument("--expected-revision", type=int, default=None)
     parser.add_argument("--expected-generation", default="")
@@ -597,6 +684,16 @@ def main():
         except (OSError,ValueError,KeyError,TypeError,HTTPError) as error:
             print("Source checkpoint refused: "+str(error),file=sys.stderr)
             return 1
+    if args.action=="agentic-lineage-chain-verify":
+        if not args.input or not args.ancestor:
+            parser.error("agentic-lineage-chain-verify requires --input and --ancestor")
+        try:
+            print(json.dumps(verify_agentic_lineage_chain(
+                args.input,args.ancestor),indent=2,ensure_ascii=False))
+            return 0
+        except (OSError,ValueError,KeyError,TypeError,UnicodeError) as error:
+            print("Historical Agentic chain refused: "+str(error),file=sys.stderr)
+            return 1
     if args.action=="agentic-lineage-verify":
         if not args.input or not args.parent:
             parser.error("agentic-lineage-verify requires --input and --parent")
@@ -624,7 +721,7 @@ def main():
             parser.error("agentic-review-draft requires --input, --output, --query")
         try:
             result=create_agentic_review_draft(
-                session,args.input,args.output,args.query)
+                session,args.input,args.output,args.query,args.ancestor)
             print(json.dumps(result,indent=2,ensure_ascii=False))
             return 0
         except (ValueError,OSError,HTTPError,KeyError,TypeError,UnicodeError) as error:
