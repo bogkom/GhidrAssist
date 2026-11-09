@@ -62,6 +62,14 @@ def fixture(path, with_simcr):
         data[0xa0:0xce]=(bytes.fromhex("207c00fffa00")+
                          bytes.fromhex("4e71")*17+
                          bytes.fromhex("30bc48484e75"))
+        # Real CPU32 branch joining two conflicting address-register
+        # definitions: A0=SIMCR or A0=CSBAR7 before a single MOVE.W.
+        # Source topology (static, not executed):
+        # D0 MOVEA.L SIMCR,A0; D6 BNE.S E0; D8 MOVEA.L CSBAR7,A0;
+        # DE BRA.S E6; E0 MOVEA.L SIMCR,A0; E6 MOVE.W #40CA,(A0); EA RTS.
+        data[0xd0:0xec]=bytes.fromhex(
+            "207c00fffa006608207c00fffa686006"
+            "207c00fffa0030bc40ca4e75")
     path.write_bytes(data)
 
 
