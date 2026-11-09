@@ -209,8 +209,10 @@ public final class AgenticReviewProgramBinding {
         var after=HardwareGhidraInputFingerprint.capture(
             program,monitor,mc68332).orElseThrow(()->
                 new IllegalArgumentException("Program changed during Review import"));
-        if(!before.equals(after))
-            throw new IllegalArgumentException("Program changed during Review import");
+        if(!before.equals(after) ||
+                !java.util.Arrays.equals(source,bounded(checkpoint,MAX_CHECKPOINT)))
+            throw new IllegalArgumentException(
+                "Program or source checkpoint changed during Review import");
         return draft;
     }
 }
