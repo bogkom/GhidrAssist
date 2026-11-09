@@ -1,5 +1,40 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
+## GA-01/02/03/11/18 — 2026-11-09: real Ghidra CPU32 branch/cycle CFG source-route acceptance
+
+The Java21 pure CFG site-order regression already covers diamond and
+loop models; the previous native Ghidra source fixture only required
+presence of the production report heading. This package adds an
+**independent byte-exact isolated CPU32 binary** with BNE/BRA
+branch-separated instruction paths, a backward conditional loop,
+a linear path, and an unresolved JMP (A0). A Java GhidraScript
+calls Ghidra 12.1.4 PUBLIC's actual DisassembleCommand, verifies
+original opcode bytes, decoded Listing mnemonics and instruction
+lengths, and extracts real getFallThrough/getFlows() successors.
+Those decoded edges are passed to the **actual packaged extension
+JAR's** HardwareCfgSiteOrder (not a copied test implementation),
+with assertions on branch separation, forward/reverse reachability,
+cyclic bidirectional reachability, incomplete Listing and unreachable
+computed jump targets. The extension build Actions job requires
+an explicit PASS banner from that headless process and fails closed
+on any reported test exception or missing banner.
+
+The new synthetic image cannot prove JSR and MOVEC **execution**:
+the selected test PCs are representative sites for graph-order
+classification, and the independently tested production report
+continues to require explicit MC68332 selection and byte-proven
+indirect JSR / MOVEC sources before attempting a real same-function
+join. The CFG order relation never creates a direct CALL edge,
+RESET execution claim, active SIMCR/MM, selected VBR, ISR or
+Review/Apply authorization. The synthetic binary has no private
+firmware or user data. Acceptance is exact-head Java21 source checks,
+full Ghidra 12.1.4 PUBLIC Java25 extension compilation, real
+headless CPU32 fixture and existing hardware/GA-12 safety gates.
+No user Ghidra projects/profiles/OAuth or stopped Wyse/Precision/
+Supervisor jobs touched. GA-01/02/03/11/18 remain PARTIAL,
+GA-14 deferred.
+
+
 ## GA-01/02/03/11/18 — 2026-11-09: bounded same-function JSR/MOVEC CFG route evidence
 
 The source-only indirect-JSR ↔ MOVEC-to-VBR same-function report now
