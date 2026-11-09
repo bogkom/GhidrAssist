@@ -120,6 +120,29 @@ jobs:
           grep -q 'GA18 LISTING SNAPSHOT PASS: assertions=9' "$RUNNER_TEMP/ga18-paths.log"
           grep -q 'GA18 LISTING RANGE BODY XREF PASS:' "$RUNNER_TEMP/ga18-paths.log"
           echo 'Real Ghidra native synthetic graph and production traversal assertions passed'
+      - name: GA-01/02/03/11 genuine CPU32 Listing CFG branch and cycle route regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/generate-synthetic-cfg-routes.py --output "$RUNNER_TEMP/synthetic-cfg-routes.bin"
+          test -s "$RUNNER_TEMP/ga18-product.jar"
+          mkdir -p "$RUNNER_TEMP/ga18-native-cfg"
+          JAVA_TOOL_OPTIONS="-Dga18.test.jar=$RUNNER_TEMP/ga18-product.jar" \
+            "$GHIDRA_INSTALL_DIR/support/analyzeHeadless" \
+            "$RUNNER_TEMP/ga18-native-cfg" GA18NativeCfgCI \
+            -import "$RUNNER_TEMP/synthetic-cfg-routes.bin" \
+            -loader BinaryLoader -processor 68000:BE:32:CPU32 -cspec default \
+            -noanalysis -scriptPath "$GITHUB_WORKSPACE/tools/ghidra_scripts" \
+            -postScript GA18VerifyNativeCfgSiteRoutes.java \
+            > "$RUNNER_TEMP/ga18-native-cfg.log" 2>&1 || {
+              tail -n 120 "$RUNNER_TEMP/ga18-native-cfg.log"; exit 1;
+            }
+          if ! grep -q 'GA18 NATIVE CFG SITE ROUTES PASS: assertions=' "$RUNNER_TEMP/ga18-native-cfg.log"; then
+            echo 'Real Ghidra CPU32 native branch/cycle route regression missing'
+            tail -n 120 "$RUNNER_TEMP/ga18-native-cfg.log"
+            exit 1
+          fi
+          grep 'GA18 NATIVE CFG SITE ROUTES PASS:' "$RUNNER_TEMP/ga18-native-cfg.log"
       - name: Real Ghidra 12.1.4 convergent CALL path regression (synthetic only)
         shell: bash
         run: |
