@@ -974,6 +974,37 @@ def main():
                             if error.code!=400: raise
                         else:
                             raise RuntimeError("Out-of-range JTable selection accepted")
+                        # GA-08/12/18: requests touching UI row selection or
+                        # guarded Review/Apply preparation must never coerce
+                        # noncanonical JSON indices or mint approval tokens.
+                        invalid_indices=("0",1.5,True,False,None,[],{},
+                                         -1,4097,2**31,1e100)
+                        strict_index_denials=0
+                        for method,field,base in (
+                            ("hardware.review.prepare","index",{}),
+                            ("hardware.apply.prepare","index",{}),
+                            ("ui.table.select","row",{"table":"hardware.mmio"})):
+                            for value in invalid_indices:
+                                try:
+                                    http_call(method,{**base,field:value})
+                                except HTTPError as error:
+                                    if error.code!=400:raise
+                                else:
+                                    raise RuntimeError(
+                                        "Noncanonical Review/UI index accepted: "+
+                                        method+" "+str(value))
+                                strict_index_denials+=1
+                            try:
+                                http_call(method,base)
+                            except HTTPError as error:
+                                if error.code!=400:raise
+                            else:
+                                raise RuntimeError(
+                                    "Missing Review/UI index silently accepted: "+method)
+                            strict_index_denials+=1
+                        if strict_index_denials!=36:
+                            raise RuntimeError("Missing strict Review index regression")
+                        print("GA-08/12/18 REAL JSON-RPC STRICT ROW/INDEX 36 DENIALS PASS")
                         candidates=[row for row in proposals["rows"]
                                     if row.get("kind")=="MEMORY" and row.get("state")=="READY"
                                     and row.get("selected_by_default") and
