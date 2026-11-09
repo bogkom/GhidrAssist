@@ -246,6 +246,30 @@ jobs:
           assert ancestry["new_independent_run"] and not ancestry["authorizes_apply"],ancestry
           assert ancestry["child_run"]==new_rows["run"],ancestry
           assert ancestry["parent_run"]==old_rows["run"],ancestry
+          # Exact same two genuine CodeBrowser JVM checkpoints must also
+          # verify as a ROOTED chain; this runs after Ghidra has exited and
+          # has no usable live session, OAuth, tool or model permission.
+          chain=run(["python3",str(client),"--session",
+              str(p/"no-agentic-session.json"),
+              "agentic-lineage-chain-verify","--input",str(new),
+              "--ancestor",str(old)],capture_output=True,text=True)
+          assert chain.returncode==0,chain.stderr
+          verified_chain=json.loads(chain.stdout)
+          assert verified_chain["verified"] and verified_chain["read_only"],verified_chain
+          assert verified_chain["root_self_contained"],verified_chain
+          assert verified_chain["chain_length"]==2,verified_chain
+          assert verified_chain["runs"]==[old_rows["run"],new_rows["run"]],verified_chain
+          assert not verified_chain["model_state_restored"],verified_chain
+          assert not verified_chain["authorizes_tools"],verified_chain
+          assert not verified_chain["authorizes_apply"],verified_chain
+          assert not verified_chain["old_approvals_inherited"],verified_chain
+          # A linked child cannot be falsely declared a fresh root.
+          hidden=run(["python3",str(client),"--session",
+              str(p/"no-agentic-session.json"),
+              "agentic-lineage-chain-verify","--input",str(new),
+              "--ancestor",str(new)],capture_output=True,text=True)
+          assert hidden.returncode!=0,hidden.stdout
+
           bad=run(["python3",str(client),"--session",
               str(p/"no-agentic-session.json"),"agentic-lineage-verify",
               "--input",str(new),"--parent",str(new)],
@@ -253,6 +277,7 @@ jobs:
           assert bad.returncode!=0,bad.stdout
           print("GA-12 FULL RESTART -> NEW REVIEW -> REAL NATIVE TOOL -> NEW CHECKPOINT PASS")
           print("GA-12 OFFLINE CHECKPOINT AFTER CODEBROWSER EXIT PASS")
+          print("GA-12/13/15 REAL GHIDRA ROOTED CHAIN PROVENANCE PASS")
           PY
           if python3 tools/ghidrassist-agent --session "$RUNNER_TEMP/missing-agentic-session.json"                agentic-resume-check --input "$RUNNER_TEMP/ga15-real-react-e2e/ga15-react-local-evidence.json"                >"$RUNNER_TEMP/ga15-illicit-resume.out" 2>&1; then
              echo "FAIL: offline checkpoint authorized a non-existing live program"
