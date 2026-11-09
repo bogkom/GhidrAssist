@@ -231,6 +231,28 @@ def main():
         received_bad+=1
     assert received_bad>=30,received_bad
     print("GA-12/15 AGENTIC EXACT PROGRAM/FINDINGS REVISION AND RUN PASS")
+    # Page bounds must be REAL canonical JSON integers, not Gson getAsInt
+    # truncations; no retained cache can be paged using coerced limits.
+    bounds_denied=0
+    for field in ("offset","limit"):
+        for value in ("1",1.5,True,False,None,[],{},-1,2**31,1e100):
+            params={**valid_page,field:value}
+            request=json.dumps({"method":"agentic.findings.page",
+                                "params":params},separators=(",",":")).encode()
+            endpoint=Request(f"http://127.0.0.1:{session['port']}/rpc",
+                data=request,headers={
+                    "Authorization":"Bearer "+session["token"],
+                    "Content-Type":"application/json"},method="POST")
+            try:
+                with urlopen(endpoint,timeout=20) as reply:
+                    raise AssertionError(
+                        f"Agentic page accepted {field}={value}: {reply.status}")
+            except HTTPError as error:
+                assert error.code==400,(field,value,error.code)
+            bounds_denied+=1
+    assert bounds_denied==20
+    print("GA-15 REAL AGENTIC CANONICAL JSON PAGE BOUNDS PASS")
+
 
 
     # The CLI must fetch *all* real ReAct pages from HTTP and create one
