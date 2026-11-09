@@ -605,6 +605,11 @@ public final class CodeBrowserMmioMain {
             require(restoreProgramManager.getAllOpenPrograms().length==2,
                 "Reused CodeBrowser unexpectedly duplicated an open program");
             result.addProperty("agent_opener_restored_program_reused",true);
+            // Only the dedicated RPC probe adds the third already
+            // disassembled isolated Program. Reuse its live object when
+            // project.program.open subsequently selects its DomainFile.
+            if(sourceProgram!=null)edt(()->restoreProgramManager.openProgram(
+                sourceProgram,ProgramManager.OPEN_VISIBLE));
             // Regression: the optional project opener must NEVER launch from
             // an actual CodeBrowser tool, even if launcher properties persist.
             // Before the fix, its Timer recursively launched more CodeBrowsers.
