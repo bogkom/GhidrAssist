@@ -1440,7 +1440,16 @@ public final class GhidraHardwareFlowService {
             var vbrPlan=HardwareVbrRelocationEvidence.plan(
                 vbrSourceSites,reset.recognized(),reset.incomplete(),
                 reset.visited(),3,HardwareVbrRelocationEvidence.MAX_REPORTED_SITES);
-            var indirectSources=indirectMmEvidence.rows().stream()
+            // The prior byte-witness lane can retain non-executable
+            // odd targets as static possibilities. They are NOT valid
+            // MC68332 instruction identities for this co-location join:
+            // count them as omitted/UNKNOWN, never abort full Analyze.
+            var joinEligible=indirectMmEvidence.rows().stream()
+                .filter(row->((row.witness().caller() |
+                    row.witness().callPc() |
+                    row.witness().target())&1L)==0)
+                .toList();
+            var indirectSources=joinEligible.stream()
                 .map(row->new HardwareResetIndirectVbrCorrelation.Indirect(
                     row.witness().caller(),row.witness().callPc(),
                     row.witness().target(),row.source().mayMm(),
@@ -1460,7 +1469,8 @@ public final class GhidraHardwareFlowService {
             resetIndirectVbr=HardwareResetIndirectVbrCorrelation.inspect(
                 indirectSources,movecSources,reset.visited(),
                 reset.recognized(),reset.incomplete(),
-                indirectMmEvidence.omittedWitnesses()+indirectCandidatesOmitted,
+                indirectMmEvidence.omittedWitnesses()+indirectCandidatesOmitted+
+                    indirectMmEvidence.rows().size()-joinEligible.size(),
                 vbrSourceSitesOmitted+vbrSourceSites.size()-vbrPlan.rows().size(),
                 HardwareResetIndirectVbrCorrelation.MAX_DISPLAY).markdown();
         }else
