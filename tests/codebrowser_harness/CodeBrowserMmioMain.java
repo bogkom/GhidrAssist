@@ -446,7 +446,8 @@ public final class CodeBrowserMmioMain {
                 // and unknown-memory-alias effects, exercised across two JVMs.
                 for(long[] cfg:new long[][]{
                         {0x40L,0x4bL,0x40L,0x46L,0x4aL},
-                        {0x60L,0x73L,0x60L,0x66L,0x6aL,0x6eL,0x72L}}) {
+                        {0x60L,0x73L,0x60L,0x66L,0x6aL,0x6eL,0x72L},
+                        {0x80L,0x8fL,0x80L,0x86L,0x8aL,0x8eL}}) {
                     Address entry=first.getAddressFactory()
                         .getDefaultAddressSpace().getAddress(cfg[0]);
                     for(int j=2;j<cfg.length;j++) {
@@ -466,6 +467,26 @@ public final class CodeBrowserMmioMain {
                         ghidra.program.model.symbol.SourceType.ANALYSIS)!=null,
                         "Synthetic register-flow function was not created");
                 }
+                // Longer real Listing CFG, not invented Java-only Steps.
+                Address longEntry=first.getAddressFactory()
+                    .getDefaultAddressSpace().getAddress(0xa0L);
+                for(long offset=0xa0L;offset<=0xccL;) {
+                    Address at=first.getAddressFactory()
+                        .getDefaultAddressSpace().getAddress(offset);
+                    if(first.getListing().getInstructionAt(at)==null)
+                        require(new DisassembleCommand(at,null,false)
+                            .applyTo(first,TaskMonitor.DUMMY),
+                            "Long CPU32 translated CFG disassembly failed "+
+                            Long.toHexString(offset));
+                    offset+=offset==0xa0L?6L:offset==0xc8L?4L:2L;
+                }
+                require(first.getFunctionManager().createFunction(
+                    "FUN_000000A0",longEntry,
+                    new ghidra.program.model.address.AddressSet(longEntry,
+                        first.getAddressFactory().getDefaultAddressSpace()
+                            .getAddress(0xcdL)),
+                    ghidra.program.model.symbol.SourceType.ANALYSIS)!=null,
+                    "Long CPU32 Listing CFG function creation failed");
             }finally{first.endTransaction(tx,true);}
             Instruction instruction=first.getListing().getInstructionAt(site);
             require(instruction!=null && instruction.toString()
