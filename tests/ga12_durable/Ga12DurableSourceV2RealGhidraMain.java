@@ -200,7 +200,7 @@ public final class Ga12DurableSourceV2RealGhidraMain {
         envelope.add("payload",payload);
         envelope.addProperty("payload_sha256",
             HardwareDurableStageStore.hash(gson.toJson(payload)));
-        Files.writeString(file,gson.toJson(envelope)+"\\n",
+        Files.writeString(file,gson.toJson(envelope),
             java.nio.file.StandardOpenOption.CREATE_NEW);
     }
     public static void main(String[] args)throws Exception {
