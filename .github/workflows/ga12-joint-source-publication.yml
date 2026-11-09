@@ -1,0 +1,33 @@
+name: GA-12/18 atomic RESET JSR MOVEC report revision safety
+on:
+  pull_request:
+    paths:
+      - 'src/main/java/ghidrassist/hardware/HardwareAnalysisRevision.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareJointSourcePublication.java'
+      - 'src/main/java/ghidrassist/hardware/GhidraHardwareFlowService.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareJointSourcePublicationSelfTest.java'
+      - '.github/workflows/ga12-joint-source-publication.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  java21-revision-publication:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Fail closed on stale complete-report publication and stage invalidation
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/ga12-publish"
+          javac --release 21 -d "$RUNNER_TEMP/ga12-publish" \
+            src/main/java/ghidrassist/hardware/HardwareAnalysisRevision.java \
+            src/main/java/ghidrassist/hardware/HardwareJointSourcePublication.java \
+            src/test/java/ghidrassist/hardware/HardwareJointSourcePublicationSelfTest.java
+          java -cp "$RUNNER_TEMP/ga12-publish" \
+            ghidrassist.hardware.HardwareJointSourcePublicationSelfTest
