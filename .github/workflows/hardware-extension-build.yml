@@ -115,6 +115,7 @@ jobs:
             tail -n 120 "$RUNNER_TEMP/ga18-paths.log"
             exit 1
           fi
+          grep -q 'GA18 RESET INDIRECT MM VBR PASS: selected-device gate, bounded same-Program evidence, no hardware execution claim' "$RUNNER_TEMP/ga18-paths.log"
           grep -q 'GA18 DECOMPILER TASK BINDING PASS: assertions=7' "$RUNNER_TEMP/ga18-paths.log"
           grep -q 'GA18 LISTING SNAPSHOT PASS: assertions=9' "$RUNNER_TEMP/ga18-paths.log"
           grep -q 'GA18 LISTING RANGE BODY XREF PASS:' "$RUNNER_TEMP/ga18-paths.log"

@@ -1,5 +1,49 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
+## GA-01/02/03/11/18 — 2026-11-09: bounded RESET / indirect SIMCR-MM / MOVEC-VBR co-location
+
+The production hardware flow previously emitted independent static
+`HardwareIndirectMmMay` and MOVEC-to-VBR source-table sections,
+but could not show whether a **byte-proven indirect JSR MAY-to-SIMCR
+source** and an independently decoded **MOVEC-to-VBR source** were
+located inside the **same function** in the observed bounded RESET
+direct-CALL subset. A new pure-Java,
+`HardwareResetIndirectVbrCorrelation` source-only join renders exact
+per-instruction identities, possible indirect target, candidate
+source-image VBR base, and whether the containing function belongs
+to the observed RESET direct-call subset. It is wired into
+`GhidraHardwareFlowService` only after explicit MC68332 selection,
+using the existing same-Program indirect MM and VBR inventories,
+without creating or changing any CALL edge.
+
+**Critical evidence limit:** co-location in one function does not
+prove a feasible CFG path between the instructions, their execution
+order, an executed indirect JSR, a prior SIMCR write, the latched MM
+state, a selected VBR, hardware IRQ/ISR or any Apply permission.
+The two potential effects stay separate, even if both are source
+candidates within a function linked by RESET graph membership.
+UNKNOWN/partial CFG sources and an unrecognized RESET root remain
+explicit. An invalid/missing candidate VBR table base is UNKNOWN.
+Every class/result is immutable and bounded (64 indirect inputs,
+32 MOVEC inputs, 32 displayed pairs); missing source records,
+overflow and truncated displays carry explicit incompleteness
+rather than negative conclusions. Unaligned/odd indirect JSR or
+target identities from the broader byte-witness inventory are counted
+as omitted/UNKNOWN instead of crashing the entire hardware Analyze.
+Generic CPU32 yields a clear not-evaluated profile gate.
+
+The independent deterministic Java21 regression covers same-function
+pairing, unrelated source exclusion, independent observed/unknown
+RESET membership, unknown MM source and VBR, competing candidate
+pairs, complete vs clipped evidence, duplicate instruction-site
+refusal, 24-bit source scope and illegal PC/owner coordinates.
+Acceptance requires exact final PR SHA Java21 workflow, full Ghidra
+12.1.4 PUBLIC Java25 extension build, and real synthetic Ghidra
+headless hardware/RESET/CPU32 regressions on GitHub Actions.
+Original ECU411 firmware, production Ghidra projects, local profiles,
+OAuth and stopped Wyse/Precision/Supervisor tests untouched.
+GA-01/02/03/11/18 remain PARTIAL; GA-14 deferred.
+
 ## GA-01/02/03/11/18 — 2026-11-09: RESET-aware bounded MOVEC/VBR source-image scan priority
 
 When more than three distinct static MOVEC-to-VBR candidate bases

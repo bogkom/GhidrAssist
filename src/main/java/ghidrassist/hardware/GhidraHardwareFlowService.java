@@ -1415,10 +1415,12 @@ public final class GhidraHardwareFlowService {
         // A byte-witnessed computed JSR may have SIMCR/MM candidates in
         // its target subtree, but it is NOT a direct RESET/ISR CALL edge.
         // Use the existing conservative per-function MM source graph.
-        String indirectMmMay=mc68332Selected?
+        HardwareIndirectMmMay.Report indirectMmEvidence=mc68332Selected?
             HardwareIndirectMmMay.analyze(
-                indirectCandidates,mmEffectNodes,HardwareIndirectMmMay.MAX_ROWS)
-                .markdown():
+                indirectCandidates,mmEffectNodes,HardwareIndirectMmMay.MAX_ROWS):
+            null;
+        String indirectMmMay=indirectMmEvidence!=null?
+            indirectMmEvidence.markdown():
             "## Byte-witnessed indirect JSR SIMCR/MM MAY effects (GA-02/03/11)\n\n"+
             "Not evaluated: explicit MC68332 profile required. "+
             "Generic CPU32 cannot imply model-specific SIMCR/MM.\n\n";
@@ -1430,6 +1432,51 @@ public final class GhidraHardwareFlowService {
             "Generic CPU32: manual MC68332 profile selection required.\n\n";
 
         ResetCandidates reset=resetStaticCandidates(program,staticCalls,evidencedFunctions);
+        // Correlate only sources already collected in this SAME bounded
+        // Program analysis. This creates NO indirect graph edge and NO
+        // SIMCR/MM -> MOVEC chronological or ISR execution inference.
+        String resetIndirectVbr;
+        if(mc68332Selected) {
+            var vbrPlan=HardwareVbrRelocationEvidence.plan(
+                vbrSourceSites,reset.recognized(),reset.incomplete(),
+                reset.visited(),3,HardwareVbrRelocationEvidence.MAX_REPORTED_SITES);
+            // The prior byte-witness lane can retain non-executable
+            // odd targets as static possibilities. They are NOT valid
+            // MC68332 instruction identities for this co-location join:
+            // count them as omitted/UNKNOWN, never abort full Analyze.
+            var joinEligible=indirectMmEvidence.rows().stream()
+                .filter(row->((row.witness().caller() |
+                    row.witness().callPc() |
+                    row.witness().target())&1L)==0)
+                .toList();
+            var indirectSources=joinEligible.stream()
+                .map(row->new HardwareResetIndirectVbrCorrelation.Indirect(
+                    row.witness().caller(),row.witness().callPc(),
+                    row.witness().target(),row.source().mayMm(),
+                    row.source().unknownAlias() ||
+                    row.source().unknownControl() || row.source().cycle() ||
+                    row.source().limited())).toList();
+            var movecSources=vbrPlan.rows().stream()
+                .map(row->new HardwareResetIndirectVbrCorrelation.Vbr(
+                    row.functionEntry(),row.instruction(),
+                    row.tableState()==
+                        HardwareVbrRelocationEvidence.TableState.TABLE_BYTES_CANDIDATE?
+                        row.sourceValue():null,
+                    row.incompleteCfg() || row.priorUnknownCall() ||
+                    row.tableState()!=
+                        HardwareVbrRelocationEvidence.TableState.TABLE_BYTES_CANDIDATE))
+                .toList();
+            resetIndirectVbr=HardwareResetIndirectVbrCorrelation.inspect(
+                indirectSources,movecSources,reset.visited(),
+                reset.recognized(),reset.incomplete(),
+                indirectMmEvidence.omittedWitnesses()+indirectCandidatesOmitted+
+                    indirectMmEvidence.rows().size()-joinEligible.size(),
+                vbrSourceSitesOmitted+vbrSourceSites.size()-vbrPlan.rows().size(),
+                HardwareResetIndirectVbrCorrelation.MAX_DISPLAY).markdown();
+        }else
+            resetIndirectVbr="## RESET / indirect MMIO / VBR source co-location\n\n"+
+                "Not evaluated: explicit MC68332 profile required. "+
+                "Generic CPU32 cannot infer device MMIO or VBR.\n\n";
         String relocatedVbr=mc68332Selected?
             GhidraInterruptVectorService.analyzeRelocatedSourceTables(
                 program,HardwareProfiles.mc68332(),monitor,
@@ -1478,6 +1525,7 @@ public final class GhidraHardwareFlowService {
            .append(detail).append(effects).append(interproceduralMm)
            .append(indirectCallEvidence)
            .append(indirectMayEffects).append(indirectMmMay)
+           .append(resetIndirectVbr)
            .append(callsiteRegisters).append(twoHopRegisters);
         if(shown>=350)out.append("\n[Detailed report bounded at 350 sites.]\n");
         boolean cfgSourcesComplete=cfgMmioSites.safeAsComplete(!limited);

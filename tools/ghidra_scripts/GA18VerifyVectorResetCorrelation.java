@@ -81,6 +81,25 @@ public class GA18VerifyVectorResetCorrelation extends GhidraScript {
                 "image-zero vector 33 interior candidate");
             check(sub.contains("STATIC ONLY") && sub.contains("runtime VBR"),
                 "static evidence cannot claim active ISR or VBR");
+            // The SAME real synthetic CPU32 Ghidra Program must refuse
+            // MCU-specific MM/VBR conclusions without explicit device
+            // selection; selecting MC68332 enables only the new read-only
+            // source co-location section, never runtime claims or Apply.
+            String joinTitle="## RESET / indirect MMIO / VBR source co-location";
+            if(!text.contains(joinTitle) ||
+                    !text.contains("Not evaluated: explicit MC68332 profile required"))
+                throw new IllegalStateException(
+                    "GA18 RESET-MM-VBR FAIL: generic CPU32 device gate");
+            Object selectedReport=analyze.invoke(instance,currentProgram,monitor,true);
+            String selectedText=(String)markdown.get(selectedReport);
+            if(!selectedText.contains(joinTitle) ||
+                    !selectedText.contains("STATIC SAME-FUNCTION SOURCE CO-LOCATION ONLY") ||
+                    !selectedText.contains("NOT proof of absent indirect MMIO or VBR") ||
+                    !selectedText.contains("selected VBR"))
+                throw new IllegalStateException(
+                    "GA18 RESET-MM-VBR FAIL: selected MC68332 bounded static report");
+            println("GA18 RESET INDIRECT MM VBR PASS: selected-device gate, "+
+                "bounded same-Program evidence, no hardware execution claim");
         }
         println("GA18 VECTOR RESET CORRELATION PASS: assertions="+assertions+
             " (real 12.1.4 headless; synthetic vector bytes; static only)");
