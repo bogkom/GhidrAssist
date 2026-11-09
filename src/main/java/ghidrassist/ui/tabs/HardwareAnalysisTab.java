@@ -109,6 +109,7 @@ public final class HardwareAnalysisTab extends JPanel {
     private volatile ghidrassist.hardware.HardwareResetIndirectVbrCorrelation.SourceInventory
         latestJointInventory;
     private volatile String latestJointGeneration;
+    private volatile long latestJointStageEpoch=-1;
     private volatile ghidra.util.task.TaskMonitorAdapter activeMonitor;
     private volatile boolean latestConcrete;
     private volatile List<HardwareFunctionNamingReview.Proposal> latestFunctionProposals=List.of();
@@ -210,7 +211,10 @@ public final class HardwareAnalysisTab extends JPanel {
             throw new IllegalStateException("Explicit MC68332 profile required");
         if(latestJointInventory==null || latestJointGeneration==null)
             throw new IllegalStateException(
-                "SOURCE_INVENTORY_NOT_RETAINED: fresh Analyze required");
+                "SOURCE_INVENTORY_NOT_RETAINED: clear checkpoint and rerun Analyze");
+        if(!ghidrassist.hardware.HardwareFlowStageCache.sourcePageEpochCurrent(
+                latestProgram,latestJointStageEpoch))
+            throw new IllegalStateException("STALE_SOURCE_GENERATION");
         long revision=latestRevision.modificationNumber();
         if(expectedRevision!=null && expectedRevision.longValue()!=revision)
             throw new IllegalStateException("STALE_REVISION");
@@ -226,6 +230,7 @@ public final class HardwareAnalysisTab extends JPanel {
         answer.addProperty("schema",1);
         answer.addProperty("revision",revision);
         answer.addProperty("generation",latestJointGeneration);
+        answer.addProperty("stage_epoch",latestJointStageEpoch);
         answer.addProperty("import_sha256",
             latestRevision.sourceSha256()==null?"UNKNOWN":latestRevision.sourceSha256());
         answer.addProperty("profile","MC68332_USER_SELECTED");
@@ -248,6 +253,8 @@ public final class HardwareAnalysisTab extends JPanel {
         answer.addProperty("scope",
             "BOUNDED STATIC SOURCE PAIRS ONLY; NOT EXECUTION, MM/VBR/ISR OR APPLY");
         if(!currentScan() || latestJointInventory==null ||
+                !ghidrassist.hardware.HardwareFlowStageCache.sourcePageEpochCurrent(
+                    latestProgram,latestJointStageEpoch) ||
                 !latestJointGeneration.equals(answer.get("generation").getAsString()))
             throw new IllegalStateException("STALE_REVISION");
         return answer;
@@ -835,6 +842,7 @@ public final class HardwareAnalysisTab extends JPanel {
         latestRevision=null;
         latestJointInventory=null;
         latestJointGeneration=null;
+        latestJointStageEpoch=-1;
         latestFunctionProposals=List.of();
         latestSites=List.of();
         latestCsbarReview=null;
@@ -1007,6 +1015,7 @@ public final class HardwareAnalysisTab extends JPanel {
         latestRevision=null;
         latestJointInventory=null;
         latestJointGeneration=null;
+        latestJointStageEpoch=-1;
         ghidrassist.hardware.HardwareEvidenceCache.clear(program);
         report.getHighlighter().removeAllHighlights();
         reportHits.clear();
@@ -1048,6 +1057,8 @@ public final class HardwareAnalysisTab extends JPanel {
                     latestJointInventory=finished.sourceInventory;
                     latestJointGeneration=finished.sourceInventory==null?null:
                         java.util.UUID.randomUUID().toString();
+                    latestJointStageEpoch=finished.sourceInventory==null?-1:
+                        ghidrassist.hardware.HardwareFlowStageCache.sourcePageEpoch(program);
                     latestFunctionProposals=finished.functionProposals;
                     latestSites=finished.sites;
                     latestCsbarReview=finished.csbarReview;
