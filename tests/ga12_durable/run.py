@@ -147,11 +147,11 @@ def main():
                         "Cross-JVM source inventory/checkpoint did not retain/refuse")
                 if source_phase in ("source-write","source-read",
                                     "source-corrupt","source-mismatch",
-                                    "source-incomplete","source-edit"):
+                                    "source-incomplete","source-edit","source-name"):
                     if (evidence["source_pairs"]!=2 or
                             evidence["omitted_indirect"]!=1):
                         raise RuntimeError("Missing bounded native V2 source pairs")
-                if source_phase!="source-edit" and not evidence["revision_unchanged"]:
+                if source_phase not in ("source-edit","source-name") and not evidence["revision_unchanged"]:
                     raise RuntimeError("Read-only source restore mutated Program")
                 source_proofs[source_phase]=evidence
             for source_phase,proof in source_proofs.items():
