@@ -98,6 +98,22 @@ public final class AutomationServer implements AutoCloseable {
     private JsonObject dispatch(JsonObject request) throws Exception {
         String method = request.get("method").getAsString();
         JsonObject args = request.has("params") ? request.getAsJsonObject("params") : new JsonObject();
+        if ("agentic.review.binding.create".equals(method)) {
+            // The native full-input fingerprint can scan bounded memory,
+            // Listing, P-code and references. Running this on Swing EDT
+            // would freeze the actual CodeBrowser; use the RPC worker.
+            AtomicReference<Program> active=new AtomicReference<>();
+            if(SwingUtilities.isEventDispatchThread())
+                throw new IllegalStateException(
+                    "Binding creation may not run on Swing EDT");
+            SwingUtilities.invokeAndWait(()->
+                active.set(plugin.getCurrentProgram()));
+            JsonObject response=new JsonObject();
+            response.addProperty("schema",3);
+            response.add("binding",AutomationAgenticBinding.create(
+                plugin,active.get(),args));
+            return response;
+        }
         AtomicReference<JsonObject> answer = new AtomicReference<>();
         AtomicReference<Exception> failure = new AtomicReference<>();
         Runnable operation = () -> {
