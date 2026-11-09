@@ -915,6 +915,7 @@ public class TabController {
             return;
         }
         final long revision=program.getModificationNumber();
+        final int initialSession=queryService.getCurrentSessionId();
         boundAgenticReviewPending=true;
         new javax.swing.SwingWorker<
                 ghidrassist.agent.react.AgenticReviewDraft,Void>() {
@@ -933,14 +934,16 @@ public class TabController {
                     var draft=get();
                     if(program!=plugin.getCurrentProgram() ||
                             program.getModificationNumber()!=revision ||
+                            queryService.getCurrentSessionId()!=initialSession ||
                             isQueryRunning || isAgentPlanPending || isCancelling)
                         throw new IllegalStateException(
                             "Program or review state changed during verification");
                     stageImportedAgenticDraft(draft);
-                    Msg.showInfo(getClass(),queryTab,"New Review required",
-                        "Full Program-bound history verified. Old observations "+
-                        "remain untrusted. A NEW plan and separate approval "+
-                        "are required; no prior tools or Apply authorization.");
+                    // Visible Query editor contains the staged NEW review.
+                    // Do not block Swing EDT with a modal success dialog.
+                    Msg.info(this,"Program-bound historical observations staged "+
+                        "as NEW unapproved Review; fresh plan and approval "+
+                        "required, no inherited tools or Apply.");
                 }catch(Exception error){
                     Throwable reason=error instanceof
                         java.util.concurrent.ExecutionException &&
