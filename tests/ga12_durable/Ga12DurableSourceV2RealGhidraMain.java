@@ -139,6 +139,14 @@ public final class Ga12DurableSourceV2RealGhidraMain {
                 require(!changed.inputSha256().equals(original.inputSha256()),
                     "actual changed Program has distinct complete input fingerprint");
             }
+            var actual=HardwareGhidraInputFingerprint.capture(
+                program,TaskMonitor.DUMMY,selected).orElseThrow();
+            if(phase.equals("source-edit"))
+                require(!actual.inputSha256().equals(original.inputSha256()),
+                    "edited bytes must change exact effective fingerprint");
+            if(phase.equals("source-profile"))
+                require(!actual.inputSha256().equals(original.inputSha256()),
+                    "different device selection cannot reuse MC68332 source data");
             if(phase.equals("source-v1"))
                 installLegacyV1(cache,original);
             var revision=HardwareAnalysisRevision.capture(program,
@@ -180,6 +188,7 @@ public final class Ga12DurableSourceV2RealGhidraMain {
                 ",\"omitted_indirect\":"+(report.sourceInventory==null?0:
                     report.sourceInventory.omittedIndirect())+
                 ",\"full_input_sha256\":\""+original.inputSha256()+"\""+
+                ",\"effective_input_sha256\":\""+actual.inputSha256()+"\""+
                 ",\"import_sha256\":\""+imported+"\""+
                 ",\"revision_unchanged\":"+
                     (program.getModificationNumber()==beforeRevision)+
