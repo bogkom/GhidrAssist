@@ -57,6 +57,9 @@ public final class AutomationListing {
         result.add("rows",rows);
         result.addProperty("evidence",
             "Static decoded Ghidra Listing in address order; gaps possible, no runtime execution verified");
+        if(program.getModificationNumber()!=revision)
+            throw new IllegalStateException(
+                "STALE_REVISION: Listing changed during page collection");
         return result;
     }
 
