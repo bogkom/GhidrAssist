@@ -30,8 +30,13 @@ public class GA18VerifyNativeCfgSiteRoutes extends GhidraScript {
             throws Exception {
         Instruction insn=currentProgram.getListing().getInstructionAt(at(pc));
         check(insn!=null,"Real Ghidra disassembly at "+Long.toHexString(pc));
-        check(insn.getMnemonicString().equalsIgnoreCase(mnemonic),
-            "Ghidra decoded "+mnemonic+" at "+Long.toHexString(pc));
+        String decoded=insn.getMnemonicString().toUpperCase(java.util.Locale.ROOT);
+        String base=mnemonic.toUpperCase(java.util.Locale.ROOT);
+        // CPU32 Sleigh may render a size suffix (BNE.B / BRA.B).
+        // Exact opcode word is asserted independently below.
+        check(decoded.equals(base) || decoded.startsWith(base+"."),
+            "Ghidra decoded "+decoded+" expected "+base+
+            " at "+Long.toHexString(pc));
         check((currentProgram.getMemory().getShort(at(pc))&0xffff)==word,
             "CPU32 source bytes match "+Long.toHexString(pc));
         check(insn.getLength()==2,"CPU32 short instruction length");
