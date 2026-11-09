@@ -790,6 +790,11 @@ def main():
         parser.error("--expected-run and --expected-findings-revision require agentic-findings")
     if method=="agentic.findings.page" and args.offset>0 and (not args.expected_run or args.expected_findings_revision is None or args.expected_revision is None):
         parser.error("nonzero Agentic offset requires expected run, findings revision and Program revision")
+    if method=="listing.range" and args.offset>0 and args.expected_revision is None:
+        parser.error("nonzero Listing offset requires an exact Program revision")
+    if method=="function.xrefs.body" and args.offset>0 and (
+            args.expected_revision is None or not args.expected_entry):
+        parser.error("nonzero function-body XREF offset requires revision and function entry")
     if args.expected_entry and method != "function.xrefs.body":
         parser.error("--expected-entry is only valid with function-xrefs-body")
     if args.task_id and method != "decompiler.status":
