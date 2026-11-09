@@ -86,12 +86,41 @@ public final class Ga12DurableSourceV2RealGhidraMain {
                 .orElseThrow(),v1),
             "V1 saved under exact original full fingerprint");
     }
+    /**
+     * Intentionally reseal a corrupted V2 witness under the exact valid
+     * synthetic disk key. SHA and full-input identity still match: decoder
+     * semantic validation must refuse this as a cache hit.
+     */
+    private static void installMalformedSource(Path cache,
+            HardwareDurableStageStore.Key key)throws Exception {
+        byte[] stage=HardwareDurableStageStore.load(cache,key).orElseThrow();
+        require(HardwareDurableCfgReport.decode(stage).orElseThrow()
+            .sourceInventory()!=null,"corruption test requires V2 inventory");
+        byte[] witness=new byte[]{
+            0,0,0,0,0,0,1,0x30,
+            0,0,0,0,0,0,1,0x38,
+            0,0,0,0,0,0,1,(byte)0x80};
+        int at=-1;
+        outer:for(int i=0;i<=stage.length-witness.length;i++){
+            for(int j=0;j<witness.length;j++)
+                if(stage[i+j]!=witness[j])continue outer;
+            at=i;break;
+        }
+        require(at>=0,"exact serialized computed JSR witness");
+        stage[at+15]=(byte)0x39;
+        require(HardwareDurableCfgReport.decode(stage).isEmpty(),
+            "odd JSR must fail closed before disk write");
+        HardwareDurableStageStore.save(cache,key,stage);
+        require(Arrays.equals(HardwareDurableStageStore.load(cache,key)
+                .orElseThrow(),stage),
+            "valid outer SHA/store digest of semantically malformed V2");
+    }
     public static void main(String[] args)throws Exception {
         require(args.length==5,"ghidra,project,proof,cache,phase");
         String phase=args[4];
         require(phase.equals("source-write")||phase.equals("source-read")||
             phase.equals("source-edit")||phase.equals("source-v1")||
-            phase.equals("source-profile"),
+            phase.equals("source-corrupt")||phase.equals("source-profile"),
             "unexpected isolated V2 phase");
         Path ghidra=Path.of(args[0]).toRealPath();
         Path projectDir=Path.of(args[1]).toRealPath();
@@ -151,6 +180,8 @@ public final class Ga12DurableSourceV2RealGhidraMain {
                     "generic CPU32 has a different full checkpoint key profile");
             if(phase.equals("source-v1"))
                 installLegacyV1(cache,original);
+            if(phase.equals("source-corrupt"))
+                installMalformedSource(cache,original);
             var revision=HardwareAnalysisRevision.capture(program,
                 program.getModificationNumber(),program.getLanguageID().toString(),
                 program.getExecutableSHA256(),selected);
