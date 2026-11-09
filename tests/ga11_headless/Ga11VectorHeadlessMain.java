@@ -1321,6 +1321,123 @@ public final class Ga11VectorHeadlessMain {
                     check(freshPostRollback.state()==
                             ghidrassist.hardware.HardwareTwoHopConsensus.State.SAMPLED_DIVERGENCE,
                         "After rollback, source-only proof could not be revalidated");
+                    // Real CPU32 divergent/convergent source cohort.
+                    // BNE has two paths, each assigning A1=A0 before a
+                    // single nested direct JSR. The final leaf contains two
+                    // independently decoded STORE instructions. A second
+                    // distinct bridge reaches a second distinct leaf.
+                    int branchTx=full.startTransaction(
+                        "GA02 isolated two bridges and multiple leaf stores");
+                    try {
+                        full.getMemory().setBytes(address(full,0x740L),
+                            java.util.HexFormat.of().parseHex(
+                                "66042248600222484eb9000007804e75"));
+                        full.getMemory().setBytes(address(full,0x760L),
+                            java.util.HexFormat.of().parseHex(
+                                "22484eb9000007c04e75"));
+                        full.getMemory().setBytes(address(full,0x780L),
+                            java.util.HexFormat.of().parseHex(
+                                "328032804e75"));
+                        full.getMemory().setBytes(address(full,0x7c0L),
+                            java.util.HexFormat.of().parseHex(
+                                "32804e75"));
+                        for(long entry:new long[]{0x900L,0x920L}) {
+                            full.getMemory().setBytes(address(full,entry),
+                                java.util.HexFormat.of().parseHex(
+                                    "207c00fffa00203c000040ca"+
+                                    "4eb9000007404e75"));
+                        }
+                        for(long entry:new long[]{0x940L,0x960L}) {
+                            full.getMemory().setBytes(address(full,entry),
+                                java.util.HexFormat.of().parseHex(
+                                    "207c00fffa68203c00004848"+
+                                    "4eb9000007604e75"));
+                        }
+                    }finally{full.endTransaction(branchTx,true);}
+                    defineFixtureFunction(full,0x780L,6,
+                        "ga02_twohop_convergent_two_store_leaf");
+                    defineFixtureFunction(full,0x7c0L,4,
+                        "ga02_twohop_other_leaf");
+                    defineFixtureFunction(full,0x740L,16,
+                        "ga02_twohop_real_branch_bridge");
+                    defineFixtureFunction(full,0x760L,10,
+                        "ga02_twohop_second_bridge");
+                    for(long entry:new long[]{0x900L,0x920L,0x940L,0x960L})
+                        defineFixtureFunction(full,entry,20,
+                            "ga02_twohop_outer_"+Long.toHexString(entry));
+                    var branchInsn=full.getListing().getInstructionAt(
+                        address(full,0x740L));
+                    check(branchInsn!=null &&
+                            branchInsn.getMnemonicString()
+                                .toUpperCase(Locale.ROOT).startsWith("BNE") &&
+                            branchInsn.getFlows().length==1 &&
+                            branchInsn.getFlows()[0].equals(address(full,0x746L)) &&
+                            full.getListing().getInstructionAt(
+                                address(full,0x748L)).getFlowType().isCall(),
+                        "Real CPU32 conditional branch or nested JSR not decoded");
+                    var realFork=(ghidrassist.hardware.HardwareTwoHopRegisterFlow.Bridge)
+                        realBridgeMethod.invoke(null,full,
+                            full.getFunctionManager().getFunctionAt(
+                                address(full,0x740L)),TaskMonitor.DUMMY);
+                    var realOtherBridge=(ghidrassist.hardware.HardwareTwoHopRegisterFlow.Bridge)
+                        realBridgeMethod.invoke(null,full,
+                            full.getFunctionManager().getFunctionAt(
+                                address(full,0x760L)),TaskMonitor.DUMMY);
+                    var realTwoStore=(ghidrassist.hardware.HardwareCallsiteRegisterFlow.Callee)
+                        realLeafMethod.invoke(null,full,
+                            full.getFunctionManager().getFunctionAt(
+                                address(full,0x780L)),TaskMonitor.DUMMY);
+                    var realOtherLeaf=(ghidrassist.hardware.HardwareCallsiteRegisterFlow.Callee)
+                        realLeafMethod.invoke(null,full,
+                            full.getFunctionManager().getFunctionAt(
+                                address(full,0x7c0L)),TaskMonitor.DUMMY);
+                    check(realFork!=null && realFork.complete() &&
+                            realFork.steps().size()==6 &&
+                            realOtherBridge!=null && realOtherBridge.complete() &&
+                            realTwoStore!=null && realTwoStore.complete() &&
+                            realTwoStore.steps().size()==3 &&
+                            realOtherLeaf!=null && realOtherLeaf.complete(),
+                        "Actual branched Ghidra bridge and dual STORE leaf incomplete");
+                    var multiOuter=List.of(
+                        new ghidrassist.hardware.HardwareCallsiteRegisterFlow.Call(
+                            0x900L,0x90cL,0x740L,
+                            Map.of("A0",0xfffa00L,"D0",0x40caL),false),
+                        new ghidrassist.hardware.HardwareCallsiteRegisterFlow.Call(
+                            0x920L,0x92cL,0x740L,
+                            Map.of("A0",0xfffa00L,"D0",0x40caL),false),
+                        new ghidrassist.hardware.HardwareCallsiteRegisterFlow.Call(
+                            0x940L,0x94cL,0x760L,
+                            Map.of("A0",0xfffa68L,"D0",0x4848L),false),
+                        new ghidrassist.hardware.HardwareCallsiteRegisterFlow.Call(
+                            0x960L,0x96cL,0x760L,
+                            Map.of("A0",0xfffa68L,"D0",0x4848L),false));
+                    var actualMulti=ghidrassist.hardware.HardwareTwoHopRegisterFlow.analyze(
+                        multiOuter,List.of(realFork,realOtherBridge),
+                        List.of(realTwoStore,realOtherLeaf),
+                        Set.of(0xfffa00L,0xfffa68L),48);
+                    check(actualMulti.sampled()==4 &&
+                            actualMulti.possibleStores()==6 &&
+                            actualMulti.rows().size()==6 &&
+                            actualMulti.unknownAliases()==0,
+                        "Actual CPU32 2-leaf, 3-STORE provenance incomplete");
+                    var multiRevision=HardwareAnalysisRevision.capture(
+                        full,full.getModificationNumber(),
+                        full.getLanguage().getLanguageID().toString(),
+                        full.getExecutableSHA256(),true);
+                    var multiReport=ghidrassist.hardware.HardwareTwoHopConsensus
+                        .markdown(multiOuter,actualMulti,0,20,multiRevision,
+                            currentRevision);
+                    check(multiReport.contains(
+                            "| 0x00000740 | 0x00000780 | 0x00000780 | 2 | SAMPLED_AGREEMENT") &&
+                            multiReport.contains(
+                            "| 0x00000740 | 0x00000780 | 0x00000782 | 2 | SAMPLED_AGREEMENT") &&
+                            multiReport.contains(
+                            "| 0x00000760 | 0x000007C0 | 0x000007C0 | 2 | SAMPLED_AGREEMENT") &&
+                            multiReport.contains("NOT HARDWARE PROOF"),
+                        "Actual Ghidra convergent CALL paths/leaf STORE cohorts mixed");
+                    result.addProperty("twohop_real_branch_convergence",true);
+                    result.addProperty("twohop_real_multiple_leaf_functions",true);
+                    result.addProperty("twohop_real_multiple_store_sites",true);
                     result.addProperty("twohop_actual_listing_revision_invalidation",true);
                     result.addProperty("twohop_actual_listing_rollback_safe",true);
                     result.addProperty("twohop_real_source_provenance_no_stale_apply",true);
