@@ -282,8 +282,7 @@ public class GA18VerifyResetIndirectVbrJointSource extends GhidraScript {
         // A completed Automation source-page cursor is invalidated by an
         // explicit GA-12 stage clear even without another Program edit.
         try(URLClassLoader loader=new URLClassLoader(
-                new URL[]{Path.of(jar).toUri().toURL()},
-                getClass().getClassLoader())) {
+                new URL[]{Path.of(jar).toUri().toURL()},bridge)) {
             Class<?> stages=Class.forName(
                 "ghidrassist.hardware.HardwareFlowStageCache",true,loader);
             long epoch=(Long)stages.getMethod("sourcePageEpoch",Program.class)
