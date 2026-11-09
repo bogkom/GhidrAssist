@@ -1213,6 +1213,15 @@ public final class Ga11VectorHeadlessMain {
                     check(repeated.equals(source) &&
                         full.getModificationNumber()==revision,
                         "GA-12 process-local replay mixed call-site contexts");
+                    var generic=new GhidraHardwareFlowService().analyze(
+                        full,TaskMonitor.DUMMY,false);
+                    check(generic.markdown.contains(
+                        "Not evaluated: explicit MC68332 profile required") &&
+                        !generic.markdown.contains(
+                            "| 0x00000600 | 0x0000060C | 0x00000640 | "+
+                            "0x00000642 |") &&
+                        full.getModificationNumber()==revision,
+                        "Generic CPU32 inherited MC68332 two-hop MMIO");
                     // GA-12: actual in-memory Ghidra Listing mutation.
                     // Decode the already validated synthetic CPU32 bridge
                     // and leaf into real production Steps, then capture
@@ -1316,15 +1325,7 @@ public final class Ga11VectorHeadlessMain {
                     result.addProperty("twohop_actual_listing_rollback_safe",true);
                     result.addProperty("twohop_real_source_provenance_no_stale_apply",true);
 
-                    var generic=new GhidraHardwareFlowService().analyze(
-                        full,TaskMonitor.DUMMY,false);
-                    check(generic.markdown.contains(
-                        "Not evaluated: explicit MC68332 profile required") &&
-                        !generic.markdown.contains(
-                            "| 0x00000600 | 0x0000060C | 0x00000640 | "+
-                            "0x00000642 |") &&
-                        full.getModificationNumber()==revision,
-                        "Generic CPU32 inherited MC68332 two-hop MMIO");
+
                     result.addProperty("twohop_register_width_metadata_readonly",true);
                     result.addProperty("twohop_real_nested_jsr_decoded",true);
                     result.addProperty("twohop_independent_a0_d0",true);
