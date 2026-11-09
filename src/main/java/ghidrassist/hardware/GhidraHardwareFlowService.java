@@ -58,12 +58,27 @@ public final class GhidraHardwareFlowService {
         public final boolean limited;
         public final boolean cfgReviewComplete;
         public final long cfgSitesOmitted,pointerSitesOmitted;
+        /** Null when recovered from a durable checkpoint without live sources. */
+        public final HardwareResetIndirectVbrCorrelation.SourceInventory sourceInventory;
         Report(String md,int fn,int indirect,int vbr,int unresolved,int visited,
                 boolean limited,List<HardwarePointerRoleReview.Proposal> pointers,
                 java.util.Set<Long> resetCandidates,boolean resetRecognized,
                 boolean resetUnresolved,String configurationCsv,
                 List<HardwareCfgWriteAudit.Site> cfgSites,
                 boolean cfgReviewComplete,long cfgOmitted,long pointerOmitted){
+            this(md,fn,indirect,vbr,unresolved,visited,limited,pointers,
+                resetCandidates,resetRecognized,resetUnresolved,
+                configurationCsv,cfgSites,cfgReviewComplete,cfgOmitted,
+                pointerOmitted,null);
+        }
+        Report(String md,int fn,int indirect,int vbr,int unresolved,int visited,
+                boolean limited,List<HardwarePointerRoleReview.Proposal> pointers,
+                java.util.Set<Long> resetCandidates,boolean resetRecognized,
+                boolean resetUnresolved,String configurationCsv,
+                List<HardwareCfgWriteAudit.Site> cfgSites,
+                boolean cfgReviewComplete,long cfgOmitted,long pointerOmitted,
+                HardwareResetIndirectVbrCorrelation.SourceInventory sourceInventory){
+            this.sourceInventory=sourceInventory;
             markdown=md;configurationEvidenceCsv=configurationCsv;
             rawCfgMmioSites=List.copyOf(cfgSites);
             pointerRoles=List.copyOf(pointers);
@@ -1486,6 +1501,7 @@ public final class GhidraHardwareFlowService {
         // Program analysis. This creates NO indirect graph edge and NO
         // SIMCR/MM -> MOVEC chronological or ISR execution inference.
         String resetIndirectVbr;
+        HardwareResetIndirectVbrCorrelation.SourceInventory publicationSources=null;
         if(mc68332Selected) {
             var vbrPlan=HardwareVbrRelocationEvidence.plan(
                 vbrSourceSites,reset.recognized(),reset.incomplete(),
@@ -1516,14 +1532,15 @@ public final class GhidraHardwareFlowService {
                     row.tableState()!=
                         HardwareVbrRelocationEvidence.TableState.TABLE_BYTES_CANDIDATE))
                 .toList();
-            var correlation=HardwareResetIndirectVbrCorrelation.inspect(
+            publicationSources=new HardwareResetIndirectVbrCorrelation.SourceInventory(
                 indirectSources,movecSources,reset.visited(),
                 reset.recognized(),reset.incomplete(),
                 indirectMmEvidence.omittedWitnesses()+indirectCandidatesOmitted+
                     indirectUnknownCalls+
                     indirectMmEvidence.rows().size()-joinEligible.size(),
-                vbrSourceSitesOmitted+vbrSourceSites.size()-vbrPlan.rows().size(),
-                HardwareResetIndirectVbrCorrelation.MAX_DISPLAY);
+                vbrSourceSitesOmitted+vbrSourceSites.size()-vbrPlan.rows().size());
+            var correlation=publicationSources.page(
+                0,HardwareResetIndirectVbrCorrelation.MAX_DISPLAY);
             StringBuilder cfgRoutes=new StringBuilder(correlation.markdown())
                 .append("## Bounded same-function JSR / MOVEC CFG routes (GA-01/02/03/11)\n\n")
                 .append("STATIC POSSIBLE INSTRUCTION ROUTES ONLY; CALL fallthrough ")
@@ -1630,6 +1647,7 @@ public final class GhidraHardwareFlowService {
             visited,limited || !cfgSourcesComplete || pointerSites.truncated(),
             roles,reset.visited(),reset.recognized(),reset.incomplete(),
             evidenceCsv,cfgMmioSites.snapshot(),
-            cfgSourcesComplete,cfgMmioSites.omitted(),pointerSites.omitted());
+            cfgSourcesComplete,cfgMmioSites.omitted(),pointerSites.omitted(),
+            publicationSources);
     }
 }
