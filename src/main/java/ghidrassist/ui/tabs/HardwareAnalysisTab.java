@@ -169,6 +169,62 @@ public final class HardwareAnalysisTab extends JPanel {
     }
 
     /** Return a revision-bound, size-limited page; no file-system side effects. */
+    /**
+     * GA-12: one Swing-EDT-consistent fingerprint of ALL three published
+     * hardware report formats. Clients can compare this before/after a
+     * multi-request export; no Ghidra Program lock or Apply is acquired.
+     */
+    public com.google.gson.JsonObject automationReportManifest() {
+        if (!SwingUtilities.isEventDispatchThread())
+            throw new IllegalStateException("EDT required");
+        if (!currentScan() || latestMarkdown==null ||
+                latestConfigCsv==null || latestNameCsv==null)
+            throw new IllegalStateException(
+                "Complete hardware report set not ready; rerun Analyze");
+        final ghidrassist.hardware.HardwareAnalysisRevision captured=latestRevision;
+        final Program source=latestProgram;
+        final long epoch=latestJointStageEpoch;
+        final java.util.Map<String,String> generations=latestReportGenerations;
+        com.google.gson.JsonObject formats=new com.google.gson.JsonObject();
+        java.util.Map<String,String> contents=java.util.Map.of(
+            "markdown",latestMarkdown,
+            "config_csv",latestConfigCsv,
+            "names_csv",latestNameCsv);
+        for(String format:new String[]{"markdown","config_csv","names_csv"}) {
+            String generation=generations.get(format);
+            String content=contents.get(format);
+            if(generation==null || content==null)
+                throw new IllegalStateException("Incomplete report generation");
+            com.google.gson.JsonObject item=new com.google.gson.JsonObject();
+            item.addProperty("generation",generation);
+            item.addProperty("total_characters",content.length());
+            item.addProperty("sha256_utf8",
+                ghidrassist.hardware.HardwareDurableStageStore.hash(content));
+            formats.add(format,item);
+        }
+        com.google.gson.JsonObject response=new com.google.gson.JsonObject();
+        response.addProperty("schema",1);
+        response.addProperty("kind","ghidrassist-hardware-report-set-manifest");
+        response.addProperty("revision",captured.toString());
+        response.addProperty("program_revision",captured.modificationNumber());
+        response.addProperty("stage_epoch",epoch);
+        response.addProperty("program_path",source.getDomainFile()==null?
+            "UNKNOWN":source.getDomainFile().getPathname());
+        response.addProperty("import_sha256",captured.sourceSha256()==null?
+            "UNKNOWN":captured.sourceSha256());
+        response.addProperty("profile",
+            latestConcrete?"MC68332_USER_SELECTED":"CPU32_SURVEY");
+        response.addProperty("scope",
+            "STATIC EVIDENCE ONLY; NO EXECUTION OR PHYSICAL MAPPING");
+        response.add("formats",formats);
+        if(!currentScan() || latestRevision!=captured ||
+                latestProgram!=source || latestJointStageEpoch!=epoch ||
+                !latestReportGenerations.equals(generations))
+            throw new IllegalStateException(
+                "Program, stage or report data changed while generating manifest");
+        return response;
+    }
+
     public com.google.gson.JsonObject automationReport(
             String format,int offset,int limit,String expectedRevision,
             String expectedGeneration) {
