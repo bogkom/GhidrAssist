@@ -6,10 +6,15 @@ import ghidra.program.model.address.Address;
 import ghidra.program.model.address.AddressSet;
 import ghidra.program.model.listing.Function;
 import ghidra.program.model.listing.Instruction;
+import ghidra.program.model.listing.CodeUnit;
 import ghidra.program.model.listing.Program;
 import ghidra.program.model.symbol.SourceType;
 import ghidra.util.task.TaskMonitor;
 import java.lang.reflect.Field;
+import java.lang.reflect.Proxy;
+import java.lang.reflect.InvocationTargetException;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.lang.reflect.Method;
 import java.net.URL;
 import java.net.URLClassLoader;
@@ -71,7 +76,8 @@ public class GA18VerifyResetIndirectVbrJointSource extends GhidraScript {
                     0x130,0x132,0x138,0x13a,0x13c,0x13e,
                     0x140,0x142,0x144,0x148,0x14a,
                     0x180,0x188,
-                    0x200,0x206,0x208,0x20c}) {
+                    0x200,0x206,0x208,0x20c,
+                    0x240,0x242}) {
                 monitor.checkCancelled();
                 if(currentProgram.getListing().getInstructionAt(at(pc))==null)
                     check(new DisassembleCommand(at(pc),null,false)
@@ -82,6 +88,7 @@ public class GA18VerifyResetIndirectVbrJointSource extends GhidraScript {
             function(0x130,0x14b);
             function(0x180,0x189);
             function(0x200,0x20d);
+            function(0x240,0x243);
             commit=true;
         } finally {
             currentProgram.endTransaction(tx,commit);
@@ -97,6 +104,10 @@ public class GA18VerifyResetIndirectVbrJointSource extends GhidraScript {
         decode(0x200,"MOVEA",0x207c,6);
         decode(0x206,"JSR",0x4e90,2);
         decode(0x208,"MOVEC",0x4e7b,4);
+        decode(0x240,"JSR",0x4e91,2);
+        check(currentProgram.getListing().getInstructionAt(at(0x240))
+            .getFlowType().isComputed(),
+            "unresolved computed JSR (A1) remains unknown and disconnected");
 
         Instruction branch=currentProgram.getListing().getInstructionAt(at(0x130));
         Set<Long> branchEdges=new LinkedHashSet<>();
@@ -162,6 +173,10 @@ public class GA18VerifyResetIndirectVbrJointSource extends GhidraScript {
             String cfg=section(report,
                 "## Bounded same-function JSR / MOVEC CFG routes",
                 "## ");
+            check(join.contains("omitted indirect witnesses: 1") &&
+                join.contains("INCOMPLETE SOURCE INVENTORY/DISPLAY"),
+                "one unproven computed JSR is counted as omitted/UNKNOWN, "
+                +"not an absent indirect call or missing MMIO conclusion");
             check(join.contains("co-located pairs: 2"),
                 "two independently source-witnessed co-located pairs");
             check(join.contains("0x00000130 | 0x00000138 | 0x00000180 | 0x00000144"),
@@ -181,9 +196,63 @@ public class GA18VerifyResetIndirectVbrJointSource extends GhidraScript {
             check(cfg.contains("CALL fallthrough") &&
                 cfg.contains("does not prove callee return"),
                 "no executed JSR / selected VBR / active MM conclusion");
+            // Mutation occurs inside the ACTUAL production Analyze call,
+            // after its revision capture and after N real TaskMonitor
+            // checkpoints. A separate, isolated Program transaction changes
+            // Ghidra's own modification number (not any test-only token).
+            // The method must throw, never return a stale partial Report.
+            for(int trigger:new int[]{1,12}) {
+                AtomicInteger ticks=new AtomicInteger();
+                AtomicBoolean changed=new AtomicBoolean(false);
+                long before=currentProgram.getModificationNumber();
+                TaskMonitor injecting=(TaskMonitor)Proxy.newProxyInstance(
+                    TaskMonitor.class.getClassLoader(),
+                    new Class<?>[]{TaskMonitor.class},
+                    (proxy,method,args)->{
+                        if(method.getName().equals("checkCancelled") &&
+                                ticks.incrementAndGet()==trigger) {
+                            int edit=currentProgram.startTransaction(
+                                "GA18 isolated revision-in-flight probe "+trigger);
+                            try {
+                                currentProgram.getListing().setComment(
+                                    at(0x100),CodeUnit.EOL_COMMENT,
+                                    "GA18 isolated revision probe "+trigger);
+                            } finally {
+                                currentProgram.endTransaction(edit,true);
+                            }
+                            changed.set(true);
+                        }
+                        try { return method.invoke(monitor,args); }
+                        catch(InvocationTargetException e){throw e.getCause();}
+                    });
+                boolean refused=false;
+                try {
+                    Object stale=analyze.invoke(instance,currentProgram,
+                        injecting,true);
+                    throw new IllegalStateException(
+                        "Production Analyze returned instead of rejecting stale revision");
+                } catch(InvocationTargetException e) {
+                    Throwable cause=e.getCause();
+                    refused=cause!=null &&
+                        (cause.getClass().getName().contains("StaleRevision") ||
+                         cause instanceof ghidra.util.exception.CancelledException);
+                    if(!refused)
+                        throw new IllegalStateException(
+                            "Unexpected native revision probe exception",cause);
+                }
+                check(changed.get() && ticks.get()>=trigger &&
+                    currentProgram.getModificationNumber()!=before,
+                    "real Ghidra Program revision mutated after "+
+                    trigger+" native monitor checks");
+                check(refused,
+                    "in-flight edit rejects complete source report: "+
+                    trigger+" checks (no stale Markdown or Report escaped)");
+            }
         }
+        println("GA18 REAL JOINT REVISION REFUSAL PASS: injected=2 unresolved=1");
         println("GA18 REAL RESET JSR MOVEC JOINT PASS: assertions="+checks+
-            " (two native CPU32 source pairs, branching CFG, RESET subset, "+
+            " (two native CPU32 source pairs, unresolved JSR, branching CFG, "+
+            "two real Ghidra in-flight revision mutations, RESET subset, "+
             "MM MAY, generic CPU32 refusal; STATIC ONLY)");
     }
 }

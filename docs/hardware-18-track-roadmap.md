@@ -1,5 +1,42 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
+## GA-01/02/03/11/12/18 — 2026-11-09: native Ghidra in-flight revision refusal and unproven JSR inventory
+
+An isolated, byte-exact CPU32 synthetic Program extends the already
+verified production RESET/direct-CALL/byte-proven indirect JSR/SIMCR-MM/
+MOVEC-to-VBR source report with a disconnected unknown JSR (A1) at
+0x240. This decoded computed CALL has **no** bounded MOVEA source
+proof. It must increase the joint source report's omitted/UNKNOWN
+indirect witness inventory while preserving the two independent
+byte-proven JSR/MOVEC source pairs. It never creates a direct CALL
+edge, proves lack of MMIO writes or changes the original firmware.
+
+After the production report's ordinary generic CPU32 refusal,
+selected MC68332 source join, RESET subset and branch/CFG tests, the
+**same native 12.1.4 PUBLIC GhidraScript** runs production Analyze
+twice with a TaskMonitor proxy that makes a committed, comment-only
+revision edit to the *isolated synthetic Program* after respectively
+one and twelve actual monitor checkpoints. A new Ghidra transaction
+updates the real Program modification number while the analysis is
+in progress; a Java-only synthetic revision token is insufficient.
+The production method must reject both edits with STALE_REVISION
+or fail-closed cancellation and never return a partial Report.
+GitHub Actions requires the distinct native
+"GA18 REAL JOINT REVISION REFUSAL PASS: injected=2 unresolved=1"
+marker in addition to the existing full same-Program source evidence
+PASS marker. This is an integrated interruption regression,
+not a formal Wyse/Precision/Supervisor host PASS.
+
+Safe scope: synthetic fixture only; no ECU411 image, production
+Ghidra Program, user profile, credentials, OAuth, Review/Apply or
+stopped local testing. The static source report does not infer
+executed JSR, actually latched SIMCR/MM, active VBR/ISR or a
+physical hardware mapping. Exact-PR-head full Java25 extension
+build, Java21 source regressions where triggered and real synthetic
+headless Actions are required before merging. GA-01/02/03/11/12/18
+remain PARTIAL; GA-14 remains deferred.
+
+
 ## GA-01/02/03/11/12/18 — 2026-11-09: atomic full-report revision safety after RESET/JSR/MOVEC source reconciliation
 
 The real-Ghidra RESET/direct-CALL/byte-witnessed indirect-JSR/SIMCR-MM/
