@@ -1,5 +1,37 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
+## GA-06/10/16/18 — 2026-11-09: exact MC68332 chip-select address-table PDF evidence
+
+After the 15 SIMCR/SYNCR diagram-to-mask checks and the separately
+completed GA-08/13 transactional pointer receipt package (merged #238),
+this bounded read-only work expands manufacturer register evidence to
+26 chip-select-related SIM entries. A reviewed Table D-2
+`HardwareSimChipSelectTableWitness` validates the actual **address,
+register role, physical publisher-PDF folio and concrete profile
+offset/width** for CSPAR0/1, CSBARBT/CSORBT and CSBAR0..10/CSOR0..10.
+It preserves the non-obvious folio boundary: CSBAR4 $YFFA5C is
+printed D-4 / physical PDF 218, while CSOR4 $YFFA5E begins D-5 /
+physical PDF 219. Changed rows, wrong/swapped/absent pages, duplicate
+PDF rows and generic CPU32 scope cannot become verified register
+addresses. The implementation neither infers additional field masks
+nor modifies existing chip-select decoders.
+
+The independent official manufacturer-PDF Actions job verifies
+the same reviewed SHA-256/265-page MC68332UM source, extracts exact
+physical PDF 218/219 and runs all 26 table-row checks; standalone
+Java21 tests exercise deterministic negative cases without source
+network access. Full Ghidra 12.1.4 PUBLIC Java25 extension
+compilation and actual synthetic headless safety regression remain
+mandatory at final exact commit SHA.
+
+Evidence is static **register-address metadata** only. A register
+row does not prove physical CS assertion, active MM, external bus
+mapping, an executed firmware write or Review/Apply eligibility.
+No original ECU411 firmware/user Ghidra projects/OAuth modified,
+no stopped Wyse/Precision/Supervisor workers restarted.
+GA-06/10/16/18 remain PARTIAL; GA-14 deferred.
+
+
 ## GA-08/13/18 — 2026-11-09: transactional argument/local pointer rename receipts
 
 Previously the GA-13 Program Options receipt and revision-guarded
