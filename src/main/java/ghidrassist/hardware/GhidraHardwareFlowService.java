@@ -1284,6 +1284,27 @@ public final class GhidraHardwareFlowService {
                     " source CALL sites skipped by the bounded 96-site "+
                     "budget or unavailable caller CFG. Missing calls are "+
                     "UNKNOWN, not proven side-effect-free.\n\n";
+            // Reconcile only sampled exact direct CALL sites. Contextual
+            // results never enter FUNCTION_STAGES, durable GA-12 caches
+            // or Review/Apply: this report remains MAY-source evidence.
+            if(program.getModificationNumber()!=functionScope.modification() ||
+                    !FUNCTION_STAGES.current(program,functionEpoch))
+                throw new CancelledException();
+            var reconciliationRevision=HardwareAnalysisRevision.capture(
+                program,functionScope.modification(),
+                program.getLanguage().getLanguageID().toString(),
+                program.getExecutableSHA256(),mc68332Selected);
+            callsiteRegisters+=HardwareCallsiteConsensus.markdown(
+                callerContexts,contextual,callerContextsOmitted,24,
+                reconciliationRevision,
+                ()->HardwareAnalysisRevision.capture(program,
+                    program.getModificationNumber(),
+                    program.getLanguage().getLanguageID().toString(),
+                    program.getExecutableSHA256(),mc68332Selected));
+            if(program.getModificationNumber()!=functionScope.modification() ||
+                    !FUNCTION_STAGES.current(program,functionEpoch))
+                throw new CancelledException();
+
             // A separate two-hop analysis is intentionally NOT attached
             // to the ordinary GA-12 FUNCTION_STAGES or durable checkpoint.
             // Its scope is one chosen outer CALL PC and ONE nested CALL.

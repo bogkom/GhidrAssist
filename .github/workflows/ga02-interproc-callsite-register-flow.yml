@@ -4,8 +4,10 @@ on:
     paths:
       - 'src/main/java/ghidrassist/hardware/HardwareDataflow.java'
       - 'src/main/java/ghidrassist/hardware/HardwareCallsiteRegisterFlow.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareCallsiteConsensus.java'
       - 'src/main/java/ghidrassist/hardware/GhidraHardwareFlowService.java'
       - 'src/test/java/ghidrassist/hardware/HardwareCallsiteRegisterFlowSelfTest.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareCallsiteConsensusSelfTest.java'
       - '.github/workflows/ga02-interproc-callsite-register-flow.yml'
   workflow_dispatch:
 permissions:
@@ -28,6 +30,11 @@ jobs:
           javac --release 21 -d "$RUNNER_TEMP/ga02-callsite" \
             src/main/java/ghidrassist/hardware/HardwareDataflow.java \
             src/main/java/ghidrassist/hardware/HardwareCallsiteRegisterFlow.java \
-            src/test/java/ghidrassist/hardware/HardwareCallsiteRegisterFlowSelfTest.java
+            src/main/java/ghidrassist/hardware/HardwareCallsiteConsensus.java \
+            src/main/java/ghidrassist/hardware/HardwareAnalysisRevision.java \
+            src/test/java/ghidrassist/hardware/HardwareCallsiteRegisterFlowSelfTest.java \
+            src/test/java/ghidrassist/hardware/HardwareCallsiteConsensusSelfTest.java
           java -cp "$RUNNER_TEMP/ga02-callsite" \
             ghidrassist.hardware.HardwareCallsiteRegisterFlowSelfTest
+          java -cp "$RUNNER_TEMP/ga02-callsite" \
+            ghidrassist.hardware.HardwareCallsiteConsensusSelfTest
