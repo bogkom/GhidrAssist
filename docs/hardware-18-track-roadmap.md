@@ -1,5 +1,44 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
+## GA-12/13/15/18 — 2026-11-09: strict JSON-RPC binding identity and late Program-session guard
+
+The already merged GUI/API sidecar creation functionality from #259 is
+hardened without changing its opt-in scope, bearer authentication,
+synthetic/attested review-copy authorization, local-only destination
+or Review/Apply separation. `agentic.review.binding.create` now requires
+a **canonical, unquoted, nonnegative JSON integer** Program revision
+in 64-bit range. JSON strings, fractions, exponent notation, negative,
+Boolean, null, arrays, objects, leading zeros and overflow cannot be
+coerced via Gson `getAsLong()`. The expected import identity must be
+exactly 64 hexadecimal SHA-256 digits, with an exact Ghidra project
+Program path. Unknown request fields (including attempted tool/Apply
+approval) are rejected, instead of being silently ignored.
+
+The production Java save helper now optionally accepts a live
+`BooleanSupplier` which must remain true before expensive
+fingerprinting and immediately before sidecar publication. GUI binds
+it to active Program object/revision, same Query session and no
+task/pending plan. Automation binds it to active Program and revision
+plus the operator's opt-in property; an in-flight Program switch,
+revision change or feature revocation cannot publish a stale sidecar.
+This witness supplements the existing repeated full-input
+fingerprints, checkpoint-byte identity, exclusive no-overwrite and
+persisted Program identity; it does not grant authorization.
+
+The true Ghidra 12.1.4 PUBLIC CodeBrowser Bearer JSON-RPC CI
+executes over 20 invalid identity/authority-shaped requests and
+requires HTTP 400 with **no sidecar file**. The real isolated
+synthetic Ghidra Java25 restart suite additionally simulates a
+Program/session switch deterministically between full scans and
+the final exclusive link, proving fail-closed nonpublication.
+Original evidence, firmware and saved project are untouched.
+The sidecar remains a read-only integrity/provenance receipt;
+later Program changes fail at the existing strict import/review
+gate, and no old model/session/Apply permission is inherited.
+GA-12/13/15/18 remain PARTIAL; GA-14 deferred. No local
+Wyse/Precision/Supervisor worker was resumed.
+
+
 ## GA-12/13/15/18 — 2026-11-09: gated creation of full-Program-bound Agentic Review evidence
 
 The previously integrated optional `Import Bound Checkpoint` path

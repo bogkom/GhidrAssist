@@ -36,6 +36,54 @@ public final class AutomationAgenticBinding {
             throw new IllegalArgumentException("Unsafe binding filename: "+key);
         return value;
     }
+    /**
+     * A JSON number MUST be an exact, canonical decimal integer. Gson's
+     * getAsLong() truncates fractions and accepts quoted numbers, and may
+     * silently overflow a 64-bit value. Never authorize a stale artifact
+     * using these coercions.
+     */
+    static long exactRevision(JsonObject args){
+        if(!args.has("expected_program_revision") ||
+                !args.get("expected_program_revision").isJsonPrimitive() ||
+                !args.get("expected_program_revision")
+                    .getAsJsonPrimitive().isNumber())
+            throw new IllegalArgumentException(
+                "Expected revision must be an unquoted integer");
+        String raw=args.get("expected_program_revision").getAsString();
+        if(!raw.matches("(0|[1-9][0-9]{0,18})"))
+            throw new IllegalArgumentException(
+                "Expected revision must be a canonical nonnegative integer");
+        try {
+            return Long.parseLong(raw);
+        }catch(NumberFormatException invalid){
+            throw new IllegalArgumentException("Expected revision out of range",invalid);
+        }
+    }
+    static String exactSourceSha(JsonObject args){
+        String sha=string(args,"expected_import_sha256",64);
+        if(!sha.matches("[A-Fa-f0-9]{64}"))
+            throw new IllegalArgumentException(
+                "Expected import SHA must have exactly 64 hexadecimal digits");
+        return sha;
+    }
+    static void validateExpectedIdentity(JsonObject args,long revision,
+            String importedSha,String programPath){
+        // No ambiguous extra request fields (including alternative paths or
+        // supposedly pre-approved plans). This is a closed security contract.
+        java.util.Set<String> allowed=java.util.Set.of(
+            "confirm_local_sidecar","expected_program_revision",
+            "expected_import_sha256","expected_program_path","profile",
+            "objective","source_file","output_file");
+        for(String key:args.keySet())
+            if(!allowed.contains(key))
+                throw new IllegalArgumentException("Unknown binding field: "+key);
+        if(exactRevision(args)!=revision ||
+                importedSha==null ||
+                !exactSourceSha(args).equalsIgnoreCase(importedSha) ||
+                !string(args,"expected_program_path",256).equals(programPath))
+            throw new IllegalStateException(
+                "Program revision/import identity changed");
+    }
     private static boolean profile(JsonObject args) {
         String value=string(args,"profile",32);
         if("CPU32_SURVEY".equals(value))return false;
@@ -63,13 +111,8 @@ public final class AutomationAgenticBinding {
                 !args.get("confirm_local_sidecar").getAsBoolean())
             throw new IllegalArgumentException("Explicit local sidecar confirmation required");
         long revision=program.getModificationNumber();
-        if(!args.has("expected_program_revision") ||
-                args.get("expected_program_revision").getAsLong()!=revision ||
-                !string(args,"expected_import_sha256",64).equalsIgnoreCase(
-                    program.getExecutableSHA256()) ||
-                !string(args,"expected_program_path",256).equals(
-                    program.getDomainFile().getPathname()))
-            throw new IllegalStateException("Program revision/import identity changed");
+        validateExpectedIdentity(args,revision,
+            program.getExecutableSHA256(),program.getDomainFile().getPathname());
         boolean mc68332=profile(args);
         String objective=string(args,"objective",512);
         if(objective.length()<8)
@@ -93,7 +136,10 @@ public final class AutomationAgenticBinding {
                 Files.exists(destination,LinkOption.NOFOLLOW_LINKS))
             throw new IllegalArgumentException("Source missing or destination already exists");
         AgenticReviewProgramBinding.save(
-            source,destination,program,objective,mc68332,TaskMonitor.DUMMY);
+            source,destination,program,objective,mc68332,TaskMonitor.DUMMY,
+            ()->plugin.getCurrentProgram()==program &&
+                program.getModificationNumber()==revision &&
+                Boolean.getBoolean("ghidrassist.automation.agenticBindingCreate"));
         if(plugin.getCurrentProgram()!=program ||
                 program.getModificationNumber()!=revision)
             throw new IllegalStateException(

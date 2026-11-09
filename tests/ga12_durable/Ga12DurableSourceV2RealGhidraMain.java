@@ -349,6 +349,22 @@ public final class Ga12DurableSourceV2RealGhidraMain {
                 bindingRefused=true;
             }
             if(phase.equals("source-read")) {
+                // Deterministic stand-in for a Program/session switch AFTER
+                // an expensive real Program fingerprint and BEFORE the
+                // exclusively created sidecar is published.
+                Path switched=proofs.resolve("ga12-switched-before-publish.json");
+                var checks=new java.util.concurrent.atomic.AtomicInteger();
+                boolean switchedRefused=false;
+                try {
+                    AgenticReviewProgramBinding.save(
+                        reviewSource,switched,program,REVIEW_OBJECTIVE,true,
+                        TaskMonitor.DUMMY,()->checks.incrementAndGet()==1);
+                }catch(IllegalStateException denied){
+                    switchedRefused=true;
+                }
+                require(switchedRefused && checks.get()==2 &&
+                    !Files.exists(switched),
+                    "Program/session switch during fingerprint may not publish a sidecar");
                 byte[] originalBinding=Files.readAllBytes(reviewBinding);
                 boolean overwriteRefused=false;
                 try {

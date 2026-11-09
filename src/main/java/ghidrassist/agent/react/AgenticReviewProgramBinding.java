@@ -110,6 +110,20 @@ public final class AgenticReviewProgramBinding {
     public static void save(Path checkpoint,Path binding,Program program,
             String objective,boolean mc68332,TaskMonitor monitor)
             throws IOException,CancelledException {
+        save(checkpoint,binding,program,objective,mc68332,monitor,()->true);
+    }
+    /**
+     * Optional live GUI/API witness. Source and fingerprint equality cannot
+     * detect a Program switch to another instance with identical bytes; the
+     * caller's live identity/epoch predicate is therefore also required
+     * immediately before publishing a new local binding.
+     */
+    public static void save(Path checkpoint,Path binding,Program program,
+            String objective,boolean mc68332,TaskMonitor monitor,
+            java.util.function.BooleanSupplier stillCurrent)
+            throws IOException,CancelledException {
+        if(stillCurrent==null || !stillCurrent.getAsBoolean())
+            throw new IllegalStateException("Program switched before binding");
         if(program==null || binding==null || monitor==null ||
                 objective==null || objective.length()<8 || objective.length()>512)
             throw new IllegalArgumentException("Missing review context/objective");
@@ -169,6 +183,9 @@ public final class AgenticReviewProgramBinding {
                     !java.util.Arrays.equals(source,bounded(checkpoint,MAX_CHECKPOINT)))
                 throw new IllegalStateException(
                     "Program or checkpoint changed before binding publication");
+            if(!stillCurrent.getAsBoolean())
+                throw new IllegalStateException(
+                    "Program, selected session or authorization changed before binding publication");
             // Exclusive create; a stale binding is never replaced.
             Files.createLink(binding,temp);
         }finally{Files.deleteIfExists(temp);}
