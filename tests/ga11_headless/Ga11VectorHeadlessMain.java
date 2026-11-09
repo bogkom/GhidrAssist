@@ -1266,11 +1266,13 @@ public final class Ga11VectorHeadlessMain {
                         full,full.getModificationNumber(),
                         full.getLanguage().getLanguageID().toString(),
                         full.getExecutableSHA256(),true);
+                    // Main's mutable full handle is not effectively final.
+                    final Program revisionProgram=full;
                     java.util.function.Supplier<HardwareAnalysisRevision> currentRevision=
-                        ()->HardwareAnalysisRevision.capture(full,
-                            full.getModificationNumber(),
-                            full.getLanguage().getLanguageID().toString(),
-                            full.getExecutableSHA256(),true);
+                        ()->HardwareAnalysisRevision.capture(revisionProgram,
+                            revisionProgram.getModificationNumber(),
+                            revisionProgram.getLanguage().getLanguageID().toString(),
+                            revisionProgram.getExecutableSHA256(),true);
                     var beforeEdit=ghidrassist.hardware.HardwareTwoHopConsensus
                         .inspectScopedRevisionBound(actualRevision,currentRevision,
                             realOuter,realTwoHop,0x640L,0x700L,0x700L);
