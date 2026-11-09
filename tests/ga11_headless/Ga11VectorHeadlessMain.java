@@ -1186,7 +1186,7 @@ public final class Ga11VectorHeadlessMain {
                         source.contains(
                         "SOURCE-ONLY MAY-CANDIDATES; NOT HARDWARE PROOF") &&
                         source.contains(
-                        "| 0x00000700 | 0x00000700 |") &&
+                        "| 0x00000640 | 0x00000700 | 0x00000700 |") &&
                         source.contains("INCOMPLETE") &&
                         !source.contains("SAMPLED_AGREEMENT"),
                         "Real nested CPU32 JSR candidates were falsely "+
