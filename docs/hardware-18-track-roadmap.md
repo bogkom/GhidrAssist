@@ -1,5 +1,39 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
+## GA-02/03/12/18 — 2026-11-09: real translated P-code interruption and byte overlap
+
+The first full two-JVM regression for an **interrupted real translated**
+CPU32 Listing CFG, not just an invented 96-node Step graph: the isolated
+256-byte CodeBrowser source now contains a real 20-instruction function
+(MOVEA.L immediate to A0, 17 NOP instructions, MOVE.W via A0, RTS).
+The first Ghidra JVM decodes all instructions, translates them via the
+production GhidraHardwareFlowService, executes one bounded 16-iteration
+slice and persists the incomplete typed worklist. Incomplete progress
+must not appear as completed Review/Apply source. The second independent
+Ghidra JVM reopens the same isolated project, retranslates the source,
+requires the exact worklist iteration count, verifies source/profile/
+budget mismatch rejection, resumes the actual worklist using the
+production HardwarePartialStageRunner and compares every encoded output
+byte with a cold full fixed point. Only a complete result may replace
+the pending cache slot.
+
+A second genuine CPU32 function writes SIMCR as a full word, overwrites
+the high byte with MOVE.B to the same effective address, then writes
+another full word. The existing HardwareDataflow overlapping-byte model
+must invalidate the previous complete register value after the byte
+write, and reestablish a known word only after the final complete write.
+This is **static** instruction/source evidence, not observed hardware
+bus transactions, activation of MM, or execution on ECU411. The earlier
+indirect-A0/unknown-A1 cases, corrupt checkpoints and 96-node
+interrupted synthetic worklist remain independent tests.
+
+Acceptance: full Java25 extension, real Ghidra 12.1.4 PUBLIC/Xvfb
+two-JVM JSON receipts, exact-HEAD GitHub Actions, source SHA and
+regression continuity. No Wyse/Precision/Supervisor, original firmware
+or user projects. This advances but does not complete GA-02/03/12/18;
+GA-14 remains deferred.
+
+
 ## GA-02/03/12/18 — 2026-11-07: actual CPU32 indirect MMIO, alias and restart
 
 A cohesive source-only acceptance candidate extends the existing Ghidra
