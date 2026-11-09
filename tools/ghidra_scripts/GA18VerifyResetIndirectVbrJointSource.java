@@ -167,6 +167,31 @@ public class GA18VerifyResetIndirectVbrJointSource extends GhidraScript {
 
             Object selected=analyze.invoke(instance,currentProgram,monitor,true);
             String report=(String)markdown.get(selected);
+            // Production Report's immutable, non-durable source snapshot
+            // is the only input accepted by Automation source pagination.
+            Object inventory=selected.getClass().getField("sourceInventory").get(selected);
+            check(inventory!=null,"production report retains bounded live source inventory");
+            Method page=inventory.getClass().getMethod("page",int.class,int.class);
+            Object firstPage=page.invoke(inventory,0,1);
+            Method total=firstPage.getClass().getMethod("colocatedPairs");
+            Method rows=firstPage.getClass().getMethod("rows");
+            Method hasMore=firstPage.getClass().getMethod("hasMore");
+            Method nextOffset=firstPage.getClass().getMethod("nextOffset");
+            check(((Integer)total.invoke(firstPage))==2 &&
+                ((java.util.List<?>)rows.invoke(firstPage)).size()==1 &&
+                ((Boolean)hasMore.invoke(firstPage)) &&
+                ((Integer)nextOffset.invoke(firstPage))==1,
+                "production native source inventory first page is complete and bounded");
+            Object secondPage=page.invoke(inventory,1,1);
+            check(((Integer)total.invoke(secondPage))==2 &&
+                ((java.util.List<?>)rows.invoke(secondPage)).size()==1 &&
+                !((Boolean)hasMore.invoke(secondPage)) &&
+                ((Integer)nextOffset.invoke(secondPage))==2,
+                "production native inventory second page is stable and exhaustive");
+            Object lastPage=page.invoke(inventory,2,1);
+            check(((java.util.List<?>)rows.invoke(lastPage)).isEmpty() &&
+                !((Boolean)hasMore.invoke(lastPage)),
+                "production native inventory end page does not repeat sources");
             String join=section(report,
                 "## RESET / indirect MMIO / VBR source co-location",
                 "## Bounded same-function JSR / MOVEC CFG routes");
