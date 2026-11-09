@@ -166,6 +166,131 @@ public final class HardwareTwoHopConsensusSelfTest {
         denied(()->HardwareTwoHopConsensus.markdown(List.of(a),summary,
                 0,HardwareTwoHopConsensus.MAX_REPORT_ROWS+1,rev,()->equal),
             "Unbounded report rows rejected");
+        // Fully decoded fork/merge in the first bridge. Two identical
+        // predecessor assignments to A1 establish an agreed inner CALL
+        // register; neither branch is assumed to execute.
+        var forkBridge=new HardwareTwoHopRegisterFlow.Bridge(0x640L,List.of(
+            new HardwareDataflow.Step(0x640L,OTHER,null,0,0,null,0,
+                List.of(0x642L,0x648L),"BNE"),
+            new HardwareDataflow.Step(0x642L,COPY_POINTER,"A1","A0",
+                0,0,null,0,List.of(0x644L),"MOVEA.L"),
+            new HardwareDataflow.Step(0x644L,OTHER,null,0,0,null,0,
+                List.of(0x64cL),"BRA"),
+            new HardwareDataflow.Step(0x648L,COPY_POINTER,"A1","A0",
+                0,0,null,0,List.of(0x64cL),"MOVEA.L"),
+            new HardwareDataflow.Step(0x64cL,CALL_BARRIER,null,
+                0,0,null,0,List.of(0x652L),"JSR"),
+            new HardwareDataflow.Step(0x652L,OTHER,null,
+                0,0,null,0,List.of(),"RTS")),0x64cL,0x700L,true);
+        var multiStoreLeaf=new HardwareCallsiteRegisterFlow.Callee(
+            0x700L,List.of(
+                new HardwareDataflow.Step(0x700L,STORE_INDIRECT,"A1","D0",
+                    0,0,null,16,List.of(0x702L),"MOVE.W"),
+                new HardwareDataflow.Step(0x702L,STORE_INDIRECT,"A1","D0",
+                    0,0,null,16,List.of(0x704L),"MOVE.W"),
+                new HardwareDataflow.Step(0x704L,OTHER,null,
+                    0,0,null,0,List.of(),"RTS")),true);
+        // Second independently decoded bridge calls a DIFFERENT leaf.
+        var secondBridge=new HardwareTwoHopRegisterFlow.Bridge(
+            0x740L,List.of(
+                new HardwareDataflow.Step(0x740L,COPY_POINTER,"A1","A0",
+                    0,0,null,0,List.of(0x742L),"MOVEA.L"),
+                new HardwareDataflow.Step(0x742L,CALL_BARRIER,null,
+                    0,0,null,0,List.of(0x748L),"JSR"),
+                new HardwareDataflow.Step(0x748L,OTHER,null,
+                    0,0,null,0,List.of(),"RTS")),0x742L,0x780L,true);
+        var secondLeaf=new HardwareCallsiteRegisterFlow.Callee(
+            0x780L,List.of(
+                new HardwareDataflow.Step(0x780L,STORE_INDIRECT,"A1","D0",
+                    0,0,null,16,List.of(0x782L),"MOVE.W"),
+                new HardwareDataflow.Step(0x782L,OTHER,null,
+                    0,0,null,0,List.of(),"RTS")),true);
+        var outerC=new HardwareCallsiteRegisterFlow.Call(
+            0x900L,0x90cL,0x740L,Map.of("A0",cs,"D0",0x4848L),false);
+        var outerD=new HardwareCallsiteRegisterFlow.Call(
+            0x980L,0x98cL,0x740L,Map.of("A0",cs,"D0",0x4848L),false);
+        var allOuter=List.of(outerD,b,a,outerC);
+        var multiple=HardwareTwoHopRegisterFlow.analyze(allOuter,
+            List.of(secondBridge,forkBridge),
+            List.of(multiStoreLeaf,secondLeaf),Set.of(simcr,cs),48);
+        ok(multiple.sampled()==4 && multiple.possibleStores()==6 &&
+                multiple.rows().size()==6 &&
+                multiple.unknownAliases()==0 && !multiple.displayTruncated(),
+            "Convergent fork and two separate leaf functions yield six sources");
+        for(long store:new long[]{0x700L,0x702L}) {
+            var hit=HardwareTwoHopConsensus.inspectScoped(
+                allOuter,multiple,0x640L,0x700L,store);
+            ok(hit.state()==HardwareTwoHopConsensus.State.SAMPLED_AGREEMENT &&
+                    hit.sampledOuterCalls()==2 && hit.address()==simcr &&
+                    hit.provenance().size()==2 &&
+                    hit.provenance().stream().allMatch(r->
+                        r.bridgeEntry()==0x640L && r.leafEntry()==0x700L &&
+                        r.storePc()==store && r.innerCallPc()==0x64cL),
+                "Every independent STORE site retains correct convergent CALL provenance");
+        }
+        var otherLeaf=HardwareTwoHopConsensus.inspectScoped(
+            allOuter,multiple,0x740L,0x780L,0x780L);
+        ok(otherLeaf.state()==HardwareTwoHopConsensus.State.SAMPLED_AGREEMENT &&
+                otherLeaf.sampledOuterCalls()==2 && otherLeaf.address()==cs &&
+                otherLeaf.provenance().stream().allMatch(r->
+                    r.bridgeEntry()==0x740L && r.leafEntry()==0x780L),
+            "Other leaf's callers cannot be mistaken for missing source of first leaf");
+        var multiMarkdown=HardwareTwoHopConsensus.markdown(
+            allOuter,multiple,0,24,rev,()->equal);
+        ok(multiMarkdown.contains(
+                "| 0x00000640 | 0x00000700 | 0x00000700 | 2 | SAMPLED_AGREEMENT") &&
+                multiMarkdown.contains(
+                "| 0x00000640 | 0x00000700 | 0x00000702 | 2 | SAMPLED_AGREEMENT") &&
+                multiMarkdown.contains(
+                "| 0x00000740 | 0x00000780 | 0x00000780 | 2 | SAMPLED_AGREEMENT"),
+            "Bounded production table displays three disjoint cohorts");
+        var omitted=HardwareTwoHopConsensus.markdown(
+            allOuter,multiple,1,24,rev,()->equal);
+        ok(omitted.contains("INCOMPLETE INPUT") &&
+                !omitted.contains("SAMPLED_AGREEMENT"),
+            "Unseen global CALL inventory still blocks every local agreement");
+        var truncated=HardwareTwoHopRegisterFlow.analyze(allOuter,
+            List.of(forkBridge,secondBridge),
+            List.of(multiStoreLeaf,secondLeaf),Set.of(simcr,cs),3);
+        ok(truncated.displayTruncated() &&
+                HardwareTwoHopConsensus.inspectScoped(allOuter,truncated,
+                    0x640L,0x700L,0x700L).state()==
+                    HardwareTwoHopConsensus.State.INCOMPLETE,
+            "Truncated source pagination cannot imply local convergence");
+
+        // One branch assigns a DIFFERENT A1, so no exact effective
+        // address survives the fixed-point join at inner JSR.
+        var divergentBranch=new HardwareTwoHopRegisterFlow.Bridge(
+            0x640L,List.of(
+                new HardwareDataflow.Step(0x640L,OTHER,null,
+                    0,0,null,0,List.of(0x642L,0x648L),"BNE"),
+                new HardwareDataflow.Step(0x642L,COPY_POINTER,"A1","A0",
+                    0,0,null,0,List.of(0x644L),"MOVEA.L"),
+                new HardwareDataflow.Step(0x644L,OTHER,null,
+                    0,0,null,0,List.of(0x64cL),"BRA"),
+                new HardwareDataflow.Step(0x648L,SET_POINTER,"A1",
+                    cs,0,null,0,List.of(0x64cL),"MOVEA.L"),
+                new HardwareDataflow.Step(0x64cL,CALL_BARRIER,null,
+                    0,0,null,0,List.of(0x652L),"JSR"),
+                new HardwareDataflow.Step(0x652L,OTHER,null,
+                    0,0,null,0,List.of(),"RTS")),0x64cL,0x700L,true);
+        var conflictScan=HardwareTwoHopRegisterFlow.analyze(
+            List.of(a,b),List.of(divergentBranch),
+            List.of(multiStoreLeaf),Set.of(simcr,cs),48);
+        ok(conflictScan.unknownAliases()>0 &&
+                HardwareTwoHopConsensus.inspectScoped(List.of(a,b),
+                    conflictScan,0x640L,0x700L,0x700L).state()==
+                    HardwareTwoHopConsensus.State.INCOMPLETE,
+            "Conflicting bridge branch A1 never fabricates known MMIO source");
+        AtomicInteger secondGate=new AtomicInteger();
+        var staleScoped=HardwareTwoHopConsensus.inspectScopedRevisionBound(
+            rev,()->secondGate.getAndIncrement()==0?equal:changed,
+            allOuter,multiple,0x640L,0x700L,0x700L);
+        ok(staleScoped.state()==HardwareTwoHopConsensus.State.STALE_REVISION &&
+                staleScoped.address()==null &&
+                staleScoped.provenance().isEmpty() && secondGate.get()==2,
+            "Mid-scan actual revision transition drops all scoped branch evidence");
+
         System.out.println("HardwareTwoHopConsensusSelfTest PASS: checks="+checks);
     }
 }
