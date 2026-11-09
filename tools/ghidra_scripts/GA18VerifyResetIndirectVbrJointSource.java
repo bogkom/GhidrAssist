@@ -177,6 +177,11 @@ public class GA18VerifyResetIndirectVbrJointSource extends GhidraScript {
                 join.contains("INCOMPLETE SOURCE INVENTORY/DISPLAY"),
                 "one unproven computed JSR is counted as omitted/UNKNOWN, "
                 +"not an absent indirect call or missing MMIO conclusion");
+            check(join.contains("page offset: 0") &&
+                join.contains("page limit: 32") &&
+                join.contains("next offset: 2") &&
+                join.contains("has more pages: false"),
+                "same-Program production join publishes exact bounded page metadata");
             check(join.contains("co-located pairs: 2"),
                 "two independently source-witnessed co-located pairs");
             check(join.contains("0x00000130 | 0x00000138 | 0x00000180 | 0x00000144"),
