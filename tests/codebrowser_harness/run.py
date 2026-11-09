@@ -144,6 +144,8 @@ def main():
                     help="Actual ReAct/real Ghidra read-only tool/HTTP CLI model-free CI")
     ap.add_argument("--agentic-react-scenario",
                     choices=("normal","cancel","switch"),default="normal")
+    ap.add_argument("--source-pairs-probe",action="store_true",
+                    help="Live CodeBrowser source-pair pagination and versioned checkpoint test")
     ap.add_argument("--review-copy-probe",action="store_true",help="Separate isolated project-copy Review/Apply/Undo HTTP test")
     ap.add_argument("--review-copy-bad-sha",action="store_true",help="Verify invalid copy identity prevents Review before any edit")
     ap.add_argument("--cua-live",action="store_true",
@@ -153,6 +155,10 @@ def main():
                                                  "window-changed"),default="none",
                     help="CI-only synthetic host response; never a native CUA proof")
     args=ap.parse_args()
+    if args.source_pairs_probe and (not args.automation_probe or
+            args.review_copy_probe or args.agentic_react_probe or
+            args.bridge_mode!="off" or args.cua_live):
+        ap.error("--source-pairs-probe requires ordinary Automation probe, not review/agentic/CUA")
     if args.review_copy_bad_sha and not args.review_copy_probe:
         ap.error("--review-copy-bad-sha requires --review-copy-probe")
     if args.agentic_react_scenario!="normal" and not args.agentic_react_probe:
@@ -226,6 +232,11 @@ def main():
             zip_extension(archive,ext)
             fixture(work/"synthetic-mmio.bin",True)
             fixture(work/"guard-other.bin",False)
+            if args.source_pairs_probe:
+                subprocess_checked([sys.executable,
+                    str(ROOT/"tools/generate-synthetic-reset-indirect-vbr.py"),
+                    "--output",str(work/"synthetic-reset-indirect-vbr.bin")],
+                    work,os.environ,out/"source-pairs-generator.log",30)
             env=dict(os.environ)
             env["JAVA_HOME"]=str(java)
             env["PATH"]=str(java/"bin")+os.pathsep+env.get("PATH","")
@@ -234,7 +245,10 @@ def main():
                 f"-Dapplication.cachedir={work/'cache'} "
                 f"-Duser.home={work/'home'}")
             headless=ghidra/"support/analyzeHeadless"
-            for name in ("synthetic-mmio.bin","guard-other.bin"):
+            imports=["synthetic-mmio.bin","guard-other.bin"]
+            if args.source_pairs_probe:
+                imports.append("synthetic-reset-indirect-vbr.bin")
+            for name in imports:
                 cmd=[str(headless),str(work/"project"),"CodeBrowserFixture",
                      "-import",str(work/name),"-loader","BinaryLoader",
                      "-processor","68000:BE:32:CPU32","-cspec","default",
@@ -249,6 +263,7 @@ def main():
                   "bridge_timeout":args.bridge_timeout if args.bridge_mode!="off" else 0,
                   "cua_hold_seconds":args.cua_timeout if args.cua_live else 0,
                   "automation_probe":args.automation_probe,
+                  "source_pairs_probe":args.source_pairs_probe,
                   "agentic_react_probe":args.agentic_react_probe,
                   "agentic_react_scenario":args.agentic_react_scenario}
             conf_path=work/"config.json"
