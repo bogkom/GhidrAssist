@@ -817,8 +817,9 @@ def main():
                                     set(checked_set["formats"])!=
                                     {"markdown","config_csv","names_csv"} or
                                     saved_set["payload"]["manifest"]!=shared_manifest or
-                                    not all(saved_set["payload"]["reports"][fmt]
-                                            for fmt in checked_set["formats"])):
+                                    not all(isinstance(
+                                        saved_set["payload"]["reports"][fmt],str)
+                                        for fmt in checked_set["formats"])):
                                 raise RuntimeError(
                                     "Actual Ghidra combined report receipt incomplete")
                             duplicate_set=subprocess.run(
@@ -847,6 +848,13 @@ def main():
                             # Program selection itself must retire a cursor
                             # even when the original source bytes are unchanged.
                             http_call("project.program.open",{"path":"/guard-other.bin"})
+                            try:
+                                http_call("analysis.report.manifest",{})
+                            except HTTPError as error:
+                                if error.code!=400:raise
+                            else:
+                                raise RuntimeError(
+                                    "Manifest leaked after switching Ghidra Program")
                             try:
                                 http_call("analysis.export",{
                                     "format":"markdown","offset":1,"limit":64,
@@ -878,6 +886,14 @@ def main():
                                 {"offset":0,"limit":1})["source_pairs"]
                             fresh_report=http_call("analysis.report",
                                 {"format":"markdown","offset":0,"limit":64})["report"]
+                            fresh_manifest=http_call(
+                                "analysis.report.manifest",{})["manifest"]
+                            if (fresh_manifest["program_revision"]!=
+                                    shared_manifest["program_revision"] or
+                                    fresh_manifest["formats"]["markdown"]["generation"]==
+                                    shared_manifest["formats"]["markdown"]["generation"]):
+                                raise RuntimeError(
+                                    "Same-input Analyze resurrected a previous report manifest")
                             if (fresh_report["program_revision"]!=
                                     source_report_first["program_revision"] or
                                     fresh_report["generation"]==
