@@ -825,9 +825,12 @@ public final class HardwareAnalysisTab extends JPanel {
         Program active=plugin.getCurrentProgram();
         if(active==null || latestRevision==null || latestProgram!=active ||
                 latestConcrete!=(selection.getSelectedIndex()==1))return false;
-        return latestRevision.matches(active,active.getModificationNumber(),
-            active.getLanguageID().toString(),active.getExecutableSHA256(),
-            latestConcrete);
+        return latestJointStageEpoch>=0 &&
+            ghidrassist.hardware.HardwareFlowStageCache.sourcePageEpochCurrent(
+                active,latestJointStageEpoch) &&
+            latestRevision.matches(active,active.getModificationNumber(),
+                active.getLanguageID().toString(),active.getExecutableSHA256(),
+                latestConcrete);
     }
 
     private void discardStale(String reason) {
@@ -1057,7 +1060,9 @@ public final class HardwareAnalysisTab extends JPanel {
                     latestJointInventory=finished.sourceInventory;
                     latestJointGeneration=finished.sourceInventory==null?null:
                         java.util.UUID.randomUUID().toString();
-                    latestJointStageEpoch=finished.sourceInventory==null?-1:
+                    // All published Analyze reports (generic, concrete,
+                    // and legacy-restored) are scoped to the stage epoch.
+                    latestJointStageEpoch=
                         ghidrassist.hardware.HardwareFlowStageCache.sourcePageEpoch(program);
                     latestFunctionProposals=finished.functionProposals;
                     latestSites=finished.sites;

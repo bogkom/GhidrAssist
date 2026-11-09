@@ -48,6 +48,7 @@ public final class CodeBrowserMmioMain {
     static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     static final String PROGRAM_A = "synthetic-mmio.bin";
     static final String PROGRAM_B = "guard-other.bin";
+    static final String PROGRAM_SOURCE_PAGES = "synthetic-reset-indirect-vbr.bin";
     static class Manager extends DefaultProjectManager { Manager(){super();} }
     static class Tool extends GhidraTool {
         // A full GhidraTool, unlike a generic PluginTool, owns the
@@ -162,6 +163,10 @@ public final class CodeBrowserMmioMain {
             .getDomainObject(consumer,false,false,TaskMonitor.DUMMY);
         Program second=(Program)project.getProjectData().getFile("/"+PROGRAM_B)
             .getDomainObject(consumer,false,false,TaskMonitor.DUMMY);
+        Program sourceProgram=conf.has("source_pairs_probe") &&
+                conf.get("source_pairs_probe").getAsBoolean()?
+            (Program)project.getProjectData().getFile("/"+PROGRAM_SOURCE_PAGES)
+                .getDomainObject(consumer,false,false,TaskMonitor.DUMMY):null;
         Tool[] tool={null};
         JsonObject result=new JsonObject();
         result.addProperty("schema",1);
@@ -509,6 +514,51 @@ public final class CodeBrowserMmioMain {
                     ghidra.program.model.symbol.SourceType.ANALYSIS)!=null,
                     "Real branched CPU32 function was not created");
             }finally{first.endTransaction(tx,true);}
+            // Decode a separate real synthetic Program for the HTTP source
+            // page probe, never modify the existing MMIO fixture or firmware.
+            if(sourceProgram!=null) {
+                int srcTx=sourceProgram.startTransaction(
+                    "TEST ONLY: exact CPU32 RESET / computed JSR / MOVEC source pages");
+                try {
+                    var space=sourceProgram.getAddressFactory().getDefaultAddressSpace();
+                    for(long pc:new long[]{
+                        0x100L,0x106L,0x130L,0x132L,0x138L,
+                        0x13aL,0x13cL,0x13eL,0x140L,0x142L,
+                        0x144L,0x148L,0x14aL,0x180L,0x188L,
+                        0x200L,0x206L,0x208L,0x20cL,0x240L,0x242L}) {
+                        var address=space.getAddress(pc);
+                        require(sourceProgram.getListing().getInstructionAt(address)!=null ||
+                            new DisassembleCommand(address,null,false)
+                                .applyTo(sourceProgram,TaskMonitor.DUMMY),
+                            "Native source-page CPU32 decode failed 0x"+
+                                Long.toHexString(pc));
+                    }
+                    for(long[] block:new long[][]{
+                        {0x100L,0x107L},{0x130L,0x14bL},
+                        {0x180L,0x189L},{0x200L,0x20dL},
+                        {0x240L,0x243L}}) {
+                        var entry=space.getAddress(block[0]);
+                        require(sourceProgram.getFunctionManager().createFunction(
+                            "GA18_"+Long.toHexString(block[0]),entry,
+                            new ghidra.program.model.address.AddressSet(
+                                entry,space.getAddress(block[1])),
+                            ghidra.program.model.symbol.SourceType.USER_DEFINED)!=null,
+                            "Native source-page Ghidra Function missing 0x"+
+                                Long.toHexString(block[0]));
+                    }
+                } finally {sourceProgram.endTransaction(srcTx,true);}
+            }
+            // project.program.open MUST reject switching away from an edited
+            // Program. Save only these disposable fixture databases after
+            // deterministic Listing bootstrap, never weaken that API guard.
+            if(sourceProgram!=null) {
+                first.save("GA18 isolated original MMIO fixture baseline",
+                    TaskMonitor.DUMMY);
+                sourceProgram.save("GA18 isolated JSR/MOVEC source fixture baseline",
+                    TaskMonitor.DUMMY);
+                require(!first.isChanged() && !sourceProgram.isChanged(),
+                    "Synthetic CodeBrowser switch preflight has dirty Program");
+            }
             Instruction instruction=first.getListing().getInstructionAt(site);
             require(instruction!=null && instruction.toString()
                 .toUpperCase(Locale.ROOT).contains("FFFA00"),
@@ -566,6 +616,14 @@ public final class CodeBrowserMmioMain {
             require(restoreProgramManager.getAllOpenPrograms().length==2,
                 "Reused CodeBrowser unexpectedly duplicated an open program");
             result.addProperty("agent_opener_restored_program_reused",true);
+            // Only the dedicated RPC probe adds the third already
+            // disassembled isolated Program. Reuse its live object when
+            // project.program.open subsequently selects its DomainFile.
+            if(sourceProgram!=null)edt(()->{
+                restoreProgramManager.openProgram(
+                    sourceProgram,ProgramManager.OPEN_VISIBLE);
+                restoreProgramManager.setCurrentProgram(first);
+            });
             // Regression: the optional project opener must NEVER launch from
             // an actual CodeBrowser tool, even if launcher properties persist.
             // Before the fix, its Timer recursively launched more CodeBrowsers.
@@ -1133,6 +1191,7 @@ public final class CodeBrowserMmioMain {
             if(tool[0]!=null)edt(()->tool[0].shutdown());
             first.release(consumer);
             second.release(consumer);
+            if(sourceProgram!=null)sourceProgram.release(consumer);
             project.close();
         }
     }

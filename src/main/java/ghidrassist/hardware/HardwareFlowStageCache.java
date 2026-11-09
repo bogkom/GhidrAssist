@@ -53,7 +53,8 @@ public final class HardwareFlowStageCache {
             r.vbr,r.unresolved,r.visited,r.limited,r.resetCandidateRecognized,
             r.resetGraphIncomplete,r.cfgReviewComplete,
             r.cfgSitesOmitted,r.pointerSitesOmitted,
-            sites,roles,new ArrayList<>(r.resetCandidateFunctions));
+            sites,roles,new ArrayList<>(r.resetCandidateFunctions),
+            r.sourceInventory);
     }
     private static GhidraHardwareFlowService.Report report(
             HardwareDurableCfgReport.Snapshot s){
@@ -75,7 +76,8 @@ public final class HardwareFlowStageCache {
             s.markdown(),s.functions(),s.indirect(),s.vbr(),s.unresolved(),
             s.visited(),s.limited(),roles,new HashSet<>(s.resetFunctions()),
             s.resetRecognized(),s.resetIncomplete(),s.csv(),sites,
-            s.cfgReviewComplete(),s.cfgOmitted(),s.pointersOmitted());
+            s.cfgReviewComplete(),s.cfgOmitted(),s.pointersOmitted(),
+            s.sourceInventory());
     }
 
     private static boolean sameRevision(Program program,

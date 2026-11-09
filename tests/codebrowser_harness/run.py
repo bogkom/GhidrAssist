@@ -144,6 +144,8 @@ def main():
                     help="Actual ReAct/real Ghidra read-only tool/HTTP CLI model-free CI")
     ap.add_argument("--agentic-react-scenario",
                     choices=("normal","cancel","switch"),default="normal")
+    ap.add_argument("--source-pairs-probe",action="store_true",
+                    help="Live CodeBrowser source-pair pagination and versioned checkpoint test")
     ap.add_argument("--review-copy-probe",action="store_true",help="Separate isolated project-copy Review/Apply/Undo HTTP test")
     ap.add_argument("--review-copy-bad-sha",action="store_true",help="Verify invalid copy identity prevents Review before any edit")
     ap.add_argument("--cua-live",action="store_true",
@@ -153,6 +155,10 @@ def main():
                                                  "window-changed"),default="none",
                     help="CI-only synthetic host response; never a native CUA proof")
     args=ap.parse_args()
+    if args.source_pairs_probe and (not args.automation_probe or
+            args.review_copy_probe or args.agentic_react_probe or
+            args.bridge_mode!="off" or args.cua_live):
+        ap.error("--source-pairs-probe requires ordinary Automation probe, not review/agentic/CUA")
     if args.review_copy_bad_sha and not args.review_copy_probe:
         ap.error("--review-copy-bad-sha requires --review-copy-probe")
     if args.agentic_react_scenario!="normal" and not args.agentic_react_probe:
@@ -226,6 +232,11 @@ def main():
             zip_extension(archive,ext)
             fixture(work/"synthetic-mmio.bin",True)
             fixture(work/"guard-other.bin",False)
+            if args.source_pairs_probe:
+                subprocess_checked([sys.executable,
+                    str(ROOT/"tools/generate-synthetic-reset-indirect-vbr.py"),
+                    "--output",str(work/"synthetic-reset-indirect-vbr.bin")],
+                    work,os.environ,out/"source-pairs-generator.log",30)
             env=dict(os.environ)
             env["JAVA_HOME"]=str(java)
             env["PATH"]=str(java/"bin")+os.pathsep+env.get("PATH","")
@@ -234,7 +245,10 @@ def main():
                 f"-Dapplication.cachedir={work/'cache'} "
                 f"-Duser.home={work/'home'}")
             headless=ghidra/"support/analyzeHeadless"
-            for name in ("synthetic-mmio.bin","guard-other.bin"):
+            imports=["synthetic-mmio.bin","guard-other.bin"]
+            if args.source_pairs_probe:
+                imports.append("synthetic-reset-indirect-vbr.bin")
+            for name in imports:
                 cmd=[str(headless),str(work/"project"),"CodeBrowserFixture",
                      "-import",str(work/name),"-loader","BinaryLoader",
                      "-processor","68000:BE:32:CPU32","-cspec","default",
@@ -249,6 +263,7 @@ def main():
                   "bridge_timeout":args.bridge_timeout if args.bridge_mode!="off" else 0,
                   "cua_hold_seconds":args.cua_timeout if args.cua_live else 0,
                   "automation_probe":args.automation_probe,
+                  "source_pairs_probe":args.source_pairs_probe,
                   "agentic_react_probe":args.agentic_react_probe,
                   "agentic_react_scenario":args.agentic_react_scenario}
             conf_path=work/"config.json"
@@ -352,8 +367,18 @@ def main():
                                 headers={"Authorization":"Bearer "+token,
                                          "Content-Type":"application/json"},
                                 method="POST")
-                            with urlopen(call,timeout=30) as reply:
-                                return json.loads(reply.read())
+                            try:
+                                with urlopen(call,timeout=30) as reply:
+                                    data=json.loads(reply.read())
+                                if args.source_pairs_probe:
+                                    with (out/"source-pairs-rpc-methods.log").open("a") as trace:
+                                        trace.write(method+" OK"+chr(10))
+                                return data
+                            except HTTPError as failure:
+                                if args.source_pairs_probe:
+                                    with (out/"source-pairs-rpc-methods.log").open("a") as trace:
+                                        trace.write(method+" HTTP "+str(failure.code)+chr(10))
+                                raise
                         # Idempotent same-project open, with no reload/DB edit.
                         current_open=http_call("project.program.open",
                             {"path":"/synthetic-mmio.bin"})
@@ -504,6 +529,171 @@ def main():
                             if review_task.get("state")!="RUNNING" or time.monotonic()>deadline:
                                 raise RuntimeError("MC68332 Review prerequisite analysis incomplete")
                             time.sleep(0.08)
+                        if args.source_pairs_probe:
+                            # A THIRD isolated real CPU32 Program (not the GUI
+                            # MMIO baseline) supplies two disassembled JSR/MOVEC
+                            # source pairs to the actual production HTTP server.
+                            opened=http_call("project.program.open",
+                                {"path":"/synthetic-reset-indirect-vbr.bin"})
+                            if (opened.get("opened_program")!="synthetic-reset-indirect-vbr.bin"
+                                    or opened.get("active") is not True):
+                                raise RuntimeError("Native source-pair Program did not activate")
+                            http_call("hardware.profile.select",
+                                {"profile":"CPU32_SURVEY"})
+                            http_call("hardware.analyze")
+                            deadline=time.monotonic()+60
+                            while True:
+                                task=http_call("hardware.task").get("task",{})
+                                if task.get("state")=="COMPLETED": break
+                                if task.get("state")!="RUNNING" or time.monotonic()>deadline:
+                                    raise RuntimeError("Generic native source fixture Analyze failed: "+str(task))
+                                time.sleep(0.07)
+                            try:
+                                http_call("hardware.source_pairs.page",{"offset":0,"limit":1})
+                            except HTTPError as error:
+                                if error.code!=400: raise
+                            else:
+                                raise RuntimeError("Generic CPU32 inherited MC68332 source inventory")
+                            http_call("hardware.profile.select",
+                                {"profile":"MC68332_USER_SELECTED"})
+                            http_call("hardware.analyze")
+                            deadline=time.monotonic()+60
+                            while True:
+                                task=http_call("hardware.task").get("task",{})
+                                if task.get("state")=="COMPLETED": break
+                                if task.get("state")!="RUNNING" or time.monotonic()>deadline:
+                                    raise RuntimeError("Native MCU source fixture Analyze failed: "+str(task))
+                                time.sleep(0.07)
+                            p1=http_call("hardware.source_pairs.page",
+                                {"offset":0,"limit":1})["source_pairs"]
+                            if (p1.get("schema")!=1 or p1.get("total_pairs")!=2
+                                    or p1.get("offset")!=0 or p1.get("next_offset")!=1
+                                    or p1.get("has_more") is not True
+                                    or p1.get("omitted_indirect")!=1
+                                    or p1.get("displayed")!=1
+                                    or p1.get("profile")!="MC68332_USER_SELECTED"
+                                    or not isinstance(p1.get("generation"),str)
+                                    or p1.get("stage_epoch",-1)<0
+                                    or p1["rows"][0].get("indirectPc")!=0x138
+                                    or p1["rows"][0].get("vbrPc")!=0x144):
+                                raise RuntimeError("Native source-pairs first HTTP page invalid: "+str(p1))
+                            params={"offset":1,"limit":1,
+                                "expected_revision":p1["revision"],
+                                "expected_generation":p1["generation"]}
+                            p2=http_call("hardware.source_pairs.page",params)["source_pairs"]
+                            if (p2.get("total_pairs")!=2 or p2.get("displayed")!=1
+                                    or p2.get("has_more") is not False
+                                    or p2.get("next_offset")!=2
+                                    or p2.get("generation")!=p1["generation"]
+                                    or p2["rows"][0].get("indirectPc")!=0x206
+                                    or p2["rows"][0].get("vbrPc")!=0x208):
+                                raise RuntimeError("Native source-pairs second HTTP page invalid: "+str(p2))
+                            pend=http_call("hardware.source_pairs.page",
+                                {"offset":2,"limit":1,
+                                 "expected_revision":p1["revision"],
+                                 "expected_generation":p1["generation"]})["source_pairs"]
+                            if pend.get("rows")!=[] or pend.get("has_more") is not False:
+                                raise RuntimeError("End of source inventory was not empty")
+                            for bad_params in (
+                                    {"offset":1,"limit":1},
+                                    {"offset":0,"limit":33},
+                                    {**params,"expected_revision":p1["revision"]+1},
+                                    {**params,"expected_generation":"forged-old-generation"}):
+                                try:
+                                    http_call("hardware.source_pairs.page",bad_params)
+                                except HTTPError as error:
+                                    if error.code!=400: raise
+                                else:
+                                    raise RuntimeError("Untrusted source pair cursor accepted: "+
+                                                       str(bad_params))
+                            # Exercise actual installed CLI, versioned local
+                            # no-overwrite checkpoint and offline verifier.
+                            private=work/"ga18-source-pairs-session.json"
+                            fd=os.open(private,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
+                            with os.fdopen(fd,"w",encoding="utf-8") as handle:
+                                json.dump({"schema":3,"port":receipt["port"],"token":token},handle)
+                            agent=str(ROOT/"tools/ghidrassist-agent")
+                            source_checkpoint=out/"source-pairs-v1-checkpoint.json"
+                            subprocess_checked([sys.executable,agent,"--session",
+                                str(private),"source-pairs-checkpoint","--output",
+                                str(source_checkpoint),"--page-size","1"],
+                                work,env,out/"source-pairs-cli-export.log",60)
+                            subprocess_checked([sys.executable,agent,"--session",
+                                str(private),"source-pairs-verify","--input",
+                                str(source_checkpoint)],
+                                work,env,out/"source-pairs-cli-verify.log",30)
+                            offline=json.loads((out/"source-pairs-cli-verify.log").read_text())
+                            if (offline.get("verified") is not True or
+                                    offline.get("total_pairs")!=2 or
+                                    offline.get("bounded_source_complete") is not False or
+                                    offline.get("resume_authorized") is not False):
+                                raise RuntimeError("Local native checkpoint claimed false completeness")
+                            # Repeated writes are denied, never replace saved proof.
+                            duplicate=subprocess.run([sys.executable,agent,
+                                "--session",str(private),"source-pairs-checkpoint",
+                                "--output",str(source_checkpoint),"--page-size","1"],
+                                cwd=work,env=env,capture_output=True,text=True,timeout=60)
+                            if duplicate.returncode==0:
+                                raise RuntimeError("Source-pair checkpoint overwrote prior result")
+                            # Program selection itself must retire a cursor
+                            # even when the original source bytes are unchanged.
+                            http_call("project.program.open",{"path":"/guard-other.bin"})
+                            try:
+                                http_call("hardware.source_pairs.page",params)
+                            except HTTPError as error:
+                                if error.code!=400:raise
+                            else:
+                                raise RuntimeError("Source page leaked after Program switch")
+                            http_call("project.program.open",
+                                {"path":"/synthetic-reset-indirect-vbr.bin"})
+                            http_call("hardware.profile.select",
+                                {"profile":"MC68332_USER_SELECTED"})
+                            http_call("hardware.analyze")
+                            deadline=time.monotonic()+60
+                            while True:
+                                task=http_call("hardware.task").get("task",{})
+                                if task.get("state")=="COMPLETED": break
+                                if task.get("state")!="RUNNING" or time.monotonic()>deadline:
+                                    raise RuntimeError("Source generation restart failed: "+str(task))
+                                time.sleep(0.07)
+                            fresh=http_call("hardware.source_pairs.page",
+                                {"offset":0,"limit":1})["source_pairs"]
+                            if fresh.get("generation")==p1["generation"]:
+                                raise RuntimeError("New Analyze revived old source-pair cursor")
+                            try:
+                                http_call("hardware.source_pairs.page",params)
+                            except HTTPError as error:
+                                if error.code!=400:raise
+                            else:
+                                raise RuntimeError("Old source pair cursor accepted after new analysis")
+                            (out/"source-pairs-real-rpc.json").write_text(json.dumps({
+                                "schema":1,"real_codebrowser":True,
+                                "real_bearer_jsonrpc":True,"native_program":
+                                    "synthetic-reset-indirect-vbr.bin",
+                                "original_revision":p1["revision"],
+                                "source_generation_changed":True,
+                                "all_observed_rows":[p1["rows"][0],p2["rows"][0]],
+                                "omitted_indirect":1,"total_pairs":2,
+                                "generic_cpu32_denied":True,
+                                "malformed_cursors_denied":True,
+                                "switched_program_denied":True,
+                                "local_checkpoint_sha256":offline["payload_sha256"],
+                                "local_checkpoint_complete":False,
+                                "no_production_write":True},indent=2))
+                            # Restore the baseline program, profile and
+                            # complete analysis for all existing GUI assertions.
+                            http_call("project.program.open",
+                                {"path":"/synthetic-mmio.bin"})
+                            http_call("hardware.profile.select",
+                                {"profile":"MC68332_USER_SELECTED"})
+                            http_call("hardware.analyze")
+                            deadline=time.monotonic()+60
+                            while True:
+                                task=http_call("hardware.task").get("task",{})
+                                if task.get("state")=="COMPLETED": break
+                                if task.get("state")!="RUNNING" or time.monotonic()>deadline:
+                                    raise RuntimeError("Original CodeBrowser analysis not restored")
+                                time.sleep(0.07)
                         # Real CodeBrowser / HTTP API: safe control and evidence
                         # endpoints (never mutate the Ghidra database).
                         changed=http_call("ui.tab.select",{"tab":"Hardware Analysis"})

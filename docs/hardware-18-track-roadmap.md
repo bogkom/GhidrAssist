@@ -1,5 +1,74 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
+## GA-01/02/03/11/12/18 — 2026-11-09: real CodeBrowser RPC source pages, V2 durable source inventories
+
+The previously merged bounded source-pair API now has an
+isolated genuine Ghidra 12.1.4 PUBLIC Swing/CodeBrowser/Xvfb
+**end-to-end JSON-RPC** acceptance path. Its THIRD synthetic
+CPU32 Program uses the exact same source bytes, Listing disassembly,
+Ghidra functions and branch-separated RESET/JSR/MOVEC witness
+positions validated by the native headless regression:
+RESET direct function 0x130, computed JSR 0x138 to SIMCR/MM
+candidate 0x180 and MOVEC 0x144 in a different CFG arm; an
+independent 0x200 function has computed JSR 0x206 before MOVEC
+0x208. A disconnected unresolved JSR (A1) at 0x240 is an
+UNKNOWN source and must increase omitted witness count, never
+erase the two established pairs.
+
+The native CodeBrowser scenario caught a stale-generation regression:
+switching from synthetic Program A to B and then back to A could
+reuse the old completed UI evidence because the Program modification
+number had not changed. GhidrAssistPlugin.programActivated now
+invalidates the departing Program's HardwareFlowStageCache and
+HardwareEvidenceCache; HardwareAnalysisTab.currentScan requires
+its exact stage epoch for **all** reports, including generic CPU32
+and legacy-restored reports. This prevents old JSR/MOVEC page cursors,
+checkpoint-derived CFG evidence and previous GUI report exports from
+reviving across a CodeBrowser context switch. The API's existing
+unsaved-Program switch refusal stays in force; the isolated native
+fixture saves ONLY its synthetic Ghidra bootstrap before switching.
+
+The real CodeBrowser test exercises authenticated production
+`hardware.source_pairs.page` over HTTP: explicit generic CPU32
+refusal; MCU-selected first, second and end pages; deterministic
+source PCs and omitted counts; 400 for missing next-page
+revision/generation, incorrect revision, forged generation, and
+over-limit requests; stale cursor refusal after Program switch
+and a new completed analysis with a different generation. The
+actual installed `ghidrassist-agent` also assembles the two
+pages into a local versioned, no-overwrite SHA-256 checkpoint and
+verifies it after the Ghidra process has exited, with tampering
+denied. The original synthetic MMIO Program is restored and
+tested by all existing GUI regressions. No private firmware or
+real user project is involved.
+
+**GA-12 typed CFG report payload version 2**
+(`GA12-CFG-REPORT-2`) optionally retains a complete, bounded,
+immutable source inventory, including exact indirect-JSR/MOVEC
+witnesses, RESET entries, omitted counts and source flags. The
+outer disk store still uses its existing exact full-input
+fingerprint, analyzer identity, per-program private path and
+integrity digest. The decoder *explicitly accepts* legacy
+`GA12-CFG-REPORT-1` as a typed completed CFG report but with
+`sourceInventory=null`: no source-pair API output is reconstructed
+from historic text/Markdown. V2 source inventory, if present, is
+strictly bounded by the 64/32 source caps and rejects malformed,
+truncated, unknown-future and oversized data. V2 correctly
+reconstructs the same source evidence after a valid exact-input
+disk restore. A valid V1 restored report is still eligible for
+its original safe CFG fixed-point result, but **not** for source
+pagination, and never for Review/Apply.
+
+CI requires the full Java25 Ghidra build, real synthetic CodeBrowser
+with Bearer HTTP and actual installed CLI, Java21 V1/V2 binary
+roundtrip and legacy compatibility, and deterministic SHA-256 local
+snapshot checks. This is CI synthetic GUI success, NOT manually
+observed Wyse/Precision or formal Supervisor PASS. The evidence
+is static only: no proof of executed JSR/return, MM latch, selected
+VBR/ISR, or physical mapping. GA-01/02/03/11/12/18 remain PARTIAL,
+and GA-14 is deferred.
+
+
 ## GA-01/02/03/11/12/18 — 2026-11-09: revision-bound Automation source pages and versioned local checkpoint
 
 Completed, explicitly MC68332-selected Hardware Analysis now retains
