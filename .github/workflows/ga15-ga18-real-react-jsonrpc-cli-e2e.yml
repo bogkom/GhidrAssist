@@ -147,6 +147,7 @@ jobs:
                        "bound_review_gui_created_after_restart",
                        "bound_review_gui_creation_no_staged_plan",
                        "bound_review_api_created_first_jvm_verified_after_restart",
+                       "bound_review_api_capability_revoked_after_restart",
               "new_review_started_only_after_import",
               "new_checkpoint_saved_in_new_jvm",
               "ga12_cfg_fixed_point_restored_after_restart"):
