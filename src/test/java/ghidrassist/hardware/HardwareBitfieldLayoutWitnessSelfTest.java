@@ -71,7 +71,7 @@ public final class HardwareBitfieldLayoutWitnessSelfTest {
                 markdown.contains("Review/Apply") &&
                 markdown.contains("| SIMCR | MM | 6 | 0x0040 | 0x0040 | D-5 / PDF 219 | 219-220 |") &&
                 markdown.contains("| SYNCR | RSTEN | 2 | 0x0004 | 0x0004 | D-6 / PDF 220 | 221 |") &&
-                markdown.contains("not") || markdown.contains("no PDF identity"),
+                markdown.contains("no PDF identity"),
             "Read-only report retains separate diagram/description folios and caveat");
         var claims=HardwareBitfieldSourceLedger.inspect(profile).entries();
         var corrupted=new ArrayList<>(claims);
