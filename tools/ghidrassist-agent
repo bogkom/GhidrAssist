@@ -656,6 +656,8 @@ def main():
     parser.add_argument("--profile",choices=("CPU32_SURVEY","MC68332_USER_SELECTED"))
     parser.add_argument("--confirm-local-sidecar",action="store_true")
     parser.add_argument("--expected-generation", default="")
+    parser.add_argument("--expected-report-revision", default="",
+                        help="Opaque revision from first analysis.report/export page")
     parser.add_argument("--page-size", type=int, default=32)
     parser.add_argument("--expected-entry", default="")
     parser.add_argument("--direction", choices=("incoming", "outgoing", "both"), default="both")
@@ -780,8 +782,15 @@ def main():
                          "and --confirm-local-sidecar")
     if args.expected_revision is not None and method not in ("listing.range", "function.xrefs.body","agentic.findings.page","hardware.source_pairs.page","agentic.review.binding.create"):
         parser.error("--expected-revision is only valid with listing-range, function-xrefs-body or agentic-findings")
-    if args.expected_generation and method!="hardware.source_pairs.page":
-        parser.error("--expected-generation is only valid with source-pairs")
+    if args.expected_generation and method not in (
+            "hardware.source_pairs.page","analysis.report","analysis.export"):
+        parser.error("--expected-generation requires source-pairs, report or export")
+    if args.expected_report_revision and method not in ("analysis.report","analysis.export"):
+        parser.error("--expected-report-revision requires report or export")
+    if method in ("analysis.report","analysis.export") and args.offset>0 and (
+            not args.expected_report_revision or not args.expected_generation):
+        parser.error("nonzero report/export page requires --expected-report-revision "
+                     "and --expected-generation from the first page")
     if method=="hardware.source_pairs.page" and (
             not 1<=args.page_size<=32 or args.offset<0 or
             (args.offset>0 and (args.expected_revision is None or not args.expected_generation))):
@@ -829,7 +838,12 @@ def main():
                    **({"expected_revision":args.expected_revision} if args.expected_revision is not None else {}),
                    **({"expected_generation":args.expected_generation} if args.expected_generation else {})}
                   if method=="hardware.source_pairs.page" else
-                  {"format":args.format, "offset":args.offset, "limit":args.limit} if method in ("analysis.report","analysis.export") else
+                  {"format":args.format, "offset":args.offset, "limit":args.limit,
+                   **({"expected_revision":args.expected_report_revision}
+                      if args.expected_report_revision else {}),
+                   **({"expected_generation":args.expected_generation}
+                      if args.expected_generation else {})}
+                  if method in ("analysis.report","analysis.export") else
                   {"offset":args.offset, "limit":args.limit,
                    **({"expected_run":args.expected_run} if args.expected_run else {}),
                    **({"expected_findings_revision":args.expected_findings_revision} if args.expected_findings_revision is not None else {}),
