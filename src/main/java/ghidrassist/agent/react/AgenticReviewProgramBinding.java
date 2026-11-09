@@ -93,7 +93,7 @@ public final class AgenticReviewProgramBinding {
     }
     private static JsonObject fields(JsonObject in) {
         JsonObject out=new JsonObject();
-        for(String name:new String[]{"kind","objective",
+        for(String name:new String[]{"schema","kind","objective",
                 "checkpoint_bytes_sha256","project_id_sha256",
                 "import_sha256","full_input_sha256","analyzer_sha256",
                 "language","mc68332","new_review_approved",
@@ -121,6 +121,7 @@ public final class AgenticReviewProgramBinding {
                 new IllegalArgumentException("Unverifiable full Ghidra Program input"));
         byte[] source=bounded(checkpoint,MAX_CHECKPOINT);
         JsonObject data=new JsonObject();
+        data.addProperty("schema",1);
         data.addProperty("kind",KIND);
         data.addProperty("objective",objective);
         data.addProperty("checkpoint_bytes_sha256",HardwareDurableStageStore.hash(source));
@@ -163,7 +164,11 @@ public final class AgenticReviewProgramBinding {
         JsonObject raw=envelope.getAsJsonObject("payload");
         if(raw==null)throw new IllegalArgumentException("Missing review binding payload");
         JsonObject data=fields(raw);
-        if(!KIND.equals(readString(data,"kind",80)) ||
+        if(!data.has("schema") ||
+                !data.get("schema").isJsonPrimitive() ||
+                !data.get("schema").getAsJsonPrimitive().isNumber() ||
+                !"1".equals(data.get("schema").getAsString()) ||
+                !KIND.equals(readString(data,"kind",80)) ||
                 !readString(envelope,"payload_sha256",64).equals(
                     HardwareDurableStageStore.hash(canonical(data))))
             throw new IllegalArgumentException("Tampered review binding");
