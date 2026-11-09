@@ -1363,7 +1363,26 @@ public final class GhidraHardwareFlowService {
                 twoHopRegisters+="- **INCOMPLETE INPUT:** "+
                     twoHopInputsOmitted+" CALL sites beyond the combined "+
                     "32-site two-hop and 96-site one-hop source caps. "+
-                    "Unseen two-hop paths remain UNKNOWN.\n\n";
+                    "Unseen two-hop paths remain UNKNOWN.\n\n";            // Report only read-only MAY-source consensus from two-hop
+            // contexts. A changed Program revision or invalidated function
+            // cache epoch prevents publishing stale source observations.
+            if(program.getModificationNumber()!=functionScope.modification() ||
+                    !FUNCTION_STAGES.current(program,functionEpoch))
+                throw new CancelledException();
+            var twoHopRevision=HardwareAnalysisRevision.capture(
+                program,functionScope.modification(),
+                program.getLanguage().getLanguageID().toString(),
+                program.getExecutableSHA256(),mc68332Selected);
+            twoHopRegisters+=HardwareTwoHopConsensus.markdown(
+                twoHopInputs,twoHop,twoHopInputsOmitted,20,twoHopRevision,
+                ()->HardwareAnalysisRevision.capture(program,
+                    program.getModificationNumber(),
+                    program.getLanguage().getLanguageID().toString(),
+                    program.getExecutableSHA256(),mc68332Selected));
+            if(program.getModificationNumber()!=functionScope.modification() ||
+                    !FUNCTION_STAGES.current(program,functionEpoch))
+                throw new CancelledException();
+
         }else {
             callsiteRegisters="## One-hop CALL-site A/D register and "+
                 "MMIO candidates (GA-02/03)\n\n"+
