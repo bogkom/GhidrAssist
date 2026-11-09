@@ -1,5 +1,58 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
+## GA-02/03/11/12/18 — 2026-11-09: branched two-hop CALL cohorts, two leaves and live Listing revision
+
+The existing bounded two-hop CPU32 solver is retained; this package
+extends **source reconciliation**, not the underlying CALL solver.
+An exact `bridge entry → leaf entry → STORE PC` cohort is evaluated
+independently, so two separate leaf functions and several distinct
+STORE instructions within the same leaf do not borrow each other's
+caller identities or generate spurious `INCOMPLETE` results. For
+each cohort, *all* directly sampled callers entering its verified bridge
+must have exactly one matching CALL origin and STORE row. Global solver
+uncertainty, hidden pagination, aliases, source omissions, untrusted
+bridge-to-leaf links and incomplete caller data still fail closed.
+An agreement applies only to sampled direct CALL contexts; it is NOT
+proof of execution, active SIMCR/MM, a physical chip-select mapping,
+ISR activation, or a Review/Apply entitlement.
+
+A second revision guard surrounds the **whole Markdown report**.
+Formerly each row was checked before and after individually; an edit
+between rows could leave earlier, stale known values in the report.
+Now any changed `HardwareAnalysisRevision` at publication discards
+the entire report and every candidate/provenance row. This also
+covers the early bounded display return. The original function-stage
+epoch guard remains intact, and contextual sources are never stored
+in durable GA-12 checkpoints.
+
+Java21 deterministic regression proves a bounded acyclic branched
+bridge with two paths assigning identical A1 before nested CALL;
+two distinct leaf functions, three STORE PCs and four independent
+caller sites; explicit distinct-cohort provenance; a contradictory
+branch assignment that leaves the inner MMIO alias unknown; foreign
+and truncated row refusal; and a mid-report revision change that
+cannot leak earlier source addresses.
+
+The actual synthetic **Ghidra 12.1.4 PUBLIC** headless fixture now
+decodes both a CPU32 BNE/BRA-convergent bridge and two distinct leaf
+functions with two STORE PCs in the first. It validates the
+three-source-cohort reconciliation from actual Ghidra-translated
+Listing/P-code steps. The same integration uses an actual CodeUnit
+EOL annotation transaction on its synthetic bridge to advance the
+real `Program.getModificationNumber()`; pre-change two-hop source
+provenance must be rejected as `STALE_REVISION` with no address or
+caller provenance, while the transaction rollback keeps source bytes
+unchanged. The harness explicitly requires these receipts.
+
+All claims remain static and limited to modeled synthetic CPU32
+source paths. Requirements: deterministic Java21 tests, full
+Ghidra Java25 extension compilation, exact-HEAD GitHub Actions
+and genuine synthetic Ghidra headless regression. Do not run
+stopped Wyse/Precision/Supervisor, modify private firmware,
+production projects or Apply. GA-02/03/11/12/18 stay PARTIAL;
+GA-14 remains deferred.
+
+
 ## GA-02/03/12/18 — 2026-11-09: sampled two-hop CALL source provenance
 
 The two-hop CPU32 direct outer CALL -> fully decoded bridge with one
