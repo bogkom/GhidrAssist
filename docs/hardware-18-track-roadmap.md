@@ -1,5 +1,51 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
+## GA-01/02/03/11/12/18 — 2026-11-09: atomic full-report revision safety after RESET/JSR/MOVEC source reconciliation
+
+The real-Ghidra RESET/direct-CALL/byte-witnessed indirect-JSR/SIMCR-MM/
+MOVEC-to-VBR production report from merged #247 previously checked
+Ghidra Program revision at selected CFG/CALL analysis stages but did
+NOT fence **the complete final Markdown report** at publication.
+An analysis edit, native Undo/Redo, imported source identity change,
+explicit MC68332 profile transition, Program switch or stage cache
+invalidation after a previously accepted row could otherwise leave
+stale RESET, JSR, MMIO or MOVEC locations in output.
+
+A bounded read-only HardwareJointSourcePublication now captures an
+identity-bound HardwareAnalysisRevision and process-local function
+stage epoch once at the start. The source-join publication checks
+this exact revision before and after rendering; the complete final
+report, after source evidence/CSV/roles have been assembled, checks
+the same revision again on entry and exit. A stale epoch/revision
+throws STALE_REVISION; no partially rendered markdown or returned
+Report is made available, and no stale report is persisted as
+GA-12 checkpoint. Explicit invalidation is recognized even when
+Program modification number stays constant. No Apply authorization,
+storage schema, source import or user Program is changed.
+
+The prior source join also omitted unresolved/unproven computed CALL
+sites from its incompleteness count; those sites now contribute to
+the reported unresolved/omitted indirect inventory so that source
+silence cannot be mistaken for a complete negative MMIO conclusion.
+The existing 32-pair display bound, independent VBR site-count
+limits, RESET subset distinction, unknown/partial CFG route safety,
+and static-only interpretation are retained.
+
+Java21 deterministic acceptance forces edits at renderer entry
+and exit, same-name/different Program, original source SHA and
+language changes, device selection changes, explicit stage epoch
+retirement, late Undo/Redo-style revisions, and a controlled
+two-sample race after source text construction; every failure
+discards the whole report rather than leaving earlier source rows.
+Exact SHA full Ghidra 12.1.4 PUBLIC Java25 extension build and
+existing genuine synthetic same-Program RESET/JSR/MOVEC headless
+test remain mandatory. No ECU411 firmware, user project/profile,
+OAuth or stopped Wyse/Precision/Supervisor worker touched.
+The gate protects evidence freshness, not real instruction execution,
+latched MM, active VBR/ISR, physical chip selects or Review/Apply.
+GA-01/02/03/11/12/18 remain PARTIAL, GA-14 deferred.
+
+
 ## GA-01/02/03/11/18 — 2026-11-09: real same-Program RESET / byte-witnessed JSR / MOVEC source correlation
 
 The native CPU32 Listing CFG fixture from #246 verified Ghidra's

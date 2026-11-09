@@ -721,6 +721,19 @@ public final class GhidraHardwareFlowService {
                 program.getModificationNumber(),
                 program.getLanguageID().toString(),
                 program.getExecutableSHA256(),mc68332Selected);
+        // Bind the ENTIRE published report, not merely individual
+        // CALL/CFG rows, to one input revision and stage epoch.
+        HardwareAnalysisRevision publicationRevision=
+            HardwareAnalysisRevision.capture(program,functionScope.modification(),
+                functionScope.language(),functionScope.sourceSha(),
+                mc68332Selected);
+        java.util.function.Supplier<HardwareAnalysisRevision> liveRevision=()->
+            HardwareAnalysisRevision.capture(program,
+                program.getModificationNumber(),
+                program.getLanguageID().toString(),
+                program.getExecutableSHA256(),mc68332Selected);
+        java.util.function.BooleanSupplier liveStages=()->
+            FUNCTION_STAGES.current(program,functionEpoch);
         Map<Long,String> targets=new LinkedHashMap<>();
         HardwareProfiles.Profile p=HardwareProfiles.mc68332();
         for(HardwareProfiles.Register r:p.registers)
@@ -1467,6 +1480,8 @@ public final class GhidraHardwareFlowService {
             "Generic CPU32: manual MC68332 profile selection required.\n\n";
 
         ResetCandidates reset=resetStaticCandidates(program,staticCalls,evidencedFunctions);
+        HardwareJointSourcePublication.requireCurrent(
+            publicationRevision,liveRevision,liveStages);
         // Correlate only sources already collected in this SAME bounded
         // Program analysis. This creates NO indirect graph edge and NO
         // SIMCR/MM -> MOVEC chronological or ISR execution inference.
@@ -1505,6 +1520,7 @@ public final class GhidraHardwareFlowService {
                 indirectSources,movecSources,reset.visited(),
                 reset.recognized(),reset.incomplete(),
                 indirectMmEvidence.omittedWitnesses()+indirectCandidatesOmitted+
+                    indirectUnknownCalls+
                     indirectMmEvidence.rows().size()-joinEligible.size(),
                 vbrSourceSitesOmitted+vbrSourceSites.size()-vbrPlan.rows().size(),
                 HardwareResetIndirectVbrCorrelation.MAX_DISPLAY);
@@ -1526,7 +1542,9 @@ public final class GhidraHardwareFlowService {
                     "| 0x%08X | 0x%08X | 0x%08X | %s |\n",
                     pair.function(),pair.indirectPc(),pair.vbrPc(),relation));
             }
-            resetIndirectVbr=cfgRoutes.append("\n").toString();
+            resetIndirectVbr=HardwareJointSourcePublication.render(
+                publicationRevision,liveRevision,liveStages,
+                ()->cfgRoutes.append("\n").toString());
         }else
             resetIndirectVbr="## RESET / indirect MMIO / VBR source co-location\n\n"+
                 "Not evaluated: explicit MC68332 profile required. "+
@@ -1604,7 +1622,11 @@ public final class GhidraHardwareFlowService {
         String evidenceCsv=HardwareConfigurationEvidenceCsv.serialize(
             HardwareCfgWriteAudit.inspect(mc68332Selected,cfgMmioSites.snapshot()),
             cfgStoreRelations,mc68332Selected);
-        return new Report(out.toString(),foundFunctions,indirect,vbr,unresolved,
+        String publishedMarkdown=HardwareJointSourcePublication.render(
+            publicationRevision,liveRevision,liveStages,out::toString);
+        HardwareJointSourcePublication.requireCurrent(
+            publicationRevision,liveRevision,liveStages);
+        return new Report(publishedMarkdown,foundFunctions,indirect,vbr,unresolved,
             visited,limited || !cfgSourcesComplete || pointerSites.truncated(),
             roles,reset.visited(),reset.recognized(),reset.incomplete(),
             evidenceCsv,cfgMmioSites.snapshot(),
