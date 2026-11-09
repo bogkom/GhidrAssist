@@ -1,5 +1,36 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
+## GA-02/03/12/18 — 2026-11-09: wrap-width overlap and multi-function pending CFG
+
+**Candidate:** use the existing CPU32 modulo-24-bit byte intersection
+solver to test isolated 8/16/32-bit writes around 0xFFFFFF -> 0x000000.
+Track one-byte no-op for an unrelated word, a 16-bit spanning write
+that invalidates the wrapped word, a 32-bit spanning write that
+invalidates *both* high and low tracked words, and an unrelated SIMCR
+word that must remain intact. A later complete aligned word can
+re-establish its own value. These are static source candidates only.
+
+**Durability:** the real Ghidra 12.1.4 PUBLIC CodeBrowser fixture now
+stores TWO distinct incomplete typed worklists for separately decoded
+CPU32 functions (0x60 and 0x80) in the same directory. Each stops after
+two genuine translated CFG iterations. The first JVM verifies two
+independent disk slots and no completed evidence. The second JVM
+reopens the isolated project, re-translates both sources, compares
+typed progress SHA-256, refuses changed source and MCU profile or
+the other function's graph, resumes both through the production
+HardwarePartialStageRunner (not cold fallback), compares complete
+result bytes with independent cold solves, and commits both without
+corrupting the other slot. This complements the existing longer
+single-function 16-iteration real translated restart.
+
+Acceptance requires source-only Java21 assertions, real synthetic
+Ghidra 12.1.4 PUBLIC Java25/Xvfb two-JVM receipts, and exact-HEAD
+GitHub Actions, followed by review and integration. A passing static
+test does not prove actual MM mapping, runtime execution or ECU411
+behavior. No private projects, Wyse/Precision or Supervisor worker.
+GA-02/03/12/18 remain PARTIAL; GA-14 is deferred.
+
+
 ## GA-02/03/12/18 — 2026-11-09: real translated P-code interruption and byte overlap
 
 The first full two-JVM regression for an **interrupted real translated**
