@@ -960,6 +960,10 @@ def main():
                     " -Dghidrassist.automation.allowProgramSwitch=true","")
                 restart_env["JAVA_TOOL_OPTIONS"]=restart_env["JAVA_TOOL_OPTIONS"].replace(
                     " -Dghidrassist.automation.syntheticWrites=true","")
+                restart_env["JAVA_TOOL_OPTIONS"]=restart_env["JAVA_TOOL_OPTIONS"].replace(
+                    " -Dghidrassist.automation.agenticBindingCreate=true","")
+                restart_env["JAVA_TOOL_OPTIONS"]=restart_env["JAVA_TOOL_OPTIONS"].replace(
+                    " -Dghidrassist.automation.agenticBindingDir="+str(out),"")
                 with (out/"ga15-restart-java.log").open("x") as log:
                     reboot=subprocess.Popen(cmd+["agentic-restore"],
                         cwd=work,env=restart_env,stdout=log,
