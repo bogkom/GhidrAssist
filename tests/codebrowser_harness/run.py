@@ -709,6 +709,26 @@ def main():
                             with os.fdopen(fd,"w",encoding="utf-8") as handle:
                                 json.dump({"schema":3,"port":receipt["port"],"token":token},handle)
                             agent=str(ROOT/"tools/ghidrassist-agent")
+                            # The shipped CLI must preserve the opaque report
+                            # cursor verbatim; not reinterpret it as a number.
+                            subprocess_checked([sys.executable,agent,"--session",
+                                str(private),"report","--offset","1",
+                                "--limit","64","--expected-report-revision",
+                                source_report_first["revision"],
+                                "--expected-generation",
+                                source_report_first["generation"]],
+                                work,env,out/"report-cursor-cli-valid.json",30)
+                            cli_page=json.loads((out/"report-cursor-cli-valid.json").read_text())
+                            if (cli_page.get("report",{}).get("generation")!=
+                                    source_report_first["generation"]):
+                                raise RuntimeError("Real CLI report cursor changed")
+                            incomplete=subprocess.run([sys.executable,agent,
+                                "--session",str(private),"report",
+                                "--offset","1","--limit","64"],
+                                cwd=work,env=env,capture_output=True,text=True,
+                                timeout=30)
+                            if incomplete.returncode==0:
+                                raise RuntimeError("CLI accepted unbound report continuation")
                             source_checkpoint=out/"source-pairs-v1-checkpoint.json"
                             subprocess_checked([sys.executable,agent,"--session",
                                 str(private),"source-pairs-checkpoint","--output",
