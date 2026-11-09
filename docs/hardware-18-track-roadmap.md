@@ -39,7 +39,13 @@ The real synthetic Ghidra 12.1.4 PUBLIC headless fixture checks
 two original argument/local receipts, Undo removing both, Redo
 restoring both, rejected stale CSV, then one explicit four-variable
 batch across two independent Functions, preserving the older
-two receipts through the newer batch's Undo/Redo. No new
+two receipts through the newer batch's Undo/Redo. A **separate
+two-JVM, same-on-disk-project regression** now saves actual typed
+parameter and local receipts alongside a function receipt in
+the first Ghidra process, reopens that same isolated Program
+in the second process, and requires both current names, storage
+identities and source import checksum to survive without any
+read-only audit mutation. No new
 automatic naming, inferred A-register variables, actor attribution,
 external database, production firmware or user settings.
 No model tests or stopped Wyse/Precision/Supervisor.
