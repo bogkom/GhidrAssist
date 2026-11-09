@@ -1,5 +1,39 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
+## GA-02/03/12/18 — 2026-11-09: atomic revision-bound cross-CALL source report
+
+The existing one-hop sampled CALL-site reconciliation continues to
+require a distinct complete source row for every sampled caller at the
+same callee and exact STORE PC; no new execution or MMIO certainty is
+inferred. A single complete CALL now explicitly returns `INCOMPLETE` instead
+of `SAMPLED_AGREEMENT`: at least two distinct direct caller sites are
+required for a cross-CALL assertion, including for direct API callers
+outside the production Markdown renderer. Previously its Markdown renderer validated the live Ghidra
+Program revision separately around each row but could keep an earlier
+known address/word if the Program changed after that row, including
+the early return at the bounded display cap.
+
+The whole cross-CALL Markdown publication now checks the captured
+`HardwareAnalysisRevision` on entry and **again immediately before
+returning all text**, including the clipped-display case. A changed
+Program identity, modification number, MCU profile, language or source
+SHA discards **all** sampled source locations, provenance, address and
+word; the renderer returns only a `STALE_REVISION` refusal. No stale
+report section can be promoted into a GA-12 checkpoint or trusted
+hardware conclusion by a partial earlier row. The existing per-row
+checks remain in place. Deterministic Java21 regression forces an edit
+after successful source reconciliation and at the report-cap branch;
+both must erase all address and STORE evidence. An unchanged report
+retains the explicit `INCOMPLETE DISPLAY` marker.
+
+Acceptance: exact-HEAD Java21 reconciliation tests, full Ghidra
+12.1.4 PUBLIC Java25 extension build and applicable genuine synthetic
+GitHub Actions regression. This protects report publication; it
+does not prove executed CALL/RESET, active MM, physical bus mapping,
+VBR/ISR activation or permission to Review/Apply. No ECU411 firmware,
+user Ghidra projects/profiles/OAuth or stopped Wyse/Precision/
+Supervisor workers touched. GA-02/03/12/18 remain PARTIAL.
+
 ## GA-06/10/16/18 — 2026-11-09: SIM D-2 source-backed register byte offsets and access
 
 Following the source-only SIMCR/SYNCR bit-diagram and mask verification,

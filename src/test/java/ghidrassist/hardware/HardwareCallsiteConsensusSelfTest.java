@@ -77,6 +77,18 @@ public final class HardwareCallsiteConsensusSelfTest {
                 omittedMarkdown.contains("INCOMPLETE") &&
                 !omittedMarkdown.contains("SAMPLED_AGREEMENT"),
             "Unsampled caller budget suppresses a seemingly unanimous result");
+        var singleton=inspect(List.of(a),8);
+        check(singleton.state()==HardwareCallsiteConsensus.State.INCOMPLETE &&
+                singleton.sampledCallSites()==1 &&
+                singleton.address()==null && singleton.word()==null &&
+                singleton.bits()==0 && singleton.provenance().size()==1,
+            "One complete CALL is not cross-CALL agreement");
+        String singletonMarkdown=HardwareCallsiteConsensus.markdown(
+            List.of(a),analyze(List.of(a),8),0,24,
+            reportRevision,()->reportRevision);
+        check(!singletonMarkdown.contains("SAMPLED_AGREEMENT") &&
+                singletonMarkdown.contains("NO_SAMPLED_CALLS"),
+            "Single caller cannot enter production cross-CALL agreement report");
         var conflict=inspect(List.of(a,c),8);
         check(conflict.state()==HardwareCallsiteConsensus.State.SAMPLED_DIVERGENCE &&
                 conflict.address()==null && conflict.word()==null &&
@@ -160,6 +172,49 @@ public final class HardwareCallsiteConsensusSelfTest {
                 List.of(a,b),summary,0,24,revision,()->changed)
                 .contains("STALE_REVISION"),
             "Ghidra edit strips all address evidence from the report");
+        // The full Markdown is one revision-bound publication, not a
+        // collection of individually valid rows. A late edit must erase
+        // even the previously rendered known MMIO address and provenance.
+        AtomicInteger midReportReads=new AtomicInteger();
+        String staleWhole=HardwareCallsiteConsensus.markdown(
+            List.of(a,b),summary,0,24,revision,
+            ()->midReportReads.incrementAndGet()<4?revision:changed);
+        check(midReportReads.get()>=4 &&
+                staleWhole.contains("STALE_REVISION") &&
+                staleWhole.contains("ENTIRE REPORT WITHHELD") &&
+                !staleWhole.contains("0x00FFFA00") &&
+                !staleWhole.contains("0x00000500") &&
+                !staleWhole.contains("SAMPLED_AGREEMENT"),
+            "Edit after a valid row discards entire source report");
+        var twoStoreLeaf=new HardwareCallsiteRegisterFlow.Callee(0x500L,List.of(
+            new HardwareDataflow.Step(0x500L,STORE_INDIRECT,"A0","D0",
+                0,0,null,16,List.of(0x502L),"MOVE.W"),
+            new HardwareDataflow.Step(0x502L,STORE_INDIRECT,"A0","D0",
+                0,0,null,16,List.of(0x504L),"MOVE.W"),
+            new HardwareDataflow.Step(0x504L,OTHER,null,0,0,null,0,
+                List.of(),"RTS")),true);
+        var twoStoreSummary=HardwareCallsiteRegisterFlow.analyze(
+            List.of(a,b),List.of(twoStoreLeaf),Set.of(0xfffa00L),8);
+        String clipped=HardwareCallsiteConsensus.markdown(
+            List.of(a,b),twoStoreSummary,0,1,revision,()->revision);
+        check(clipped.contains("INCOMPLETE DISPLAY") &&
+                clipped.contains("0x00FFFA00"),
+            "Bounded display retains explicit incomplete marker if unchanged");
+        AtomicInteger clippedReads=new AtomicInteger();
+        String staleClipped=HardwareCallsiteConsensus.markdown(
+            List.of(a,b),twoStoreSummary,0,1,revision,
+            ()->clippedReads.incrementAndGet()<4?revision:changed);
+        check(clippedReads.get()>=4 &&
+                staleClipped.contains("STALE_REVISION") &&
+                !staleClipped.contains("INCOMPLETE DISPLAY") &&
+                !staleClipped.contains("0x00FFFA00") &&
+                !staleClipped.contains("0x00000500"),
+            "Early bounded display exit also discards stale earlier source rows");
+        String immediatelyStale=HardwareCallsiteConsensus.markdown(
+            List.of(a,b),summary,0,24,revision,()->changed);
+        check(immediatelyStale.contains("STALE_REVISION") &&
+                !immediatelyStale.contains("0x00FFFA00"),
+            "Revision changed before report build cannot publish known evidence");
         rejects(()->HardwareCallsiteConsensus.markdown(
                 List.of(a,b),summary,-1,24,revision,()->revision),
             "Negative omitted-call inventory rejected");
