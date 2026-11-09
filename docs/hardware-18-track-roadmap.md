@@ -1,5 +1,62 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
+## GA-08/12/15/18 — 2026-11-10: coherent three-report snapshots and Apply/Undo stale-token retirement
+
+`analysis.report.manifest` is a new explicitly read-only,
+empty-arguments-only Automation API v3 method. It reads a single
+completed Ghidra Analyze state on the Swing EDT and emits one
+versioned manifest for **all three** independent report products:
+`markdown`, `config_csv` and `names_csv`. It binds exact Program
+path, imported source SHA-256, Ghidra modification counter, opaque
+analysis revision, selected CPU32/MC68332 profile and current GA-12
+stage epoch to each format's own UUID generation, UTF-16 character
+length and full UTF-8 SHA-256 digest. No server-side file write,
+Analyze, Review, Apply or AI tool is performed by this query.
+
+The external CLI supports:
+`ghidrassist-agent report-set-checkpoint --output FILE --page-size N`
+and offline
+`ghidrassist-agent report-set-verify --input FILE`.
+The capturing client compares the same manifest **before** fetching
+all three formats and **after** a final terminal-page check for each.
+Every intermediate HTTP page must match the manifest's Program,
+revision, stage, profile, UUID and length. The concatenated content
+for each section must independently match the manifest's UTF-8
+SHA-256, with page offsets counted using Ghidra's UTF-16 units.
+All three data sections and the read-only provenance are written
+as **one** bounded, private, atomically published, SHA-256 checked
+no-overwrite local JSON envelope. The total file cap is 7.5 MB.
+No partial report-set file is published after failure. Offline
+verification rejects missing formats, changed content, unknown
+fields, incorrect counters and even locally rehashed forged Apply
+or AI-resumption flags. SHA-256 proves file integrity, **not**
+authenticated authorship or past firmware execution.
+
+Automation API `hardware.apply.commit` and `hardware.apply.undo`
+now also retire the completed hardware source/report epoch and
+generation immediately after each successful synthetic/attested
+working-copy mutation. Even if a Ghidra Undo/Redo transaction later
+restores the original bytes or a revision-like value, an old report
+cursor never becomes valid without a new explicit Analyze. This
+does not add a Redo RPC or authorize new writes. Direct changes
+from other Ghidra plugins still rely on the existing
+Program/revision/stage-current checks.
+
+The Java21 + Python3 deterministic regression covers an intentionally
+mixed Analyze/Undo/Redo-like generation sequence, edits between
+formats, changed identities and content, a transition after the
+last body page, no-overwrite, truncated/forged reports and offline
+verification. The real synthetic Ghidra 12.1.4 PUBLIC Java25
+CodeBrowser/Xvfb + bearer JSON-RPC/CLI test publishes a three-format
+read-only receipt, verifies it in an unrelated CLI process and
+checks denial after Program switching, same-input reanalysis and
+**actual safe Apply and Undo**. It does not claim that an actual
+Ghidra Redo was exercised unless a separate native regression
+explicitly confirms it. No original ECU411, user projects,
+OAuth or stopped Wyse/Precision/Supervisor tests are touched.
+GA-08/12/15/18 remain PARTIAL; GA-14 deferred.
+
+
 ## GA-08/12/15/18 — 2026-11-10: strict Review indices and atomic multi-page report receipts
 
 Remaining mutating UI selectors `hardware.review.prepare`,
