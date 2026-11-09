@@ -90,6 +90,20 @@ public final class HardwareSimD2RegisterWitnessSelfTest {
                 219,d5()));
         check(wrapped.completeSample(),
             "Wrapped SYPCR description belongs to same Table D-2 address row");
+        // Manufacturer layout may separate address and name by >160
+        // characters. Never borrow a name from the next register row.
+        var wideCell=HardwareSimD2RegisterWitness.inspect(profile,
+            Map.of(218,d4().replace("SYSTEM PROTECTION CONTROL\n",
+                "SYSTEM PROTECTION CONTROL "+" ".repeat(170)+"\n"),
+                219,d5()));
+        check(wideCell.completeSample(),
+            "Publisher-style wide table cell is bounded to this source row");
+        var borrowedName=HardwareSimD2RegisterWitness.inspect(profile,
+            Map.of(218,d4().replace("(SYPCR)","")
+                .replace("$YFFA26", "(SYPCR) $YFFA26"),219,d5()));
+        check(row(borrowedName,"SYPCR").state()==
+                HardwareSimD2RegisterWitness.State.TABLE_ROW_MISSING,
+            "Next register address cannot supply a missing SYPCR name");
         check(HardwareSimD2RegisterWitness.inspect(
                 HardwareProfiles.cpu32Family(),text).rows().isEmpty(),
             "Generic CPU32 does not inherit MC68332 SIM register evidence");
