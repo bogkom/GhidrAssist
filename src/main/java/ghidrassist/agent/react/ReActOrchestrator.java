@@ -625,8 +625,14 @@ public class ReActOrchestrator {
 
                 // Defense-in-depth: if fullResponse is just a status message (e.g. from
                 // max tool rounds), use the responseBuffer which accumulated all streamed content
-                if(fullResponse!=null &&
-                        fullResponse.length()>BoundedAgenticStream.MAX_ITERATION_CHARS)
+                // Provider callbacks may split a UTF-16 code point. The
+                // bounded stream never releases a dangling surrogate, but
+                // an unmatched final callback is incomplete source evidence.
+                // Also check the full callback: truncation or malformed UTF-16
+                // must not be silently treated as a complete finding.
+                if(!responseBuffer.completeSource() ||
+                        !BoundedAgenticStream.fullResponseComplete(fullResponse,
+                            BoundedAgenticStream.MAX_ITERATION_CHARS))
                     findings.markSourceIncomplete();
                 String limitedResponse=BoundedAgenticStream.bounded(fullResponse,
                     BoundedAgenticStream.MAX_ITERATION_CHARS);
@@ -769,8 +775,9 @@ public class ReActOrchestrator {
                     return;
                 }
 
-                if(fullResponse!=null &&
-                        fullResponse.length()>BoundedAgenticStream.MAX_ITERATION_CHARS)
+                if(!answer.completeSource() ||
+                        !BoundedAgenticStream.fullResponseComplete(fullResponse,
+                            BoundedAgenticStream.MAX_ITERATION_CHARS))
                     findings.markSourceIncomplete();
                 String limitedResponse=BoundedAgenticStream.bounded(fullResponse,
                     BoundedAgenticStream.MAX_ITERATION_CHARS);

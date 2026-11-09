@@ -3,11 +3,17 @@ on:
   pull_request:
     paths:
       - 'src/main/java/ghidrassist/agent/react/FindingsCache.java'
+      - 'src/main/java/ghidrassist/agent/react/BoundedAgenticStream.java'
+      - 'src/main/java/ghidrassist/agent/react/ReActOrchestrator.java'
+      - 'src/test/java/ghidrassist/agent/react/BoundedAgenticStreamSelfTest.java'
       - 'src/test/java/ghidrassist/agent/react/FindingsCacheBudgetSelfTest.java'
       - '.github/workflows/ga15-findings-context-bounds.yml'
   push:
     paths:
       - 'src/main/java/ghidrassist/agent/react/FindingsCache.java'
+      - 'src/main/java/ghidrassist/agent/react/BoundedAgenticStream.java'
+      - 'src/main/java/ghidrassist/agent/react/ReActOrchestrator.java'
+      - 'src/test/java/ghidrassist/agent/react/BoundedAgenticStreamSelfTest.java'
       - 'src/test/java/ghidrassist/agent/react/FindingsCacheBudgetSelfTest.java'
       - '.github/workflows/ga15-findings-context-bounds.yml'
   workflow_dispatch:
@@ -29,6 +35,10 @@ jobs:
           mkdir -p "$RUNNER_TEMP/ga15"
           javac --release 21 -d "$RUNNER_TEMP/ga15" \
             src/main/java/ghidrassist/agent/react/FindingsCache.java \
+            src/main/java/ghidrassist/agent/react/BoundedAgenticStream.java \
+            src/test/java/ghidrassist/agent/react/BoundedAgenticStreamSelfTest.java \
             src/test/java/ghidrassist/agent/react/FindingsCacheBudgetSelfTest.java
+      - name: Refuse malformed or truncated UTF-16 Agentic stream evidence
+        run: java -cp "$RUNNER_TEMP/ga15" ghidrassist.agent.react.BoundedAgenticStreamSelfTest
       - name: Reject unbounded output, invalid views and stale numbering
         run: java -cp "$RUNNER_TEMP/ga15" ghidrassist.agent.react.FindingsCacheBudgetSelfTest

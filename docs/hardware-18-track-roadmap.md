@@ -1,5 +1,41 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
+## GA-15/18 — 2026-11-09: complete UTF-16 bounded Agentic response evidence
+
+The existing `BoundedAgenticStream` retained a high UTF-16 surrogate
+at the end of an intermediate provider callback while waiting for a
+later low surrogate; its `text()` view could therefore briefly expose
+an invalid code unit to UI/RAG. A full provider callback shorter than
+the configured limit could also bypass source-content validation,
+and an invalid limit was accepted if the response was already short.
+
+This package holds an unfinished high surrogate **privately** until
+the matching next callback arrives; only complete code points enter
+the bounded retained prefix. Unpaired low/high surrogates and input
+exceeding the hard cap mark source loss. `completeSource()` remains
+false when the final provider callback has an unmatched high;
+`fullResponseComplete()` detects malformed full callbacks even
+below the cap. `bounded()` always validates the limit and returns
+only valid UTF-16 prefix characters. The existing production
+`ReActOrchestrator` now marks `FindingsCache` source INCOMPLETE
+at both iteration and synthesis completion whenever full text or
+stream callback evidence is truncated/invalid. It never upgrades
+untrusted partial model text to a complete hardware claim.
+
+Java21 deterministic regression exercises a supplementary Unicode
+character split between two callbacks, full-response split at
+capacity, isolated low/high surrogates, high followed by ordinary
+text, malformed short full callbacks, reset and invalid-limit bypass.
+The GA-15 bounded findings workflow executes those tests with the
+existing dropped-source and pagination-staleness suite. Full
+Ghidra 12.1.4 PUBLIC Java25 build and applicable real synthetic
+Automation API/CodeBrowser GitHub Actions remain required on exact
+final SHA. There are no model-based test calls, UI Apply permissions,
+private firmware or historical Supervisor/Wyse tests.
+
+GA-15/18 remain PARTIAL; GA-14 remains deferred.
+
+
 ## GA-05/08/13/18 — 2026-11-09: correct function-local pointer namespaces across approvals
 
 The existing `HardwareScopedVariableReview.propose` is now safe for

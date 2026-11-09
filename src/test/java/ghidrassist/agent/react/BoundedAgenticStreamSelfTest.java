@@ -42,6 +42,66 @@ public final class BoundedAgenticStreamSelfTest {
         check(orphanLow.append(smile.substring(2)) && orphanLow.length()==0,
             "unpaired low surrogate accepted from independent callback");
 
+        char high=(char)0xD83D, low=(char)0xDE03;
+        // A withheld high surrogate is never sent to the UI/RAG as
+        // a dangling UTF-16 unit; a later callback can complete it.
+        var pending=new BoundedAgenticStream(8);
+        check(!pending.append("a"+high) && pending.text().equals("a") &&
+                !pending.completeSource(),
+            "Pending high surrogate must not become complete source evidence");
+        check(!pending.append(String.valueOf(low)) &&
+                pending.completeSource() && pending.text().equals(smile),
+            "Valid split callback pair is reconstructed without source loss");
+        var invalidNext=new BoundedAgenticStream(8);
+        invalidNext.append("a"+high);
+        check(invalidNext.append("X") &&
+                invalidNext.text().equals("aX") &&
+                !invalidNext.completeSource(),
+            "Unpaired high followed by normal data drops malformed unit");
+        var orphanMiddle=new BoundedAgenticStream(16);
+        check(orphanMiddle.append("abc"+low+"def") &&
+                orphanMiddle.text().equals("abcdef") &&
+                !orphanMiddle.completeSource(),
+            "Unpaired low surrogate in callback is not retained");
+        var twoHigh=new BoundedAgenticStream(16);
+        check(twoHigh.append("a"+high+high) &&
+                twoHigh.text().equals("a") &&
+                !twoHigh.completeSource(),
+            "Adjacent high surrogates cannot masquerade as complete response");
+        check(!BoundedAgenticStream.fullResponseComplete(
+                "hello"+high,20) &&
+                BoundedAgenticStream.bounded("hello"+high,20).equals("hello"),
+            "Malformed trailing high in short full callback must be detected");
+        check(!BoundedAgenticStream.fullResponseComplete(
+                "a"+low+"b",20) &&
+                BoundedAgenticStream.bounded("a"+low+"b",20).equals("ab"),
+            "Malformed low surrogate stripped from short full response");
+        check(BoundedAgenticStream.fullResponseComplete(smile,3) &&
+                BoundedAgenticStream.bounded(smile,3).equals(smile) &&
+                !BoundedAgenticStream.fullResponseComplete(smile,2),
+            "Source completeness respects whole emoji across hard limit");
+        var splitEnd=new BoundedAgenticStream(3);
+        check(!splitEnd.append("a"+high) &&
+                !splitEnd.completeSource() &&
+                splitEnd.text().equals("a"),
+            "Pending final high cannot be emitted despite available capacity");
+        splitEnd.reset();
+        check(splitEnd.completeSource() && splitEnd.text().isEmpty(),
+            "Reset discards prior callback's pending high");
+        for(int limit:new int[]{0,-1,BoundedAgenticStream.MAX_ITERATION_CHARS+1}){
+            boolean rejected=false;
+            try{BoundedAgenticStream.bounded("short",limit);}
+            catch(IllegalArgumentException expected){rejected=true;}
+            check(rejected,"Invalid limit rejected even for short full response");
+            rejected=false;
+            try{BoundedAgenticStream.fullResponseComplete("short",limit);}
+            catch(IllegalArgumentException expected){rejected=true;}
+            check(rejected,"Invalid completeness cap rejected before short bypass");
+        }
+        check(BoundedAgenticStream.bounded(null,4)==null &&
+                BoundedAgenticStream.fullResponseComplete(null,4),
+            "Missing full callback must not fabricate any source text");
+
         var cache=new FindingsCache(1);
         cache.addFinding("one complete observation","source","listing",9);
         var baseline=cache.page(0,100);
