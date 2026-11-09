@@ -783,17 +783,68 @@ def main():
                             if error.code!=400: raise
                         else:
                             raise RuntimeError("Unknown UI tab was accepted")
+                        report_first=None
                         for method in ("analysis.report","analysis.export"):
                             page=http_call(method,{"format":"markdown","offset":0,"limit":128}).get("report",{})
                             if (page.get("format")!="markdown" or
                                     not 0<len(page.get("text",""))<=128 or
                                     page.get("total_characters",0)<len(page["text"]) or
-                                    not page.get("revision")):
+                                    not isinstance(page.get("revision"),str) or
+                                    not isinstance(page.get("generation"),str) or
+                                    page.get("stage_epoch",-1)<0 or
+                                    not page.get("import_sha256") or
+                                    page.get("profile")!="MC68332_USER_SELECTED" or
+                                    page.get("program_path")!="/synthetic-mmio.bin"):
                                 raise RuntimeError("Hardware evidence page invalid: "+str(page))
+                            if report_first is None:
+                                report_first=page
+                            elif page["generation"]!=report_first["generation"]:
+                                raise RuntimeError("Report/export served different generations")
+                            cursor={"expected_revision":page["revision"],
+                                    "expected_generation":page["generation"]}
                             end=http_call(method,{"format":"markdown",
-                                "offset":page["total_characters"],"limit":128}).get("report",{})
-                            if end.get("text")!="" or end.get("more") is not False:
+                                "offset":page["total_characters"],"limit":128,
+                                **cursor}).get("report",{})
+                            if (end.get("text")!="" or end.get("more") is not False or
+                                    end.get("generation")!=page["generation"]):
                                 raise RuntimeError("End-of-report page invalid")
+                            for bad in (
+                                {"format":"markdown","offset":1,"limit":128},
+                                {"format":"markdown","offset":1,"limit":128,
+                                 "expected_revision":page["revision"]},
+                                {"format":"markdown","offset":1,"limit":128,
+                                 "expected_generation":page["generation"]},
+                                {"format":"markdown","offset":1,"limit":128,
+                                 **{**cursor,"expected_revision":page["revision"]+"-old"}},
+                                {"format":"markdown","offset":1,"limit":128,
+                                 **{**cursor,"expected_generation":
+                                    "00000000-0000-0000-0000-000000000000"}},
+                                {"format":"markdown","offset":1,"limit":128,
+                                 **{**cursor,"expected_revision":0}},
+                                {"format":"markdown","offset":1,"limit":128,
+                                 **{**cursor,"expected_generation":True}}):
+                                try:
+                                    http_call(method,bad)
+                                except HTTPError as error:
+                                    if error.code!=400:raise
+                                else:
+                                    raise RuntimeError(
+                                        "Unbound or malformed report page accepted: "+str(bad))
+                        for format_name in ("config_csv","names_csv"):
+                            first=http_call("analysis.report",
+                                {"format":format_name,"offset":0,"limit":64})["report"]
+                            if (first["generation"]==report_first["generation"] or
+                                    first["format"]!=format_name):
+                                raise RuntimeError("Report format shared a stale cursor")
+                            try:
+                                http_call("analysis.report",{
+                                    "format":format_name,"offset":1,"limit":64,
+                                    "expected_revision":first["revision"],
+                                    "expected_generation":report_first["generation"]})
+                            except HTTPError as error:
+                                if error.code!=400:raise
+                            else:
+                                raise RuntimeError("Cross-format report cursor accepted")
                         try:
                             http_call("analysis.report",{"format":"markdown","offset":0,"limit":8193})
                         except HTTPError as error:
