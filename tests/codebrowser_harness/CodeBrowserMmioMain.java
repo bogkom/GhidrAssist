@@ -267,6 +267,71 @@ public final class CodeBrowserMmioMain {
                 // reset its policy, but this stale source cannot be imported.
                 require(evalEdt(()->queryTab.getTaskToolPolicyPanel().snapshot()==null),
                     "A prior per-task tool policy unexpectedly survived restart");
+                // New explicit GUI opt-in bound Review: first real CodeBrowser
+                // JVM saved both the source checkpoint and full Program sidecar.
+                Path binding=out.resolve("ga15-bound-review-program.json");
+                require(Files.isRegularFile(binding),
+                    "First Ghidra JVM did not save the full Program binding");
+                var button=(javax.swing.JButton)field(
+                    queryTab,"loadBoundCheckpointButton");
+                require(button!=null && evalEdt(()->"Import Bound Checkpoint"
+                    .equals(button.getText())),"Bound Review GUI button absent");
+                boolean wrongBoundProfile=false;
+                try {
+                    ghidrassist.agent.react.AgenticReviewProgramBinding.load(
+                        checkpoint,binding,first,true,TaskMonitor.DUMMY);
+                }catch(IllegalArgumentException refused){wrongBoundProfile=true;}
+                require(wrongBoundProfile,"Different MCU profile accepted bound Review");
+                boolean wrongBoundProgram=false;
+                try {
+                    ghidrassist.agent.react.AgenticReviewProgramBinding.load(
+                        checkpoint,binding,second,false,TaskMonitor.DUMMY);
+                }catch(IllegalArgumentException refused){wrongBoundProgram=true;}
+                require(wrongBoundProgram,"Different Program accepted bound Review");
+                Path changedBoundSource=out.resolve("ga15-changed-bound-source.json");
+                Files.writeString(changedBoundSource,
+                    Files.readString(checkpoint)+" ",
+                    java.nio.file.StandardOpenOption.CREATE_NEW);
+                boolean changedBoundDenied=false;
+                try {
+                    ghidrassist.agent.react.AgenticReviewProgramBinding.load(
+                        changedBoundSource,binding,first,false,TaskMonitor.DUMMY);
+                }catch(IllegalArgumentException refused){changedBoundDenied=true;}
+                require(changedBoundDenied,
+                    "Modified historical checkpoint inherited bound Review");
+                Files.delete(changedBoundSource);
+                long beforeBoundRevision=first.getModificationNumber();
+                int oldBoundChat=queryService.getCurrentSessionId();
+                // Simulate prior chat with permissive approval. Actual GUI
+                // controller must revoke it and stage a NEW read-only review.
+                edt(()->{
+                    queryService.setAcceptAllToolsEnabled(true);
+                    ((ghidrassist.core.TabController)controller)
+                        .handleBoundSavedAgenticCheckpointImport(
+                            checkpoint,binding,false);
+                });
+                until(()->{
+                    try { return evalEdt(()->
+                        queryService.getCurrentSessionId()!=oldBoundChat); }
+                    catch(Exception error) { throw new IllegalStateException(error); }
+                },40);
+                var boundArea=(javax.swing.JTextArea)field(queryTab,"queryTextArea");
+                require(evalEdt(()->boundArea.getText().startsWith(
+                            "New independent bound synthetic MMIO review") &&
+                        boundArea.getText().contains(
+                            "Untrusted historical observations") &&
+                        queryTab.isAgenticSelected() &&
+                        !queryService.isAcceptAllToolsEnabled() &&
+                        queryTab.getTaskToolPolicyPanel().snapshot()!=null &&
+                        queryTab.getTaskToolPolicyPanel().snapshot().readOnly() &&
+                        Integer.valueOf(8).equals(
+                            queryTab.getTaskToolPolicyPanel().snapshot().totalLimit())),
+                    "Actual CodeBrowser failed to stage a new read-only bound Review");
+                require(first.getModificationNumber()==beforeBoundRevision &&
+                        !(Boolean)field(controller,"isAgentPlanPending") &&
+                        !(Boolean)field(controller,"isQueryRunning") &&
+                        field(controller,"currentOrchestrator")==null,
+                    "Historical bound Review mutated Program or started old AI");
                 // The saved proof is strictly historical data: a
                 // different imported synthetic firmware must fail even if
                 // the checkpoint itself has a valid payload hash.
@@ -349,6 +414,13 @@ public final class CodeBrowserMmioMain {
                 check.addProperty("no_inherited_task_policy",true);
                 check.addProperty("no_automatic_plan_or_model_run",true);
                 check.addProperty("new_review_still_required",true);
+                check.addProperty("bound_review_real_gui_button",true);
+                check.addProperty("bound_review_verified_after_restart",true);
+                check.addProperty("bound_review_wrong_profile_refused",wrongBoundProfile);
+                check.addProperty("bound_review_wrong_program_refused",wrongBoundProgram);
+                check.addProperty("bound_review_source_tamper_refused",changedBoundDenied);
+                check.addProperty("bound_review_new_chat_readonly",true);
+                check.addProperty("bound_review_no_auto_run_or_apply",true);
                 check.addProperty("wrong_program_refused",wrongProgramDenied);
                 check.addProperty("tampered_source_refused",corruptedDenied);
                 check.addProperty("incomplete_source_refused",incompleteDenied);
