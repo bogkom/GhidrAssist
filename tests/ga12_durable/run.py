@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import subprocess
 import tempfile
+import sys
 
 HERE=Path(__file__).parent
 LEGACY=HERE.parent/"ga11_headless"/"run.py"
@@ -89,12 +90,100 @@ def main():
                     raise RuntimeError("Read-only real Ghidra Program modified")
                 if not proof["checkpoint_exists"]:
                     raise RuntimeError("Durable disk snapshot missing")
+            # GA-12 V2: a SECOND isolated Program with byte-exact real
+            # CPU32 RESET/JSR/MOVEC witnesses, fully separate from vectors.
+            source_file=work/"synthetic-reset-indirect-vbr.bin"
+            helper.call([sys.executable,
+                str(HERE.parent.parent/"tools/generate-synthetic-reset-indirect-vbr.py"),
+                "--output",str(source_file)],
+                work,env,out/"source-generator.log",timeout=30)
+            helper.call([str(ghidra/"support/analyzeHeadless"),
+                str(work/"project"),"Ga12SourceV2","-import",
+                str(source_file),"-loader","BinaryLoader",
+                "-processor","68000:BE:32:CPU32","-cspec","default",
+                "-noanalysis",
+                "-scriptPath",str(HERE.parent.parent/"tools/ghidra_scripts"),
+                "-postScript","GA12BootstrapDurableSourceV2.java"],
+                work,env,out/"source-import-bootstrap.log",timeout=240)
+            bootstrap=(out/"source-import-bootstrap.log").read_text(
+                encoding="utf-8",errors="replace")
+            if ("GA12 SOURCE V2 REAL GHIDRA BOOTSTRAP PASS: functions=5"
+                    not in bootstrap):
+                raise RuntimeError(
+                    "Actual Ghidra source fixture bootstrap did not PASS")
+            if not (work/"project/Ga12SourceV2.gpr").is_file():
+                raise RuntimeError("Real Ghidra V2 source project not saved")
+            helper.call([str(java/"bin/javac"),"-cp",cp,"-d",
+                str(work/"classes"),
+                str(HERE/"Ga12DurableSourceV2RealGhidraMain.java")],
+                work,env,out/"source-compile.log",timeout=120)
+            source_proofs={}
+            for source_phase in ("source-write","source-read","source-v1",
+                                 "source-edit","source-profile"):
+                helper.call([str(java/"bin/java"),
+                    "-Djava.system.class.loader=ghidra.GhidraClassLoader",
+                    "-Djava.awt.headless=true",
+                    f"-Dapplication.settingsdir={settings}",
+                    f"-Dapplication.cachedir={work/'cache'}",
+                    f"-Duser.home={work/'home'}",
+                    f"-Dghidrassist.ga12.durable.dir={work/'durable'}",
+                    "-cp",str(work/"classes")+os.pathsep+cp,
+                    "Ga12DurableSourceV2RealGhidraMain",str(ghidra),
+                    str(work/"project"),str(out),str(work/"durable"),
+                    source_phase],work,env,
+                    out/("integration-"+source_phase+".log"),timeout=240)
+                evidence=json.loads((out/("ga12-"+source_phase+".json"))
+                    .read_text(encoding="utf-8"))
+                if (evidence["phase"]!=source_phase or
+                        not evidence["ghidra_real"] or
+                        not evidence["checkpoint_exists"] or
+                        evidence["reused"] !=
+                        (source_phase in ("source-read","source-v1")) or
+                        evidence["source_inventory_retained"] !=
+                        (source_phase not in ("source-v1","source-profile"))):
+                    raise RuntimeError(
+                        "Cross-JVM source inventory/checkpoint did not retain/refuse")
+                if source_phase in ("source-write","source-read","source-edit"):
+                    if (evidence["source_pairs"]!=2 or
+                            evidence["omitted_indirect"]!=1):
+                        raise RuntimeError("Missing bounded native V2 source pairs")
+                if source_phase!="source-edit" and not evidence["revision_unchanged"]:
+                    raise RuntimeError("Read-only source restore mutated Program")
+                source_proofs[source_phase]=evidence
+            initial=source_proofs["source-write"]
+            restored=source_proofs["source-read"]
+            legacy=source_proofs["source-v1"]
+            changed=source_proofs["source-edit"]
+            generic=source_proofs["source-profile"]
+            if not (initial["effective_input_sha256"]==
+                    restored["effective_input_sha256"]==
+                    legacy["effective_input_sha256"] and
+                    initial["import_sha256"]==
+                    restored["import_sha256"]==
+                    changed["import_sha256"]==
+                    legacy["import_sha256"]==
+                    generic["import_sha256"] and
+                    initial["effective_input_sha256"]!=
+                    changed["effective_input_sha256"] and
+                    initial["effective_input_sha256"]!=
+                    generic["effective_input_sha256"]):
+                raise RuntimeError(
+                    "Cross-JVM input/full-fingerprint/profile isolation failed")
             summary.update({"status":"PASSED_SYNTHETIC_REAL_GHIDRA_HEADLESS",
                 "restart_processes":3,
                 "cold_computed":True,"reopened_reused":True,
                 "edited_recomputed":True,
                 "source_data":"synthetic-only",
-                "tested_stage":"completed CFG Report"})
+                "tested_stage":"completed CFG Report",
+                "v2_source_processes":5,
+                "v2_source_cold_computed":True,
+                "v2_source_reopened_reused":True,
+                "v1_legacy_cfg_only_reused":True,
+                "v1_source_inventory_refused":True,
+                "edited_v2_input_recomputed":True,
+                "generic_cpu32_profile_refused":True,
+                "byte_verified_jsr_movec_pairs":2,
+                "unknown_indirect_sources":1})
     except (OSError,ValueError,RuntimeError,subprocess.TimeoutExpired) as error:
         summary["error_type"]=type(error).__name__
         summary["reason"]=str(error)[:600]
