@@ -1,5 +1,44 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
+## GA-06/10/16/18 — 2026-11-09: SIM D-2 source-backed register byte offsets and access
+
+Following the source-only SIMCR/SYNCR bit-diagram and mask verification,
+ten further SIM register rows are now correlated with the independently
+inspected **MC68332UM Table D-2** on Appendix D-4/PDF218 and its
+D-5/PDF219 continuation. This addresses the non-bitfield profile gap:
+seven previously `UNVERIFIED` register-source metadata entries now
+carry concrete physical folio and source `S`/ `S/U` access classes
+for SYPCR, SWSR, PORTE0, DDRE, PFPAR and CSPAR0/1. Existing
+CSBAR0, CSBAR8, CSOR8 remain included as source-page boundary
+witnesses, but no active chip-select mapping is asserted.
+
+The reviewed table uses **aligned 16-bit row addresses** for both
+16-bit registers and registers occupying the **lower byte**.
+SYPCR is physically `0xFFFA21` in row `$YFFA20`; SWSR
+`0xFFFA27` in row `$YFFA26`; PORTE0 `0xFFFA11` in row
+`$YFFA10`. The new pure-Java, bounded, read-only
+`HardwareSimD2RegisterWitness` keeps these identities separate,
+checks width and profile access class, and matches each register
+name after its **own** row address on the claimed physical page
+before the next address, including wrapped SYPCR text.
+Missing/shifted PDF page and changed profile claims return
+incomplete instead of a trusted address.
+
+The existing publisher-NXP CI first validates immutable PDF
+SHA-256 and total 265 physical pages and then verifies ten
+Table D-2 rows from exact PDF pages 218/219; independent
+Java21 tests cover bad row association, wrong pages,
+unbounded inputs and low-byte addresses. Full Ghidra
+12.1.4 PUBLIC Java25 build and relevant real synthetic
+safety gates remain required on exact HEAD. These static
+catalog addresses do **not** prove active SIMCR/MM, configured
+watchdog, CSBAR/CSOR physical bus map, runtime execution or
+read/write permission. No local RAG copy authenticated, original
+ECU411 firmware, user Ghidra project or OAuth modified.
+GA-06/10/16/18 remain PARTIAL; GA-14 deferred. Stopped
+Wyse/Precision/Supervisor tests remain stopped.
+
+
 ## GA-08/13/18 — 2026-11-09: transactional argument/local pointer rename receipts
 
 Previously the GA-13 Program Options receipt and revision-guarded
