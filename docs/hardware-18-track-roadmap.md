@@ -1,5 +1,40 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
+## GA-12/18 — 2026-11-09: V2 RESET inventory cross-counters and source completeness separation
+
+A typed `GA12-CFG-REPORT-2` checkpoint now requires the **full
+RESET-visited function set** in the CFG report to equal its independent
+JSR/MOVEC `SourceInventory.resetVisited` set. Duplicate CFG RESET
+entries and otherwise byte-valid, SHA-256-resealed disagreement are
+invalid provenance, not trustworthy completed hardware evidence.
+The existing root-recognized and CFG-incomplete flags must still
+match. Original historical V1 CFG-only reports remain compatible,
+without fabricated JSR/MOVEC source pages.
+
+`eligibleForCompletedRestore` still means the completed **CFG stage**
+passes its existing safety gates (review completeness, no CFG/pointer
+omissions, no stage limit). Independent
+`eligibleForCompleteSourceInventory` now refuses V1/absent sources,
+unknown RESET root, incomplete RESET graph, omitted JSR/MOVEC sources
+and explicitly uncertain source witnesses. This is a bounded observed
+input classification only, never execution, MM/VBR/ISR or Apply proof;
+valid partially observed source inventories remain restorable as
+static **INCOMPLETE/UNKNOWN** and are not misclassified as corrupt.
+
+Java21 adversarial tests cover duplicated and mismatched RESET
+counters, byte-valid mutated V2, interrupted CFG and separate source
+completeness. The real Ghidra 12.1.4 PUBLIC Java25 isolated
+cross-JVM harness retains its three original CFG phases and extends
+to eight typed V2/V1 source phases: cold write, same-input read,
+resealed invalid JSR, resealed mismatched RESET, checksum-valid
+but incomplete CFG, legacy V1 CFG-only, changed Program bytes,
+and generic CPU32 profile refusal. Both malformed and incomplete
+checkpoints must trigger **fresh analysis**, not publication of
+a misleading completed stage. No private firmware, Ghidra project,
+profile, OAuth or stopped Wyse/Precision/Supervisor workers used.
+GA-12/18 remain PARTIAL.
+
+
 ## GA-12/18 — 2026-11-09: strict V1/V2 evidence decoding and semantic restore refusal
 
 The typed GA12-CFG-REPORT-1/2 decoder now rejects **noncanonical

@@ -91,7 +91,7 @@ public final class HardwareDurableCfgReportSelfTest {
             complete.limited(),complete.resetRecognized(),
             complete.resetIncomplete(),complete.cfgReviewComplete(),
             complete.cfgOmitted(),complete.pointersOmitted(),
-            complete.sites(),complete.roles(),complete.resetFunctions(),sources);
+            complete.sites(),complete.roles(),List.of(0x100L,0x130L),sources);
         var decoded=decode(encode(typed)).orElseThrow();
         ok(decoded.equals(typed) &&
             decoded.sourceInventory()!=null &&
@@ -181,6 +181,68 @@ public final class HardwareDurableCfgReportSelfTest {
             decoded.sourceInventory().page(0,32).markdown()
                 .contains("INCOMPLETE SOURCE INVENTORY/DISPLAY"),
             "Partial observed source inventory remains explicitly UNKNOWN");
+        // The two independent V2 collections of RESET functions MUST agree.
+        // A valid disk SHA does not authenticate contradictory evidence.
+        boolean mismatchedReset=false;
+        try {
+            new Snapshot(typed.markdown(),typed.csv(),typed.functions(),
+                typed.indirect(),typed.vbr(),typed.unresolved(),typed.visited(),
+                typed.limited(),typed.resetRecognized(),typed.resetIncomplete(),
+                typed.cfgReviewComplete(),typed.cfgOmitted(),typed.pointersOmitted(),
+                typed.sites(),typed.roles(),List.of(0x100L),sources);
+        }catch(IllegalArgumentException expected){mismatchedReset=true;}
+        ok(mismatchedReset,"V2 CFG and source RESET sets must be identical");
+        boolean repeatedReset=false;
+        try {
+            new Snapshot(typed.markdown(),typed.csv(),typed.functions(),
+                typed.indirect(),typed.vbr(),typed.unresolved(),typed.visited(),
+                typed.limited(),typed.resetRecognized(),typed.resetIncomplete(),
+                typed.cfgReviewComplete(),typed.cfgOmitted(),typed.pointersOmitted(),
+                typed.sites(),typed.roles(),List.of(0x100L,0x130L,0x130L),sources);
+        }catch(IllegalArgumentException expected){repeatedReset=true;}
+        ok(repeatedReset,"Duplicated CFG RESET counter must be refused");
+        byte[] sourceSetTamper=encode(typed);
+        // V2's canonical sorted sourceVisited set is the final array of
+        // 64-bit addresses. Change a valid even 0x130 into even 0x132.
+        ok(sourceSetTamper[sourceSetTamper.length-1]==0x30,
+            "Real typed V2 source RESET record ends in 0x130");
+        sourceSetTamper[sourceSetTamper.length-1]=(byte)0x32;
+        ok(decode(sourceSetTamper).isEmpty(),
+            "Byte-valid, checksum-resealable but different RESET sets denied");
+        ok(eligibleForCompletedRestore(decoded) &&
+            !eligibleForCompleteSourceInventory(decoded),
+            "CFG completed does not certify omitted or uncertain JSR/MOVEC");
+        ok(eligibleForCompletedRestore(old) &&
+            !eligibleForCompleteSourceInventory(old),
+            "Legacy V1 CFG-only restore cannot certify any source inventory");
+        var confident=new HardwareResetIndirectVbrCorrelation.SourceInventory(
+            List.of(new HardwareResetIndirectVbrCorrelation.Indirect(
+                0x130L,0x138L,0x180L,true,false)),
+            List.of(new HardwareResetIndirectVbrCorrelation.Vbr(
+                0x130L,0x144L,0L,false)),
+            Set.of(0x100L,0x130L),true,false,0,0);
+        var confidentlyObserved=new Snapshot(
+            typed.markdown(),typed.csv(),typed.functions(),typed.indirect(),
+            typed.vbr(),typed.unresolved(),typed.visited(),typed.limited(),
+            typed.resetRecognized(),typed.resetIncomplete(),
+            typed.cfgReviewComplete(),typed.cfgOmitted(),typed.pointersOmitted(),
+            typed.sites(),typed.roles(),typed.resetFunctions(),confident);
+        ok(eligibleForCompleteSourceInventory(confidentlyObserved) &&
+            eligibleForCompleteSourceInventory(
+                decode(encode(confidentlyObserved)).orElseThrow()),
+            "Fully retained bounded source inputs survive strictly typed V2");
+        var interrupted=new Snapshot(
+            confidentlyObserved.markdown(),confidentlyObserved.csv(),
+            confidentlyObserved.functions(),confidentlyObserved.indirect(),
+            confidentlyObserved.vbr(),confidentlyObserved.unresolved(),
+            confidentlyObserved.visited(),true,
+            confidentlyObserved.resetRecognized(),
+            confidentlyObserved.resetIncomplete(),true,0,0,
+            confidentlyObserved.sites(),confidentlyObserved.roles(),
+            confidentlyObserved.resetFunctions(),confident);
+        ok(!eligibleForCompletedRestore(interrupted) &&
+            !eligibleForCompleteSourceInventory(interrupted),
+            "Limited CFG cannot be revived as a complete source report");
         System.out.println("HardwareDurableCfgReportSelfTest OK");
     }
 }

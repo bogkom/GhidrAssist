@@ -115,12 +115,65 @@ public final class Ga12DurableSourceV2RealGhidraMain {
                 .orElseThrow(),stage),
             "valid outer SHA/store digest of semantically malformed V2");
     }
+    /**
+     * Two independently cross-checked RESET sets are in the V2 format.
+     * A checkpoint with an otherwise valid disk fingerprint and digest
+     * must NOT replace the live report with inconsistent source provenance.
+     */
+    private static void installResetSetMismatch(Path cache,
+            HardwareDurableStageStore.Key key)throws Exception {
+        byte[] stage=HardwareDurableStageStore.load(cache,key).orElseThrow();
+        var snapshot=HardwareDurableCfgReport.decode(stage).orElseThrow();
+        require(snapshot.sourceInventory()!=null &&
+            !snapshot.sourceInventory().resetVisited().isEmpty(),
+            "V2 mismatch fixture has RESET sources");
+        // Last address of the sorted binary source RESET set, not the CFG
+        // list. XOR bit 1 preserves CPU32 alignment and length bounds.
+        stage[stage.length-1]^=0x02;
+        require(HardwareDurableCfgReport.decode(stage).isEmpty(),
+            "different V2 RESET source subset fails semantic validation");
+        HardwareDurableStageStore.save(cache,key,stage);
+        require(Arrays.equals(HardwareDurableStageStore.load(cache,key)
+                .orElseThrow(),stage),"valid rewrapped mismatched RESET checkpoint");
+    }
+
+    /**
+     * Incomplete CFG metadata cannot be promoted by retaining otherwise
+     * valid JSR/MOVEC source rows or an exact-input disk checksum.
+     */
+    private static void installIncompleteCfg(Path cache,
+            HardwareDurableStageStore.Key key)throws Exception {
+        var stage=HardwareDurableStageStore.load(cache,key).orElseThrow();
+        var original=HardwareDurableCfgReport.decode(stage).orElseThrow();
+        require(HardwareDurableCfgReport.eligibleForCompletedRestore(original) &&
+            original.sourceInventory()!=null,
+            "incomplete fixture needs an eligible full CFG and V2 sources");
+        var incomplete=new HardwareDurableCfgReport.Snapshot(
+            original.markdown(),original.csv(),original.functions(),
+            original.indirect(),original.vbr(),original.unresolved(),
+            original.visited(),true,
+            original.resetRecognized(),original.resetIncomplete(),
+            false,original.cfgOmitted()+1,original.pointersOmitted(),
+            original.sites(),original.roles(),original.resetFunctions(),
+            original.sourceInventory());
+        require(!HardwareDurableCfgReport.eligibleForCompletedRestore(incomplete)
+            && !HardwareDurableCfgReport.eligibleForCompleteSourceInventory(incomplete),
+            "incomplete source/CFG checkpoint has no complete-restore privilege");
+        var bytes=HardwareDurableCfgReport.encode(incomplete);
+        require(HardwareDurableCfgReport.decode(bytes).isPresent(),
+            "incomplete typed V2 is format-valid, NOT completed");
+        HardwareDurableStageStore.save(cache,key,bytes);
+        require(Arrays.equals(HardwareDurableStageStore.load(cache,key)
+                .orElseThrow(),bytes),
+            "validly checksummed but incomplete V2 must remain untrusted");
+    }
     public static void main(String[] args)throws Exception {
         require(args.length==5,"ghidra,project,proof,cache,phase");
         String phase=args[4];
         require(phase.equals("source-write")||phase.equals("source-read")||
             phase.equals("source-edit")||phase.equals("source-v1")||
-            phase.equals("source-corrupt")||phase.equals("source-profile"),
+            phase.equals("source-corrupt")||phase.equals("source-profile")||
+            phase.equals("source-mismatch")||phase.equals("source-incomplete"),
             "unexpected isolated V2 phase");
         Path ghidra=Path.of(args[0]).toRealPath();
         Path projectDir=Path.of(args[1]).toRealPath();
@@ -178,6 +231,10 @@ public final class Ga12DurableSourceV2RealGhidraMain {
                 require(!actual.mc68332() && original.mc68332() &&
                     !actual.equals(original),
                     "generic CPU32 has a different full checkpoint key profile");
+            if(phase.equals("source-mismatch"))
+                installResetSetMismatch(cache,original);
+            if(phase.equals("source-incomplete"))
+                installIncompleteCfg(cache,original);
             if(phase.equals("source-v1"))
                 installLegacyV1(cache,original);
             if(phase.equals("source-corrupt"))
@@ -194,6 +251,18 @@ public final class Ga12DurableSourceV2RealGhidraMain {
             var report=obtained.report();
             require(report.cfgReviewComplete && !report.limited,
                 "incomplete CFG cannot publish completed durable report");
+            require(!HardwareDurableCfgReport.eligibleForCompleteSourceInventory(
+                new HardwareDurableCfgReport.Snapshot(
+                    report.markdown,report.configurationEvidenceCsv,
+                    report.functions,report.indirect,report.vbr,
+                    report.unresolved,report.visited,report.limited,
+                    report.resetCandidateRecognized,report.resetGraphIncomplete,
+                    report.cfgReviewComplete,report.cfgSitesOmitted,
+                    report.pointerSitesOmitted,
+                    java.util.List.of(),java.util.List.of(),
+                    new java.util.ArrayList<>(report.resetCandidateFunctions),
+                    report.sourceInventory)),
+                "Unknown/omitted synthetic JSR witnesses must remain incomplete");
             require(report.markdown.contains("CFG/P-code"),
                 "real Ghidra CFG report missing");
             if(phase.equals("source-v1")) {

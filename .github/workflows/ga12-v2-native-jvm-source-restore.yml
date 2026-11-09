@@ -42,7 +42,7 @@ jobs:
           bash tools/ci/ghidra-gradle-ci-network.sh "$GHIDRA_INSTALL_DIR"
           "$GHIDRA_INSTALL_DIR/support/gradle/gradlew" \
             --no-daemon --stacktrace buildExtension
-      - name: Verify 3 CFG and 6 JSR MOVEC V2/V1 real independent JVM phases
+      - name: Verify 3 CFG and 8 JSR MOVEC V2/V1 real independent JVM phases
         shell: bash
         run: |
           set -euo pipefail
@@ -61,9 +61,11 @@ jobs:
           expected={
               "status":"PASSED_SYNTHETIC_REAL_GHIDRA_HEADLESS",
               "restart_processes":3,
-              "v2_source_processes":6,
+              "v2_source_processes":8,
               "v2_source_cold_computed":True,
               "v2_corrupt_semantic_checksum_refused":True,
+              "v2_mismatched_reset_provenance_refused":True,
+              "v2_incomplete_cfg_checkpoint_refused":True,
               "v2_source_reopened_reused":True,
               "v1_legacy_cfg_only_reused":True,
               "v1_source_inventory_refused":True,
@@ -75,13 +77,13 @@ jobs:
           }
           for k,v in expected.items():
               assert p.get(k)==v, (k,p.get(k),v)
-          print("GA12 REAL GHIDRA V2 SOURCE RESTART PASS: phases=9 native_pairs=2 omissions=1")
+          print("GA12 REAL GHIDRA V2 SOURCE RESTART PASS: phases=11 native_pairs=2 omissions=1")
           PY
       - name: Bounded diagnostic tail for synthetic-only failures
         if: failure()
         shell: bash
         run: |
-          for f in "$RUNNER_TEMP"/ga12-v2-real/{source-import-bootstrap,source-compile,integration-source-write,integration-source-read,integration-source-corrupt,integration-source-v1,integration-source-edit,integration-source-profile}.log; do
+          for f in "$RUNNER_TEMP"/ga12-v2-real/{source-import-bootstrap,source-compile,integration-source-write,integration-source-read,integration-source-corrupt,integration-source-mismatch,integration-source-incomplete,integration-source-v1,integration-source-edit,integration-source-profile}.log; do
             if test -f "$f"; then
               echo "=== $(basename "$f") ==="
               tail -n 65 "$f"

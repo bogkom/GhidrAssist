@@ -47,15 +47,43 @@ public final class HardwareDurableCfgReport {
             // A typed source inventory cannot contradict the CFG summary's
             // RESET provenance. This gate applies before save AND after V2
             // decode, even when the outer disk checksum is valid.
-            if(sourceInventory!=null &&
-                    (sourceInventory.resetRecognized()!=resetRecognized ||
-                     sourceInventory.resetIncomplete()!=resetIncomplete))
-                throw new IllegalArgumentException(
-                    "Contradictory V2 RESET source provenance");
+            if(sourceInventory!=null){
+                // The independent CFG and typed source sections carry the
+                // SAME bounded RESET reachability set. A V2 report may have
+                // unknown/omitted JSR witnesses, but it cannot fabricate a
+                // different RESET set while claiming the CFG was restored.
+                Set<Long> fromCfg=new HashSet<>(resetFunctions);
+                if(sourceInventory.resetRecognized()!=resetRecognized ||
+                        sourceInventory.resetIncomplete()!=resetIncomplete ||
+                        fromCfg.size()!=resetFunctions.size() ||
+                        !sourceInventory.resetVisited().equals(fromCfg))
+                    throw new IllegalArgumentException(
+                        "Contradictory V2 RESET source provenance/counters");
+            }
             sites=List.copyOf(sites);roles=List.copyOf(roles);
             resetFunctions=List.copyOf(resetFunctions);
         }
     }
+    /**
+     * Complete CFG restoration and a complete observed JSR/MOVEC inventory
+     * are different claims. Never elevate a historical V1 CFG-only snapshot
+     * or a V2 with omitted/uncertain source witnesses to complete sources.
+     * This read-only classifier does not authorize Review/Apply or execution.
+     */
+    public static boolean eligibleForCompleteSourceInventory(Snapshot snapshot){
+        if(!eligibleForCompletedRestore(snapshot) ||
+                snapshot.sourceInventory()==null)return false;
+        var sources=snapshot.sourceInventory();
+        if(!sources.resetRecognized() || sources.resetIncomplete() ||
+                sources.omittedIndirect()!=0 || sources.omittedVbr()!=0)
+            return false;
+        for(var jsr:sources.indirect())
+            if(jsr.uncertain())return false;
+        for(var movec:sources.vbr())
+            if(movec.uncertain())return false;
+        return true;
+    }
+
     /**
      * GA-12: a valid checksum and matching Program fingerprint alone do not
      * prove that a historical payload contains a completed CFG evidence set.
