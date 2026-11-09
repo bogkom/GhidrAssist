@@ -83,8 +83,7 @@ public final class HardwareScopedVariableService {
         for(var p:accepted) {
             if(p==null || p.decision()!=HardwareScopedVariableReview.Decision.READY ||
                     !selected.add(p.original().functionEntry()+"/"+
-                        p.original().kind()+"/"+p.original().storage()+"/"+
-                        p.original().ordinal()))
+                        p.original().kind()+"/"+p.original().ordinal()))
                 throw new IllegalArgumentException("Duplicate or unreviewed variable");
         }
         int tx=program.startTransaction("GhidrAssist: explicitly approved pointer variable names");

@@ -2754,6 +2754,155 @@ public final class Ga11VectorHeadlessMain {
                             full,candidates,reviewed);
                     }catch(IllegalStateException expected){stale=true;}
                     check(stale,"Replay after Ghidra Undo/Redo must reject old approval");
+                    // A single Review/Apply batch across TWO independent
+                    // Function namespaces. Both functions legitimately have
+                    // parameter 0, local 0, identical stack storage and
+                    // identical approved candidate names; the first
+                    // function's namespace must not collide with the second.
+                    int multiSetup=full.startTransaction(
+                        "GA05/08 isolated two-Function pointer source");
+                    try {
+                        full.getMemory().setBytes(address(full,0x640L),code);
+                        full.getMemory().setBytes(address(full,0x680L),code);
+                    }finally{full.endTransaction(multiSetup,true);}
+                    defineFixtureFunction(full,0x640L,26,"FUN_00000640");
+                    defineFixtureFunction(full,0x680L,26,"FUN_00000680");
+                    var pointerFnA=full.getFunctionManager().getFunctionAt(
+                        address(full,0x640L));
+                    var pointerFnB=full.getFunctionManager().getFunctionAt(
+                        address(full,0x680L));
+                    check(pointerFnA!=null && pointerFnB!=null,
+                        "Real second Function namespace missing");
+                    int multiVariables=full.startTransaction(
+                        "GA05/08 test-only matching pointer storage two Functions");
+                    try {
+                        for(Function fptr:List.of(pointerFnA,pointerFnB)) {
+                            fptr.addParameter(new ghidra.program.model.listing.ParameterImpl(
+                                "param_1",ptr,8,full,SourceType.DEFAULT),
+                                SourceType.DEFAULT);
+                            fptr.addLocalVariable(new ghidra.program.model.listing.LocalVariableImpl(
+                                "local_8",ptr,-8,full,SourceType.DEFAULT),
+                                SourceType.DEFAULT);
+                        }
+                    }finally{full.endTransaction(multiVariables,true);}
+                    var multiCandidates=new java.util.ArrayList<
+                        ghidrassist.hardware.HardwareScopedVariableReview.Proposal>();
+                    multiCandidates.addAll(ghidrassist.hardware
+                        .HardwareScopedVariableService.preview(pointerFnA));
+                    multiCandidates.addAll(ghidrassist.hardware
+                        .HardwareScopedVariableService.preview(pointerFnB));
+                    check(multiCandidates.size()==4 &&
+                            multiCandidates.stream().allMatch(p->
+                                p.decision()==ghidrassist.hardware
+                                    .HardwareScopedVariableReview.Decision.READY) &&
+                            multiCandidates.get(0).proposedName().equals(
+                                multiCandidates.get(2).proposedName()) &&
+                            multiCandidates.get(1).proposedName().equals(
+                                multiCandidates.get(3).proposedName()),
+                        "Same candidate names in two real Ghidra Functions must not collide");
+                    var multiRevision=HardwareAnalysisRevision.capture(
+                        full,full.getModificationNumber(),
+                        full.getLanguageID().toString(),
+                        full.getExecutableSHA256(),true);
+                    // Duplicate same-Function ordinal with tampered storage
+                    // must be rejected BEFORE beginning any transaction.
+                    var firstMulti=multiCandidates.get(0);
+                    var originalMulti=firstMulti.original();
+                    var forgedMulti=new ghidrassist.hardware.HardwareScopedVariableReview
+                        .Proposal(new ghidrassist.hardware.HardwareScopedVariableReview
+                            .Observation(originalMulti.functionEntry(),
+                                originalMulti.currentName(),originalMulti.kind(),
+                                originalMulti.ordinal(),originalMulti.storage()+"-alternate",
+                                true,false,false),firstMulti.proposedName(),
+                                firstMulti.decision());
+                    boolean duplicateRefused=false;
+                    try {
+                        ghidrassist.hardware.HardwareScopedVariableService.apply(
+                            full,List.of(firstMulti,forgedMulti),multiRevision);
+                    }catch(IllegalArgumentException expected){duplicateRefused=true;}
+                    check(duplicateRefused &&
+                            ghidrassist.hardware.HardwareScopedVariableService
+                                .preview(pointerFnA).stream().allMatch(p->
+                                    p.decision()==ghidrassist.hardware
+                                        .HardwareScopedVariableReview.Decision.READY),
+                        "Duplicate ordinal forged storage must not rename any live variable");
+                    // Fail a real multi-Function batch in its LAST row and
+                    // verify that the FIRST function's names roll back.
+                    var lastMulti=multiCandidates.get(3);
+                    var lastObs=lastMulti.original();
+                    var forgedLast=new ghidrassist.hardware.HardwareScopedVariableReview
+                        .Proposal(new ghidrassist.hardware.HardwareScopedVariableReview
+                            .Observation(lastObs.functionEntry(),lastObs.currentName(),
+                                lastObs.kind(),lastObs.ordinal(),
+                                lastObs.storage()+"-stale",true,false,false),
+                            lastMulti.proposedName(),lastMulti.decision());
+                    var partialBatch=new java.util.ArrayList<>(
+                        multiCandidates.subList(0,3));
+                    partialBatch.add(forgedLast);
+                    boolean atomicRefused=false;
+                    try{
+                        ghidrassist.hardware.HardwareScopedVariableService.apply(
+                            full,partialBatch,multiRevision);
+                    }catch(IllegalStateException expected){atomicRefused=true;}
+                    check(atomicRefused &&
+                            ghidrassist.hardware.HardwareScopedVariableService
+                                .preview(pointerFnA).stream().allMatch(p->
+                                    p.decision()==ghidrassist.hardware
+                                        .HardwareScopedVariableReview.Decision.READY) &&
+                            ghidrassist.hardware.HardwareScopedVariableService
+                                .preview(pointerFnB).stream().allMatch(p->
+                                    p.decision()==ghidrassist.hardware
+                                        .HardwareScopedVariableReview.Decision.READY),
+                        "Late invalid second Function target must roll back first Function");
+                    // A failed native transaction can advance modification.
+                    var freshMultiRevision=HardwareAnalysisRevision.capture(
+                        full,full.getModificationNumber(),
+                        full.getLanguageID().toString(),
+                        full.getExecutableSHA256(),true);
+                    var multiApplied=ghidrassist.hardware.HardwareScopedVariableService.apply(
+                        full,multiCandidates,freshMultiRevision);
+                    check(multiApplied.renamed()==4 &&
+                            ghidrassist.hardware.HardwareScopedVariableService
+                                .preview(pointerFnA).stream().allMatch(p->
+                                    p.decision()==ghidrassist.hardware
+                                        .HardwareScopedVariableReview.Decision.USER_NAMED) &&
+                            ghidrassist.hardware.HardwareScopedVariableService
+                                .preview(pointerFnB).stream().allMatch(p->
+                                    p.decision()==ghidrassist.hardware
+                                        .HardwareScopedVariableReview.Decision.USER_NAMED),
+                        "Explicit approved batch did not rename both real Function namespaces");
+                    full.undo();
+                    check(ghidrassist.hardware.HardwareScopedVariableService
+                            .preview(pointerFnA).stream().allMatch(p->
+                                p.decision()==ghidrassist.hardware
+                                    .HardwareScopedVariableReview.Decision.READY) &&
+                            ghidrassist.hardware.HardwareScopedVariableService
+                            .preview(pointerFnB).stream().allMatch(p->
+                                p.decision()==ghidrassist.hardware
+                                    .HardwareScopedVariableReview.Decision.READY),
+                        "Native Undo failed to restore all four names");
+                    full.redo();
+                    check(ghidrassist.hardware.HardwareScopedVariableService
+                            .preview(pointerFnA).stream().allMatch(p->
+                                p.decision()==ghidrassist.hardware
+                                    .HardwareScopedVariableReview.Decision.USER_NAMED) &&
+                            ghidrassist.hardware.HardwareScopedVariableService
+                            .preview(pointerFnB).stream().allMatch(p->
+                                p.decision()==ghidrassist.hardware
+                                    .HardwareScopedVariableReview.Decision.USER_NAMED),
+                        "Native Redo failed to restore all four approved names");
+                    boolean staleMultiRefused=false;
+                    try {
+                        ghidrassist.hardware.HardwareScopedVariableService.apply(
+                            full,multiCandidates,freshMultiRevision);
+                    }catch(IllegalStateException expected){staleMultiRefused=true;}
+                    check(staleMultiRefused,
+                        "Pre-Undo reviewed source revision must not permit replay");
+                    result.addProperty("scoped_multi_function_namespace_independent",true);
+                    result.addProperty("scoped_multi_function_duplicate_ordinal_rejected",true);
+                    result.addProperty("scoped_multi_function_atomic_failure",true);
+                    result.addProperty("scoped_multi_function_apply_undo_redo",true);
+                    result.addProperty("scoped_multi_function_stale_replay_rejected",true);
                     result.addProperty("scoped_real_pointer_param_local",true);
                     result.addProperty("scoped_atomic_rejection",true);
                     result.addProperty("scoped_explicit_apply",true);

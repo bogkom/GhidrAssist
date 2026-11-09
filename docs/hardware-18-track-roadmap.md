@@ -1,5 +1,42 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
+## GA-05/08/13/18 — 2026-11-09: correct function-local pointer namespaces across approvals
+
+The existing `HardwareScopedVariableReview.propose` is now safe for
+batched previews containing variables from **multiple** Ghidra
+Functions: candidate-name collisions are scoped to a specific Function
+entry, while the exact candidate identity is `function entry / kind /
+ordinal`. Duplicate ordinals under different storage in one Function
+are rejected instead of resolving the first convenient storage.
+Independent functions may legitimately contain the same stack slot,
+ordinal, generated name and proposed pointer placeholder. Existing
+Ghidra Service `apply` also rejects repeated
+`Function/kind/ordinal` even if a forged Proposal contains another
+storage description.
+
+Deterministic Java21 regressions check two independent Functions,
+false global collisions, collision within a Function, forged
+duplicate ordinal/storage and binding a reviewed Proposal to its
+original Function. Actual synthetic Ghidra 12.1.4 PUBLIC headless
+uses two independent FunctionManager objects, each with a genuinely
+typed pointer parameter and stack local; a single four-item explicit
+approval batch must preserve independent Function namespaces.
+A late forged observation for the second Function must roll back the
+first Function and leave all four names untouched. The same fixture
+requires real native Undo/Redo of all four names, strict duplicate
+ordinal refusal and denial of stale replay. All five new receipt flags
+are mandatory in the Python CI harness.
+
+This is *not* automatic naming from an A-register: every candidate
+must refer to an existing Ghidra variable with stable exact type,
+ordinal, storage and Function owner. No parameter/local rename
+history is claimed when native Undo erases it, no actor identified,
+no private MCU firmware/production project changed. Review/Apply
+continues to require explicit confirmation and a current Program
+revision. No Wyse, Precision or legacy Supervisor.
+GA-05/08/13/18 remain PARTIAL; GA-14 deferred.
+
+
 ## GA-08/13/18 — 2026-11-09: live revision-bound approved-rename audit CSV
 
 The existing GA-13 transactional Program Options receipt and

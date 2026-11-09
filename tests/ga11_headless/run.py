@@ -435,7 +435,12 @@ def main():
                         "scoped_atomic_rejection",
                         "scoped_explicit_apply",
                         "scoped_native_undo_redo",
-                        "scoped_stale_revision_rejected"),
+                        "scoped_stale_revision_rejected",
+                        "scoped_multi_function_namespace_independent",
+                        "scoped_multi_function_duplicate_ordinal_rejected",
+                        "scoped_multi_function_atomic_failure",
+                        "scoped_multi_function_apply_undo_redo",
+                        "scoped_multi_function_stale_replay_rejected"),
                     "receipt-restart":(
                         "rename_receipt_second_jvm_reopened",
                         "rename_receipt_saved_name_and_source",

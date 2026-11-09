@@ -78,6 +78,48 @@ public final class HardwareScopedVariableReviewSelfTest {
                 "ga_local_ptr_candidate_0","stack:e",true,true,false)))
             .get(0).decision()==HardwareScopedVariableReview.Decision.NAME_COLLISION,
             "cross-kind name collision blocked");
+        // A batched Review may contain several independent functions.
+        // The same parameter ordinal, local slot and proposed name in a
+        // DIFFERENT function is legal; within one function it is not.
+        var fnOther=new HardwareScopedVariableReview.Observation(
+            0x640L,"param_1",HardwareScopedVariableReview.Kind.PARAMETER,
+            0,"stack:00000004:4",true,false,false);
+        var fnOtherLocal=new HardwareScopedVariableReview.Observation(
+            0x640L,"local_4",HardwareScopedVariableReview.Kind.LOCAL,
+            0,"stack:fffffff8:4",true,false,false);
+        var across=HardwareScopedVariableReview.propose(
+            List.of(param,local,fnOther,fnOtherLocal));
+        ok(across.size()==4 && across.stream().allMatch(p->
+                p.decision()==HardwareScopedVariableReview.Decision.READY) &&
+                across.get(0).proposedName().equals(across.get(2).proposedName()) &&
+                across.get(1).proposedName().equals(across.get(3).proposedName()),
+            "Same arguments/storage/names in different Functions remain independently READY");
+        var alreadyNamedInOther=new HardwareScopedVariableReview.Observation(
+            0x640L,"ga_arg_ptr_candidate_0",
+            HardwareScopedVariableReview.Kind.PARAMETER,0,
+            "stack:00000004:4",true,true,false);
+        var otherName=HardwareScopedVariableReview.propose(
+            List.of(param,alreadyNamedInOther));
+        ok(otherName.get(0).decision()==
+                HardwareScopedVariableReview.Decision.READY &&
+                otherName.get(1).decision()==
+                HardwareScopedVariableReview.Decision.USER_NAMED,
+            "Names in another Function cannot cause a false local namespace collision");
+        rejects(()->HardwareScopedVariableReview.propose(List.of(
+            param,row(HardwareScopedVariableReview.Kind.PARAMETER,0,
+                "param_2","stack:00000008:4",true,false,false))),
+            "One Function parameter ordinal assigned to competing storages rejected");
+        var changedFunction=new HardwareScopedVariableReview.Observation(
+            0x640L,local.currentName(),local.kind(),local.ordinal(),
+            local.storage(),true,false,false);
+        ok(HardwareScopedVariableReview.recheck(list.get(1),
+                changedFunction,List.of())==
+                HardwareScopedVariableReview.Decision.STALE_OR_CHANGED,
+            "Approval bound to Function entry cannot be replayed in another Function");
+        ok(HardwareScopedVariableReview.recheck(across.get(2),fnOther,
+                List.of("ga_arg_ptr_candidate_0"))==
+                HardwareScopedVariableReview.Decision.NAME_COLLISION,
+            "Actual current sibling Function-variable name collision still fails");
         var forged=new HardwareScopedVariableReview.Proposal(
             row(HardwareScopedVariableReview.Kind.PARAMETER,0,
                 "param_1","stack:fake",false,false,false),
