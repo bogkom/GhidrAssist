@@ -225,3 +225,45 @@ configuration, SIMCR/MM activation, CSBAR window presence on a
 physical external bus, or permission to change Ghidra symbols or
 memory blocks. Unmodeled device-specific registers and unverified
 folio citations remain hypotheses; GA-06/10/16 stay PARTIAL.
+
+## 2026-11-09 — SIM Table D-2 address/byte-width/access witnesses (GA-06/10/16)
+
+The publisher `MC68332UM.pdf` Appendix **D-4** on physical PDF
+page **218** contains SIM Table D-2 through `CSBAR4` at row
+`$YFFA5C`. The continuation on Appendix **D-5** / PDF page **219**
+starts with `CSOR4` at row `$YFFA5E`; `CSBAR8` and `CSOR8`
+are therefore on **219**, whereas `CSPAR0`, `CSPAR1`,
+`SYPCR`, `SWSR`, `PORTE0`, `DDRE`, `PFPAR` and
+`CSBAR0` are on **218**. The pages were visually reviewed from
+the official PDF before creating the independent source reference.
+
+The crucial distinction: Table D-2 prints **aligned 16-bit row
+addresses**. For lower-byte registers, the actual device-profile
+address is **row + 1**. Thus SYPCR = `0xFFFA21` vs table row
+`$YFFA20`, SWSR = `0xFFFA27` vs table row `$YFFA26`,
+PORTE0 = `0xFFFA11` vs row `$YFFA10`. The status/register
+width must not be fabricated from the row label: SYPCR/SWSR
+are 8-bit; CSPAR0/1 and CSBAR/CSOR are 16-bit. The table marks
+`S` supervisor-only and `S/U` configurable for selected
+ports; this does not prove privilege or runtime status.
+
+The bounded, **read-only** `HardwareSimD2RegisterWitness`
+compares ten independent expected row/byte-offset/width/access/page
+records against the selected concrete MC68332 profile and checks
+that the corresponding field name occurs after exactly the table
+row address, before the next printed `$YFFAxx` row (allowing
+one wrapped label). A wrongly placed/missing folio or mismatched
+profile definition cannot pass as complete. The official PDF CI
+first validates the fixed publisher digest
+`02c2cb99738dd45a785798bba3e7dcc34bb0d54fb5fba42900e6ecb8356bf28a`,
+then extracts physical pages 218/219 from the **same** 265-page PDF
+and executes source-table tests. Java21 synthetic regression covers
+lower-byte offsets, different width/access, wrong/missing folios,
+falsified row names and bounded input.
+
+The matching row is a *publisher source address claim*, not
+verification of a particular ECU configuration, runtime module
+mapping/MM, initialized watchdog, active chip select, physical
+memory layout, or authorization for Ghidra Apply. Generic CPU32
+never inherits these MC68332-specific registers; no original
+ECU411 firmware or user Ghidra project is accessed.

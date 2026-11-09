@@ -7,6 +7,8 @@ on:
       - 'src/main/java/ghidrassist/hardware/HardwareBitfieldSourceLedger.java'
       - 'src/main/java/ghidrassist/hardware/HardwareBitfieldPageWitness.java'
       - 'src/main/java/ghidrassist/hardware/HardwareBitfieldLayoutWitness.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareSimD2RegisterWitness.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareSimD2RegisterWitnessSelfTest.java'
       - 'src/main/java/ghidrassist/hardware/HardwareSimChipSelectTableWitness.java'
       - 'src/test/java/ghidrassist/hardware/HardwareSimChipSelectTableWitnessSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/HardwareBitfieldLayoutWitnessSelfTest.java'
@@ -78,6 +80,9 @@ jobs:
             src/main/java/ghidrassist/hardware/HardwareBitfieldSourceLedger.java \
             src/main/java/ghidrassist/hardware/HardwareBitfieldPageWitness.java \
             src/main/java/ghidrassist/hardware/HardwareBitfieldLayoutWitness.java \
+            src/main/java/ghidrassist/hardware/HardwareProfileAudit.java \
+            src/main/java/ghidrassist/hardware/HardwareSimD2RegisterWitness.java \
+            src/test/java/ghidrassist/hardware/HardwareSimD2RegisterWitnessSelfTest.java \
             src/main/java/ghidrassist/hardware/HardwareSimChipSelectTableWitness.java \
             src/test/java/ghidrassist/hardware/HardwareSimChipSelectTableWitnessSelfTest.java \
             src/test/java/ghidrassist/hardware/HardwareBitfieldLayoutWitnessSelfTest.java \
@@ -105,3 +110,7 @@ jobs:
             "$RUNNER_TEMP/page-219.txt"
           echo 'OFFICIAL MC68332UM TABLE D-2 CS REGISTER ADDRESS SOURCE PASS'
 
+          java -cp "$RUNNER_TEMP/mc68332-field-witness" \
+            ghidrassist.hardware.HardwareSimD2RegisterWitnessSelfTest \
+            "$RUNNER_TEMP/page-218.txt" "$RUNNER_TEMP/page-219.txt"
+          echo 'SIM D-2 REGISTER ROW/ACCESS/BYTE WIDTH PASS; no MM/CS execution inferred'
