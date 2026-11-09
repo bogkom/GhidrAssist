@@ -60,11 +60,34 @@ public final class HardwareCallsiteConsensusSelfTest {
                 agreement.description().contains("not runtime execution") &&
                 agreement.description().contains("Review/Apply"),
             "Agreement among sampled CALLs is never runtime/global proof");
+        Object reportOwner=new Object();
+        var reportRevision=HardwareAnalysisRevision.capture(reportOwner,1,
+            "68000:BE:32:CPU32","sha",true);
+        String agreementMarkdown=HardwareCallsiteConsensus.markdown(
+            List.of(a,b),analyze(List.of(a,b),8),0,24,
+            reportRevision,()->reportRevision);
+        check(agreementMarkdown.contains("SAMPLED_AGREEMENT") &&
+                agreementMarkdown.contains("0x00FFFA00") &&
+                agreementMarkdown.contains("NEVER HARDWARE PROOF"),
+            "Production source report displays only sampled MAY agreement");
+        String omittedMarkdown=HardwareCallsiteConsensus.markdown(
+            List.of(a,b),analyze(List.of(a,b),8),1,24,
+            reportRevision,()->reportRevision);
+        check(omittedMarkdown.contains("INCOMPLETE SOURCE INVENTORY") &&
+                omittedMarkdown.contains("INCOMPLETE") &&
+                !omittedMarkdown.contains("SAMPLED_AGREEMENT"),
+            "Unsampled caller budget suppresses a seemingly unanimous result");
         var conflict=inspect(List.of(a,c),8);
         check(conflict.state()==HardwareCallsiteConsensus.State.SAMPLED_DIVERGENCE &&
                 conflict.address()==null && conflict.word()==null &&
                 conflict.bits()==0 && conflict.provenance().size()==2,
             "Different callers do not invent global callee MMIO address");
+        String conflictMarkdown=HardwareCallsiteConsensus.markdown(
+            List.of(a,c),analyze(List.of(a,c),8),0,24,
+            reportRevision,()->reportRevision);
+        check(conflictMarkdown.contains("SAMPLED_DIVERGENCE") &&
+                conflictMarkdown.contains("UNKNOWN"),
+            "Disagreeing source callers never emit one inferred MMIO address");
         var hidden=inspect(List.of(a,b,c),1);
         check(hidden.state()==HardwareCallsiteConsensus.State.INCOMPLETE &&
                 hidden.address()==null,
@@ -133,6 +156,17 @@ public final class HardwareCallsiteConsensusSelfTest {
         rejects(()->HardwareCallsiteConsensus.inspectRevisionBound(
             revision,null,List.of(a),summary,0x500L,0x500L),
             "Missing revision supplier rejected");
+        check(HardwareCallsiteConsensus.markdown(
+                List.of(a,b),summary,0,24,revision,()->changed)
+                .contains("STALE_REVISION"),
+            "Ghidra edit strips all address evidence from the report");
+        rejects(()->HardwareCallsiteConsensus.markdown(
+                List.of(a,b),summary,-1,24,revision,()->revision),
+            "Negative omitted-call inventory rejected");
+        rejects(()->HardwareCallsiteConsensus.markdown(
+                List.of(a,b),summary,0,49,revision,()->revision),
+            "Oversized report budget rejected");
+
         System.out.println("HardwareCallsiteConsensusSelfTest PASS: assertions="+
             assertions);
     }
