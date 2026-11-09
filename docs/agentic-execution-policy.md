@@ -283,6 +283,44 @@ CLI processes must verify both old and new snapshots, which remain
 read-only evidence. This does not test private firmware, user profile
 migration (Issue #98), hardware execution, external LLM or manual approval.
 
+## GA-12/13/15 — exact Program-bound saved Review after Ghidra restart (2026-11-09)
+
+A new **opt-in Java review binding helper**
+`AgenticReviewProgramBinding.save(checkpoint,binding,program,objective,mc68332,monitor)`
+creates a private, no-overwrite, SHA-256-integrity-checked **sidecar**
+for a complete historical Agentic checkpoint. This is not the old
+Agentic session and does not authorize reuse of a plan. It binds the
+source checkpoint's exact file bytes, reviewed objective and the
+existing GA-12 **full Ghidra input fingerprint**, including persisted
+project identity, imported source SHA, Listing/bytes/functions/refs,
+selected MCU profile and exact installed extension/analyzer identity.
+The old import SHA alone is not sufficient to detect changed symbols
+or a different Ghidra Program.
+
+`AgenticReviewProgramBinding.load(checkpoint,binding,program,mc68332,monitor)`
+is **read-only** and must re-evaluate the full input before and after
+loading the source; it refuses a changed Listing, renamed function,
+different project/profile, altered source/checkpoint bytes,
+unavailable fingerprint or unexpected/privileged metadata. For an
+unchanged saved synthetic Program, it returns only the existing
+`AgenticReviewDraft` containing **untrusted historical observations**
+for a new independent plan. The sidecar always has
+`new_review_approved=false`, `tool_execution_authorized=false`,
+`apply_authorized=false`, `resumable_ai_session=false`, and
+`old_plan_inherited=false`. The binding digest is corruption
+detection, **not** authenticated authorship; an attacker with write
+access may forge both file and hash. The original checkpoint and
+sidecar must both remain available locally.
+
+This is a **new explicit Java opt-in API**, not an implicit migration
+or authorization of old unbound files, and the existing GUI flow is
+not silently upgraded to require or bypass it. CI uses only genuine
+isolated synthetic Ghidra 12.1.4 PUBLIC Java25 Program instances,
+with project saved/opened in separate JVMs; it checks the unchanged
+case, stale bytes, renamed symbols, profile differences, source-byte
+tamper and no-overwrite. No private ECU411, user projects, OAuth,
+local Wyse/Precision or Supervisor worker is touched.
+
 ## GA-12/13/15: complete bounded historical Agentic ancestry (2026-11-09)
 
 `ghidrassist-agent agentic-lineage-chain-verify --input NEWEST.json
