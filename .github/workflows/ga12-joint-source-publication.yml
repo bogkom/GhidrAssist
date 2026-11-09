@@ -7,6 +7,11 @@ on:
       - 'src/main/java/ghidrassist/hardware/GhidraHardwareFlowService.java'
       - 'src/test/java/ghidrassist/hardware/HardwareJointSourcePublicationSelfTest.java'
       - '.github/workflows/ga12-joint-source-publication.yml'
+      - 'tools/ghidrassist-agent'
+      - 'tools/tests/test_source_pair_checkpoint.py'
+      - 'src/main/java/ghidrassist/hardware/HardwareFlowStageCache.java'
+      - 'src/main/java/ghidrassist/ui/tabs/HardwareAnalysisTab.java'
+      - 'src/main/java/ghidrassist/automation/AutomationServer.java'
   workflow_dispatch:
 permissions:
   contents: read
@@ -31,3 +36,9 @@ jobs:
             src/test/java/ghidrassist/hardware/HardwareJointSourcePublicationSelfTest.java
           java -cp "$RUNNER_TEMP/ga12-publish" \
             ghidrassist.hardware.HardwareJointSourcePublicationSelfTest
+      - name: Python 3 read-only source-pairs CLI provenance and tamper regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m unittest discover -s tools/tests -p 'test_source_pair_checkpoint.py' -v
+          python3 -m py_compile tools/ghidrassist-agent
