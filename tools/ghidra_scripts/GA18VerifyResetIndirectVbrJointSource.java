@@ -279,6 +279,24 @@ public class GA18VerifyResetIndirectVbrJointSource extends GhidraScript {
                     trigger+" checks (no stale Markdown or Report escaped)");
             }
         }
+        // A completed Automation source-page cursor is invalidated by an
+        // explicit GA-12 stage clear even without another Program edit.
+        try(URLClassLoader loader=new URLClassLoader(
+                new URL[]{Path.of(jar).toUri().toURL()},
+                getClass().getClassLoader())) {
+            Class<?> stages=Class.forName(
+                "ghidrassist.hardware.HardwareFlowStageCache",true,loader);
+            long epoch=(Long)stages.getMethod("sourcePageEpoch",Program.class)
+                .invoke(null,currentProgram);
+            boolean before=(Boolean)stages.getMethod("sourcePageEpochCurrent",
+                Program.class,long.class).invoke(null,currentProgram,epoch);
+            check(before,"native source-page epoch is current before clear");
+            stages.getMethod("clear",Program.class).invoke(null,currentProgram);
+            boolean after=(Boolean)stages.getMethod("sourcePageEpochCurrent",
+                Program.class,long.class).invoke(null,currentProgram,epoch);
+            check(!after,"native GA-12 explicit stage clear invalidates source page");
+        }
+        println("GA18 REAL JOINT SOURCE PAGE PASS: pairs=2 pages=2 stale_epoch=1");
         println("GA18 REAL JOINT REVISION REFUSAL PASS: injected=2 unresolved=1");
         println("GA18 REAL RESET JSR MOVEC JOINT PASS: assertions="+checks+
             " (two native CPU32 source pairs, unresolved JSR, branching CFG, "+
