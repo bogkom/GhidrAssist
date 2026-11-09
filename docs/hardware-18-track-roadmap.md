@@ -1,5 +1,41 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
+## GA-06/10/16 — 2026-11-09: exact MC68332UM physical PDF folio field-name witnesses
+
+The 15 previously modeled MC68332 SIMCR/SYNCR bitfield
+source-page **claims** remain bounded and device-scoped. This
+package adds read-only `HardwareBitfieldPageWitness`, which compares
+the complete discriminative field-name token against actual extracted
+page text for each claimed one-based physical PDF folio, returning
+`NAME_ON_CLAIMED_PAGE`, `NAME_NOT_ON_CLAIMED_PAGE`,
+`PAGE_TEXT_MISSING`, `SHORT_NAME_AMBIGUOUS` or
+`FIELD_PAGE_CLAIM_UNUSABLE`. The page inventory is limited to 16
+items of 256 KiB each and emits immutable rows, mask **claims**,
+physical folio numbers, edition claim and publisher checksum metadata.
+Short terms `MM`, `W`, `X` and `Y` cannot serve as independent
+bitfield witnesses. No text match proves mask/meaning/reset semantics
+or execution. Generic CPU32 never inherits the MC68332 ledger.
+
+The existing official SHA-256-pinned MC68332UM source CI gate now
+compiles Java21 source-page witnesses **after** validating that the
+downloaded NXP publisher PDF matches the reviewed digest and has
+265 physical pages; extracts D-5/D-6/D-7 folios 219/220/221; and
+requires exact full field-name matches for SHEN on page 219 and
+STEXT on page 221. Standalone deterministic Java21 test covers all
+11 discriminative synthetic token names, missing/shifted pages,
+substring collisions, size caps and unknown device scope.
+No PDF bytes or RAG copies are uploaded or authenticated implicitly.
+The runtime source ledger remains CLAIM_ONLY; none of these checks
+automatically validates a local PDF or warrants Review/Apply.
+
+Acceptance requires the exact final GitHub Actions SHA, official
+publisher PDF witness, full Ghidra 12.1.4 PUBLIC Java25 extension
+build and regression suite. No Wyse/Precision/Supervisor, private
+ECU411, user project/profile, secrets, or production Apply.
+GA-06/10/16 remain PARTIAL; GA-08/13 continue independently,
+GA-14 deferred.
+
+
 ## GA-02/03/11/12/18 — 2026-11-09: branched two-hop CALL cohorts, two leaves and live Listing revision
 
 The existing bounded two-hop CPU32 solver is retained; this package

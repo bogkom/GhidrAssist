@@ -106,3 +106,37 @@ firmware/project. GA-10 and GA-16 remain **PARTIAL** outside these
 explicitly modeled fields and pages: broader register tables, verified
 local document ingestion and folio/table correlation still require
 separate evidence.
+
+
+## 2026-11-09 — GA-06/10/16 bounded physical-page field-name witnesses
+
+The MC68332UM publisher-PDF CI gate already pins SHA-256
+`02c2cb99738dd45a785798bba3e7dcc34bb0d54fb5fba42900e6ecb8356bf28a`,
+validates the 265-page document and maps printed Appendix D-5/D-6/D-7 to
+physical PDF pages 219/220/221. A new, independent Java21
+`HardwareBitfieldPageWitness` now correlates the existing 15
+SIMCR/SYNCR field claim records with **literal field-name tokens on
+their claimed physical folios**, without inspecting adjacent pages to
+fill gaps. The official-PDF Actions job extracts the exact three pages
+from SHA-checked publisher bytes and requires real source-text
+witnesses for `SHEN` on physical page **219** and `STEXT` on page
+**221**. Deterministic synthetic regressions also cover the other
+nine discriminative names, wrong/missing folios, word-substring
+attacks, oversized page text and generic CPU32 scope.
+
+`MM`, `W`, `X` and `Y` are **SHORT_NAME_AMBIGUOUS** even if
+those short strings appear in PDF prose. A literal name on a page
+gives only `NAME_ON_CLAIMED_PAGE`: it is **not independent
+verification** of the mask, register layout, reset values, printed
+edition, CPU variant, runtime write, or active MM. Publisher SHA
+validation is a separate CI gate; supplying arbitrary extracted text
+to this pure Java inspector **never authenticates a local/RAG PDF**.
+
+The inspector is bounded to 16 one-based physical pages and 256 KiB
+text per page, emits immutable per-field rows with the actual matching
+folio numbers, and has no document/network/Ghidra database access.
+Runtime `HardwareBitfieldSourceLedger` remains clearly `CLAIM_ONLY`
+until real local PDF authentication and page-region checks are
+implemented. No user files, ECU411 firmware or OAuth are read or
+modified. GA-06/10/16 remain PARTIAL; GA-08/13 retain their separate
+Review/Apply/Undo protection track.

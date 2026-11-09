@@ -4,6 +4,8 @@ on:
   push:
     paths:
       - 'src/main/java/ghidrassist/hardware/HardwareBitfieldSourceLedger.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareBitfieldPageWitness.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareBitfieldPageWitnessSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/HardwareBitfieldSourceLedgerSelfTest.java'
       - 'src/main/java/ghidrassist/hardware/HardwareContextSelector.java'
       - 'src/test/java/ghidrassist/hardware/HardwareContextSelectorSelfTest.java'
@@ -18,6 +20,8 @@ on:
   pull_request:
     paths:
       - 'src/main/java/ghidrassist/hardware/HardwareBitfieldSourceLedger.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareBitfieldPageWitness.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareBitfieldPageWitnessSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/HardwareBitfieldSourceLedgerSelfTest.java'
       - 'src/main/java/ghidrassist/hardware/HardwareContextSelector.java'
       - 'src/test/java/ghidrassist/hardware/HardwareContextSelectorSelfTest.java'
@@ -52,6 +56,8 @@ jobs:
             src/main/java/ghidrassist/hardware/HardwareProfiles.java \
             src/main/java/ghidrassist/hardware/HardwareBitfieldDecoder.java \
             src/main/java/ghidrassist/hardware/HardwareBitfieldSourceLedger.java \
+            src/main/java/ghidrassist/hardware/HardwareBitfieldPageWitness.java \
+            src/test/java/ghidrassist/hardware/HardwareBitfieldPageWitnessSelfTest.java \
             src/main/java/ghidrassist/hardware/HardwareContextSelector.java \
             src/test/java/ghidrassist/hardware/HardwareBitfieldSourceLedgerSelfTest.java \
             src/test/java/ghidrassist/hardware/HardwareContextSelectorSelfTest.java \
@@ -64,5 +70,7 @@ jobs:
         run: java -cp "$RUNNER_TEMP/bitfields" ghidrassist.hardware.ManualPdfPageClaimSelfTest
       - name: Verify field-to-page ledger and PDF authentication caveat
         run: java -cp "$RUNNER_TEMP/bitfields" ghidrassist.hardware.HardwareBitfieldSourceLedgerSelfTest
+      - name: Verify synthetic source-only field text on exact physical PDF folios
+        run: java -cp "$RUNNER_TEMP/bitfields" ghidrassist.hardware.HardwareBitfieldPageWitnessSelfTest
       - name: Verify focused SIMCR/SYNCR RAG keeps bounded source citations
         run: java -cp "$RUNNER_TEMP/bitfields" ghidrassist.hardware.HardwareContextSelectorSelfTest
