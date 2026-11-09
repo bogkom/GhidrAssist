@@ -375,7 +375,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--session", default=os.environ.get(
         "GHIDRASSIST_AGENT_SESSION", str(Path.home() / ".local/state/ghidrassist-agent/session.json")))
-    parser.add_argument("action", choices=("status", "snapshot", "analyze", "task", "mmio", "review-preview", "profile-select", "function", "xrefs", "function-xrefs-body", "decompile", "decompile-status", "bundle", "paths", "listing", "listing-range", "goto", "tab-select", "table-select", "program-open", "review-prepare", "review-apply", "review-undo", "cancel", "report", "export", "agentic-findings", "agentic-checkpoint", "agentic-verify", "agentic-read", "agentic-resume-check", "agentic-review-draft", "agentic-lineage-verify"))
+    parser.add_argument("action", choices=("status", "snapshot", "analyze", "task", "mmio", "review-preview", "profile-select", "function", "xrefs", "function-xrefs-body", "decompile", "decompile-status", "bundle", "paths", "listing", "listing-range", "goto", "tab-select", "table-select", "program-open", "review-prepare", "review-apply", "review-undo", "cancel", "report", "export", "agentic-findings", "agentic-checkpoint", "agentic-verify", "agentic-read", "agentic-resume-check", "agentic-review-draft", "agentic-lineage-verify", "source-pairs"))
     parser.add_argument("address", nargs="?")
     parser.add_argument("--filter", default="")
     parser.add_argument("--row", type=int, default=None)
@@ -388,6 +388,8 @@ def main():
     parser.add_argument("--parent", default="")
     parser.add_argument("--query", default="")
     parser.add_argument("--expected-revision", type=int, default=None)
+    parser.add_argument("--expected-generation", default="")
+    parser.add_argument("--page-size", type=int, default=32)
     parser.add_argument("--expected-entry", default="")
     parser.add_argument("--direction", choices=("incoming", "outgoing", "both"), default="both")
     parser.add_argument("--name", default="")
@@ -454,7 +456,8 @@ def main():
     method = {"agentic-findings":"agentic.findings.page", "status": "session.status", "snapshot": "ui.snapshot",
               "analyze": "hardware.analyze", "task": "hardware.task",
               "mmio": "hardware.mmio.rows", "review-preview": "hardware.review.preview", "profile-select": "hardware.profile.select", "function": "function.snapshot", "xrefs": "function.xrefs", "function-xrefs-body": "function.xrefs.body", "decompile": "decompiler.start", "decompile-status": "decompiler.status", "bundle": "analysis.bundle", "paths": "analysis.paths", "listing": "listing.snapshot", "listing-range": "listing.range",
-              "goto": "listing.goto", "tab-select": "ui.tab.select", "table-select": "ui.table.select", "program-open": "project.program.open", "review-prepare": "hardware.review.prepare", "review-apply": "hardware.review.apply", "review-undo": "hardware.review.undo", "cancel": "hardware.cancel", "report": "analysis.report", "export": "analysis.export"}[args.action]
+              "goto": "listing.goto", "tab-select": "ui.tab.select", "table-select": "ui.table.select", "program-open": "project.program.open", "review-prepare": "hardware.review.prepare", "review-apply": "hardware.review.apply", "review-undo": "hardware.review.undo", "cancel": "hardware.cancel", "report": "analysis.report", "export": "analysis.export",
+              "source-pairs": "hardware.source_pairs.page"}[args.action]
     if method == "analysis.paths" and args.origin == "entry" and not args.address:
         parser.error("paths --origin entry requires an address")
     if method == "ui.tab.select" and not args.address:
@@ -465,8 +468,14 @@ def main():
         parser.error("program-open requires project-relative /path")
     if method == "hardware.review.prepare" and (args.row is None or args.row<0):
         parser.error("review-prepare requires --row nonnegative-index")
-    if args.expected_revision is not None and method not in ("listing.range", "function.xrefs.body","agentic.findings.page"):
+    if args.expected_revision is not None and method not in ("listing.range", "function.xrefs.body","agentic.findings.page","hardware.source_pairs.page"):
         parser.error("--expected-revision is only valid with listing-range, function-xrefs-body or agentic-findings")
+    if args.expected_generation and method!="hardware.source_pairs.page":
+        parser.error("--expected-generation is only valid with source-pairs")
+    if method=="hardware.source_pairs.page" and (
+            not 1<=args.page_size<=32 or args.offset<0 or
+            (args.offset>0 and (args.expected_revision is None or not args.expected_generation))):
+        parser.error("source-pairs requires page-size 1..32 and revision + generation after first page")
     if (args.expected_run or args.expected_findings_revision is not None) and method!="agentic.findings.page":
         parser.error("--expected-run and --expected-findings-revision require agentic-findings")
     if method=="agentic.findings.page" and args.offset>0 and (not args.expected_run or args.expected_findings_revision is None or args.expected_revision is None):
@@ -494,6 +503,10 @@ def main():
                    "expected_entry":args.expected_entry,
                    **({"expected_revision":args.expected_revision} if args.expected_revision is not None else {})}
                   if method=="function.xrefs.body" else
+                  {"offset":args.offset,"limit":args.page_size,
+                   **({"expected_revision":args.expected_revision} if args.expected_revision is not None else {}),
+                   **({"expected_generation":args.expected_generation} if args.expected_generation else {})}
+                  if method=="hardware.source_pairs.page" else
                   {"format":args.format, "offset":args.offset, "limit":args.limit} if method in ("analysis.report","analysis.export") else
                   {"offset":args.offset, "limit":args.limit,
                    **({"expected_run":args.expected_run} if args.expected_run else {}),
