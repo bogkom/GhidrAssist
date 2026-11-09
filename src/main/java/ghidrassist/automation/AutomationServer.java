@@ -134,19 +134,27 @@ public final class AutomationServer implements AutoCloseable {
                     if(program==null)throw new IllegalStateException(
                         "Agentic evidence requires current Ghidra Program");
                     long revision=program.getModificationNumber();
-                    if(args.has("expected_program_revision") &&
-                            args.get("expected_program_revision").getAsLong()!=revision)
+                    Long requiredRevision=AutomationRpcPagination.optionalRevision(
+                        args,"expected_program_revision");
+                    if(requiredRevision!=null && requiredRevision.longValue()!=revision)
                         throw new IllegalStateException(
                             "Agentic Program revision changed during pagination");
                     int offset=args.has("offset")?args.get("offset").getAsInt():0;
                     int limit=args.has("limit")?args.get("limit").getAsInt():25;
-                    String expectedRun=args.has("expected_run")?
-                        args.get("expected_run").getAsString():null;
-                    Long expectedPageRevision=args.has("expected_findings_revision")?
-                        args.get("expected_findings_revision").getAsLong():null;
+                    String expectedRun=AutomationRpcPagination.optionalUuid(
+                        args,"expected_run");
+                    Long expectedPageRevision=AutomationRpcPagination.optionalRevision(
+                        args,"expected_findings_revision");
+                    AutomationRpcPagination.requiredAfterFirst(
+                        offset,requiredRevision,expectedPageRevision,expectedRun,
+                        "Agentic findings");
                     var page=ghidrassist.agent.react.AgenticEvidenceRegistry
                         .shared().page(program,revision,program.getExecutableSHA256(),
                             offset,limit,expectedRun,expectedPageRevision);
+                    if(plugin.getCurrentProgram()!=program ||
+                            program.getModificationNumber()!=revision)
+                        throw new IllegalStateException(
+                            "Agentic Program changed while reading findings page");
                     result.add("agentic",JSON.toJsonTree(page));
                     result.addProperty("read_only",true);
                 } else if ("session.status".equals(method)) {
@@ -178,8 +186,11 @@ public final class AutomationServer implements AutoCloseable {
                     ProgramLocation location=viewer==null ? null : viewer.getCurrentLocation();
                     int offset=args.has("offset") ? args.get("offset").getAsInt() : 0;
                     int limit=args.has("limit") ? args.get("limit").getAsInt() : 32;
-                    Long expectedRevision=args.has("expected_revision") ?
-                        args.get("expected_revision").getAsLong() : null;
+                    Long expectedRevision=AutomationRpcPagination.optionalRevision(
+                        args,"expected_revision");
+                    if(offset>0 && expectedRevision==null)
+                        throw new IllegalArgumentException(
+                            "Subsequent Listing page requires Program revision");
                     String start=args.has("address") ? args.get("address").getAsString() : "";
                     result.add("listing_range",AutomationListing.range(
                         program,location,start,offset,limit,expectedRevision));
@@ -287,8 +298,11 @@ public final class AutomationServer implements AutoCloseable {
                     int limit=args.has("limit") ? args.get("limit").getAsInt() : 50;
                     String direction=args.has("direction") ? args.get("direction").getAsString() : "both";
                     String entry=args.has("expected_entry") ? args.get("expected_entry").getAsString() : "";
-                    Long revision=args.has("expected_revision") ?
-                        args.get("expected_revision").getAsLong() : null;
+                    Long revision=AutomationRpcPagination.optionalRevision(
+                        args,"expected_revision");
+                    if(offset>0 && (revision==null || entry.isBlank()))
+                        throw new IllegalArgumentException(
+                            "Subsequent function XREF page requires revision and function entry");
                     result.add("body_xrefs",AutomationFunctionXrefs.body(
                         program,function,direction,offset,limit,revision,entry));
                 } else if ("function.xrefs".equals(method)) {
@@ -398,10 +412,13 @@ public final class AutomationServer implements AutoCloseable {
                     if(provider==null)throw new IllegalStateException("GhidrAssist UI unavailable");
                     int offset=args.has("offset")?args.get("offset").getAsInt():0;
                     int limit=args.has("limit")?args.get("limit").getAsInt():32;
-                    Long expectedRevision=args.has("expected_revision")?
-                        args.get("expected_revision").getAsLong():null;
-                    String generation=args.has("expected_generation")?
-                        args.get("expected_generation").getAsString():null;
+                    Long expectedRevision=AutomationRpcPagination.optionalRevision(
+                        args,"expected_revision");
+                    String generation=AutomationRpcPagination.optionalUuid(
+                        args,"expected_generation");
+                    if(offset>0 && (expectedRevision==null || generation==null))
+                        throw new IllegalArgumentException(
+                            "Subsequent source page requires Program revision and generation");
                     result.add("source_pairs",provider.getUI().automationJointSourcePage(
                         offset,limit,expectedRevision,generation));
                 } else if ("analysis.report".equals(method) || "analysis.export".equals(method)) {
