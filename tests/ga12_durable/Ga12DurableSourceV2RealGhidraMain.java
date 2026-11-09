@@ -146,8 +146,9 @@ public final class Ga12DurableSourceV2RealGhidraMain {
                 require(!actual.inputSha256().equals(original.inputSha256()),
                     "edited bytes must change exact effective fingerprint");
             if(phase.equals("source-profile"))
-                require(!actual.inputSha256().equals(original.inputSha256()),
-                    "different device selection cannot reuse MC68332 source data");
+                require(!actual.mc68332() && original.mc68332() &&
+                    !actual.equals(original),
+                    "generic CPU32 has a different full checkpoint key profile");
             if(phase.equals("source-v1"))
                 installLegacyV1(cache,original);
             var revision=HardwareAnalysisRevision.capture(program,
@@ -190,6 +191,7 @@ public final class Ga12DurableSourceV2RealGhidraMain {
                     report.sourceInventory.omittedIndirect())+
                 ",\"full_input_sha256\":\""+original.inputSha256()+"\""+
                 ",\"effective_input_sha256\":\""+actual.inputSha256()+"\""+
+                ",\"selected_mc68332\":"+selected+
                 ",\"import_sha256\":\""+imported+"\""+
                 ",\"revision_unchanged\":"+
                     (program.getModificationNumber()==beforeRevision)+
