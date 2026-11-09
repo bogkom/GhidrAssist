@@ -187,6 +187,43 @@ public final class Ga12InterruptedCfgRestartFixture {
             "Real CPU32 CFG failed to converge with expected STORE sites");
         return new RealFlow(entry,List.copyOf(steps),result);
     }
+    /**
+     * A real decoded conditional branch has two distinct sources for A0 at
+     * the same later STORE. A source reachable from RESET/CFG is not proof
+     * that either path executes or that either MMIO register is written.
+     */
+    private static RealFlow divergentRealCpu32Source(Program program)
+            throws Exception {
+        var space=program.getAddressFactory().getDefaultAddressSpace();
+        var function=program.getFunctionManager().getFunctionAt(
+            space.getAddress(0xd0L));
+        require(function!=null,"Real divergent CPU32 function missing");
+        long[] pcs={0xd0L,0xd6L,0xd8L,0xdeL,0xe0L,0xe6L,0xeaL};
+        List<HardwareDataflow.Step> steps=new ArrayList<>();
+        for(long pc:pcs) {
+            var insn=program.getListing().getInstructionAt(
+                space.getAddress(pc));
+            require(insn!=null && function.getBody().contains(insn.getAddress()),
+                "Real divergent Ghidra instruction missing: "+
+                Long.toHexString(pc));
+            steps.add(GhidraHardwareFlowService.translate(insn,function));
+        }
+        require(steps.get(1).successors.contains(0xd8L) &&
+                steps.get(1).successors.contains(0xe0L) &&
+                steps.get(3).successors.contains(0xe6L) &&
+                steps.get(4).successors.contains(0xe6L),
+            "Real Ghidra branch CFG did not preserve both paths");
+        var result=HardwareDataflow.analyze(0xd0L,steps,
+            Set.of(0xfffa00L,0xfffa68L),128);
+        require(!result.truncated && result.reachedNodes==7 &&
+                result.snapshots.size()==1 &&
+                result.snapshots.get(0).instruction==0xe6L &&
+                result.snapshots.get(0).effectiveAddress==null &&
+                result.snapshots.get(0).knownPeripheralWords.isEmpty(),
+            "Divergent branch fabricated a proven SIMCR/CSBAR write");
+        return new RealFlow(0xd0L,List.copyOf(steps),result);
+    }
+
     private static String verifyRealRegisterAndAliasFlow(Program program,
             Path output,HardwareDurableStageStore.Key key,
             boolean resumedJvm) throws Exception {
@@ -231,10 +268,11 @@ public final class Ga12InterruptedCfgRestartFixture {
                 o.get(2).knownPeripheralWords.get(0xfffa00L)) &&
                 o.get(2).writeBits==16,
             "Real following complete word did not reestablish SIMCR evidence");
+        RealFlow divergent=divergentRealCpu32Source(program);
         Path dir=output.resolve("ga12-real-pcode-function-stages");
         Files.createDirectories(dir);
         StringBuilder hashes=new StringBuilder();
-        for(RealFlow flow:List.of(indirect,alias,overlap)) {
+        for(RealFlow flow:List.of(indirect,alias,overlap,divergent)) {
             byte[] serialized=HardwareFunctionResultCodec.encode(flow.result());
             String digest=HardwareDurableStageStore.hash(serialized);
             hashes.append(Long.toHexString(flow.entry())).append(':')
@@ -447,6 +485,67 @@ public final class Ga12InterruptedCfgRestartFixture {
         }
     }
 
+    /**
+     * Exercise a real in-memory Program revision, not an invented revision
+     * counter. Transaction rollback leaves the disposable Listing intact.
+     * A process-local revision guard must refuse old CFG work even though
+     * the imported binary SHA and durable cache directory are unchanged.
+     */
+    private static boolean rejectActualGhidraRevision(Program program,
+            Path output) throws Exception {
+        var flow=divergentRealCpu32Source(program);
+        long before=program.getModificationNumber();
+        var gate=HardwareAnalysisRevision.capture(program,before,
+            program.getLanguage().getLanguageID().toString(),
+            program.getExecutableSHA256(),true);
+        require(gate.matches(program,before,
+            program.getLanguage().getLanguageID().toString(),
+            program.getExecutableSHA256(),true),
+            "Initial real Ghidra revision must be current");
+        var insn=program.getListing().getInstructionAt(
+            program.getAddressFactory().getDefaultAddressSpace()
+                .getAddress(0xd0L));
+        require(insn!=null,"Missing actual Ghidra instruction to edit");
+        int tx=program.startTransaction(
+            "GA-12 isolated in-memory revision invalidation negative test");
+        try {
+            insn.setComment(ghidra.program.model.listing.CodeUnit.EOL_COMMENT,
+                "GA12 isolated source annotation revision probe");
+            require(program.getModificationNumber()!=before &&
+                !gate.matches(program,program.getModificationNumber(),
+                    program.getLanguage().getLanguageID().toString(),
+                    program.getExecutableSHA256(),true),
+                "Actual Ghidra edit did not invalidate old analysis revision");
+            Path dir=Files.createDirectories(
+                output.resolve("ga12-genuine-revision-cancel-probe"));
+            boolean rejected=false;
+            try {
+                HardwarePartialStageRunner.analyze(flow.entry(),flow.steps(),
+                    TARGETS,128,dir,identity(program),TaskMonitor.DUMMY,
+                    ()->gate.matches(program,program.getModificationNumber(),
+                        program.getLanguage().getLanguageID().toString(),
+                        program.getExecutableSHA256(),true));
+            } catch(CancelledException expected) {
+                rejected=true;
+            }
+            require(rejected &&
+                HardwareDurableFunctionStages.load(dir,identity(program),
+                    flow.entry(),128,flow.steps(),TARGETS).isEmpty() &&
+                HardwareDurableFunctionStages.loadProgress(dir,
+                    identity(program),flow.entry(),128,flow.steps(),
+                    TARGETS).isEmpty(),
+                "Obsolete real Ghidra revision was resumed or published");
+        } finally {
+            program.endTransaction(tx,false);
+        }
+        // No persistent source change; physical instructions and their
+        // previously verified CFG must still parse after transaction undo.
+        require(divergentRealCpu32Source(program).result()
+                .snapshots.get(0).effectiveAddress==null,
+            "Rollback damaged actual CPU32 static branch source");
+        return true;
+    }
+
     /** First genuine Ghidra process deliberately stops just after a saved slice. */
     public static void interruptInFirstJvm(Program program,Path output)
             throws Exception {
@@ -509,6 +608,7 @@ public final class Ga12InterruptedCfgRestartFixture {
             parallelWorklists);
         report.addProperty("real_parallel_worklists_isolated",true);
         report.addProperty("real_unknown_alias_poisoned",true);
+        report.addProperty("real_divergent_branch_unproven",true);
         report.addProperty("deliberately_cancelled",cancelled);
         report.addProperty("partial_worklist_saved",true);
         report.addProperty("partial_not_review_evidence",true);
@@ -710,6 +810,8 @@ public final class Ga12InterruptedCfgRestartFixture {
             first.get("real_translated_partial_iterations").getAsInt());
         resumeParallelTranslatedWorklists(program,output,key,
             first.get("real_parallel_worklists_sha256").getAsString());
+        boolean liveRevisionRejected=rejectActualGhidraRevision(
+            program,output);
         var steps=graph();
         require(key.importedSha256().equals(first.get("import_sha256").getAsString())
                 && key.inputSha256().equals(first.get("full_input_sha256").getAsString())
@@ -782,6 +884,10 @@ public final class Ga12InterruptedCfgRestartFixture {
         report.addProperty("real_parallel_worklists_restored",true);
         report.addProperty("real_parallel_results_cold_byte_equal",true);
         report.addProperty("real_parallel_stale_keys_refused",true);
+        report.addProperty("real_divergent_branch_checkpoint_restored",true);
+        report.addProperty("real_program_revision_edit_refused",
+            liveRevisionRejected);
+        report.addProperty("real_program_revision_edit_rolled_back",true);
         report.addProperty("real_pcode_memory_effects_verified",true);
         report.addProperty("source_identity_matches",true);
         report.addProperty("partial_restored",resumed.restoredPartial());
