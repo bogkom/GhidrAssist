@@ -38,10 +38,11 @@ def _source_pairs_metadata(page):
               "profile", "total_pairs", "indirect_sources",
               "movec_sources", "omitted_indirect", "omitted_movec",
               "reset_root_recognized", "reset_graph_incomplete",
-              "observed_inventory_incomplete")
+              "observed_inventory_incomplete", "stage_epoch")
     identity = tuple(page[key] for key in fields)
     if (page["schema"] != 1 or page["profile"] != "MC68332_USER_SELECTED"
             or type(page["revision"]) != int or page["revision"] < 0
+            or type(page["stage_epoch"]) != int or page["stage_epoch"] < 0
             or not isinstance(page["generation"], str)
             or not 1 <= len(page["generation"]) <= 128
             or not isinstance(page["import_sha256"], str)
@@ -106,7 +107,9 @@ def capture_source_pairs_checkpoint(session, output, page_size=32):
     if len(set(keys)) != len(keys) or keys != sorted(keys):
         raise ValueError("Duplicate or unsorted source evidence")
     # Source completeness is a bounded observation, not firmware execution.
-    complete = bool(rows and not expected[12] and
+    sha=expected[3]
+    valid_import=len(sha)==64 and all(c in "0123456789abcdefABCDEF" for c in sha)
+    complete = bool(rows and valid_import and not expected[12] and
                     expected[8] == 0 and expected[9] == 0 and
                     expected[10] and not expected[11])
     payload = {
@@ -118,6 +121,7 @@ def capture_source_pairs_checkpoint(session, output, page_size=32):
         "omitted_movec": expected[9], "reset_root_recognized": expected[10],
         "reset_graph_incomplete": expected[11],
         "observed_inventory_incomplete": expected[12],
+        "stage_epoch": expected[13],
         "collected_all_observed_pairs": True,
         "bounded_source_complete": complete, "rows": rows,
         "notice": "STATIC SOURCE-ONLY: not executable CALL, MM/VBR, ISR, Apply or cross-revision resume",
@@ -174,6 +178,7 @@ def verify_source_pairs_checkpoint(source):
         "reset_root_recognized":p["reset_root_recognized"],
         "reset_graph_incomplete":p["reset_graph_incomplete"],
         "observed_inventory_incomplete":p["observed_inventory_incomplete"],
+        "stage_epoch":p["stage_epoch"],
     }
     values=_source_pairs_metadata(metadata)
     rows=p["rows"]
@@ -191,7 +196,9 @@ def verify_source_pairs_checkpoint(source):
         keys.append((row["function"],row["indirectPc"],row["vbrPc"]))
     if len(set(keys))!=len(keys) or keys!=sorted(keys):
         raise ValueError("Invalid source pair ordering")
-    eligible=bool(rows and not values[12] and values[8]==0 and values[9]==0
+    sha=values[3]
+    valid_import=len(sha)==64 and all(c in "0123456789abcdefABCDEF" for c in sha)
+    eligible=bool(rows and valid_import and not values[12] and values[8]==0 and values[9]==0
                   and values[10] and not values[11])
     if p["bounded_source_complete"]!=eligible:
         raise ValueError("False source-inventory completeness")
