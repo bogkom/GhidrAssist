@@ -1,5 +1,56 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
+## GA-01/02/03/11/12/18 — 2026-11-09: revision-bound Automation source pages and versioned local checkpoint
+
+Completed, explicitly MC68332-selected Hardware Analysis now retains
+the **bounded immutable** CPU32 indirect-JSR/MOVEC source inventory
+(max 64 indirect witnesses, 32 MOVEC sites, 2048 pairs). Automation
+API v3 adds authenticated, read-only `hardware.source_pairs.page`,
+returning at most 32 stable, deterministically ordered pair rows,
+total pair count, omitted/unknown source counts, RESET relation,
+source SHA, Program modification revision, completed-report generation
+token, and GA-12 stage epoch. Page offsets are valid only within the
+SAME in-memory Program revision and generation; subsequent page
+requests require both the expected revision and expected generation.
+Explicit checkpoint clear also invalidates the cursor without a
+Program modification. The API never creates a direct CALL edge,
+invokes an AI model, approves Apply or claims runtime SIMCR/MM/VBR/ISR.
+
+Data comes ONLY from the actual successful production flow analysis,
+passed through the completed Hardware Inventory into the UI; the
+source inventory is intentionally not serialized by legacy GA-12
+durable CFG report snapshots. If only an old durable report was
+restored, pagination fails with SOURCE_INVENTORY_NOT_RETAINED instead
+of parsing Markdown, creating invented provenance or publishing
+incomplete evidence as if complete. Ordinary report export and
+first-page Markdown retain backward compatibility.
+
+`ghidrassist-agent source-pairs` fetches one page. The new explicit
+`source-pairs-checkpoint --output <local path>` reassembles all
+bounded source pages under the exact server-supplied revision and
+generation. It writes only a local atomic create-no-overwrite JSON
+envelope with versioned kind, original import SHA, stage epoch,
+row counts, omitted counts, source flags and SHA-256 of canonical
+payload. Offline `source-pairs-verify --input <path>` refuses
+tampering, duplicate/unsorted rows, inconsistent counts and
+false-complete source claims. The JSON is a **read-only provenance
+snapshot**, not a Ghidra saved Program, a resumable CFG checkpoint,
+a source of Apply approval or a cross-revision cursor. Missing
+source SHA and omitted/unknown source witnesses cannot claim
+complete evidence.
+
+Acceptance requires Java21 source and native Ghidra 12.1.4 PUBLIC
+Java25 extension CI. Native synthetic CPU32 report tests inspect
+both source pages from the exact production Report, require all
+existing RESET/JSR/SIMCR/MOVEC relations and explicitly retire the
+stage epoch without revising the Program. Python deterministic
+CLI tests cover page stitching, race, changing generation/revision,
+incomplete inventory, no-overwrite and checksum tampering. This
+does not restore private ECU411 firmware, user Program, profile,
+OAuth or suspended Wyse/Precision/Supervisor tests. GA-01/02/03/
+11/12/18 remain PARTIAL; GA-14 remains deferred.
+
+
 ## GA-01/02/03/11/12/18 — 2026-11-09: complete bounded joint-source pagination
 
 The production RESET / byte-witnessed JSR / conditional MM MAY / MOVEC
