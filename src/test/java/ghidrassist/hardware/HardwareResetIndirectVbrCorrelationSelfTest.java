@@ -109,6 +109,12 @@ public final class HardwareResetIndirectVbrCorrelationSelfTest {
         reject(()->new HardwareResetIndirectVbrCorrelation.Indirect(
             0x130L,0x12eL,0x500L,true,false),
             "Indirect source PC before declared function entry rejected");
+        reject(()->new HardwareResetIndirectVbrCorrelation.Indirect(
+            0x130L,0x139L,0x500L,true,false),
+            "Odd indirect JSR PC is not an executable CPU32 instruction");
+        reject(()->new HardwareResetIndirectVbrCorrelation.Indirect(
+            0x130L,0x138L,0x501L,true,false),
+            "Odd indirect JSR target cannot be promoted as an exact CPU32 entry");
         reject(()->new HardwareResetIndirectVbrCorrelation.Vbr(
             0x130L,0x131L,0x800L,false),
             "Unaligned MOVEC source PC rejected");
