@@ -440,7 +440,11 @@ def main():
                         "scoped_multi_function_duplicate_ordinal_rejected",
                         "scoped_multi_function_atomic_failure",
                         "scoped_multi_function_apply_undo_redo",
-                        "scoped_multi_function_stale_replay_rejected"),
+                        "scoped_multi_function_stale_replay_rejected",
+                        "scoped_variable_approval_receipts",
+                        "scoped_variable_receipt_undo_redo",
+                        "scoped_variable_receipt_revision_stale",
+                        "scoped_multifunction_receipt_rollback"),
                     "receipt-restart":(
                         "rename_receipt_second_jvm_reopened",
                         "rename_receipt_saved_name_and_source",
