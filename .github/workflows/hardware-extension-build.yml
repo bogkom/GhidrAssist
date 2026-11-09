@@ -143,6 +143,32 @@ jobs:
             exit 1
           fi
           grep 'GA18 NATIVE CFG SITE ROUTES PASS:' "$RUNNER_TEMP/ga18-native-cfg.log"
+      - name: GA-01/02/03/11 real RESET / computed JSR / MOVEC joint-source regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/generate-synthetic-reset-indirect-vbr.py \
+            --output "$RUNNER_TEMP/synthetic-reset-indirect-vbr.bin"
+          test -s "$RUNNER_TEMP/ga18-product.jar"
+          mkdir -p "$RUNNER_TEMP/ga18-reset-indirect-vbr"
+          JAVA_TOOL_OPTIONS="-Dga18.test.jar=$RUNNER_TEMP/ga18-product.jar" \
+            "$GHIDRA_INSTALL_DIR/support/analyzeHeadless" \
+            "$RUNNER_TEMP/ga18-reset-indirect-vbr" GA18ResetIndirectVbrCI \
+            -import "$RUNNER_TEMP/synthetic-reset-indirect-vbr.bin" \
+            -loader BinaryLoader -processor 68000:BE:32:CPU32 -cspec default \
+            -noanalysis -scriptPath "$GITHUB_WORKSPACE/tools/ghidra_scripts" \
+            -postScript GA18VerifyResetIndirectVbrJointSource.java \
+            > "$RUNNER_TEMP/ga18-reset-indirect-vbr.log" 2>&1 || {
+              tail -n 120 "$RUNNER_TEMP/ga18-reset-indirect-vbr.log"; exit 1;
+            }
+          if ! grep -q 'GA18 REAL RESET JSR MOVEC JOINT PASS: assertions=' \
+              "$RUNNER_TEMP/ga18-reset-indirect-vbr.log"; then
+            echo 'Native RESET JSR MOVEC production joint-source evidence missing'
+            tail -n 120 "$RUNNER_TEMP/ga18-reset-indirect-vbr.log"
+            exit 1
+          fi
+          grep 'GA18 REAL RESET JSR MOVEC JOINT PASS:' \
+            "$RUNNER_TEMP/ga18-reset-indirect-vbr.log"
       - name: Real Ghidra 12.1.4 convergent CALL path regression (synthetic only)
         shell: bash
         run: |
