@@ -44,6 +44,14 @@ public final class HardwareDurableCfgReport {
                     pointersOmitted<0 || sites.size()>12000 ||
                     roles.size()>8000 || resetFunctions.size()>50000)
                 throw new IllegalArgumentException("Invalid CFG snapshot");
+            // A typed source inventory cannot contradict the CFG summary's
+            // RESET provenance. This gate applies before save AND after V2
+            // decode, even when the outer disk checksum is valid.
+            if(sourceInventory!=null &&
+                    (sourceInventory.resetRecognized()!=resetRecognized ||
+                     sourceInventory.resetIncomplete()!=resetIncomplete))
+                throw new IllegalArgumentException(
+                    "Contradictory V2 RESET source provenance");
             sites=List.copyOf(sites);roles=List.copyOf(roles);
             resetFunctions=List.copyOf(resetFunctions);
         }
