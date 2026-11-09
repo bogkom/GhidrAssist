@@ -1368,6 +1368,24 @@ public final class Ga11VectorHeadlessMain {
                     for(long callerPc:new long[]{0x900L,0x920L,0x940L,0x960L})
                         defineFixtureFunction(full,callerPc,20,
                             "ga02_twohop_outer_"+Long.toHexString(callerPc));
+                    // Ghidra's recursive disassembler may stop at a
+                    // conditional branch and leave the other arm undecoded.
+                    // Explicitly decode every known CPU32 source address
+                    // before asking the production bridge translator for
+                    // a fully closed real Listing CFG.
+                    int allBranchTx=full.startTransaction(
+                        "GA02 decode both exact CPU32 branch successors");
+                    try {
+                        for(long branchPc:new long[]{0x740L,0x742L,0x744L,
+                                0x746L,0x748L,0x74eL}) {
+                            var at=address(full,branchPc);
+                            if(full.getListing().getInstructionAt(at)==null)
+                                check(new DisassembleCommand(at,null,false)
+                                    .applyTo(full,TaskMonitor.DUMMY),
+                                    "Cannot decode real branch CPU32 PC "+
+                                    Long.toHexString(branchPc));
+                        }
+                    }finally{full.endTransaction(allBranchTx,true);}
                     var branchInsn=full.getListing().getInstructionAt(
                         address(full,0x740L));
                     check(branchInsn!=null &&
