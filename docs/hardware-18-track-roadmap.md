@@ -1,5 +1,42 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
+## GA-06/10/16/18 — 2026-11-09: MC68332UM source-checked register mask diagrams
+
+The previous 15-field MC68332 SIMCR/SYNCR source ledger and exact
+physical PDF-page token witnesses remain unchanged. A new bounded,
+read-only `HardwareBitfieldLayoutWitness` compares all existing
+explicitly selected device-profile masks to bit positions
+independently reviewed from the MC68332UM Appendix D diagrams:
+SIMCR D-5 / physical PDF 219 and SYNCR D-6 / physical PDF 220.
+It computes masks from the 15 reviewed MSB:LSB ranges rather than
+copying claimed profile masks, rejects missing/extra fields, altered
+mask claims, absent/shifted diagram pages and invalid source text.
+It also distinguishes a field's physical PDF **diagram page** from
+its prose/description page: SUPV is drawn on PDF 219 but described
+on 220; RSTEN/STSIM/STEXT drawn on 220, described on 221.
+Reserved bits remain uninterpreted (SIMCR `0x1430`, SYNCR
+`0x0078`, including SYNCR hardware status bits).
+
+The separate official-NXP-PDF Actions job first validates the
+reviewed PDF SHA-256 and 265-page count, extracts exact physical
+pages 219–221, then verifies distinctive bit-number headers and
+ordered field-diagram text from those same immutable bytes, followed
+by the 15 position-to-profile-mask checks. Standalone Java21
+regressions cover the independent reference, profile-mask
+corruption, swapped page text, missing and unexpected fields, and
+bounded input. Full Ghidra 12.1.4 PUBLIC Java25 extension build and
+existing hardware CI remain required at the exact final HEAD.
+
+**Evidence limit:** a reviewed PDF diagram plus pinned publisher
+source is stronger than a field-name string, but is not an
+automated image parser or proof of every documented bit meaning,
+reset condition, physical device identity or executed firmware
+write. Local/RAG copies remain unauthenticated by this runtime
+class; no automatic Review/Apply or private firmware modification.
+GA-06/10/16/18 remain PARTIAL, GA-14 deferred. No stopped
+Wyse/Precision/Supervisor tests reactivated.
+
+
 ## GA-15/18 — 2026-11-09: complete UTF-16 bounded Agentic response evidence
 
 The existing `BoundedAgenticStream` retained a high UTF-16 surrogate
