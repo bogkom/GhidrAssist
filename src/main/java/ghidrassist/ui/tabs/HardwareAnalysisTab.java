@@ -226,7 +226,8 @@ public final class HardwareAnalysisTab extends JPanel {
         answer.addProperty("schema",1);
         answer.addProperty("revision",revision);
         answer.addProperty("generation",latestJointGeneration);
-        answer.addProperty("import_sha256",latestRevision.sourceSha256());
+        answer.addProperty("import_sha256",
+            latestRevision.sourceSha256()==null?"UNKNOWN":latestRevision.sourceSha256());
         answer.addProperty("profile","MC68332_USER_SELECTED");
         answer.addProperty("offset",page.pageOffset());
         answer.addProperty("limit",page.pageLimit());
