@@ -1,5 +1,54 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
+## GA-08/13/18 — 2026-11-09: transactional argument/local pointer rename receipts
+
+Previously the GA-13 Program Options receipt and revision-guarded
+read-only audit covered approved **Function** renames, while actual
+Ghidra parameter/local pointer renames used atomic explicit
+Review/Apply/Undo but left no correlated saved operation record.
+
+A versioned, SHA-256-integrity-checked, bounded
+`HardwareScopedVariableReceipt` now records each **explicitly
+approved** existing typed pointer variable rename in the Ghidra
+Program's own transactional Options. The storage key binds the
+exact `Function entry / PARAMETER|LOCAL / ordinal`; the body
+retains storage identity, before/after names, review-time Program
+modification number, source SHA and the operation origin with
+**actor UNKNOWN**. The checksum detects accidental corruption;
+it does NOT authenticate editor identity or make the receipt
+tamper-proof. Any previously stored record at a target key blocks
+silent overwrite and the ENTIRE selected batch rolls back.
+
+`HardwareScopedVariableService.audit(Program)` reads the same
+Program Options, decodes *all* records with strict version/key
+checks, and independently looks up live typed Ghidra variables
+by function/kind/ordinal. Each row distinguishes current approved
+name from changed name, changed pointer type/SourceType, changed
+storage, missing variable, changed source import or missing source
+identity. `auditCsv(Program)` and the immutable
+`Snapshot.csvRevisionBound` refuse reports after edits, native
+Undo/Redo, Program switches or revision changes between source
+collection and CSV publication. CSV remains read-only, sanitized
+against spreadsheet formulas and never an Apply input.
+
+Deterministic Java21 regressions exercise canonical serialization,
+checksum tampering, invalid/oversized records, duplicate and
+foreign Options keys, stale Program owner/revision, mid-export
+race, altered pointer type/storage/name and source SHA uncertainty.
+The real synthetic Ghidra 12.1.4 PUBLIC headless fixture checks
+two original argument/local receipts, Undo removing both, Redo
+restoring both, rejected stale CSV, then one explicit four-variable
+batch across two independent Functions, preserving the older
+two receipts through the newer batch's Undo/Redo. No new
+automatic naming, inferred A-register variables, actor attribution,
+external database, production firmware or user settings.
+No model tests or stopped Wyse/Precision/Supervisor.
+
+GA-08/13/18 remain PARTIAL, GA-14 deferred. Exact final HEAD
+Actions full Java25 extension build, Java21 policy and genuine
+synthetic Ghidra tests required before integration.
+
+
 ## GA-06/10/16/18 — 2026-11-09: MC68332UM source-checked register mask diagrams
 
 The previous 15-field MC68332 SIMCR/SYNCR source ledger and exact
