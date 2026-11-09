@@ -1,5 +1,52 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
+## GA-08/12/15/18 — 2026-11-10: strict Review indices and atomic multi-page report receipts
+
+Remaining mutating UI selectors `hardware.review.prepare`,
+`hardware.apply.prepare` and `ui.table.select` now use one
+**required** canonical, nonnegative JSON integer `row`/`index`
+contract, with a conservative 0..4096 upper bound before accessing
+Review, authorization or the Swing table. String-encoded numbers,
+fractions, scientific notation, Boolean/null, containers, negative
+values, 32-bit overflow and missing indices fail closed, before any
+approval token can be minted. Target-specific list bounds and all
+existing Review/Apply/Undo/copy authorization remain in force.
+The CLI also preflights the same `--row` range.
+
+The standalone `ghidrassist-agent report-checkpoint --output FILE
+--format markdown|config_csv|names_csv --page-size N` now captures
+a **complete read-only report**, not a resumable action, across many
+real Automation API v3 `analysis.export` calls. It validates on
+every page the exact scan UUID, opaque report revision, numeric
+Ghidra Program revision, active project Program path, import SHA-256,
+explicit CPU32/MC68332 profile, stage epoch, total UTF-16 code units,
+page offsets, size and `more` flag. A final end-of-report request
+with the same exact revision/generation refuses late Program change
+or fresh Analyze before publication. Output is capped (1 MiB of
+UTF-16 content, 2.5 MB encoded file), locally atomic, private,
+SHA-256 integrity checked, and exclusive/no-overwrite. Failure or
+stale evidence creates **no** final file. The separate offline
+`report-checkpoint-verify --input FILE` checks field types,
+complete/static-only scope, source counters and payload SHA; it
+cannot authenticate historical author identity, AI state, Review
+approval or Apply permission.
+
+Deterministic Python 3 regression covers complete multi-page
+capture, final sentinel, same-Program stale generation, changed
+project identity/revision/epoch/content, incomplete pages, tampering,
+forged authorization, UTF-16 and no-overwrite. CI's true Ghidra
+12.1.4 PUBLIC Java25/Xvfb CodeBrowser/JSON-RPC suite adds 36
+invalid `row`/`index` authenticated server requests and a real
+native multi-page CLI report capture, offline verify after capture,
+and duplicate-save rejection. Existing full Java25 extension,
+Java21, GA-12 durable checkpoint and synthetic GUI workflows remain
+required. This is **not** a global lock on Ghidra across separate
+HTTP calls; the final cursor check protects observed changes up to
+that check, not mutations after it. No private ECU411, production
+Ghidra project/profile/OAuth or stopped Wyse/Precision/Supervisor
+session is used. GA-08/12/15/18 remain PARTIAL; GA-14 deferred.
+
+
 ## GA-12/15/18 — 2026-11-09: typed page bounds and scan-bound hardware report exports
 
 The Automation API v3 paginated endpoints now use one strict
