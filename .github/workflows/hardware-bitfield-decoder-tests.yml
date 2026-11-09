@@ -6,6 +6,8 @@ on:
       - 'src/main/java/ghidrassist/hardware/HardwareBitfieldSourceLedger.java'
       - 'src/main/java/ghidrassist/hardware/HardwareBitfieldPageWitness.java'
       - 'src/main/java/ghidrassist/hardware/HardwareBitfieldLayoutWitness.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareSimChipSelectTableWitness.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareSimChipSelectTableWitnessSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/HardwareBitfieldLayoutWitnessSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/HardwareBitfieldPageWitnessSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/HardwareBitfieldSourceLedgerSelfTest.java'
@@ -24,6 +26,8 @@ on:
       - 'src/main/java/ghidrassist/hardware/HardwareBitfieldSourceLedger.java'
       - 'src/main/java/ghidrassist/hardware/HardwareBitfieldPageWitness.java'
       - 'src/main/java/ghidrassist/hardware/HardwareBitfieldLayoutWitness.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareSimChipSelectTableWitness.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareSimChipSelectTableWitnessSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/HardwareBitfieldLayoutWitnessSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/HardwareBitfieldPageWitnessSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/HardwareBitfieldSourceLedgerSelfTest.java'
@@ -62,6 +66,8 @@ jobs:
             src/main/java/ghidrassist/hardware/HardwareBitfieldSourceLedger.java \
             src/main/java/ghidrassist/hardware/HardwareBitfieldPageWitness.java \
             src/main/java/ghidrassist/hardware/HardwareBitfieldLayoutWitness.java \
+            src/main/java/ghidrassist/hardware/HardwareSimChipSelectTableWitness.java \
+            src/test/java/ghidrassist/hardware/HardwareSimChipSelectTableWitnessSelfTest.java \
             src/test/java/ghidrassist/hardware/HardwareBitfieldLayoutWitnessSelfTest.java \
             src/test/java/ghidrassist/hardware/HardwareBitfieldPageWitnessSelfTest.java \
             src/main/java/ghidrassist/hardware/HardwareContextSelector.java \
@@ -80,5 +86,7 @@ jobs:
         run: java -cp "$RUNNER_TEMP/bitfields" ghidrassist.hardware.HardwareBitfieldPageWitnessSelfTest
       - name: Cross-check all 15 manually reviewed register-diagram bit positions
         run: java -cp "$RUNNER_TEMP/bitfields" ghidrassist.hardware.HardwareBitfieldLayoutWitnessSelfTest
+      - name: Validate exact D-4/D-5 CS register source rows in synthetic PDF text
+        run: java -cp "$RUNNER_TEMP/bitfields" ghidrassist.hardware.HardwareSimChipSelectTableWitnessSelfTest
       - name: Verify focused SIMCR/SYNCR RAG keeps bounded source citations
         run: java -cp "$RUNNER_TEMP/bitfields" ghidrassist.hardware.HardwareContextSelectorSelfTest
