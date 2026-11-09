@@ -2107,6 +2107,19 @@ public final class Ga11VectorHeadlessMain {
                         source.contains("No argument convention/actual"),
                         "Caller arguments were promoted to false execution "+
                         "or Review/Apply evidence");
+                    // Genuine Ghidra 12.1.4 decoded CPU32: two callers
+                    // disagree, third caller cannot prove A0. Reconciliation
+                    // must expose only INCOMPLETE sampled source evidence.
+                    check(source.contains(
+                        "## Cross-CALL MMIO source agreement (GA-02/03)") &&
+                        source.contains(
+                        "SOURCE-ONLY MAY-CANDIDATES, NEVER HARDWARE PROOF") &&
+                        source.contains(
+                        "| 0x00000640 | 0x00000640 |") &&
+                        source.contains("INCOMPLETE") &&
+                        !source.contains("SAMPLED_AGREEMENT"),
+                        "Real mixed CALL contexts promoted partial source "+
+                        "inventory to an apparent global MMIO effect");
                     check(interproc.rawCfgMmioSites.stream().noneMatch(s->
                         s.pc()==0x640L && s.address()==0xfffa00L),
                         "Contextual source-only MMIO was promoted to "+
