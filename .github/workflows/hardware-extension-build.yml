@@ -167,6 +167,8 @@ jobs:
             tail -n 120 "$RUNNER_TEMP/ga18-reset-indirect-vbr.log"
             exit 1
           fi
+          grep -q 'GA18 REAL JOINT REVISION REFUSAL PASS: injected=2 unresolved=1' \
+            "$RUNNER_TEMP/ga18-reset-indirect-vbr.log"
           grep 'GA18 REAL RESET JSR MOVEC JOINT PASS:' \
             "$RUNNER_TEMP/ga18-reset-indirect-vbr.log"
       - name: Real Ghidra 12.1.4 convergent CALL path regression (synthetic only)
