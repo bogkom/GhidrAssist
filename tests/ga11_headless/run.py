@@ -166,7 +166,8 @@ def main():
                 first=json.loads((phase/"result.json").read_text())
                 if (first.get("state")!="PASSED_SYNTHETIC_REAL_GHIDRA_HEADLESS"
                     or first.get("rename_receipt_first_jvm_saved") is not True
-                    or first.get("rename_receipt_first_jvm_source") is not True):
+                    or first.get("rename_receipt_first_jvm_source") is not True
+                    or first.get("ga13_pointer_restart_first_jvm_saved") is not True):
                     raise RuntimeError("First Ghidra JVM did not save rename receipt")
                 summary["ga13_first_jvm_saved"]=True
                 mode="receipt-restart-read"
@@ -187,6 +188,11 @@ def main():
                     or not isinstance(proof.get("ga13_process_pid"),int)
                     or first["ga13_process_pid"]==proof["ga13_process_pid"]):
                     raise RuntimeError("Ghidra restart did not use two JVM PIDs")
+                if (proof.get("ga13_pointer_restart_second_jvm_verified") is not True
+                    or first.get("ga13_pointer_restart_source") !=
+                       proof.get("ga13_pointer_restart_source")):
+                    raise RuntimeError("Second JVM lost pointer variable receipts")
+                summary["ga13_pointer_receipts_survive_restart"]=True
                 summary["ga13_matching_persisted_fields"]=4
                 summary["ga13_different_process_pids"]=True
             required=("function_entry_and_body_verified",
@@ -440,11 +446,16 @@ def main():
                         "scoped_multi_function_duplicate_ordinal_rejected",
                         "scoped_multi_function_atomic_failure",
                         "scoped_multi_function_apply_undo_redo",
-                        "scoped_multi_function_stale_replay_rejected"),
+                        "scoped_multi_function_stale_replay_rejected",
+                        "scoped_variable_approval_receipts",
+                        "scoped_variable_receipt_undo_redo",
+                        "scoped_variable_receipt_revision_stale",
+                        "scoped_multifunction_receipt_rollback"),
                     "receipt-restart":(
                         "rename_receipt_second_jvm_reopened",
                         "rename_receipt_saved_name_and_source",
-                        "rename_receipt_restart_read_only"),
+                        "rename_receipt_restart_read_only",
+                        "ga13_pointer_restart_second_jvm_verified"),
                     "apply-preserve":(
                         "apply_real_label_protected",
                         "apply_real_typed_data_preserved",

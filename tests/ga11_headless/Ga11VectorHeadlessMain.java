@@ -2729,6 +2729,25 @@ public final class Ga11VectorHeadlessMain {
                         full,candidates,cleanRevision);
                     check(scopedOutcome.renamed()==2,
                         "Explicit approved Ghidra pointer variable batch must rename both");
+                    var initialReceipts=ghidrassist.hardware.HardwareScopedVariableService
+                        .audit(full);
+                    check(initialReceipts.rows().size()==2 &&
+                            initialReceipts.rows().stream().allMatch(r->
+                                r.receipt().function()==0x5a0L &&
+                                r.receipt().reviewedModification()==
+                                    cleanRevision.modificationNumber() &&
+                                r.receipt().origin().contains("actor UNKNOWN")),
+                        "Actual Ghidra pointer batch must persist two function-local approvals");
+                    String initialReceiptCsv=ghidrassist.hardware
+                        .HardwareScopedVariableService.auditCsv(full);
+                    check(initialReceiptCsv.lines().count()==3 &&
+                            initialReceiptCsv.contains("PV_000005A0_P_0000") &&
+                            initialReceiptCsv.contains("PV_000005A0_L_0000"),
+                        "Read-only pointer receipt audit must emit exact typed variable keys");
+                    var initialAuditRevision=HardwareAnalysisRevision.capture(
+                        full,full.getModificationNumber(),full.getLanguageID().toString(),
+                        full.getExecutableSHA256(),true);
+                    final Program receiptAuditProgram=full;
                     var after=ghidrassist.hardware.HardwareScopedVariableService.preview(fn);
                     check(after.size()==2 && after.stream().allMatch(
                         p->p.decision()==ghidrassist.hardware.HardwareScopedVariableReview
@@ -2736,6 +2755,19 @@ public final class Ga11VectorHeadlessMain {
                         "Renamed pointer types must protect existing user names");
                     check(full.canUndo(),"Native Ghidra Undo missing after pointer Apply");
                     full.undo();
+                    check(ghidrassist.hardware.HardwareScopedVariableService
+                            .audit(full).rows().isEmpty(),
+                        "Native Undo must remove both transactional variable receipts");
+                    boolean oldReceiptStale=false;
+                    try {
+                        initialReceipts.csvRevisionBound(initialAuditRevision,()->
+                            HardwareAnalysisRevision.capture(receiptAuditProgram,
+                                receiptAuditProgram.getModificationNumber(),
+                                receiptAuditProgram.getLanguageID().toString(),
+                                receiptAuditProgram.getExecutableSHA256(),true));
+                    }catch(IllegalStateException expected){oldReceiptStale=true;}
+                    check(oldReceiptStale,
+                        "Native Undo cannot authorize stale approved-variable CSV");
                     check(ghidrassist.hardware.HardwareScopedVariableService.preview(fn)
                             .stream().allMatch(p->p.decision()==
                                 ghidrassist.hardware.HardwareScopedVariableReview
@@ -2743,6 +2775,11 @@ public final class Ga11VectorHeadlessMain {
                         "Native Undo must restore original argument/local names");
                     check(full.canRedo(),"Native Ghidra Redo missing after pointer Undo");
                     full.redo();
+                    check(ghidrassist.hardware.HardwareScopedVariableService
+                            .audit(full).rows().size()==2 &&
+                            ghidrassist.hardware.HardwareScopedVariableService
+                            .auditCsv(full).lines().count()==3,
+                        "Native Redo must restore both saved variable receipts and current CSV");
                     check(ghidrassist.hardware.HardwareScopedVariableService.preview(fn)
                             .stream().allMatch(p->p.decision()==
                                 ghidrassist.hardware.HardwareScopedVariableReview
@@ -2861,6 +2898,9 @@ public final class Ga11VectorHeadlessMain {
                         full.getExecutableSHA256(),true);
                     var multiApplied=ghidrassist.hardware.HardwareScopedVariableService.apply(
                         full,multiCandidates,freshMultiRevision);
+                    check(ghidrassist.hardware.HardwareScopedVariableService
+                            .audit(full).rows().size()==6,
+                        "Two-function batch must persist four additional distinct receipts");
                     check(multiApplied.renamed()==4 &&
                             ghidrassist.hardware.HardwareScopedVariableService
                                 .preview(pointerFnA).stream().allMatch(p->
@@ -2873,6 +2913,9 @@ public final class Ga11VectorHeadlessMain {
                         "Explicit approved batch did not rename both real Function namespaces");
                     full.undo();
                     check(ghidrassist.hardware.HardwareScopedVariableService
+                            .audit(full).rows().size()==2,
+                        "Native Undo of four-variable batch must preserve older two receipts");
+                    check(ghidrassist.hardware.HardwareScopedVariableService
                             .preview(pointerFnA).stream().allMatch(p->
                                 p.decision()==ghidrassist.hardware
                                     .HardwareScopedVariableReview.Decision.READY) &&
@@ -2882,6 +2925,9 @@ public final class Ga11VectorHeadlessMain {
                                     .HardwareScopedVariableReview.Decision.READY),
                         "Native Undo failed to restore all four names");
                     full.redo();
+                    check(ghidrassist.hardware.HardwareScopedVariableService
+                            .audit(full).rows().size()==6,
+                        "Native Redo must restore all four independent function-owner receipts");
                     check(ghidrassist.hardware.HardwareScopedVariableService
                             .preview(pointerFnA).stream().allMatch(p->
                                 p.decision()==ghidrassist.hardware
@@ -2898,6 +2944,10 @@ public final class Ga11VectorHeadlessMain {
                     }catch(IllegalStateException expected){staleMultiRefused=true;}
                     check(staleMultiRefused,
                         "Pre-Undo reviewed source revision must not permit replay");
+                    result.addProperty("scoped_variable_approval_receipts",true);
+                    result.addProperty("scoped_variable_receipt_undo_redo",true);
+                    result.addProperty("scoped_variable_receipt_revision_stale",true);
+                    result.addProperty("scoped_multifunction_receipt_rollback",true);
                     result.addProperty("scoped_multi_function_namespace_independent",true);
                     result.addProperty("scoped_multi_function_duplicate_ordinal_rejected",true);
                     result.addProperty("scoped_multi_function_atomic_failure",true);
@@ -3199,9 +3249,48 @@ public final class Ga11VectorHeadlessMain {
                         receipt.afterName().equals(target.getName()) &&
                         receipt.reviewedModification()==reviewed.modificationNumber(),
                         "First JVM failed to persist approved rename and evidence");
+                    // The same disposable Program now gains one parameter
+                    // and one local pointer in the already approved Function.
+                    // Their transactional receipts must survive the SAME
+                    // two-process restart as the Function name receipt.
+                    var pointerType=new ghidra.program.model.data.PointerDataType();
+                    int typed=full.startTransaction(
+                        "GA13 second-JVM pointer variable source");
+                    try {
+                        target.addParameter(new ghidra.program.model.listing.ParameterImpl(
+                            "param_1",pointerType,8,full,SourceType.DEFAULT),
+                            SourceType.DEFAULT);
+                        target.addLocalVariable(new ghidra.program.model.listing.LocalVariableImpl(
+                            "local_8",pointerType,-8,full,SourceType.DEFAULT),
+                            SourceType.DEFAULT);
+                    }finally{full.endTransaction(typed,true);}
+                    var pointers=ghidrassist.hardware.HardwareScopedVariableService
+                        .preview(target);
+                    check(pointers.size()==2 && pointers.stream().allMatch(v->
+                        v.decision()==ghidrassist.hardware
+                            .HardwareScopedVariableReview.Decision.READY),
+                        "First JVM could not propose two typed existing pointer variables");
+                    var pointerReviewed=HardwareAnalysisRevision.capture(full,
+                        full.getModificationNumber(),full.getLanguageID().toString(),
+                        full.getExecutableSHA256(),true);
+                    var pointerApplied=ghidrassist.hardware.HardwareScopedVariableService
+                        .apply(full,pointers,pointerReviewed);
+                    var pointerAudit=ghidrassist.hardware.HardwareScopedVariableService
+                        .audit(full);
+                    check(pointerApplied.renamed()==2 &&
+                            pointerAudit.rows().size()==2 &&
+                            pointerAudit.rows().stream().allMatch(r->
+                                r.receipt().function()==0x5a0L &&
+                                r.receipt().reviewedModification()==
+                                    pointerReviewed.modificationNumber()),
+                        "First JVM failed to write two variable receipts with approved names");
+                    result.addProperty("ga13_pointer_restart_first_jvm_saved",true);
+                    result.addProperty("ga13_pointer_restart_source",
+                        pointerAudit.rows().get(0).receipt().importSha256());
                     // The prior test only checked Undo/Redo in one JVM.
                     // This explicitly saves a genuine Ghidra Program DB.
-                    full.save("GA-13 synthetic rename receipt cross-JVM",TaskMonitor.DUMMY);
+                    full.save("GA-13 function + pointer receipts cross-JVM",
+                        TaskMonitor.DUMMY);
                     result.addProperty("rename_receipt_first_jvm_saved",true);
                     result.addProperty("rename_receipt_first_jvm_source",true);
                     result.addProperty("ga13_receipt_before",receipt.beforeName());
@@ -3254,6 +3343,28 @@ public final class Ga11VectorHeadlessMain {
                           reloadedAudit.rows().get(0).receipt().equals(receipt) &&
                           reloadedAudit.csv().contains("actor UNKNOWN"),
                         "Distinct second JVM must retain current rename audit identity");
+                    var reloadPointers=ghidrassist.hardware
+                        .HardwareScopedVariableService.audit(full);
+                    var livePointerVars=ghidrassist.hardware
+                        .HardwareScopedVariableService.preview(renamed);
+                    check(reloadPointers.rows().size()==2 &&
+                            livePointerVars.size()==2 &&
+                            livePointerVars.stream().allMatch(v->
+                                v.decision()==ghidrassist.hardware
+                                    .HardwareScopedVariableReview.Decision.USER_NAMED) &&
+                            reloadPointers.rows().stream().allMatch(r->
+                                r.receipt().function()==0x5a0L &&
+                                r.currentName()!=null &&
+                                r.currentName().equals(r.receipt().afterName()) &&
+                                r.currentStorage()!=null &&
+                                r.currentStorage().equals(r.receipt().storage()) &&
+                                r.receipt().origin().contains("actor UNKNOWN")) &&
+                            ghidrassist.hardware.HardwareScopedVariableService
+                                .auditCsv(full).lines().count()==3,
+                        "Second JVM lost exact persisted pointer parameter/local receipts");
+                    result.addProperty("ga13_pointer_restart_second_jvm_verified",true);
+                    result.addProperty("ga13_pointer_restart_source",
+                        reloadPointers.rows().get(0).receipt().importSha256());
                     check(full.getModificationNumber()==unchanged,
                         "Reading persisted receipt and audit must never edit Ghidra Program");
                     result.addProperty("ga13_restart_audit_read_only",true);

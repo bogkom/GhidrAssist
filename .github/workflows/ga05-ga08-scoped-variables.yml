@@ -4,6 +4,8 @@ on:
     paths:
       - 'src/main/java/ghidrassist/hardware/HardwareScopedVariableReview.java'
       - 'src/main/java/ghidrassist/hardware/HardwareScopedVariableService.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareScopedVariableReceipt.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareScopedVariableReceiptSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/HardwareScopedVariableReviewSelfTest.java'
       - 'tests/ga11_headless/Ga11VectorHeadlessMain.java'
       - '.github/workflows/ga05-ga08-scoped-variables.yml'
@@ -27,6 +29,12 @@ jobs:
           mkdir -p "$RUNNER_TEMP/variables"
           javac --release 21 -d "$RUNNER_TEMP/variables" \
             src/main/java/ghidrassist/hardware/HardwareScopedVariableReview.java \
+            src/main/java/ghidrassist/hardware/HardwareAnalysisRevision.java \
+            src/main/java/ghidrassist/hardware/HardwareChangeProvenance.java \
+            src/main/java/ghidrassist/hardware/HardwareScopedVariableReceipt.java \
+            src/test/java/ghidrassist/hardware/HardwareScopedVariableReceiptSelfTest.java \
             src/test/java/ghidrassist/hardware/HardwareScopedVariableReviewSelfTest.java
+      - name: Verify versioned variable receipts, revision race and corruption refusal
+        run: java -cp "$RUNNER_TEMP/variables" ghidrassist.hardware.HardwareScopedVariableReceiptSelfTest
       - name: Assert exact pointer type/storage and refusal to auto rename
         run: java -cp "$RUNNER_TEMP/variables" ghidrassist.hardware.HardwareScopedVariableReviewSelfTest
