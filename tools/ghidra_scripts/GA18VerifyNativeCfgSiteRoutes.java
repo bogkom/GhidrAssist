@@ -93,7 +93,14 @@ public class GA18VerifyNativeCfgSiteRoutes extends GhidraScript {
         int tx=currentProgram.startTransaction("GA18 native synthetic CFG bytes");
         boolean committed=false;
         try {
-            for(long entry:new long[]{0x100L,0x140L,0x180L,0x1c0L,0x1c2L}) {
+            // -noanalysis intentionally does not pursue every conditional
+            // branch destination. Explicitly disassemble each reviewed
+            // instruction site, then read native Ghidra flow metadata.
+            for(long entry:new long[]{
+                    0x100L,0x102L,0x104L,0x108L,0x10aL,
+                    0x140L,0x142L,0x144L,0x146L,0x148L,
+                    0x180L,0x182L,0x184L,
+                    0x1c0L,0x1c2L,0x1c4L}) {
                 monitor.checkCancelled();
                 if(currentProgram.getListing().getInstructionAt(at(entry))==null)
                     check(new DisassembleCommand(at(entry),null,false)
