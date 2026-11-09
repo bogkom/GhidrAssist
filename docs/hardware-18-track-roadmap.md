@@ -1,5 +1,45 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
+## GA-01/02/03/11/12/18 — 2026-11-09: complete bounded joint-source pagination
+
+The production RESET / byte-witnessed JSR / conditional MM MAY / MOVEC
+co-location used to expose at most the first 32 joined pairs. This
+package adds an explicit **bounded, immutable, deterministic offset /
+limit page API** for the existing pure-Java source-join solver. The
+old inspect(...) entry point remains the first page (offset 0), so
+existing report clients and native CPU32 headless evidence continue
+to work. Each returned page includes total observed pair count,
+selected input source counts, omitted indirect/MOVEC evidence,
+page offset/limit/nextOffset and hasMore. The full pair count and
+omitted counts must NEVER be reduced to the visible row count.
+No page caches all candidate pairs; it enumerates only the bounded
+64 indirect x 32 MOVEC source inventory, at most 2048 pairs, and
+materializes at most 32 output rows. The cursor denotes a source
+ordering within one Program/revision only; it is not a cross-revision
+durable resume token or proof that omitted or unknown sources are
+absent.
+
+Deterministic Java21 regression stitches all 64 pages of 32 pairs,
+checks no duplicates or gaps, first/middle/final/out-of-range
+windows, omission counts, uncertain RESET source, input order
+invariance, cap rejection and immutable rows. Page markdown is
+rendered under HardwareJointSourcePublication's entry/exit
+identity/revision/epoch fence; changing the Program revision during
+rendering or invalidating the stage refuses the entire page. The
+existing Ghidra 12.1.4 PUBLIC native synthetic same-Program
+RESET/JSR/MM/MOVEC test also verifies that production Markdown
+has first-page metadata with exact count and no phantom next page.
+This is not a claim that external Automation API clients can yet
+request arbitrary pages: wiring page requests into that API and
+versioned durable GA-12 checkpoint provenance remain later work.
+
+Safety: synthetic CI only; no original ECU411, private project,
+profile, OAuth, runtime MM latch, selected VBR, ISR execution,
+physical chip-select mapping, automatic Apply, or stopped
+Wyse/Precision/Supervisor test worker. GA-01/02/03/11/12/18
+remain PARTIAL and GA-14 is deferred.
+
+
 ## GA-01/02/03/11/12/18 — 2026-11-09: native Ghidra in-flight revision refusal and unproven JSR inventory
 
 An isolated, byte-exact CPU32 synthetic Program extends the already
