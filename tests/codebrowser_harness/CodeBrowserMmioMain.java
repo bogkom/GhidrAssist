@@ -363,8 +363,13 @@ public final class CodeBrowserMmioMain {
                         "New synthetic read-only investigation after restart",false));
                 until(()->Files.isRegularFile(guiBinding),40);
                 until(()->{
-                    try { return evalEdt(()->!(Boolean)field(controller,
-                        "boundAgenticReviewPending")); }
+                    try { return evalEdt(()->{
+                        try { return !(Boolean)field(controller,
+                            "boundAgenticReviewPending"); }
+                        catch(Exception reflection) {
+                            throw new IllegalStateException(reflection);
+                        }
+                    }); }
                     catch(Exception error) {
                         throw new IllegalStateException(error);
                     }
