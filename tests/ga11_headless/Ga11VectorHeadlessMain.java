@@ -12,6 +12,7 @@ import ghidra.framework.project.DefaultProjectManager;
 import ghidra.app.cmd.disassemble.DisassembleCommand;
 import ghidra.program.model.address.Address;
 import ghidra.program.model.address.AddressSet;
+import ghidra.program.model.listing.CodeUnit;
 import ghidra.program.model.listing.Function;
 import ghidra.program.model.listing.Program;
 import ghidra.program.model.data.WordDataType;
@@ -1284,7 +1285,7 @@ public final class Ga11VectorHeadlessMain {
                         "GA12 isolated two-hop source revision invalidation");
                     try {
                         editedInstruction.setComment(
-                            ghidra.program.model.listing.CodeUnit.EOL_COMMENT,
+                            CodeUnit.EOL_COMMENT,
                             "GA12 disposable changed real two-hop Listing input");
                         check(full.getModificationNumber()!=
                                 actualRevision.modificationNumber(),
@@ -1341,14 +1342,14 @@ public final class Ga11VectorHeadlessMain {
                         full.getMemory().setBytes(address(full,0x7c0L),
                             java.util.HexFormat.of().parseHex(
                                 "32804e75"));
-                        for(long entry:new long[]{0x900L,0x920L}) {
-                            full.getMemory().setBytes(address(full,entry),
+                        for(long callerPc:new long[]{0x900L,0x920L}) {
+                            full.getMemory().setBytes(address(full,callerPc),
                                 java.util.HexFormat.of().parseHex(
                                     "207c00fffa00203c000040ca"+
                                     "4eb9000007404e75"));
                         }
-                        for(long entry:new long[]{0x940L,0x960L}) {
-                            full.getMemory().setBytes(address(full,entry),
+                        for(long callerPc:new long[]{0x940L,0x960L}) {
+                            full.getMemory().setBytes(address(full,callerPc),
                                 java.util.HexFormat.of().parseHex(
                                     "207c00fffa68203c00004848"+
                                     "4eb9000007604e75"));
@@ -1362,9 +1363,9 @@ public final class Ga11VectorHeadlessMain {
                         "ga02_twohop_real_branch_bridge");
                     defineFixtureFunction(full,0x760L,10,
                         "ga02_twohop_second_bridge");
-                    for(long entry:new long[]{0x900L,0x920L,0x940L,0x960L})
-                        defineFixtureFunction(full,entry,20,
-                            "ga02_twohop_outer_"+Long.toHexString(entry));
+                    for(long callerPc:new long[]{0x900L,0x920L,0x940L,0x960L})
+                        defineFixtureFunction(full,callerPc,20,
+                            "ga02_twohop_outer_"+Long.toHexString(callerPc));
                     var branchInsn=full.getListing().getInstructionAt(
                         address(full,0x740L));
                     check(branchInsn!=null &&
