@@ -7,6 +7,7 @@ import ghidra.framework.model.Project;
 import ghidra.framework.model.ProjectLocator;
 import ghidra.framework.project.DefaultProjectManager;
 import ghidra.program.model.listing.Program;
+import ghidra.program.model.symbol.SourceType;
 import ghidra.util.task.TaskMonitor;
 import ghidrassist.agent.react.AgenticReviewProgramBinding;
 import ghidrassist.hardware.HardwareAnalysisRevision;
@@ -264,7 +265,7 @@ public final class Ga12DurableSourceV2RealGhidraMain {
                         program.getAddressFactory().getDefaultAddressSpace()
                             .getAddress(0x130));
                     function.setName("GA12_RENAMED_SOURCE_130",
-                        ghidra.program.model.symbol.SourceType.USER_DEFINED);
+                        SourceType.USER_DEFINED);
                 }finally{program.endTransaction(renameTx,true);}
             }
             if(phase.equals("source-edit")) {
