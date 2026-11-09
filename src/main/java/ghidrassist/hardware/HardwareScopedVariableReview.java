@@ -54,17 +54,24 @@ public final class HardwareScopedVariableReview {
     public static List<Proposal> propose(List<Observation> rows) {
         if(rows==null || rows.size()>2048)
             throw new IllegalArgumentException("Missing or excessive variable inventory");
-        Set<String> used=new HashSet<>();
+        // Ghidra parameters and locals have FUNCTION-LOCAL namespaces.
+        // Aggregate Review across multiple functions must neither reject
+        // independent variables sharing an ordinal/storage nor invent a
+        // collision because another function already uses the proposed name.
+        java.util.Map<Long,Set<String>> usedByFunction=new java.util.HashMap<>();
         for(Observation row:rows) {
             if(row==null)throw new IllegalArgumentException("Null variable observation");
-            used.add(row.currentName().toUpperCase(Locale.ROOT));
+            usedByFunction.computeIfAbsent(row.functionEntry(),
+                unused->new HashSet<>()).add(row.currentName().toUpperCase(Locale.ROOT));
         }
         List<Proposal> proposals=new ArrayList<>();
         Set<String> identity=new HashSet<>();
         for(Observation row:rows) {
-            String key=row.kind()+"/"+row.ordinal()+"/"+row.storage();
+            // One function/kind/ordinal must resolve to one exact storage.
+            // Two conflicting storages under the same ordinal fail CLOSED.
+            String key=row.functionEntry()+"/"+row.kind()+"/"+row.ordinal();
             if(!identity.add(key))
-                throw new IllegalArgumentException("Ambiguous function variable storage");
+                throw new IllegalArgumentException("Ambiguous function variable identity");
             String candidate=row.kind()==Kind.PARAMETER ?
                 "ga_arg_ptr_candidate_"+row.ordinal() :
                 "ga_local_ptr_candidate_"+row.ordinal();
@@ -76,7 +83,8 @@ public final class HardwareScopedVariableReview {
             else if(row.autoParameter() ||
                     "UNASSIGNED".equalsIgnoreCase(row.storage()))
                 decision=Decision.UNSAFE_STORAGE;
-            else if(used.contains(candidate.toUpperCase(Locale.ROOT)))
+            else if(usedByFunction.get(row.functionEntry())
+                    .contains(candidate.toUpperCase(Locale.ROOT)))
                 decision=Decision.NAME_COLLISION;
             else decision=Decision.READY;
             proposals.add(new Proposal(row,
