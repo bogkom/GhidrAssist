@@ -123,12 +123,12 @@ public final class HardwareSimD2RegisterWitnessSelfTest {
                     if(failed.state()==HardwareSimD2RegisterWitness.State.MATCHED_TABLE_AND_PROFILE)
                         continue;
                     var ref=failed.reviewed();
-                    String text=java.nio.file.Files.readString(java.nio.file.Path.of(
+                    String publisherText=java.nio.file.Files.readString(java.nio.file.Path.of(
                         ref.physicalPage()==218?args[0]:args[1]));
-                    int at=text.indexOf(ref.tableAddress());
-                    int name=text.indexOf(ref.name());
+                    int at=publisherText.indexOf(ref.tableAddress());
+                    int name=publisherText.indexOf(ref.name());
                     String context=at<0?"ADDRESS_NOT_FOUND":
-                        text.substring(at,Math.min(text.length(),at+125))
+                        publisherText.substring(at,Math.min(publisherText.length(),at+125))
                             .replaceAll("\\s+"," ");
                     System.out.println("ROW "+ref.name()+" "+ref.tableAddress()+
                         " state="+failed.state()+" address_index="+at+
