@@ -119,6 +119,68 @@ public final class HardwareDurableCfgReportSelfTest {
             "Unknown future report schema must fail closed");
         byte[] v1Extra=Arrays.copyOf(v1,v1.length+1);
         ok(decode(v1Extra).isEmpty(),"V1 extra fields refused");
+        // GA-12 adversarial V1/V2 payloads: disk-store SHA-256
+        // authenticates bytes against accidental corruption, but a checksum
+        // of semantically malformed content must still fail closed.
+        byte[] noncanonicalV2=encode(complete);
+        noncanonicalV2[noncanonicalV2.length-1]=2;
+        ok(decode(noncanonicalV2).isEmpty(),
+            "V2 optional inventory flag 2 is not a canonical Boolean");
+        // The schema and markdown are length-prefixed UTF-8. A malformed
+        // text witness must not silently become replacement characters.
+        byte[] invalidUtf8=encode(complete);
+        int mark=4+SCHEMA.getBytes(java.nio.charset.StandardCharsets.UTF_8).length+4;
+        invalidUtf8[mark]=(byte)0xff;
+        ok(decode(invalidUtf8).isEmpty(),
+            "Malformed UTF-8 in a provenance report is refused");
+        byte[] legacyUtf8=v1.clone();
+        legacyUtf8[mark]=(byte)0xff;
+        ok(decode(legacyUtf8).isEmpty(),
+            "V1 legacy decode refuses invalid UTF-8 without migration loss");
+        boolean rejectedMismatch=false;
+        try {
+            new Snapshot(typed.markdown(),typed.csv(),typed.functions(),
+                typed.indirect(),typed.vbr(),typed.unresolved(),typed.visited(),
+                typed.limited(),false,typed.resetIncomplete(),
+                typed.cfgReviewComplete(),typed.cfgOmitted(),typed.pointersOmitted(),
+                typed.sites(),typed.roles(),typed.resetFunctions(),sources);
+        }catch(IllegalArgumentException expected){rejectedMismatch=true;}
+        ok(rejectedMismatch,
+            "Conflicting RESET root summary and V2 typed sources refused");
+        rejectedMismatch=false;
+        try {
+            new Snapshot(typed.markdown(),typed.csv(),typed.functions(),
+                typed.indirect(),typed.vbr(),typed.unresolved(),typed.visited(),
+                typed.limited(),typed.resetRecognized(),true,
+                typed.cfgReviewComplete(),typed.cfgOmitted(),typed.pointersOmitted(),
+                typed.sites(),typed.roles(),typed.resetFunctions(),sources);
+        }catch(IllegalArgumentException expected){rejectedMismatch=true;}
+        ok(rejectedMismatch,
+            "Conflicting RESET incomplete summary and V2 sources refused");
+        // A byte-valid but semantically impossible MCU call witness must be
+        // rejected by the typed V2 decoder, not published as a source row.
+        byte[] impossiblePc=encode(typed);
+        byte[] witness=new byte[]{
+            0,0,0,0,0,0,1,0x30,
+            0,0,0,0,0,0,1,0x38,
+            0,0,0,0,0,0,1,(byte)0x80};
+        int at=-1;
+        outer:for(int i=0;i<=impossiblePc.length-witness.length;i++){
+            for(int j=0;j<witness.length;j++)
+                if(impossiblePc[i+j]!=witness[j])continue outer;
+            at=i;break;
+        }
+        ok(at>=0,"typed JSR byte witness found in V2 serialization");
+        impossiblePc[at+15]=(byte)0x39;
+        ok(decode(impossiblePc).isEmpty(),
+            "Odd untrusted indirect JSR PC refused despite valid payload format");
+        // V2 omits one unknown JSR and two MOVEC sources; this is
+        // INCOMPLETE SOURCE INVENTORY, never promoted to no missing sites.
+        ok(decoded.sourceInventory().omittedIndirect()==1 &&
+            decoded.sourceInventory().omittedVbr()==2 &&
+            decoded.sourceInventory().page(0,32).markdown()
+                .contains("INCOMPLETE SOURCE INVENTORY/DISPLAY"),
+            "Partial observed source inventory remains explicitly UNKNOWN");
         System.out.println("HardwareDurableCfgReportSelfTest OK");
     }
 }
