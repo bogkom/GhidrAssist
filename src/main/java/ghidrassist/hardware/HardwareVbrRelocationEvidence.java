@@ -2,11 +2,12 @@ package ghidrassist.hardware;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
-import java.util.TreeSet;
 
 /**
  * GA-11: bounded planning of read-only *source image* exception-table
@@ -38,7 +39,8 @@ public final class HardwareVbrRelocationEvidence {
                        boolean incompleteCfg,boolean priorUnknownCall) {
         public Site {
             if(functionEntry<0 || functionEntry>MAX_24BIT ||
-                    instruction<0 || instruction>MAX_24BIT ||
+                    instruction<functionEntry || instruction>MAX_24BIT ||
+                    (functionEntry&1)!=0 || (instruction&1)!=0 ||
                     sourceValue!=null && (sourceValue<0 ||
                             sourceValue>MAX_24BIT))
                 throw new IllegalArgumentException("Invalid VBR source coordinates");
@@ -70,6 +72,11 @@ public final class HardwareVbrRelocationEvidence {
                .append("; distinct eligible table bases: ")
                .append(eligibleTableBases).append("; inspected bases: ")
                .append(tableBases.size()).append(".\n")
+               .append("- Bounded table scan priority is a deterministic ")
+               .append("SOURCE-ONLY budget heuristic: observed RESET direct-call ")
+               .append("subset first, then complete local MOVEC context, then ")
+               .append("ascending base. A shared base uses its best observed ")
+               .append("source; rank is NOT active-VBR probability or proof.\n")
                .append("- Table bytes: read-only current Ghidra memory image at ")
                .append("VBR candidate + (vector number × 4); 256 × 4 bytes. ")
                .append("No inference of a runtime relocation, physical memory map, ")
@@ -134,7 +141,12 @@ public final class HardwareVbrRelocationEvidence {
             throw new IllegalArgumentException("Null MOVEC site");
         ordered.sort(Comparator.comparingLong(Site::instruction));
         Set<Long> seenPc=new HashSet<>();
-        TreeSet<Long> bases=new TreeSet<>();
+        // Rank only for which read-only table receives a bounded scan.
+        // 0: observed RESET subset and closed local source;
+        // 1: observed RESET subset with CFG/unknown-CALL uncertainty;
+        // 2/3: outside observed subset (or unknown RESET root),
+        //      with/without local uncertainty. Never a runtime rank.
+        Map<Long,Integer> basePriority=new HashMap<>();
         List<Row> rows=new ArrayList<>();
         int unknown=0,invalid=0;
         for(Site site:ordered){
@@ -143,7 +155,14 @@ public final class HardwareVbrRelocationEvidence {
             TableState table=tableState(site.sourceValue());
             if(table==TableState.UNKNOWN_SOURCE_REGISTER)unknown++;
             else if(table!=TableState.TABLE_BYTES_CANDIDATE)invalid++;
-            else bases.add(site.sourceValue());
+            else {
+                boolean seenFromReset=resetRootRecognized &&
+                    resetVisited.contains(site.functionEntry());
+                boolean localUncertain=site.incompleteCfg() ||
+                    site.priorUnknownCall();
+                int priority=(seenFromReset?0:2)+(localUncertain?1:0);
+                basePriority.merge(site.sourceValue(),priority,Math::min);
+            }
             Relation rel=!resetRootRecognized?Relation.RESET_ROOT_UNKNOWN:
                 resetVisited.contains(site.functionEntry())?
                     Relation.IN_OBSERVED_RESET_CALL_SUBSET:
@@ -153,13 +172,13 @@ public final class HardwareVbrRelocationEvidence {
                 site.incompleteCfg(),site.priorUnknownCall(),
                 resetGraphIncomplete));
         }
-        List<Long> selected=new ArrayList<>();
-        for(Long base:bases){
-            if(selected.size()>=maxTables)break;
-            selected.add(base);
-        }
-        return new Plan(sites.size(),unknown,invalid,bases.size(),
-            bases.size()>selected.size(),rows.size()<sites.size(),
+        List<Long> ranked=new ArrayList<>(basePriority.keySet());
+        ranked.sort(Comparator.comparingInt(
+            (Long base)->basePriority.get(base)).thenComparingLong(Long::longValue));
+        List<Long> selected=new ArrayList<>(
+            ranked.subList(0,Math.min(maxTables,ranked.size())));
+        return new Plan(sites.size(),unknown,invalid,ranked.size(),
+            ranked.size()>selected.size(),rows.size()<sites.size(),
             selected,rows);
     }
 }

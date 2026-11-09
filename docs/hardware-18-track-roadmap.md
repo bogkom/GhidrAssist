@@ -1,5 +1,43 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
+## GA-01/02/03/11/18 — 2026-11-09: RESET-aware bounded MOVEC/VBR source-image scan priority
+
+When more than three distinct static MOVEC-to-VBR candidate bases
+were recognized, the GA-11 read-only table planner previously scanned
+the **lowest numeric bases**. This could omit the candidate from a
+known static RESET direct-call subset solely because an unrelated
+source image contained lower numerical table addresses.
+
+The planner now preserves the same strict **three-table** and
+**32-displayed-site** bounds, but ranks each DISTINCT candidate base
+by the best available source site: observed bounded RESET direct-call
+subset before outside/unknown sources; within each relation, complete
+local MOVEC source context before incomplete CFG/unknown prior CALL.
+Equal ranks use ascending address for deterministic output, and
+multiple MOVEC sites referencing one base share the best (minimum)
+rank. Unknown RESET roots cannot supply privileged RESET membership.
+This is a **scan-budget heuristic only**, NOT a claim that the CPU
+executed RESET, that a MOVEC write selected a particular VBR, that
+the ISR/IRQ is active, or that its hardware effects occurred.
+
+A MOVEC source site must also have an even function entry and
+instruction PC inside the selected MC68332 24-bit source domain,
+and its instruction PC cannot precede its declaring function entry.
+Malformed source ownership fails closed before any table is scanned.
+Existing Ghidra vector classification, VBR source-image reading,
+24-bit table-end and SIMD/MMIO controls are unchanged.
+
+Java21 deterministic regressions cover five candidate table bases
+under a three-table budget, duplicate best-source ranking, unknown
+RESET root, incomplete CFG and prior-call uncertainty, independent
+display/table bounds and malformed MOVEC source ownership. Exact
+final SHA acceptance requires the focused Java21 VBR test, complete
+Ghidra 12.1.4 PUBLIC Java25 extension build, and real synthetic
+RESET/VBR/ISR/CPU32 headless GitHub Actions regression. No original
+ECU411 firmware, production Ghidra project, user profile/OAuth or
+stopped Wyse/Precision/Supervisor worker touched. GA-01/02/03/11/18
+remain PARTIAL; GA-14 deferred.
+
 ## GA-02/03/11/18 — 2026-11-09: require independent outer CALLs for two-hop MMIO agreement
 
 The read-only two-hop CPU32 pipeline (sampled outer CALL → verified
