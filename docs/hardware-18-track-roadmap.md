@@ -5,7 +5,10 @@
 The existing one-hop sampled CALL-site reconciliation continues to
 require a distinct complete source row for every sampled caller at the
 same callee and exact STORE PC; no new execution or MMIO certainty is
-inferred. Previously its Markdown renderer validated the live Ghidra
+inferred. A single complete CALL now explicitly returns `INCOMPLETE` instead
+of `SAMPLED_AGREEMENT`: at least two distinct direct caller sites are
+required for a cross-CALL assertion, including for direct API callers
+outside the production Markdown renderer. Previously its Markdown renderer validated the live Ghidra
 Program revision separately around each row but could keep an earlier
 known address/word if the Program changed after that row, including
 the early return at the bounded display cap.
