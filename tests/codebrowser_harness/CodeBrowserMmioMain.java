@@ -608,8 +608,11 @@ public final class CodeBrowserMmioMain {
             // Only the dedicated RPC probe adds the third already
             // disassembled isolated Program. Reuse its live object when
             // project.program.open subsequently selects its DomainFile.
-            if(sourceProgram!=null)edt(()->restoreProgramManager.openProgram(
-                sourceProgram,ProgramManager.OPEN_VISIBLE));
+            if(sourceProgram!=null)edt(()->{
+                restoreProgramManager.openProgram(
+                    sourceProgram,ProgramManager.OPEN_VISIBLE);
+                restoreProgramManager.setCurrentProgram(first);
+            });
             // Regression: the optional project opener must NEVER launch from
             // an actual CodeBrowser tool, even if launcher properties persist.
             // Before the fix, its Timer recursively launched more CodeBrowsers.
