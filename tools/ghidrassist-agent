@@ -498,7 +498,7 @@ def capture_report_set_checkpoint(session,output,page_size=4096):
                    ensure_ascii=True).encode("utf-8")
     digest=hashlib.sha256(raw).hexdigest()
     data=(json.dumps({"payload":payload,"payload_sha256":digest},
-                     indent=2,ensure_ascii=True)+"\\n").encode("utf-8")
+                     indent=2,ensure_ascii=True)+"\n").encode("utf-8")
     if len(data)>REPORT_SET_MAX_BYTES:
         raise ValueError("Combined report checkpoint exceeds byte cap")
     dest=Path(output).expanduser()
@@ -999,7 +999,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--session", default=os.environ.get(
         "GHIDRASSIST_AGENT_SESSION", str(Path.home() / ".local/state/ghidrassist-agent/session.json")))
-    parser.add_argument("action", choices=("status", "snapshot", "analyze", "task", "mmio", "review-preview", "profile-select", "function", "xrefs", "function-xrefs-body", "decompile", "decompile-status", "bundle", "paths", "listing", "listing-range", "goto", "tab-select", "table-select", "program-open", "review-prepare", "review-apply", "review-undo", "cancel", "report", "export", "agentic-findings", "agentic-checkpoint", "agentic-verify", "agentic-read", "agentic-resume-check", "agentic-review-draft", "agentic-lineage-verify", "agentic-lineage-chain-verify", "agentic-binding-create", "source-pairs", "source-pairs-checkpoint", "source-pairs-verify", "report-checkpoint", "report-checkpoint-verify"))
+    parser.add_argument("action", choices=("status", "snapshot", "analyze", "task", "mmio", "review-preview", "profile-select", "function", "xrefs", "function-xrefs-body", "decompile", "decompile-status", "bundle", "paths", "listing", "listing-range", "goto", "tab-select", "table-select", "program-open", "review-prepare", "review-apply", "review-undo", "cancel", "report", "export", "agentic-findings", "agentic-checkpoint", "agentic-verify", "agentic-read", "agentic-resume-check", "agentic-review-draft", "agentic-lineage-verify", "agentic-lineage-chain-verify", "agentic-binding-create", "source-pairs", "source-pairs-checkpoint", "source-pairs-verify", "report-checkpoint", "report-checkpoint-verify", "report-set-checkpoint", "report-set-verify"))
     parser.add_argument("address", nargs="?")
     parser.add_argument("--filter", default="")
     parser.add_argument("--row", type=int, default=None)
@@ -1031,6 +1031,27 @@ def main():
     parser.add_argument("--offset", type=int, default=0)
     parser.add_argument("--limit", type=int, default=100)
     args = parser.parse_args()
+    if args.action=="report-set-verify":
+        if not args.input:
+            parser.error("report-set-verify requires --input")
+        try:
+            print(json.dumps(verify_report_set_checkpoint(args.input),
+                             indent=2,ensure_ascii=False))
+            return 0
+        except (OSError,ValueError,KeyError,TypeError,UnicodeError) as error:
+            print("Report set refused: "+str(error),file=sys.stderr)
+            return 1
+    if args.action=="report-set-checkpoint":
+        if not args.output or not 1<=args.page_size<=8192:
+            parser.error("report-set-checkpoint needs --output and page-size 1..8192")
+        try:
+            session=load_session(args.session)
+            print(json.dumps(capture_report_set_checkpoint(
+                session,args.output,args.page_size),indent=2))
+            return 0
+        except (OSError,ValueError,KeyError,TypeError,UnicodeError,HTTPError) as error:
+            print("Report set refused: "+str(error),file=sys.stderr)
+            return 1
     if args.action=="report-checkpoint-verify":
         if not args.input:
             parser.error("report-checkpoint-verify requires --input")
