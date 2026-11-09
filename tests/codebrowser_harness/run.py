@@ -738,6 +738,45 @@ def main():
                                 str(private),"source-pairs-verify","--input",
                                 str(source_checkpoint)],
                                 work,env,out/"source-pairs-cli-verify.log",30)
+                            # Full hardware report is captured through
+                            # MULTIPLE real bearer RPC pages; no Ghidra Apply
+                            # or file writes inside the server. The CLI must
+                            # verify the same Program/generation at the final
+                            # end-of-report sentinel before atomic local save.
+                            report_checkpoint=out/"real-hardware-report-checkpoint.json"
+                            subprocess_checked([sys.executable,agent,"--session",
+                                str(private),"report-checkpoint","--output",
+                                str(report_checkpoint),"--format","markdown",
+                                "--page-size","128"],work,env,
+                                out/"report-checkpoint-cli-save.log",60)
+                            subprocess_checked([sys.executable,agent,"--session",
+                                str(out/"missing-offline-session.json"),
+                                "report-checkpoint-verify","--input",
+                                str(report_checkpoint)],work,env,
+                                out/"report-checkpoint-cli-verify.log",30)
+                            offline_report=json.loads(
+                                (out/"report-checkpoint-cli-verify.log").read_text())
+                            report_record=json.loads(report_checkpoint.read_text())
+                            if (not offline_report["verified"] or
+                                    not offline_report["complete"] or
+                                    offline_report["apply_authorized"] or
+                                    offline_report["model_state_restored"] or
+                                    offline_report["report_generation"]!=
+                                    source_report_first["generation"] or
+                                    len(report_record["payload"]["content"])<=128 or
+                                    report_record["payload"]["metadata"]["program_path"]!=
+                                    "/synthetic-reset-indirect-vbr.bin"):
+                                raise RuntimeError("Incomplete or stale full report checkpoint")
+                            duplicate_report=subprocess.run(
+                                [sys.executable,agent,"--session",str(private),
+                                 "report-checkpoint","--output",
+                                 str(report_checkpoint),"--format","markdown",
+                                 "--page-size","128"],
+                                cwd=work,env=env,capture_output=True,
+                                text=True,timeout=60)
+                            if duplicate_report.returncode==0:
+                                raise RuntimeError("Report checkpoint unexpectedly overwritten")
+                            print("GA-12 REAL GHIDRA MULTIPAGE ATOMIC REPORT SNAPSHOT PASS")
                             offline=json.loads((out/"source-pairs-cli-verify.log").read_text())
                             if (offline.get("verified") is not True or
                                     offline.get("total_pairs")!=2 or
@@ -974,6 +1013,37 @@ def main():
                             if error.code!=400: raise
                         else:
                             raise RuntimeError("Out-of-range JTable selection accepted")
+                        # GA-08/12/18: requests touching UI row selection or
+                        # guarded Review/Apply preparation must never coerce
+                        # noncanonical JSON indices or mint approval tokens.
+                        invalid_indices=("0",1.5,True,False,None,[],{},
+                                         -1,4097,2**31,1e100)
+                        strict_index_denials=0
+                        for method,field,base in (
+                            ("hardware.review.prepare","index",{}),
+                            ("hardware.apply.prepare","index",{}),
+                            ("ui.table.select","row",{"table":"hardware.mmio"})):
+                            for value in invalid_indices:
+                                try:
+                                    http_call(method,{**base,field:value})
+                                except HTTPError as error:
+                                    if error.code!=400:raise
+                                else:
+                                    raise RuntimeError(
+                                        "Noncanonical Review/UI index accepted: "+
+                                        method+" "+str(value))
+                                strict_index_denials+=1
+                            try:
+                                http_call(method,base)
+                            except HTTPError as error:
+                                if error.code!=400:raise
+                            else:
+                                raise RuntimeError(
+                                    "Missing Review/UI index silently accepted: "+method)
+                            strict_index_denials+=1
+                        if strict_index_denials!=36:
+                            raise RuntimeError("Missing strict Review index regression")
+                        print("GA-08/12/18 REAL JSON-RPC STRICT ROW/INDEX 36 DENIALS PASS")
                         candidates=[row for row in proposals["rows"]
                                     if row.get("kind")=="MEMORY" and row.get("state")=="READY"
                                     and row.get("selected_by_default") and

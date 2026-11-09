@@ -342,7 +342,7 @@ public final class AutomationServer implements AutoCloseable {
                     if(provider==null)throw new IllegalStateException("GhidrAssist UI unavailable");
                     if("hardware.review.prepare".equals(method)) {
                         result.add("approval",provider.getUI().automationReviewPrepare(
-                            args.get("index").getAsInt()));
+                            AutomationRpcPagination.requiredIndex(args,"index",4096)));
                     } else if("hardware.review.apply".equals(method)) {
                         result.add("apply",provider.getUI().automationReviewCommit(
                             args.get("token").getAsString(),args.get("name").getAsString()));
@@ -355,7 +355,7 @@ public final class AutomationServer implements AutoCloseable {
                     GhidrAssistProvider provider=plugin.getAutomationProvider();
                     if(provider==null)throw new IllegalStateException("GhidrAssist UI unavailable");
                     if("hardware.apply.prepare".equals(method)) {
-                        int index=args.get("index").getAsInt();
+                        int index=AutomationRpcPagination.requiredIndex(args,"index",4096);
                         result.add("approval",provider.getUI().automationApplyPrepare(index));
                     } else if("hardware.apply.commit".equals(method)) {
                         result.add("apply",provider.getUI().automationApplyCommit(
@@ -401,7 +401,7 @@ public final class AutomationServer implements AutoCloseable {
                     if(!args.has("table") || !args.has("row"))
                         throw new IllegalArgumentException("Table and row required");
                     result.add("selection",provider.getUI().automationSelectTableRow(
-                        args.get("table").getAsString(),args.get("row").getAsInt()));
+                        args.get("table").getAsString(),AutomationRpcPagination.requiredIndex(args,"row",4096)));
                 } else if ("hardware.cancel".equals(method)) {
                     GhidrAssistProvider provider=plugin.getAutomationProvider();
                     if(provider==null) throw new IllegalStateException("GhidrAssist UI unavailable");

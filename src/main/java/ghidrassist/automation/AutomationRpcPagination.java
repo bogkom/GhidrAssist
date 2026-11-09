@@ -45,6 +45,17 @@ final class AutomationRpcPagination {
     }
 
     /**
+     * Indices used by UI selection or Review/Apply preparation must not be
+     * accepted via Gson number coercion. Missing indices are never zero.
+     * Their actual list range is checked by the target operation as well.
+     */
+    static int requiredIndex(JsonObject args,String field,int maximum) {
+        if(!args.has(field))
+            throw new IllegalArgumentException("Required index missing: "+field);
+        return pageInt(args,field,0,0,maximum);
+    }
+
+    /**
      * Hardware report versions are opaque text, not coerced numeric values.
      * On subsequent pages both the exact old report revision and a per-scan
      * generation UUID are required; a new Analyze cannot revive an old cursor.
