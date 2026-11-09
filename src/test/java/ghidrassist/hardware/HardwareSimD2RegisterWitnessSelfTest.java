@@ -100,7 +100,7 @@ public final class HardwareSimD2RegisterWitnessSelfTest {
             "Publisher-style wide table cell is bounded to this source row");
         var borrowedName=HardwareSimD2RegisterWitness.inspect(profile,
             Map.of(218,d4().replace("(SYPCR)","")
-                .replace("$YFFA26", "(SYPCR) $YFFA26"),219,d5()));
+                .replace("$YFFA26", "$YFFA26 (SYPCR)"),219,d5()));
         check(row(borrowedName,"SYPCR").state()==
                 HardwareSimD2RegisterWitness.State.TABLE_ROW_MISSING,
             "Next register address cannot supply a missing SYPCR name");
