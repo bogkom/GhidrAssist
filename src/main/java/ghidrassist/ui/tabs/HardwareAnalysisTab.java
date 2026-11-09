@@ -106,6 +106,10 @@ public final class HardwareAnalysisTab extends JPanel {
     private volatile String latestConfigCsv;
     private volatile Program latestProgram;
     private volatile ghidrassist.hardware.HardwareAnalysisRevision latestRevision;
+    private volatile ghidrassist.hardware.HardwareResetIndirectVbrCorrelation.SourceInventory
+        latestJointInventory;
+    private volatile String latestJointGeneration;
+    private volatile long latestJointStageEpoch=-1;
     private volatile ghidra.util.task.TaskMonitorAdapter activeMonitor;
     private volatile boolean latestConcrete;
     private volatile List<HardwareFunctionNamingReview.Proposal> latestFunctionProposals=List.of();
@@ -186,6 +190,73 @@ public final class HardwareAnalysisTab extends JPanel {
         answer.addProperty("more",end<content.length());
         answer.addProperty("scope","STATIC EVIDENCE ONLY; NO EXECUTION OR PHYSICAL MAPPING");
         if (!currentScan()) throw new IllegalStateException("Program changed while reading report");
+        return answer;
+    }
+
+    /**
+     * Read-only, bounded, revision-bound source inventory from the COMPLETED
+     * in-memory Analyze result. A restored durable Markdown report intentionally
+     * lacks this source inventory; never parse/reconstruct or pretend complete.
+     */
+    public com.google.gson.JsonObject automationJointSourcePage(
+            int offset,int limit,Long expectedRevision,String expectedGeneration) {
+        if(!SwingUtilities.isEventDispatchThread())
+            throw new IllegalStateException("EDT required");
+        if(offset<0 || limit<1 ||
+                limit>ghidrassist.hardware.HardwareResetIndirectVbrCorrelation.MAX_DISPLAY)
+            throw new IllegalArgumentException("Invalid joint-source page bounds");
+        if(!currentScan() || latestMarkdown==null)
+            throw new IllegalStateException("STALE_REVISION: rerun Hardware Analyze");
+        if(!latestConcrete)
+            throw new IllegalStateException("Explicit MC68332 profile required");
+        if(latestJointInventory==null || latestJointGeneration==null)
+            throw new IllegalStateException(
+                "SOURCE_INVENTORY_NOT_RETAINED: clear checkpoint and rerun Analyze");
+        if(!ghidrassist.hardware.HardwareFlowStageCache.sourcePageEpochCurrent(
+                latestProgram,latestJointStageEpoch))
+            throw new IllegalStateException("STALE_SOURCE_GENERATION");
+        long revision=latestRevision.modificationNumber();
+        if(expectedRevision!=null && expectedRevision.longValue()!=revision)
+            throw new IllegalStateException("STALE_REVISION");
+        if(expectedGeneration!=null &&
+                !latestJointGeneration.equals(expectedGeneration))
+            throw new IllegalStateException("STALE_SOURCE_GENERATION");
+        if(offset>0 && (expectedRevision==null || expectedGeneration==null ||
+                expectedGeneration.isBlank()))
+            throw new IllegalArgumentException(
+                "Subsequent source page requires revision and generation");
+        var page=latestJointInventory.page(offset,limit);
+        com.google.gson.JsonObject answer=new com.google.gson.JsonObject();
+        answer.addProperty("schema",1);
+        answer.addProperty("revision",revision);
+        answer.addProperty("generation",latestJointGeneration);
+        answer.addProperty("stage_epoch",latestJointStageEpoch);
+        answer.addProperty("import_sha256",
+            latestRevision.sourceSha256()==null?"UNKNOWN":latestRevision.sourceSha256());
+        answer.addProperty("profile","MC68332_USER_SELECTED");
+        answer.addProperty("offset",page.pageOffset());
+        answer.addProperty("limit",page.pageLimit());
+        answer.addProperty("next_offset",page.nextOffset());
+        answer.addProperty("has_more",page.hasMore());
+        answer.addProperty("total_pairs",page.colocatedPairs());
+        answer.addProperty("displayed",page.rows().size());
+        answer.addProperty("indirect_sources",page.indirectSources());
+        answer.addProperty("movec_sources",page.vbrSources());
+        answer.addProperty("omitted_indirect",page.omittedIndirect());
+        answer.addProperty("omitted_movec",page.omittedVbr());
+        answer.addProperty("reset_root_recognized",page.resetRootRecognized());
+        answer.addProperty("reset_graph_incomplete",page.resetGraphIncomplete());
+        answer.addProperty("observed_inventory_incomplete",
+            page.omittedIndirect()>0 || page.omittedVbr()>0 ||
+            page.resetGraphIncomplete() || !page.resetRootRecognized());
+        answer.add("rows",new com.google.gson.Gson().toJsonTree(page.rows()));
+        answer.addProperty("scope",
+            "BOUNDED STATIC SOURCE PAIRS ONLY; NOT EXECUTION, MM/VBR/ISR OR APPLY");
+        if(!currentScan() || latestJointInventory==null ||
+                !ghidrassist.hardware.HardwareFlowStageCache.sourcePageEpochCurrent(
+                    latestProgram,latestJointStageEpoch) ||
+                !latestJointGeneration.equals(answer.get("generation").getAsString()))
+            throw new IllegalStateException("STALE_REVISION");
         return answer;
     }
 
@@ -769,6 +840,9 @@ public final class HardwareAnalysisTab extends JPanel {
         latestNameCsv=null;
         latestProgram=null;
         latestRevision=null;
+        latestJointInventory=null;
+        latestJointGeneration=null;
+        latestJointStageEpoch=-1;
         latestFunctionProposals=List.of();
         latestSites=List.of();
         latestCsbarReview=null;
@@ -939,6 +1013,9 @@ public final class HardwareAnalysisTab extends JPanel {
         latestCsbarReview=null;
         latestMarkdown=null;latestConfigCsv=null;latestNameCsv=null;latestProgram=null;
         latestRevision=null;
+        latestJointInventory=null;
+        latestJointGeneration=null;
+        latestJointStageEpoch=-1;
         ghidrassist.hardware.HardwareEvidenceCache.clear(program);
         report.getHighlighter().removeAllHighlights();
         reportHits.clear();
@@ -977,6 +1054,11 @@ public final class HardwareAnalysisTab extends JPanel {
                     latestProgram=program;
                     latestRevision=started;
                     latestConcrete=concrete;
+                    latestJointInventory=finished.sourceInventory;
+                    latestJointGeneration=finished.sourceInventory==null?null:
+                        java.util.UUID.randomUUID().toString();
+                    latestJointStageEpoch=finished.sourceInventory==null?-1:
+                        ghidrassist.hardware.HardwareFlowStageCache.sourcePageEpoch(program);
                     latestFunctionProposals=finished.functionProposals;
                     latestSites=finished.sites;
                     latestCsbarReview=finished.csbarReview;

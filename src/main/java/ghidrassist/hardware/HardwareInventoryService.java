@@ -58,12 +58,16 @@ public final class HardwareInventoryService {
         public final String namePreviewCsv;
         public final String configurationEvidenceCsv;
         public final HardwareCsbarUnifiedReview.Review csbarReview;
+        /** Null on safe durable CFG restore: never reconstruct from Markdown. */
+        public final HardwareResetIndirectVbrCorrelation.SourceInventory sourceInventory;
         public final List<HardwareFunctionNamingReview.Proposal> functionProposals;
         private Report(String program,String language,String selection,List<Site> sites,
                 String overviewMarkdown,String detailsMarkdown,String namePreviewCsv,
                 String configurationEvidenceCsv,int functions,
                 List<HardwareFunctionNamingReview.Proposal> functionProposals,
-                HardwareCsbarUnifiedReview.Review csbarReview){
+                HardwareCsbarUnifiedReview.Review csbarReview,
+                HardwareResetIndirectVbrCorrelation.SourceInventory sourceInventory){
+            this.sourceInventory=sourceInventory;
             this.program=program;
             this.language=language;
             this.selection=selection;
@@ -423,6 +427,7 @@ public final class HardwareInventoryService {
             overview,md.toString(),csv,
             HardwareConfigurationEvidenceCsv.withUnifiedSources(
                 flowStage.report().configurationEvidenceCsv,merged,concreteDevice),
-            initializationFunctions,functionProposals,guardedCsbar);
+            initializationFunctions,functionProposals,guardedCsbar,
+            flowStage.report().sourceInventory);
     }
 }

@@ -167,6 +167,31 @@ public class GA18VerifyResetIndirectVbrJointSource extends GhidraScript {
 
             Object selected=analyze.invoke(instance,currentProgram,monitor,true);
             String report=(String)markdown.get(selected);
+            // Production Report's immutable, non-durable source snapshot
+            // is the only input accepted by Automation source pagination.
+            Object inventory=selected.getClass().getField("sourceInventory").get(selected);
+            check(inventory!=null,"production report retains bounded live source inventory");
+            Method page=inventory.getClass().getMethod("page",int.class,int.class);
+            Object firstPage=page.invoke(inventory,0,1);
+            Method total=firstPage.getClass().getMethod("colocatedPairs");
+            Method rows=firstPage.getClass().getMethod("rows");
+            Method hasMore=firstPage.getClass().getMethod("hasMore");
+            Method nextOffset=firstPage.getClass().getMethod("nextOffset");
+            check(((Integer)total.invoke(firstPage))==2 &&
+                ((java.util.List<?>)rows.invoke(firstPage)).size()==1 &&
+                ((Boolean)hasMore.invoke(firstPage)) &&
+                ((Integer)nextOffset.invoke(firstPage))==1,
+                "production native source inventory first page is complete and bounded");
+            Object secondPage=page.invoke(inventory,1,1);
+            check(((Integer)total.invoke(secondPage))==2 &&
+                ((java.util.List<?>)rows.invoke(secondPage)).size()==1 &&
+                !((Boolean)hasMore.invoke(secondPage)) &&
+                ((Integer)nextOffset.invoke(secondPage))==2,
+                "production native inventory second page is stable and exhaustive");
+            Object lastPage=page.invoke(inventory,2,1);
+            check(((java.util.List<?>)rows.invoke(lastPage)).isEmpty() &&
+                !((Boolean)hasMore.invoke(lastPage)),
+                "production native inventory end page does not repeat sources");
             String join=section(report,
                 "## RESET / indirect MMIO / VBR source co-location",
                 "## Bounded same-function JSR / MOVEC CFG routes");
@@ -254,6 +279,23 @@ public class GA18VerifyResetIndirectVbrJointSource extends GhidraScript {
                     trigger+" checks (no stale Markdown or Report escaped)");
             }
         }
+        // A completed Automation source-page cursor is invalidated by an
+        // explicit GA-12 stage clear even without another Program edit.
+        try(URLClassLoader loader=new URLClassLoader(
+                new URL[]{Path.of(jar).toUri().toURL()},bridge)) {
+            Class<?> stages=Class.forName(
+                "ghidrassist.hardware.HardwareFlowStageCache",true,loader);
+            long epoch=(Long)stages.getMethod("sourcePageEpoch",Program.class)
+                .invoke(null,currentProgram);
+            boolean before=(Boolean)stages.getMethod("sourcePageEpochCurrent",
+                Program.class,long.class).invoke(null,currentProgram,epoch);
+            check(before,"native source-page epoch is current before clear");
+            stages.getMethod("clear",Program.class).invoke(null,currentProgram);
+            boolean after=(Boolean)stages.getMethod("sourcePageEpochCurrent",
+                Program.class,long.class).invoke(null,currentProgram,epoch);
+            check(!after,"native GA-12 explicit stage clear invalidates source page");
+        }
+        println("GA18 REAL JOINT SOURCE PAGE PASS: pairs=2 pages=2 stale_epoch=1");
         println("GA18 REAL JOINT REVISION REFUSAL PASS: injected=2 unresolved=1");
         println("GA18 REAL RESET JSR MOVEC JOINT PASS: assertions="+checks+
             " (two native CPU32 source pairs, unresolved JSR, branching CFG, "+

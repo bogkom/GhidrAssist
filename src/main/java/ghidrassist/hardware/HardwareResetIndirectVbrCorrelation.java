@@ -39,6 +39,35 @@ public final class HardwareResetIndirectVbrCorrelation {
                 throw new IllegalArgumentException("Invalid MOVEC source");
         }
     }
+    /**
+     * Bounded immutable input inventory for revision-scoped on-demand pages.
+     * This is deliberately NOT serialized by the completed CFG disk cache.
+     * Callers must refuse pagination of a restored report without inventory.
+     */
+    public record SourceInventory(List<Indirect> indirect,List<Vbr> vbr,
+            Set<Long> resetVisited,boolean resetRecognized,
+            boolean resetIncomplete,int omittedIndirect,int omittedVbr) {
+        public SourceInventory {
+            if(indirect==null || vbr==null || resetVisited==null ||
+                    indirect.size()>MAX_INDIRECT_SOURCES ||
+                    vbr.size()>MAX_VBR_SOURCES ||
+                    omittedIndirect<0 || omittedVbr<0)
+                throw new IllegalArgumentException("Unbounded source inventory");
+            indirect=List.copyOf(indirect);
+            vbr=List.copyOf(vbr);
+            resetVisited=Set.copyOf(resetVisited);
+            // Use the same duplicate/source-coordinate checks as pagination.
+            HardwareResetIndirectVbrCorrelation.page(indirect,vbr,
+                resetVisited,resetRecognized,resetIncomplete,
+                omittedIndirect,omittedVbr,0,MAX_DISPLAY);
+        }
+        public Result page(int offset,int limit) {
+            return HardwareResetIndirectVbrCorrelation.page(indirect,vbr,
+                resetVisited,resetRecognized,resetIncomplete,
+                omittedIndirect,omittedVbr,offset,limit);
+        }
+    }
+
     public enum ResetRelation {
         IN_OBSERVED_RESET_CALL_SUBSET,
         OUTSIDE_OBSERVED_RESET_CALL_SUBSET,

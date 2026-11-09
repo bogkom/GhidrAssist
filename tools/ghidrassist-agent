@@ -32,6 +32,181 @@ def rpc(session, method, params=None):
         return json.loads(answer.read(1048576))
 
 
+def _source_pairs_metadata(page):
+    """Immutable source-generation identity and bounded inventory counters."""
+    fields = ("schema", "revision", "generation", "import_sha256",
+              "profile", "total_pairs", "indirect_sources",
+              "movec_sources", "omitted_indirect", "omitted_movec",
+              "reset_root_recognized", "reset_graph_incomplete",
+              "observed_inventory_incomplete", "stage_epoch")
+    identity = tuple(page[key] for key in fields)
+    if (page["schema"] != 1 or page["profile"] != "MC68332_USER_SELECTED"
+            or type(page["revision"]) != int or page["revision"] < 0
+            or type(page["stage_epoch"]) != int or page["stage_epoch"] < 0
+            or not isinstance(page["generation"], str)
+            or not 1 <= len(page["generation"]) <= 128
+            or not isinstance(page["import_sha256"], str)
+            or len(page["import_sha256"]) > 128
+            or any(type(page[k]) != int or page[k] < 0 for k in
+                   ("total_pairs", "indirect_sources", "movec_sources",
+                    "omitted_indirect", "omitted_movec"))
+            or page["indirect_sources"] > 64 or page["movec_sources"] > 32
+            or page["total_pairs"] > 2048
+            or page["total_pairs"] > (page["indirect_sources"] *
+                                       page["movec_sources"])
+            or any(type(page[k]) != bool for k in
+                   ("reset_root_recognized", "reset_graph_incomplete",
+                    "observed_inventory_incomplete"))):
+        raise ValueError("Invalid bounded source inventory metadata")
+    return identity
+
+
+def capture_source_pairs_checkpoint(session, output, page_size=32):
+    """Read-only, versioned, atomic local source evidence; never Analyze/Apply."""
+    if not 1 <= page_size <= 32:
+        raise ValueError("Source pair page size must be 1..32")
+    first = rpc(session, "hardware.source_pairs.page",
+                {"offset": 0, "limit": page_size})["source_pairs"]
+    expected = _source_pairs_metadata(first)
+    rows = []
+    current = first
+    while True:
+        if _source_pairs_metadata(current) != expected:
+            raise ValueError("Source revision/generation changed during pagination")
+        if (type(current["offset"]) != int or current["offset"] != len(rows)
+                or type(current["limit"]) != int or current["limit"] != page_size
+                or type(current["next_offset"]) != int
+                or type(current["has_more"]) != bool
+                or type(current["displayed"]) != int
+                or not isinstance(current["rows"], list)
+                or current["displayed"] != len(current["rows"])
+                or len(current["rows"]) > page_size
+                or current["next_offset"] != len(rows)+len(current["rows"])
+                or current["next_offset"] > expected[5]
+                or current["has_more"] != (
+                    current["next_offset"] < expected[5])):
+            raise ValueError("Inconsistent bounded source page or cursor")
+        if current["has_more"] and not current["rows"]:
+            raise ValueError("Source page made no progress")
+        rows.extend(current["rows"])
+        if not current["has_more"]:
+            break
+        current = rpc(session, "hardware.source_pairs.page", {
+            "offset": len(rows), "limit": page_size,
+            "expected_revision": expected[1],
+            "expected_generation": expected[2]})["source_pairs"]
+    if len(rows) != expected[5]:
+        raise ValueError("Source pair collection omitted observed pairs")
+    keys = []
+    for row in rows:
+        if not isinstance(row, dict) or not all(
+                type(row.get(k)) == int and 0 <= row[k] <= 0xffffff
+                for k in ("function", "indirectPc", "indirectTarget", "vbrPc")):
+            raise ValueError("Invalid source row address")
+        keys.append((row["function"], row["indirectPc"], row["vbrPc"]))
+    if len(set(keys)) != len(keys) or keys != sorted(keys):
+        raise ValueError("Duplicate or unsorted source evidence")
+    # Source completeness is a bounded observation, not firmware execution.
+    sha=expected[3]
+    valid_import=len(sha)==64 and all(c in "0123456789abcdefABCDEF" for c in sha)
+    complete = bool(rows and valid_import and not expected[12] and
+                    expected[8] == 0 and expected[9] == 0 and
+                    expected[10] and not expected[11])
+    payload = {
+        "schema": 1, "kind": "ghidrassist-hardware-source-pairs",
+        "program_revision": expected[1], "generation": expected[2],
+        "import_sha256": expected[3], "profile": expected[4],
+        "total_pairs": expected[5], "indirect_sources": expected[6],
+        "movec_sources": expected[7], "omitted_indirect": expected[8],
+        "omitted_movec": expected[9], "reset_root_recognized": expected[10],
+        "reset_graph_incomplete": expected[11],
+        "observed_inventory_incomplete": expected[12],
+        "stage_epoch": expected[13],
+        "collected_all_observed_pairs": True,
+        "bounded_source_complete": complete, "rows": rows,
+        "notice": "STATIC SOURCE-ONLY: not executable CALL, MM/VBR, ISR, Apply or cross-revision resume",
+    }
+    canonical=json.dumps(payload,sort_keys=True,separators=(",",":"),
+                         ensure_ascii=False).encode("utf-8")
+    digest=hashlib.sha256(canonical).hexdigest()
+    envelope={"payload":payload,"payload_sha256":digest}
+    data=(json.dumps(envelope,indent=2,ensure_ascii=False)+"\n").encode("utf-8")
+    if len(data)>1024*1024:
+        raise ValueError("Source checkpoint exceeds 1 MiB cap")
+    dest=Path(output).expanduser()
+    if not dest.parent.is_dir():
+        raise ValueError("Checkpoint directory must already exist")
+    temp=None
+    try:
+        fd,temp=tempfile.mkstemp(prefix=".ghidrassist-source-pairs-",dir=dest.parent)
+        with os.fdopen(fd,"wb") as handle:
+            handle.write(data)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.link(temp,dest)
+    finally:
+        if temp is not None:
+            os.unlink(temp)
+    return {"saved":str(dest),"total_pairs":len(rows),
+            "bounded_source_complete":complete,"payload_sha256":digest}
+
+
+def verify_source_pairs_checkpoint(source):
+    """Offline hash/count/provenance integrity check; never authorizes replay."""
+    path=Path(source).expanduser()
+    with path.open("rb") as handle:
+        raw=handle.read(1024*1024+1)
+    if len(raw)>1024*1024:
+        raise ValueError("Oversized source checkpoint")
+    envelope=json.loads(raw.decode("utf-8"))
+    if not isinstance(envelope,dict) or not isinstance(envelope.get("payload"),dict):
+        raise ValueError("Invalid source checkpoint envelope")
+    p=envelope["payload"]
+    if p.get("schema")!=1 or p.get("kind")!="ghidrassist-hardware-source-pairs":
+        raise ValueError("Unsupported source checkpoint kind")
+    canonical=json.dumps(p,sort_keys=True,separators=(",",":"),
+                         ensure_ascii=False).encode("utf-8")
+    digest=hashlib.sha256(canonical).hexdigest()
+    if digest!=envelope.get("payload_sha256"):
+        raise ValueError("Source checkpoint SHA-256 mismatch")
+    metadata={
+        "schema":p["schema"],"revision":p["program_revision"],
+        "generation":p["generation"],"import_sha256":p["import_sha256"],
+        "profile":p["profile"],"total_pairs":p["total_pairs"],
+        "indirect_sources":p["indirect_sources"],"movec_sources":p["movec_sources"],
+        "omitted_indirect":p["omitted_indirect"],"omitted_movec":p["omitted_movec"],
+        "reset_root_recognized":p["reset_root_recognized"],
+        "reset_graph_incomplete":p["reset_graph_incomplete"],
+        "observed_inventory_incomplete":p["observed_inventory_incomplete"],
+        "stage_epoch":p["stage_epoch"],
+    }
+    values=_source_pairs_metadata(metadata)
+    rows=p["rows"]
+    if (not isinstance(rows,list) or len(rows)!=values[5] or
+            type(p.get("collected_all_observed_pairs"))!=bool or
+            not p["collected_all_observed_pairs"] or
+            type(p.get("bounded_source_complete"))!=bool):
+        raise ValueError("Inconsistent checkpoint rows/completeness")
+    keys=[]
+    for row in rows:
+        if not isinstance(row,dict) or not all(
+                type(row.get(k))==int and 0<=row[k]<=0xffffff
+                for k in ("function","indirectPc","indirectTarget","vbrPc")):
+            raise ValueError("Invalid source row")
+        keys.append((row["function"],row["indirectPc"],row["vbrPc"]))
+    if len(set(keys))!=len(keys) or keys!=sorted(keys):
+        raise ValueError("Invalid source pair ordering")
+    sha=values[3]
+    valid_import=len(sha)==64 and all(c in "0123456789abcdefABCDEF" for c in sha)
+    eligible=bool(rows and valid_import and not values[12] and values[8]==0 and values[9]==0
+                  and values[10] and not values[11])
+    if p["bounded_source_complete"]!=eligible:
+        raise ValueError("False source-inventory completeness")
+    return {"verified":True,"payload_sha256":digest,
+            "total_pairs":len(rows),"bounded_source_complete":eligible,
+            "resume_authorized":False}
+
+
 def capture_agentic_checkpoint(session, output, page_size=100, parent=None):
     """Explicit local read-only evidence export; never a resumable AI session."""
     if not 1 <= page_size <= 100:
@@ -375,7 +550,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--session", default=os.environ.get(
         "GHIDRASSIST_AGENT_SESSION", str(Path.home() / ".local/state/ghidrassist-agent/session.json")))
-    parser.add_argument("action", choices=("status", "snapshot", "analyze", "task", "mmio", "review-preview", "profile-select", "function", "xrefs", "function-xrefs-body", "decompile", "decompile-status", "bundle", "paths", "listing", "listing-range", "goto", "tab-select", "table-select", "program-open", "review-prepare", "review-apply", "review-undo", "cancel", "report", "export", "agentic-findings", "agentic-checkpoint", "agentic-verify", "agentic-read", "agentic-resume-check", "agentic-review-draft", "agentic-lineage-verify"))
+    parser.add_argument("action", choices=("status", "snapshot", "analyze", "task", "mmio", "review-preview", "profile-select", "function", "xrefs", "function-xrefs-body", "decompile", "decompile-status", "bundle", "paths", "listing", "listing-range", "goto", "tab-select", "table-select", "program-open", "review-prepare", "review-apply", "review-undo", "cancel", "report", "export", "agentic-findings", "agentic-checkpoint", "agentic-verify", "agentic-read", "agentic-resume-check", "agentic-review-draft", "agentic-lineage-verify", "source-pairs", "source-pairs-checkpoint", "source-pairs-verify"))
     parser.add_argument("address", nargs="?")
     parser.add_argument("--filter", default="")
     parser.add_argument("--row", type=int, default=None)
@@ -388,6 +563,8 @@ def main():
     parser.add_argument("--parent", default="")
     parser.add_argument("--query", default="")
     parser.add_argument("--expected-revision", type=int, default=None)
+    parser.add_argument("--expected-generation", default="")
+    parser.add_argument("--page-size", type=int, default=32)
     parser.add_argument("--expected-entry", default="")
     parser.add_argument("--direction", choices=("incoming", "outgoing", "both"), default="both")
     parser.add_argument("--name", default="")
@@ -397,6 +574,29 @@ def main():
     parser.add_argument("--offset", type=int, default=0)
     parser.add_argument("--limit", type=int, default=100)
     args = parser.parse_args()
+    if args.action=="source-pairs-verify":
+        if not args.input:
+            parser.error("source-pairs-verify requires --input")
+        try:
+            print(json.dumps(verify_source_pairs_checkpoint(args.input),
+                             indent=2,ensure_ascii=False))
+            return 0
+        except (OSError,ValueError,KeyError,TypeError,UnicodeError) as error:
+            print("Source checkpoint refused: "+str(error),file=sys.stderr)
+            return 1
+    if args.action=="source-pairs-checkpoint":
+        if not args.output:
+            parser.error("source-pairs-checkpoint requires --output")
+        if not 1<=args.page_size<=32:
+            parser.error("source-pairs-checkpoint page-size must be 1..32")
+        try:
+            session=load_session(args.session)
+            print(json.dumps(capture_source_pairs_checkpoint(
+                session,args.output,args.page_size),indent=2))
+            return 0
+        except (OSError,ValueError,KeyError,TypeError,HTTPError) as error:
+            print("Source checkpoint refused: "+str(error),file=sys.stderr)
+            return 1
     if args.action=="agentic-lineage-verify":
         if not args.input or not args.parent:
             parser.error("agentic-lineage-verify requires --input and --parent")
@@ -454,7 +654,8 @@ def main():
     method = {"agentic-findings":"agentic.findings.page", "status": "session.status", "snapshot": "ui.snapshot",
               "analyze": "hardware.analyze", "task": "hardware.task",
               "mmio": "hardware.mmio.rows", "review-preview": "hardware.review.preview", "profile-select": "hardware.profile.select", "function": "function.snapshot", "xrefs": "function.xrefs", "function-xrefs-body": "function.xrefs.body", "decompile": "decompiler.start", "decompile-status": "decompiler.status", "bundle": "analysis.bundle", "paths": "analysis.paths", "listing": "listing.snapshot", "listing-range": "listing.range",
-              "goto": "listing.goto", "tab-select": "ui.tab.select", "table-select": "ui.table.select", "program-open": "project.program.open", "review-prepare": "hardware.review.prepare", "review-apply": "hardware.review.apply", "review-undo": "hardware.review.undo", "cancel": "hardware.cancel", "report": "analysis.report", "export": "analysis.export"}[args.action]
+              "goto": "listing.goto", "tab-select": "ui.tab.select", "table-select": "ui.table.select", "program-open": "project.program.open", "review-prepare": "hardware.review.prepare", "review-apply": "hardware.review.apply", "review-undo": "hardware.review.undo", "cancel": "hardware.cancel", "report": "analysis.report", "export": "analysis.export",
+              "source-pairs": "hardware.source_pairs.page"}[args.action]
     if method == "analysis.paths" and args.origin == "entry" and not args.address:
         parser.error("paths --origin entry requires an address")
     if method == "ui.tab.select" and not args.address:
@@ -465,8 +666,14 @@ def main():
         parser.error("program-open requires project-relative /path")
     if method == "hardware.review.prepare" and (args.row is None or args.row<0):
         parser.error("review-prepare requires --row nonnegative-index")
-    if args.expected_revision is not None and method not in ("listing.range", "function.xrefs.body","agentic.findings.page"):
+    if args.expected_revision is not None and method not in ("listing.range", "function.xrefs.body","agentic.findings.page","hardware.source_pairs.page"):
         parser.error("--expected-revision is only valid with listing-range, function-xrefs-body or agentic-findings")
+    if args.expected_generation and method!="hardware.source_pairs.page":
+        parser.error("--expected-generation is only valid with source-pairs")
+    if method=="hardware.source_pairs.page" and (
+            not 1<=args.page_size<=32 or args.offset<0 or
+            (args.offset>0 and (args.expected_revision is None or not args.expected_generation))):
+        parser.error("source-pairs requires page-size 1..32 and revision + generation after first page")
     if (args.expected_run or args.expected_findings_revision is not None) and method!="agentic.findings.page":
         parser.error("--expected-run and --expected-findings-revision require agentic-findings")
     if method=="agentic.findings.page" and args.offset>0 and (not args.expected_run or args.expected_findings_revision is None or args.expected_revision is None):
@@ -494,6 +701,10 @@ def main():
                    "expected_entry":args.expected_entry,
                    **({"expected_revision":args.expected_revision} if args.expected_revision is not None else {})}
                   if method=="function.xrefs.body" else
+                  {"offset":args.offset,"limit":args.page_size,
+                   **({"expected_revision":args.expected_revision} if args.expected_revision is not None else {}),
+                   **({"expected_generation":args.expected_generation} if args.expected_generation else {})}
+                  if method=="hardware.source_pairs.page" else
                   {"format":args.format, "offset":args.offset, "limit":args.limit} if method in ("analysis.report","analysis.export") else
                   {"offset":args.offset, "limit":args.limit,
                    **({"expected_run":args.expected_run} if args.expected_run else {}),
