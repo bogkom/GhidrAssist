@@ -2747,6 +2747,7 @@ public final class Ga11VectorHeadlessMain {
                     var initialAuditRevision=HardwareAnalysisRevision.capture(
                         full,full.getModificationNumber(),full.getLanguageID().toString(),
                         full.getExecutableSHA256(),true);
+                    final Program receiptAuditProgram=full;
                     var after=ghidrassist.hardware.HardwareScopedVariableService.preview(fn);
                     check(after.size()==2 && after.stream().allMatch(
                         p->p.decision()==ghidrassist.hardware.HardwareScopedVariableReview
@@ -2760,10 +2761,10 @@ public final class Ga11VectorHeadlessMain {
                     boolean oldReceiptStale=false;
                     try {
                         initialReceipts.csvRevisionBound(initialAuditRevision,()->
-                            HardwareAnalysisRevision.capture(full,
-                                full.getModificationNumber(),
-                                full.getLanguageID().toString(),
-                                full.getExecutableSHA256(),true));
+                            HardwareAnalysisRevision.capture(receiptAuditProgram,
+                                receiptAuditProgram.getModificationNumber(),
+                                receiptAuditProgram.getLanguageID().toString(),
+                                receiptAuditProgram.getExecutableSHA256(),true));
                     }catch(IllegalStateException expected){oldReceiptStale=true;}
                     check(oldReceiptStale,
                         "Native Undo cannot authorize stale approved-variable CSV");
