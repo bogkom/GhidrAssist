@@ -165,8 +165,11 @@ def main():
                     generic["import_sha256"] and
                     initial["effective_input_sha256"]!=
                     changed["effective_input_sha256"] and
-                    initial["effective_input_sha256"]!=
-                    generic["effective_input_sha256"]):
+                    initial["selected_mc68332"] and
+                    restored["selected_mc68332"] and
+                    legacy["selected_mc68332"] and
+                    changed["selected_mc68332"] and
+                    not generic["selected_mc68332"]):
                 raise RuntimeError(
                     "Cross-JVM input/full-fingerprint/profile isolation failed")
             summary.update({"status":"PASSED_SYNTHETIC_REAL_GHIDRA_HEADLESS",
