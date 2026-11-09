@@ -238,7 +238,9 @@ public final class HardwareCallsiteConsensus {
                     hit.callPc()==call.callPc()))
                 incomplete=true;
         }
-        if(incomplete)
+        // A single sampled CALL cannot establish cross-CALL agreement,
+        // even if its one candidate is complete and address-resolved.
+        if(incomplete || selected.size()<2)
             return incomplete(callee,storePc,selected.size(),evidence);
 
         var reference=evidence.get(0);
