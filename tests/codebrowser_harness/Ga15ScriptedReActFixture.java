@@ -164,6 +164,15 @@ public final class Ga15ScriptedReActFixture {
                 proof.addProperty("synthetic_only",true);
                 try {
                     waitFor(evidence.resolve("ga15-review-draft-ready"),80);
+                    // Real CodeBrowser Program, native Listing and installed
+                    // analyzer JAR. Bind the already completed, authenticated
+                    // read-only checkpoint before the first Ghidra JVM exits.
+                    // A new Review is STILL unapproved in the next JVM.
+                    AgenticReviewProgramBinding.save(
+                        evidence.resolve("ga15-react-local-evidence.json"),
+                        evidence.resolve("ga15-bound-review-program.json"),
+                        program,"New independent bound synthetic MMIO review",
+                        false,ghidra.util.task.TaskMonitor.DUMMY);
                     var draft=AgenticReviewDraft.load(
                         evidence.resolve("ga15-new-independent-review.json"),
                         program,AgenticEvidenceRegistry.shared());
