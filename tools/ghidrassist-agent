@@ -32,6 +32,174 @@ def rpc(session, method, params=None):
         return json.loads(answer.read(1048576))
 
 
+def _source_pairs_metadata(page):
+    """Immutable source-generation identity and bounded inventory counters."""
+    fields = ("schema", "revision", "generation", "import_sha256",
+              "profile", "total_pairs", "indirect_sources",
+              "movec_sources", "omitted_indirect", "omitted_movec",
+              "reset_root_recognized", "reset_graph_incomplete",
+              "observed_inventory_incomplete")
+    identity = tuple(page[key] for key in fields)
+    if (page["schema"] != 1 or page["profile"] != "MC68332_USER_SELECTED"
+            or type(page["revision"]) != int or page["revision"] < 0
+            or not isinstance(page["generation"], str)
+            or not 1 <= len(page["generation"]) <= 128
+            or not isinstance(page["import_sha256"], str)
+            or len(page["import_sha256"]) > 128
+            or any(type(page[k]) != int or page[k] < 0 for k in
+                   ("total_pairs", "indirect_sources", "movec_sources",
+                    "omitted_indirect", "omitted_movec"))
+            or page["indirect_sources"] > 64 or page["movec_sources"] > 32
+            or page["total_pairs"] > 2048
+            or page["total_pairs"] > (page["indirect_sources"] *
+                                       page["movec_sources"])
+            or any(type(page[k]) != bool for k in
+                   ("reset_root_recognized", "reset_graph_incomplete",
+                    "observed_inventory_incomplete"))):
+        raise ValueError("Invalid bounded source inventory metadata")
+    return identity
+
+
+def capture_source_pairs_checkpoint(session, output, page_size=32):
+    """Read-only, versioned, atomic local source evidence; never Analyze/Apply."""
+    if not 1 <= page_size <= 32:
+        raise ValueError("Source pair page size must be 1..32")
+    first = rpc(session, "hardware.source_pairs.page",
+                {"offset": 0, "limit": page_size})["source_pairs"]
+    expected = _source_pairs_metadata(first)
+    rows = []
+    current = first
+    while True:
+        if _source_pairs_metadata(current) != expected:
+            raise ValueError("Source revision/generation changed during pagination")
+        if (type(current["offset"]) != int or current["offset"] != len(rows)
+                or type(current["limit"]) != int or current["limit"] != page_size
+                or type(current["next_offset"]) != int
+                or type(current["has_more"]) != bool
+                or type(current["displayed"]) != int
+                or not isinstance(current["rows"], list)
+                or current["displayed"] != len(current["rows"])
+                or len(current["rows"]) > page_size
+                or current["next_offset"] != len(rows)+len(current["rows"])
+                or current["next_offset"] > expected[5]
+                or current["has_more"] != (
+                    current["next_offset"] < expected[5])):
+            raise ValueError("Inconsistent bounded source page or cursor")
+        if current["has_more"] and not current["rows"]:
+            raise ValueError("Source page made no progress")
+        rows.extend(current["rows"])
+        if not current["has_more"]:
+            break
+        current = rpc(session, "hardware.source_pairs.page", {
+            "offset": len(rows), "limit": page_size,
+            "expected_revision": expected[1],
+            "expected_generation": expected[2]})["source_pairs"]
+    if len(rows) != expected[5]:
+        raise ValueError("Source pair collection omitted observed pairs")
+    keys = []
+    for row in rows:
+        if not isinstance(row, dict) or not all(
+                type(row.get(k)) == int and 0 <= row[k] <= 0xffffff
+                for k in ("function", "indirectPc", "indirectTarget", "vbrPc")):
+            raise ValueError("Invalid source row address")
+        keys.append((row["function"], row["indirectPc"], row["vbrPc"]))
+    if len(set(keys)) != len(keys) or keys != sorted(keys):
+        raise ValueError("Duplicate or unsorted source evidence")
+    # Source completeness is a bounded observation, not firmware execution.
+    complete = bool(rows and not expected[12] and
+                    expected[8] == 0 and expected[9] == 0 and
+                    expected[10] and not expected[11])
+    payload = {
+        "schema": 1, "kind": "ghidrassist-hardware-source-pairs",
+        "program_revision": expected[1], "generation": expected[2],
+        "import_sha256": expected[3], "profile": expected[4],
+        "total_pairs": expected[5], "indirect_sources": expected[6],
+        "movec_sources": expected[7], "omitted_indirect": expected[8],
+        "omitted_movec": expected[9], "reset_root_recognized": expected[10],
+        "reset_graph_incomplete": expected[11],
+        "observed_inventory_incomplete": expected[12],
+        "collected_all_observed_pairs": True,
+        "bounded_source_complete": complete, "rows": rows,
+        "notice": "STATIC SOURCE-ONLY: not executable CALL, MM/VBR, ISR, Apply or cross-revision resume",
+    }
+    canonical=json.dumps(payload,sort_keys=True,separators=(",",":"),
+                         ensure_ascii=False).encode("utf-8")
+    digest=hashlib.sha256(canonical).hexdigest()
+    envelope={"payload":payload,"payload_sha256":digest}
+    data=(json.dumps(envelope,indent=2,ensure_ascii=False)+"\\n").encode("utf-8")
+    if len(data)>1024*1024:
+        raise ValueError("Source checkpoint exceeds 1 MiB cap")
+    dest=Path(output).expanduser()
+    if not dest.parent.is_dir():
+        raise ValueError("Checkpoint directory must already exist")
+    temp=None
+    try:
+        fd,temp=tempfile.mkstemp(prefix=".ghidrassist-source-pairs-",dir=dest.parent)
+        with os.fdopen(fd,"wb") as handle:
+            handle.write(data)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.link(temp,dest)
+    finally:
+        if temp is not None:
+            os.unlink(temp)
+    return {"saved":str(dest),"total_pairs":len(rows),
+            "bounded_source_complete":complete,"payload_sha256":digest}
+
+
+def verify_source_pairs_checkpoint(source):
+    """Offline hash/count/provenance integrity check; never authorizes replay."""
+    path=Path(source).expanduser()
+    with path.open("rb") as handle:
+        raw=handle.read(1024*1024+1)
+    if len(raw)>1024*1024:
+        raise ValueError("Oversized source checkpoint")
+    envelope=json.loads(raw.decode("utf-8"))
+    if not isinstance(envelope,dict) or not isinstance(envelope.get("payload"),dict):
+        raise ValueError("Invalid source checkpoint envelope")
+    p=envelope["payload"]
+    if p.get("schema")!=1 or p.get("kind")!="ghidrassist-hardware-source-pairs":
+        raise ValueError("Unsupported source checkpoint kind")
+    canonical=json.dumps(p,sort_keys=True,separators=(",",":"),
+                         ensure_ascii=False).encode("utf-8")
+    digest=hashlib.sha256(canonical).hexdigest()
+    if digest!=envelope.get("payload_sha256"):
+        raise ValueError("Source checkpoint SHA-256 mismatch")
+    metadata={
+        "schema":p["schema"],"revision":p["program_revision"],
+        "generation":p["generation"],"import_sha256":p["import_sha256"],
+        "profile":p["profile"],"total_pairs":p["total_pairs"],
+        "indirect_sources":p["indirect_sources"],"movec_sources":p["movec_sources"],
+        "omitted_indirect":p["omitted_indirect"],"omitted_movec":p["omitted_movec"],
+        "reset_root_recognized":p["reset_root_recognized"],
+        "reset_graph_incomplete":p["reset_graph_incomplete"],
+        "observed_inventory_incomplete":p["observed_inventory_incomplete"],
+    }
+    values=_source_pairs_metadata(metadata)
+    rows=p["rows"]
+    if (not isinstance(rows,list) or len(rows)!=values[5] or
+            type(p.get("collected_all_observed_pairs"))!=bool or
+            not p["collected_all_observed_pairs"] or
+            type(p.get("bounded_source_complete"))!=bool):
+        raise ValueError("Inconsistent checkpoint rows/completeness")
+    keys=[]
+    for row in rows:
+        if not isinstance(row,dict) or not all(
+                type(row.get(k))==int and 0<=row[k]<=0xffffff
+                for k in ("function","indirectPc","indirectTarget","vbrPc")):
+            raise ValueError("Invalid source row")
+        keys.append((row["function"],row["indirectPc"],row["vbrPc"]))
+    if len(set(keys))!=len(keys) or keys!=sorted(keys):
+        raise ValueError("Invalid source pair ordering")
+    eligible=bool(rows and not values[12] and values[8]==0 and values[9]==0
+                  and values[10] and not values[11])
+    if p["bounded_source_complete"]!=eligible:
+        raise ValueError("False source-inventory completeness")
+    return {"verified":True,"payload_sha256":digest,
+            "total_pairs":len(rows),"bounded_source_complete":eligible,
+            "resume_authorized":False}
+
+
 def capture_agentic_checkpoint(session, output, page_size=100, parent=None):
     """Explicit local read-only evidence export; never a resumable AI session."""
     if not 1 <= page_size <= 100:
