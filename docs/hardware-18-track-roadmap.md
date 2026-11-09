@@ -27,8 +27,10 @@ explicit. An invalid/missing candidate VBR table base is UNKNOWN.
 Every class/result is immutable and bounded (64 indirect inputs,
 32 MOVEC inputs, 32 displayed pairs); missing source records,
 overflow and truncated displays carry explicit incompleteness
-rather than negative conclusions. Generic CPU32 yields a clear
-not-evaluated profile gate.
+rather than negative conclusions. Unaligned/odd indirect JSR or
+target identities from the broader byte-witness inventory are counted
+as omitted/UNKNOWN instead of crashing the entire hardware Analyze.
+Generic CPU32 yields a clear not-evaluated profile gate.
 
 The independent deterministic Java21 regression covers same-function
 pairing, unrelated source exclusion, independent observed/unknown
