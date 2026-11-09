@@ -548,6 +548,17 @@ public final class CodeBrowserMmioMain {
                     }
                 } finally {sourceProgram.endTransaction(srcTx,true);}
             }
+            // project.program.open MUST reject switching away from an edited
+            // Program. Save only these disposable fixture databases after
+            // deterministic Listing bootstrap, never weaken that API guard.
+            if(sourceProgram!=null) {
+                first.save("GA18 isolated original MMIO fixture baseline",
+                    TaskMonitor.DUMMY);
+                sourceProgram.save("GA18 isolated JSR/MOVEC source fixture baseline",
+                    TaskMonitor.DUMMY);
+                require(!first.isChanged() && !sourceProgram.isChanged(),
+                    "Synthetic CodeBrowser switch preflight has dirty Program");
+            }
             Instruction instruction=first.getListing().getInstructionAt(site);
             require(instruction!=null && instruction.toString()
                 .toUpperCase(Locale.ROOT).contains("FFFA00"),
