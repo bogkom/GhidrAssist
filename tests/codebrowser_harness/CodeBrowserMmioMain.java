@@ -487,6 +487,27 @@ public final class CodeBrowserMmioMain {
                             .getAddress(0xcdL)),
                     ghidra.program.model.symbol.SourceType.ANALYSIS)!=null,
                     "Long CPU32 Listing CFG function creation failed");
+                // Divergent CPU32 CFG is decoded from actual source bytes,
+                // including both branch edges and their shared STORE site.
+                Address branchEntry=first.getAddressFactory()
+                    .getDefaultAddressSpace().getAddress(0xd0L);
+                for(long pc:new long[]{0xd0L,0xd6L,0xd8L,0xdeL,
+                        0xe0L,0xe6L,0xeaL}) {
+                    Address at=first.getAddressFactory()
+                        .getDefaultAddressSpace().getAddress(pc);
+                    if(first.getListing().getInstructionAt(at)==null)
+                        require(new DisassembleCommand(at,null,false)
+                            .applyTo(first,TaskMonitor.DUMMY),
+                            "Real branched CPU32 disassembly failed at "+
+                            Long.toHexString(pc));
+                }
+                require(first.getFunctionManager().createFunction(
+                    "FUN_000000D0",branchEntry,
+                    new ghidra.program.model.address.AddressSet(
+                        branchEntry,first.getAddressFactory()
+                            .getDefaultAddressSpace().getAddress(0xebL)),
+                    ghidra.program.model.symbol.SourceType.ANALYSIS)!=null,
+                    "Real branched CPU32 function was not created");
             }finally{first.endTransaction(tx,true);}
             Instruction instruction=first.getListing().getInstructionAt(site);
             require(instruction!=null && instruction.toString()
