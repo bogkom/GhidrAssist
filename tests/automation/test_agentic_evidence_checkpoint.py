@@ -192,6 +192,123 @@ class LocalAgenticCheckpoint(unittest.TestCase):
                         {},root/"wrong-firmware.json",100,parent)
             self.assertFalse((root/"wrong-firmware.json").exists())
 
+    def test_three_generation_chain_and_unapproved_new_review(self):
+        import subprocess
+        with tempfile.TemporaryDirectory() as work:
+            directory=Path(work)
+            root=directory/"root.json"
+            middle=directory/"middle.json"
+            newest=directory/"newest.json"
+            for name,path,parent in (
+                    ("run-0",root,None),("run-1",middle,root),
+                    ("run-2",newest,middle)):
+                with patch.object(cli,"rpc",
+                        lambda _s,_m,args,name=name:page(
+                            args["offset"],args["limit"],run=name)):
+                    cli.capture_agentic_checkpoint({},path,2,parent)
+            result=cli.verify_agentic_lineage_chain(newest,[root,middle])
+            self.assertTrue(result["verified"])
+            self.assertTrue(result["read_only"])
+            self.assertEqual(result["runs"],["run-0","run-1","run-2"])
+            self.assertEqual(result["chain_length"],3)
+            self.assertEqual(len(result["chain_sha256"]),64)
+            self.assertFalse(result["authorizes_tools"])
+            self.assertFalse(result["authorizes_apply"])
+            self.assertFalse(result["old_approvals_inherited"])
+            self.assertFalse(result["model_state_restored"])
+            self.assertEqual(result["checkpoints"][-1]["run"],"run-2")
+            self.assertEqual(result["checkpoints"][0]["program_revision"],12)
+            offline=subprocess.run(["python3",str(AGENT),"--session",
+                str(directory/"nonexistent-session.json"),
+                "agentic-lineage-chain-verify","--input",str(newest),
+                "--ancestor",str(root),"--ancestor",str(middle)],
+                text=True,capture_output=True)
+            self.assertEqual(offline.returncode,0,offline.stderr)
+            self.assertEqual(json.loads(offline.stdout)["chain_sha256"],
+                result["chain_sha256"])
+            # A linked checkpoint without its COMPLETE ancestry cannot
+            # seed a new review, even if its current evidence matches Ghidra.
+            def live(_s,method,args):
+                self.assertEqual(method,"agentic.findings.page")
+                response=page(args["offset"],args["limit"],run="run-2")
+                response["read_only"]=True
+                return response
+            review=directory/"new-review.json"
+            with patch.object(cli,"rpc",live):
+                with self.assertRaises(ValueError):
+                    cli.create_agentic_review_draft({},
+                        newest,review,"New independent source analysis")
+                self.assertFalse(review.exists())
+                status=cli.create_agentic_review_draft({},
+                    newest,review,"New independent source analysis",
+                    [root,middle])
+            self.assertFalse(status["new_review_approved"])
+            self.assertFalse(status["authorizes_tools"]
+                if "authorizes_tools" in status else
+                status["tool_execution_authorized"])
+            draft=json.loads(review.read_text())["payload"]
+            self.assertTrue(draft["historical_chain_verified"])
+            self.assertEqual(draft["historical_chain_length"],3)
+            self.assertEqual(draft["historical_chain_sha256"],
+                result["chain_sha256"])
+            self.assertEqual(draft["state"],"AWAITING_NEW_REVIEW")
+            self.assertFalse(draft["old_plan_inherited"])
+            self.assertFalse(draft["apply_authorized"])
+            self.assertFalse(draft["resumable_ai_session"])
+
+    def test_lineage_chain_rejects_hidden_parent_duplicates_and_rehashed_forgery(self):
+        import subprocess
+        with tempfile.TemporaryDirectory() as work:
+            directory=Path(work)
+            root=directory/"root.json"
+            middle=directory/"middle.json"
+            newest=directory/"newest.json"
+            for name,path,parent in (
+                    ("run-a",root,None),("run-b",middle,root),
+                    ("run-c",newest,middle)):
+                with patch.object(cli,"rpc",
+                        lambda _s,_m,args,name=name:page(
+                            args["offset"],args["limit"],run=name)):
+                    cli.capture_agentic_checkpoint({},path,3,parent)
+            for ancestors in (
+                    [],[middle],[root],[middle,root],
+                    [root,root],[root,middle,middle],
+                    [root]*16,[newest,middle]):
+                with self.subTest(ancestors=ancestors),self.assertRaises(ValueError):
+                    cli.verify_agentic_lineage_chain(newest,ancestors)
+            with self.assertRaises(ValueError):
+                cli.verify_agentic_lineage_chain(root,[middle])
+            for field,value in (
+                    ("run","run-a"),
+                    ("parent_run","run-a"),
+                    ("parent_checkpoint_sha256","b"*64),
+                    ("import_sha256","b"*64),
+                    ("source_incomplete",True),
+                    ("complete",False)):
+                forged=directory/("changed-"+field+".json")
+                blob=json.loads(newest.read_text())
+                blob["payload"][field]=value
+                canonical=json.dumps(blob["payload"],sort_keys=True,
+                    separators=(",",":"),ensure_ascii=False).encode()
+                blob["payload_sha256"]=hashlib.sha256(canonical).hexdigest()
+                forged.write_text(json.dumps(blob))
+                with self.subTest(field=field),self.assertRaises(ValueError):
+                    cli.verify_agentic_lineage_chain(forged,[root,middle])
+            # A legacy two-file lineage comparison alone cannot establish a
+            # fully rooted chain if the parent itself already has a parent.
+            self.assertTrue(cli.verify_agentic_lineage(newest,middle)["verified"])
+            with self.assertRaises(ValueError):
+                cli.verify_agentic_lineage_chain(newest,[middle])
+            bad=subprocess.run(["python3",str(AGENT),"--session",
+                str(directory/"absent-session.json"),
+                "agentic-lineage-chain-verify","--input",str(newest),
+                "--ancestor",str(middle)],capture_output=True,text=True)
+            self.assertNotEqual(bad.returncode,0)
+            self.assertIn("refused",bad.stderr)
+            self.assertEqual(
+                cli.verify_agentic_lineage_chain(newest,[root,middle])
+                ["runs"],["run-a","run-b","run-c"])
+
     def test_offline_null_evidence_and_false_complete_forgery_rejected(self):
         with tempfile.TemporaryDirectory() as work:
             target=Path(work)/"nullable.json"
