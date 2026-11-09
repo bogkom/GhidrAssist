@@ -851,6 +851,40 @@ def main():
                             if error.code!=400: raise
                         else:
                             raise RuntimeError("Unbounded report page was accepted")
+                        # Same real bearer-authenticated CodeBrowser API:
+                        # NO endpoint may coerce a quoted, fractional,
+                        # Boolean, null, container, negative or overflowing
+                        # page selector through Gson getAsInt().
+                        page_routes=(
+                            ("analysis.report",{"format":"markdown"}),
+                            ("analysis.export",{"format":"markdown"}),
+                            ("hardware.mmio.rows",{"filter":"SIMCR"}),
+                            ("hardware.review.preview",{}),
+                            ("listing.range",{"address":pc}),
+                            ("function.xrefs.body",{"direction":"outgoing"}),
+                            ("function.xrefs",{}),
+                            ("decompiler.status",{}),
+                            ("analysis.paths",{"origin":"reset","max_depth":4}),
+                        )
+                        illegal_page_values=("1",1.5,True,False,None,[],{},
+                                             -1,2**31,1e100)
+                        page_denials=0
+                        for method,base in page_routes:
+                            for field in ("offset","limit"):
+                                for value in illegal_page_values:
+                                    args_page={**base,"offset":0,"limit":1,field:value}
+                                    try:
+                                        http_call(method,args_page)
+                                    except HTTPError as error:
+                                        if error.code!=400:raise
+                                    else:
+                                        raise RuntimeError(
+                                            "Noncanonical paged RPC accepted: "+
+                                            method+" "+field+" "+str(value))
+                                    page_denials+=1
+                        if page_denials!=len(page_routes)*2*len(illegal_page_values):
+                            raise RuntimeError("Missing deterministic page selector denials")
+                        print("GA-12/18 BOUNDED JSON OFFSET/LIMIT 180 REAL RPC DENIALS PASS")
                         try:
                             http_call("hardware.cancel")
                         except HTTPError as error:
