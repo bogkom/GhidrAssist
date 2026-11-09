@@ -283,6 +283,42 @@ CLI processes must verify both old and new snapshots, which remain
 read-only evidence. This does not test private firmware, user profile
 migration (Issue #98), hardware execution, external LLM or manual approval.
 
+## GA-12/13/15: complete bounded historical Agentic ancestry (2026-11-09)
+
+`ghidrassist-agent agentic-lineage-chain-verify --input NEWEST.json
+--ancestor ROOT.json --ancestor NEXT.json [--ancestor ...]` performs
+**offline, read-only verification of 2–16 local snapshots**, with ancestors
+listed **oldest first**. Each snapshot independently passes SHA-256
+canonical payload checks, exact metadata/counter limits, retained-row
+validation and a strict completed-source gate. The first entry must be
+an unlinked root. Every subsequent entry must declare the exact previous
+checkpoint's SHA-256 and opaque run ID. Repeated run tokens or hashes,
+missing ancestors, skipped edges, import SHA mismatch, incomplete
+sources and altered but locally re-hashed records fail closed. The result
+contains only bounded identity/provenance metadata and a deterministic
+SHA-256 chain digest. It does **not** certify human/AI authorship or
+prove approval of the independent investigations.
+
+`agentic-review-draft` now refuses a child checkpoint that declares a
+parent unless the operator supplies the **entire** ordered history via
+repeatable `--ancestor`. It checks the same rooted chain before
+querying the active Ghidra evidence, rechecks after the existing live
+source preflight, and stores history depth/hash in the *new, unapproved*
+Review draft. A root checkpoint uses the existing command without
+ancestors. There is no model replay, automatic continuation, inherited
+Approve Plan, tools, mutating Program or Apply permission. The draft
+retains `AWAITING_NEW_REVIEW` and its source observations remain untrusted.
+
+The existing two-run `agentic-lineage-verify --input CHILD --parent PRIOR`
+remains available for **one edge** and is not mislabeled proof that a
+longer parent chain has no missing history. Python deterministic tests
+exercise three generations, omitted and reversed ancestors, repeated
+runs, rehashed alterations, offline usage without a session and the
+fresh Review gate. The real Ghidra 12.1.4 PUBLIC CodeBrowser two-JVM
+ReAct/CLI workflow verifies a rooted two-entry chain after both
+application processes exit. That workflow does **not** establish
+three native Ghidra model runs and is not Supervisor/host GUI PASS.
+
 ## GA-12/15: explicit checkpoint provenance across independent reviewed runs (2026-11-07)
 
 `ghidrassist-agent agentic-checkpoint --output NEW.json --parent PRIOR.json`
