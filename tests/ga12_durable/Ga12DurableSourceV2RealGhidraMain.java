@@ -28,7 +28,8 @@ public final class Ga12DurableSourceV2RealGhidraMain {
     private static void sourceMatches(
             HardwareResetIndirectVbrCorrelation.SourceInventory source) {
         require(source!=null,"typed V2 source inventory retained");
-        var first=source.page(0,1),second=source.page(1,1);
+        var first=source.page(0,1);
+        var second=source.page(1,1);
         require(first.colocatedPairs()==2 && first.rows().size()==1 &&
             first.nextOffset()==1 && first.hasMore() &&
             first.omittedIndirect()==1 && second.rows().size()==1 &&
