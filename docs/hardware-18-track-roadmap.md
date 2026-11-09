@@ -1,5 +1,39 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
+## GA-12/18 — 2026-11-09: strict V1/V2 evidence decoding and semantic restore refusal
+
+The typed GA12-CFG-REPORT-1/2 decoder now rejects **noncanonical
+Boolean encodings** (only 0 or 1 accepted) and **malformed UTF-8**
+(no silent replacement characters in provenance). V2 source inventory
+RESET-recognized/incomplete flags must agree with the parent CFG
+snapshot. The constructor enforces consistency before persistence,
+and decode enforces it again on untrusted bytes before restore.
+Malformed source coordinates (odd/out-of-range computed JSR, duplicate
+PC) are refused by existing typed SourceInventory validation.
+A correctly SHA-256-wrapped disk checkpoint is never mistaken for
+proof that its *content* is semantically valid.
+
+A Java21 adversarial suite changes canonical flags, injects invalid
+UTF-8 into V1 and V2, creates conflicting RESET summary flags,
+and mutates a serialized indirect JSR PC. The real Ghidra 12.1.4
+PUBLIC Java25 isolated test extends the completed three-JVM CFG
+plus five-JVM V1/V2 restore lane with a sixth V2 phase: it wraps a
+semantically impossible odd JSR PC in a **valid exact full-input
+disk-store digest**, then requires the restored V2 to be rejected
+and fresh synthetic CFG recomputation. Cold/valid V2, legacy V1
+CFG-only and stale Program/profile denial remain mandatory.
+
+Importantly, **observed source inventory incompleteness** (unknown
+indirect JSR or omitted MOVEC witnesses) remains visible and tagged
+INCOMPLETE/UNKNOWN; it is not equated with corruption and never
+becomes proof of missing hardware actions. Only corrupted or
+internally contradictory checkpoint provenance is refused.
+No production firmware, Ghidra projects/profiles, secrets or
+stopped local Wyse/Precision/Supervisor testing lanes are touched.
+This does not prove executed CALL, active MM/VBR/ISR, or Review/Apply
+permission. GA-12/18 remain PARTIAL.
+
+
 ## GA-01/02/03/11/12/18 — 2026-11-09: real cross-JVM V2 source report restore, V1 conservative migration
 
 An additional GA-12 acceptance lane expands the existing **three**
