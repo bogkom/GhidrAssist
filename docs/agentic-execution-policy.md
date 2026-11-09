@@ -284,6 +284,59 @@ read-only evidence. This does not test private firmware, user profile
 migration (Issue #98), hardware execution, external LLM or manual approval.
 
 ## GA-12/13/15/18: explicit Program-bound CodeBrowser Review import (2026-11-09)
+## GA-12/13/15/18: explicit GUI and restricted Automation sidecar creation (2026-11-09)
+
+The Query tab now includes **Create Bound Checkpoint** separately from
+**Import Bound Checkpoint**. The operator selects a completed local Agentic
+evidence source, a NEW output filename, a new independent objective,
+explicit CPU32 generic or MC68332 profile and confirms the sidecar's
+read-only nature. A SwingWorker computes the existing full GA-12
+Program/Listing/analyzer fingerprint outside Swing EDT. Creation only
+writes a private local sidecar, never modifies firmware, starts a model,
+imports a plan or grants Apply. Import still requires separate new
+Submit and Approve Plan actions.
+
+The Automation API v3 supports an authenticated but **separately
+disabled-by-default** `agentic.review.binding.create` method.
+Operators must explicitly enable
+`-Dghidrassist.automation.agenticBindingCreate=true` and set an
+existing operator-controlled
+`-Dghidrassist.automation.agenticBindingDir=<isolated-directory>`.
+An API bearer token alone **never** enables creation. The method
+also requires `AUTO_SAFE` synthetic-only permission or an
+independently attested writable review-copy via existing
+`AutomationWritePolicy.requireReviewCopy`; no production write
+capability is granted. It accepts only safe JSON **basenames** within
+that directory, a positive confirmation, an exact current Ghidra
+Program project path, imported SHA-256, modification revision and
+explicit MCU selection. No arbitrary host paths, traversal,
+symlinks, overwrite, model state, approval or Apply.
+
+CLI syntax: `ghidrassist-agent agentic-binding-create --input
+<completed-evidence.json> --output <new-sidecar.json> --query
+"New independent review objective" --profile CPU32_SURVEY
+--expected-revision N --expected-import-sha256 HEX64
+--expected-program-path /synthetic-mmio.bin --confirm-local-sidecar`.
+The file names are relative only to the separately configured server
+directory, **not** the CLI process working directory.
+
+Sidecar creation now rejects input-byte replacement or an in-flight
+Ghidra Program edit detected during full fingerprint scanning.
+Pre-publication fingerprint and source-byte rechecks must agree;
+an incompatible or switched Program cannot inherit Review permission.
+A deterministic Ghidra TaskMonitor regression deliberately edits
+only a disposable synthetic Program *inside* the actual fingerprint
+scan and verifies load refusal and **no published sidecar** on save.
+A two-JVM real CodeBrowser test covers the local GUI creation route,
+authenticated synthetic-only API creation, wrong SHA/revision, missing
+operator consent, outside-directory filenames, bad Bearer,
+non-overwrite, private file mode and read-only restart behavior.
+
+The SHA-256 manifest checks integrity, NOT who created the original
+historical evidence. Neither an unbound legacy checkpoint nor a
+sidecar is an authentication token or a resurrected Agentic session.
+
+
 
 The Query tab now exposes a **separate** `Import Bound Checkpoint`
 button alongside the unchanged legacy `Import Saved Checkpoint`.
