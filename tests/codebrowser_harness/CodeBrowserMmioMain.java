@@ -332,6 +332,56 @@ public final class CodeBrowserMmioMain {
                         !(Boolean)field(controller,"isQueryRunning") &&
                         field(controller,"currentOrchestrator")==null,
                     "Historical bound Review mutated Program or started old AI");
+                // The FIRST JVM also published a separately authenticated,
+                // operator-directory-scoped Automation API sidecar. The
+                // SECOND JVM must independently validate it against the same
+                // persisted Program, not trust an HTTP success response.
+                Path apiBinding=out.resolve("ga15-api-created-binding.json");
+                require(Files.isRegularFile(apiBinding),
+                    "Authenticated real JSON-RPC did not create a sidecar");
+                var apiHistory=ghidrassist.agent.react
+                    .AgenticReviewProgramBinding.load(
+                        checkpoint,apiBinding,first,false,TaskMonitor.DUMMY);
+                require(apiHistory.toReviewQuery().contains(
+                    "Independent static synthetic MMIO bound review"),
+                    "Automation-created sidecar failed after Ghidra restart");
+                // Test the NEW GUI creation entrypoint itself (not only the
+                // earlier Import Bound path). The recorded Program is
+                // unchanged and creation must not stage ANY new AI plan.
+                var createButton=(javax.swing.JButton)field(
+                    queryTab,"createBoundCheckpointButton");
+                require(createButton!=null &&
+                    evalEdt(()->"Create Bound Checkpoint"
+                        .equals(createButton.getText())),
+                    "Explicit safe GUI sidecar creation button missing");
+                Path guiBinding=out.resolve("ga15-gui-created-binding.json");
+                int beforeCreateSession=queryService.getCurrentSessionId();
+                long beforeCreateRevision=first.getModificationNumber();
+                edt(()->((ghidrassist.core.TabController)controller)
+                    .handleCreateBoundAgenticCheckpoint(
+                        checkpoint,guiBinding,
+                        "New synthetic read-only investigation after restart",false));
+                until(()->Files.isRegularFile(guiBinding),40);
+                until(()->{
+                    try { return evalEdt(()->!(Boolean)field(controller,
+                        "boundAgenticReviewPending")); }
+                    catch(Exception error) {
+                        throw new IllegalStateException(error);
+                    }
+                },40);
+                require(queryService.getCurrentSessionId()==beforeCreateSession &&
+                    first.getModificationNumber()==beforeCreateRevision &&
+                    !(Boolean)field(controller,"isAgentPlanPending") &&
+                    !(Boolean)field(controller,"isQueryRunning") &&
+                    field(controller,"currentOrchestrator")==null,
+                    "GUI sidecar creation resurrected an Agentic plan/AI or edited Program");
+                var guiHistory=ghidrassist.agent.react
+                    .AgenticReviewProgramBinding.load(
+                        checkpoint,guiBinding,first,false,TaskMonitor.DUMMY);
+                require(guiHistory.toReviewQuery().contains(
+                    "New synthetic read-only investigation after restart"),
+                    "GUI-created sidecar not bound to unchanged Program");
+
                 // The saved proof is strictly historical data: a
                 // different imported synthetic firmware must fail even if
                 // the checkpoint itself has a valid payload hash.
@@ -421,6 +471,9 @@ public final class CodeBrowserMmioMain {
                 check.addProperty("bound_review_source_tamper_refused",changedBoundDenied);
                 check.addProperty("bound_review_new_chat_readonly",true);
                 check.addProperty("bound_review_no_auto_run_or_apply",true);
+                check.addProperty("bound_review_gui_created_after_restart",true);
+                check.addProperty("bound_review_gui_creation_no_staged_plan",true);
+                check.addProperty("bound_review_api_created_first_jvm_verified_after_restart",true);
                 check.addProperty("wrong_program_refused",wrongProgramDenied);
                 check.addProperty("tampered_source_refused",corruptedDenied);
                 check.addProperty("incomplete_source_refused",incompleteDenied);
