@@ -15,6 +15,53 @@ final class AutomationRpcPagination {
     private static final Pattern UUID=Pattern.compile(
         "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}");
 
+    /**
+     * Every paged selector is an actual (unquoted) JSON integer, not a Gson
+     * coercion. Validate endpoint bounds BEFORE any scan or page allocation;
+     * a large/overflowing offset must not turn into a negative int.
+     */
+    static int pageInt(JsonObject args,String field,int defaultValue,
+                       int min,int max) {
+        if(min<0 || max<min || defaultValue<min || defaultValue>max)
+            throw new IllegalArgumentException("Invalid pagination contract");
+        if(!args.has(field))return defaultValue;
+        JsonPrimitive primitive;
+        try { primitive=args.get(field).getAsJsonPrimitive(); }
+        catch(RuntimeException invalid){
+            throw new IllegalArgumentException("Invalid JSON page selector: "+field,invalid);
+        }
+        String raw=primitive.getAsString();
+        if(!primitive.isNumber() || !DECIMAL.matcher(raw).matches())
+            throw new IllegalArgumentException(
+                "Page selector must be canonical JSON nonnegative integer: "+field);
+        try {
+            long number=Long.parseLong(raw);
+            if(number<min || number>max)
+                throw new IllegalArgumentException("Page selector out of range: "+field);
+            return (int)number;
+        }catch(NumberFormatException invalid){
+            throw new IllegalArgumentException("Page selector overflow: "+field,invalid);
+        }
+    }
+
+    /**
+     * Hardware report versions are opaque text, not coerced numeric values.
+     * On subsequent pages both the exact old report revision and a per-scan
+     * generation UUID are required; a new Analyze cannot revive an old cursor.
+     */
+    static String optionalReportRevision(JsonObject args,String field) {
+        if(!args.has(field))return null;
+        JsonPrimitive primitive;
+        try { primitive=args.get(field).getAsJsonPrimitive(); }
+        catch(RuntimeException invalid) {
+            throw new IllegalArgumentException("Invalid report revision",invalid);
+        }
+        if(!primitive.isString() || primitive.getAsString().isBlank() ||
+                primitive.getAsString().length()>512)
+            throw new IllegalArgumentException("Invalid report revision");
+        return primitive.getAsString();
+    }
+
     static Long optionalRevision(JsonObject args,String field){
         if(!args.has(field))return null;
         JsonPrimitive primitive;

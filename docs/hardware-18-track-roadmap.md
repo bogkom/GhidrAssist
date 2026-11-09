@@ -1,5 +1,49 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
+## GA-12/15/18 — 2026-11-09: typed page bounds and scan-bound hardware report exports
+
+The Automation API v3 paginated endpoints now use one strict
+`AutomationRpcPagination.pageInt` validator for both `offset` and
+`limit` rather than Gson's permissive `getAsInt()`. Requests with
+quoted numbers, fractions, exponent notation, Booleans, null,
+containers, negative values, 32-bit overflow or an endpoint's own
+page-size/offset budget are refused **before any Listing, ReAct,
+Decompiler, MMIO, XREF, CALL path or hardware report read**. The
+existing endpoint-specific limits (including Decompiler's legitimate
+zero-length status probe) remain intact. An unbounded offset on a
+cheap textual report is still limited to Java's nonnegative int range;
+this does not authorize an unbounded response.
+
+Hardware `analysis.report` and `analysis.export` now use separate,
+ephemeral **UUID generations for each report format**, minted on
+every completed Analyze even when imported firmware bytes and the
+Ghidra modification number have not changed. Each first page
+contains `revision`, `generation`, `stage_epoch`, `profile`,
+`program_path`, `import_sha256` and the existing bounded static
+content. For nonzero offsets the client must echo the EXACT previous
+opaque revision as a JSON string and generation as a UUID string.
+The GUI tab refuses different format, new scan, changed Program,
+profile, source epoch, or stale revision before and after collecting
+the read-only page. The CLI exposes
+`--expected-report-revision` plus existing
+`--expected-generation` for report/export follow-on pages.
+The old unbound HTTP page continuation is intentionally refused;
+initial offset-zero requests remain compatible.
+
+The real Ghidra 12.1.4 PUBLIC / Java25 / Xvfb / Bearer JSON-RPC
+CodeBrowser smoke tests perform hundreds of deterministic type/bounds
+refusals across real paginated methods. They also verify end-of-report
+pages with exact cursor, format isolation, source-pair bounds, and a
+stale report refusal after Program switch and **fresh Analyze of the
+same Program with the same revision**. The independent actual
+synthetic CodeBrowser/Agentic test checks retained findings selector
+bounds; full extension build, Java21 and ongoing CI remain required.
+No user Program, private ECU411, OAuth or stopped local Wyse/Precision
+and Supervisor workers participate. Static evidence is never actual
+executed MM/VBR/ISR or Apply authorization. GA-12/15/18 remain
+PARTIAL; GA-14 remains deferred.
+
+
 ## GA-12/15/18 — 2026-11-09: exact wire-format cursor identity for hardware and Agentic pagination
 
 The pre-existing stage-epoch, active Program and findings-run guards

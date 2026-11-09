@@ -109,6 +109,10 @@ public final class HardwareAnalysisTab extends JPanel {
     private volatile ghidrassist.hardware.HardwareResetIndirectVbrCorrelation.SourceInventory
         latestJointInventory;
     private volatile String latestJointGeneration;
+    // Per-format, per-completed-Analyze unguessable cursors. This also
+    // protects generic CPU32 and legacy-restored reports with no JSR inventory.
+    private volatile java.util.Map<String,String> latestReportGenerations=
+        java.util.Map.of();
     private volatile long latestJointStageEpoch=-1;
     private volatile ghidra.util.task.TaskMonitorAdapter activeMonitor;
     private volatile boolean latestConcrete;
@@ -165,8 +169,11 @@ public final class HardwareAnalysisTab extends JPanel {
     }
 
     /** Return a revision-bound, size-limited page; no file-system side effects. */
-    public com.google.gson.JsonObject automationReport(String format,int offset,int limit) {
-        if (!SwingUtilities.isEventDispatchThread()) throw new IllegalStateException("EDT required");
+    public com.google.gson.JsonObject automationReport(
+            String format,int offset,int limit,String expectedRevision,
+            String expectedGeneration) {
+        if (!SwingUtilities.isEventDispatchThread())
+            throw new IllegalStateException("EDT required");
         if (offset<0 || limit<1 || limit>8192)
             throw new IllegalArgumentException("Invalid report pagination");
         if (!currentScan() || latestMarkdown==null)
@@ -178,19 +185,47 @@ public final class HardwareAnalysisTab extends JPanel {
             default -> throw new IllegalArgumentException("Unknown report format");
         };
         if (content==null) throw new IllegalStateException("Requested report unavailable");
+        String revision=latestRevision.toString();
+        String generation=latestReportGenerations.get(format);
+        if(generation==null || generation.isBlank())
+            throw new IllegalStateException("Report generation not retained");
+        if(expectedRevision!=null && !expectedRevision.equals(revision))
+            throw new IllegalStateException("STALE_REVISION: report revision changed");
+        if(expectedGeneration!=null && !expectedGeneration.equals(generation))
+            throw new IllegalStateException("STALE_GENERATION: report rerun or format changed");
+        if(offset>0 && (expectedRevision==null || expectedGeneration==null))
+            throw new IllegalArgumentException(
+                "Subsequent report page requires revision and generation");
         int start=Math.min(offset,content.length());
         int end=(int)Math.min((long)content.length(),(long)start+limit);
         com.google.gson.JsonObject answer=new com.google.gson.JsonObject();
         answer.addProperty("format",format);
-        answer.addProperty("revision",latestRevision.toString());
+        answer.addProperty("revision",revision);
+        // The legacy revision string is an opaque per-capture object token.
+        // A stable numeric Ghidra modification counter is a separate fact.
+        answer.addProperty("program_revision",latestRevision.modificationNumber());
+        answer.addProperty("generation",generation);
+        answer.addProperty("stage_epoch",latestJointStageEpoch);
+        answer.addProperty("import_sha256",
+            latestRevision.sourceSha256()==null?"UNKNOWN":latestRevision.sourceSha256());
+        answer.addProperty("profile",latestConcrete?"MC68332_USER_SELECTED":"CPU32_SURVEY");
+        answer.addProperty("program_path",latestProgram.getDomainFile()==null?
+            "UNKNOWN":latestProgram.getDomainFile().getPathname());
         answer.addProperty("total_characters",content.length());
         answer.addProperty("offset",offset);
         answer.addProperty("limit",limit);
         answer.addProperty("text",content.substring(start,end));
         answer.addProperty("more",end<content.length());
         answer.addProperty("scope","STATIC EVIDENCE ONLY; NO EXECUTION OR PHYSICAL MAPPING");
-        if (!currentScan()) throw new IllegalStateException("Program changed while reading report");
+        if (!currentScan() || !revision.equals(latestRevision.toString()) ||
+                !generation.equals(latestReportGenerations.get(format)))
+            throw new IllegalStateException("STALE_REVISION: report changed while reading");
         return answer;
+    }
+
+    /** Legacy internal callers may request only the first page without a cursor. */
+    public com.google.gson.JsonObject automationReport(String format,int offset,int limit){
+        return automationReport(format,offset,limit,null,null);
     }
 
     /**
@@ -845,6 +880,7 @@ public final class HardwareAnalysisTab extends JPanel {
         latestRevision=null;
         latestJointInventory=null;
         latestJointGeneration=null;
+        latestReportGenerations=java.util.Map.of();
         latestJointStageEpoch=-1;
         latestFunctionProposals=List.of();
         latestSites=List.of();
@@ -1018,6 +1054,7 @@ public final class HardwareAnalysisTab extends JPanel {
         latestRevision=null;
         latestJointInventory=null;
         latestJointGeneration=null;
+        latestReportGenerations=java.util.Map.of();
         latestJointStageEpoch=-1;
         ghidrassist.hardware.HardwareEvidenceCache.clear(program);
         report.getHighlighter().removeAllHighlights();
@@ -1060,6 +1097,10 @@ public final class HardwareAnalysisTab extends JPanel {
                     latestJointInventory=finished.sourceInventory;
                     latestJointGeneration=finished.sourceInventory==null?null:
                         java.util.UUID.randomUUID().toString();
+                    latestReportGenerations=java.util.Map.of(
+                        "markdown",java.util.UUID.randomUUID().toString(),
+                        "config_csv",java.util.UUID.randomUUID().toString(),
+                        "names_csv",java.util.UUID.randomUUID().toString());
                     // All published Analyze reports (generic, concrete,
                     // and legacy-restored) are scoped to the stage epoch.
                     latestJointStageEpoch=

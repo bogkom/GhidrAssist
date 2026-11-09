@@ -612,6 +612,12 @@ def main():
                                 time.sleep(0.07)
                             p1=http_call("hardware.source_pairs.page",
                                 {"offset":0,"limit":1})["source_pairs"]
+                            source_report_first=http_call("analysis.report",
+                                {"format":"markdown","offset":0,"limit":64})["report"]
+                            if (not source_report_first.get("generation") or
+                                    source_report_first.get("program_path")!=
+                                    "/synthetic-reset-indirect-vbr.bin"):
+                                raise RuntimeError("Real source report missing Program binding")
                             if (p1.get("schema")!=1 or p1.get("total_pairs")!=2
                                     or p1.get("offset")!=0 or p1.get("next_offset")!=1
                                     or p1.get("has_more") is not True
@@ -684,6 +690,18 @@ def main():
                             if refused!=len(invalid_revision)+len(invalid_generation):
                                 raise RuntimeError("Missing strict source-pair denial")
                             print("GA-12 SOURCE PAIRS EXACT REVISION/UUID PASS")
+                            for field in ("offset","limit"):
+                                for value in ("1",1.5,True,None,[],{},-1,
+                                              2**31,1e100):
+                                    untrusted={**params,field:value}
+                                    try:
+                                        http_call("hardware.source_pairs.page",untrusted)
+                                    except HTTPError as error:
+                                        if error.code!=400:raise
+                                    else:
+                                        raise RuntimeError(
+                                            "Noncanonical source page accepted: "+str(untrusted))
+                            print("GA-12 SOURCE-PAIR STRICT JSON PAGE LIMITS PASS")
                             # Exercise actual installed CLI, versioned local
                             # no-overwrite checkpoint and offline verifier.
                             private=work/"ga18-source-pairs-session.json"
@@ -691,6 +709,26 @@ def main():
                             with os.fdopen(fd,"w",encoding="utf-8") as handle:
                                 json.dump({"schema":3,"port":receipt["port"],"token":token},handle)
                             agent=str(ROOT/"tools/ghidrassist-agent")
+                            # The shipped CLI must preserve the opaque report
+                            # cursor verbatim; not reinterpret it as a number.
+                            subprocess_checked([sys.executable,agent,"--session",
+                                str(private),"report","--offset","1",
+                                "--limit","64","--expected-report-revision",
+                                source_report_first["revision"],
+                                "--expected-generation",
+                                source_report_first["generation"]],
+                                work,env,out/"report-cursor-cli-valid.json",30)
+                            cli_page=json.loads((out/"report-cursor-cli-valid.json").read_text())
+                            if (cli_page.get("report",{}).get("generation")!=
+                                    source_report_first["generation"]):
+                                raise RuntimeError("Real CLI report cursor changed")
+                            incomplete=subprocess.run([sys.executable,agent,
+                                "--session",str(private),"report",
+                                "--offset","1","--limit","64"],
+                                cwd=work,env=env,capture_output=True,text=True,
+                                timeout=30)
+                            if incomplete.returncode==0:
+                                raise RuntimeError("CLI accepted unbound report continuation")
                             source_checkpoint=out/"source-pairs-v1-checkpoint.json"
                             subprocess_checked([sys.executable,agent,"--session",
                                 str(private),"source-pairs-checkpoint","--output",
@@ -717,6 +755,15 @@ def main():
                             # even when the original source bytes are unchanged.
                             http_call("project.program.open",{"path":"/guard-other.bin"})
                             try:
+                                http_call("analysis.export",{
+                                    "format":"markdown","offset":1,"limit":64,
+                                    "expected_revision":source_report_first["revision"],
+                                    "expected_generation":source_report_first["generation"]})
+                            except HTTPError as error:
+                                if error.code!=400:raise
+                            else:
+                                raise RuntimeError("Old report leaked after Program switch")
+                            try:
                                 http_call("hardware.source_pairs.page",params)
                             except HTTPError as error:
                                 if error.code!=400:raise
@@ -736,6 +783,24 @@ def main():
                                 time.sleep(0.07)
                             fresh=http_call("hardware.source_pairs.page",
                                 {"offset":0,"limit":1})["source_pairs"]
+                            fresh_report=http_call("analysis.report",
+                                {"format":"markdown","offset":0,"limit":64})["report"]
+                            if (fresh_report["program_revision"]!=
+                                    source_report_first["program_revision"] or
+                                    fresh_report["generation"]==
+                                    source_report_first["generation"]):
+                                raise RuntimeError(
+                                    "Rerun with same Program revision revived old report generation")
+                            try:
+                                http_call("analysis.report",{
+                                    "format":"markdown","offset":1,"limit":64,
+                                    "expected_revision":source_report_first["revision"],
+                                    "expected_generation":source_report_first["generation"]})
+                            except HTTPError as error:
+                                if error.code!=400:raise
+                            else:
+                                raise RuntimeError(
+                                    "Old report cursor reused after same-input Analyze rerun")
                             if fresh.get("generation")==p1["generation"]:
                                 raise RuntimeError("New Analyze revived old source-pair cursor")
                             try:
@@ -783,23 +848,108 @@ def main():
                             if error.code!=400: raise
                         else:
                             raise RuntimeError("Unknown UI tab was accepted")
+                        report_first=None
                         for method in ("analysis.report","analysis.export"):
                             page=http_call(method,{"format":"markdown","offset":0,"limit":128}).get("report",{})
                             if (page.get("format")!="markdown" or
                                     not 0<len(page.get("text",""))<=128 or
                                     page.get("total_characters",0)<len(page["text"]) or
-                                    not page.get("revision")):
+                                    not isinstance(page.get("revision"),str) or
+                                    not isinstance(page.get("generation"),str) or
+                                    page.get("stage_epoch",-1)<0 or
+                                    not page.get("import_sha256") or
+                                    page.get("profile")!="MC68332_USER_SELECTED" or
+                                    page.get("program_path")!="/synthetic-mmio.bin"):
                                 raise RuntimeError("Hardware evidence page invalid: "+str(page))
+                            if report_first is None:
+                                report_first=page
+                            elif page["generation"]!=report_first["generation"]:
+                                raise RuntimeError("Report/export served different generations")
+                            cursor={"expected_revision":page["revision"],
+                                    "expected_generation":page["generation"]}
                             end=http_call(method,{"format":"markdown",
-                                "offset":page["total_characters"],"limit":128}).get("report",{})
-                            if end.get("text")!="" or end.get("more") is not False:
+                                "offset":page["total_characters"],"limit":128,
+                                **cursor}).get("report",{})
+                            if (end.get("text")!="" or end.get("more") is not False or
+                                    end.get("generation")!=page["generation"]):
                                 raise RuntimeError("End-of-report page invalid")
+                            for bad in (
+                                {"format":"markdown","offset":1,"limit":128},
+                                {"format":"markdown","offset":1,"limit":128,
+                                 "expected_revision":page["revision"]},
+                                {"format":"markdown","offset":1,"limit":128,
+                                 "expected_generation":page["generation"]},
+                                {"format":"markdown","offset":1,"limit":128,
+                                 **{**cursor,"expected_revision":page["revision"]+"-old"}},
+                                {"format":"markdown","offset":1,"limit":128,
+                                 **{**cursor,"expected_generation":
+                                    "00000000-0000-0000-0000-000000000000"}},
+                                {"format":"markdown","offset":1,"limit":128,
+                                 **{**cursor,"expected_revision":0}},
+                                {"format":"markdown","offset":1,"limit":128,
+                                 **{**cursor,"expected_generation":True}}):
+                                try:
+                                    http_call(method,bad)
+                                except HTTPError as error:
+                                    if error.code!=400:raise
+                                else:
+                                    raise RuntimeError(
+                                        "Unbound or malformed report page accepted: "+str(bad))
+                        for format_name in ("config_csv","names_csv"):
+                            first=http_call("analysis.report",
+                                {"format":format_name,"offset":0,"limit":64})["report"]
+                            if (first["generation"]==report_first["generation"] or
+                                    first["format"]!=format_name):
+                                raise RuntimeError("Report format shared a stale cursor")
+                            try:
+                                http_call("analysis.report",{
+                                    "format":format_name,"offset":1,"limit":64,
+                                    "expected_revision":first["revision"],
+                                    "expected_generation":report_first["generation"]})
+                            except HTTPError as error:
+                                if error.code!=400:raise
+                            else:
+                                raise RuntimeError("Cross-format report cursor accepted")
                         try:
                             http_call("analysis.report",{"format":"markdown","offset":0,"limit":8193})
                         except HTTPError as error:
                             if error.code!=400: raise
                         else:
                             raise RuntimeError("Unbounded report page was accepted")
+                        # Same real bearer-authenticated CodeBrowser API:
+                        # NO endpoint may coerce a quoted, fractional,
+                        # Boolean, null, container, negative or overflowing
+                        # page selector through Gson getAsInt().
+                        page_routes=(
+                            ("analysis.report",{"format":"markdown"}),
+                            ("analysis.export",{"format":"markdown"}),
+                            ("hardware.mmio.rows",{"filter":"SIMCR"}),
+                            ("hardware.review.preview",{}),
+                            ("listing.range",{"address":pc}),
+                            ("function.xrefs.body",{"direction":"outgoing"}),
+                            ("function.xrefs",{}),
+                            ("decompiler.status",{}),
+                            ("analysis.paths",{"origin":"reset","max_depth":4}),
+                        )
+                        illegal_page_values=("1",1.5,True,False,None,[],{},
+                                             -1,2**31,1e100)
+                        page_denials=0
+                        for method,base in page_routes:
+                            for field in ("offset","limit"):
+                                for value in illegal_page_values:
+                                    args_page={**base,"offset":0,"limit":1,field:value}
+                                    try:
+                                        http_call(method,args_page)
+                                    except HTTPError as error:
+                                        if error.code!=400:raise
+                                    else:
+                                        raise RuntimeError(
+                                            "Noncanonical paged RPC accepted: "+
+                                            method+" "+field+" "+str(value))
+                                    page_denials+=1
+                        if page_denials!=len(page_routes)*2*len(illegal_page_values):
+                            raise RuntimeError("Missing deterministic page selector denials")
+                        print("GA-12/18 BOUNDED JSON OFFSET/LIMIT 180 REAL RPC DENIALS PASS")
                         try:
                             http_call("hardware.cancel")
                         except HTTPError as error:
