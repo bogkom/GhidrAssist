@@ -893,6 +893,68 @@ public class TabController {
     // available; this route never bypasses the fresh Review/Approve flow.
     private boolean boundAgenticReviewPending;
 
+    /**
+     * Explicit local evidence-sidecar creation only. This does not stage
+     * a Review, run a model or authorize any Program mutation.
+     * The full Program fingerprint is computed off Swing EDT.
+     */
+    public void handleCreateBoundAgenticCheckpoint(
+            java.nio.file.Path checkpoint,java.nio.file.Path binding,
+            String objective,boolean mc68332) {
+        if(!SwingUtilities.isEventDispatchThread()) {
+            SwingUtilities.invokeLater(()->
+                handleCreateBoundAgenticCheckpoint(
+                    checkpoint,binding,objective,mc68332));
+            return;
+        }
+        if(isQueryRunning || isAgentPlanPending || isCancelling ||
+                boundAgenticReviewPending) {
+            Msg.showError(getClass(),queryTab,"Create Review binding",
+                "Finish the current task, plan or import first.");
+            return;
+        }
+        var program=plugin.getCurrentProgram();
+        if(program==null) {
+            Msg.showError(getClass(),queryTab,"Create Review binding",
+                "No active Program");
+            return;
+        }
+        final long revision=program.getModificationNumber();
+        final int session=queryService.getCurrentSessionId();
+        boundAgenticReviewPending=true;
+        new javax.swing.SwingWorker<Boolean,Void>(){
+            @Override protected Boolean doInBackground()throws Exception {
+                ghidrassist.agent.react.AgenticReviewProgramBinding.save(
+                    checkpoint,binding,program,objective,mc68332,
+                    ghidra.util.task.TaskMonitor.DUMMY);
+                return true;
+            }
+            @Override protected void done() {
+                try {
+                    get();
+                    if(program!=plugin.getCurrentProgram() ||
+                            program.getModificationNumber()!=revision ||
+                            queryService.getCurrentSessionId()!=session ||
+                            isQueryRunning || isAgentPlanPending || isCancelling)
+                        throw new IllegalStateException(
+                            "Program/Query changed while saving binding; discard the sidecar");
+                    Msg.info(this,"Read-only Program binding created. "+
+                        "Select Import Bound Checkpoint to start a separate NEW Review; "+
+                        "no plan, model or Apply was authorized.");
+                }catch(Exception error) {
+                    Throwable reason=error instanceof
+                        java.util.concurrent.ExecutionException &&
+                        error.getCause()!=null?error.getCause():error;
+                    Msg.showError(getClass(),queryTab,
+                        "Review binding creation refused",
+                        reason.getMessage()==null?
+                            "Program, checkpoint or output changed":
+                            reason.getMessage());
+                }finally{boundAgenticReviewPending=false;}
+            }
+        }.execute();
+    }
+
     public void handleBoundSavedAgenticCheckpointImport(
             java.nio.file.Path checkpoint, java.nio.file.Path binding,
             boolean mc68332) {
