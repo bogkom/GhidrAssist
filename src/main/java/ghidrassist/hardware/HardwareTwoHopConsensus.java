@@ -154,8 +154,6 @@ public final class HardwareTwoHopConsensus {
         selected.sort(Comparator.comparingLong(
             HardwareCallsiteRegisterFlow.Call::caller)
             .thenComparingLong(HardwareCallsiteRegisterFlow.Call::callPc));
-        if(selected.isEmpty())
-            return blank(State.NO_SAMPLED_CALLS,leaf,store,0,List.of());
         List<HardwareTwoHopRegisterFlow.Candidate> rows=new ArrayList<>();
         for(var hit:summary.rows())
             if(hit.bridgeEntry()==bridge && hit.leafEntry()==leaf &&
@@ -164,6 +162,9 @@ public final class HardwareTwoHopConsensus {
         rows.sort(Comparator.comparingLong(
             HardwareTwoHopRegisterFlow.Candidate::outerCaller)
             .thenComparingLong(HardwareTwoHopRegisterFlow.Candidate::outerCallPc));
+        if(selected.isEmpty())
+            return blank(rows.isEmpty()?State.NO_SAMPLED_CALLS:
+                State.INCOMPLETE,leaf,store,0,rows);
         boolean incomplete=summary.sampled()!=outer.size() ||
             summary.displayTruncated() ||
             summary.possibleStores()!=summary.rows().size() ||
@@ -234,6 +235,10 @@ public final class HardwareTwoHopConsensus {
                 maxRows<1 || maxRows>MAX_REPORT_ROWS ||
                 captured==null || current==null)
             throw new IllegalArgumentException("Unbounded two-hop report");
+        // Even a row-by-row guarded report could leak a previously
+        // reconciled candidate when Ghidra edits the Listing between rows.
+        // The entire report must be discarded if the revision changes.
+        if(!captured.same(current.get()))return staleMarkdown();
         StringBuilder b=new StringBuilder();
         b.append("## Two-hop cross-CALL MMIO source agreement (GA-02/03)\n\n")
          .append("- **SOURCE-ONLY MAY-CANDIDATES; NOT HARDWARE PROOF**. ")
@@ -262,7 +267,8 @@ public final class HardwareTwoHopConsensus {
                     if(displayed>=maxRows){
                         b.append("- **INCOMPLETE DISPLAY:** extra leaf STORE ")
                          .append("sites omitted by report budget.\n\n");
-                        return b.toString();
+                        return captured.same(current.get())?
+                        b.toString():staleMarkdown();
                     }
                     Finding hit=inspectScopedRevisionBound(captured,current,
                         outer,summary,group.getKey(),leaf.getKey(),store);
@@ -285,6 +291,15 @@ public final class HardwareTwoHopConsensus {
                 }
         if(displayed==0)b.append("| — | — | — | 0 | NO_SAMPLED_CALLS | ")
             .append("UNKNOWN | UNKNOWN | UNKNOWN |\n");
-        return b.append("\n").toString();
+        b.append("\n");
+        return captured.same(current.get())?
+            b.toString():staleMarkdown();
+    }
+
+    private static String staleMarkdown(){
+        return "## Two-hop cross-CALL MMIO source agreement (GA-02/03)\n\n"+
+            "- **STALE_REVISION**: Ghidra Listing/program changed while "+
+            "building the report; all source address, word and CALL "+
+            "provenance discarded. No Review/Apply evidence.\n\n";
     }
 }
