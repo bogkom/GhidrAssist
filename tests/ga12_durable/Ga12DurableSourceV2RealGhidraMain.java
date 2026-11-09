@@ -8,6 +8,7 @@ import ghidra.framework.model.ProjectLocator;
 import ghidra.framework.project.DefaultProjectManager;
 import ghidra.program.model.listing.Program;
 import ghidra.util.task.TaskMonitor;
+import ghidrassist.agent.react.AgenticReviewProgramBinding;
 import ghidrassist.hardware.HardwareAnalysisRevision;
 import ghidrassist.hardware.HardwareDurableCfgReport;
 import ghidrassist.hardware.HardwareDurableStageStore;
@@ -167,13 +168,49 @@ public final class Ga12DurableSourceV2RealGhidraMain {
                 .orElseThrow(),bytes),
             "validly checksummed but incomplete V2 must remain untrusted");
     }
+    private static final String REVIEW_OBJECTIVE=
+        "Independently inspect saved synthetic CPU32 source observations";
+    private static void createSyntheticReviewSource(Path file,Program program)
+            throws Exception {
+        // Synthetic retained data, NOT an LLM run or an approved plan.
+        var gson=new com.google.gson.GsonBuilder().disableHtmlEscaping().create();
+        var payload=new com.google.gson.JsonObject();
+        payload.addProperty("accepted_count",1);
+        payload.addProperty("complete",true);
+        payload.addProperty("evicted_count",0);
+        payload.addProperty("findings_revision",1);
+        payload.addProperty("import_sha256",program.getExecutableSHA256());
+        payload.addProperty("kind","ghidrassist-agentic-retained-evidence");
+        payload.addProperty("program_revision",program.getModificationNumber());
+        payload.addProperty("retained_count",1);
+        var rows=new com.google.gson.JsonArray();
+        var row=new com.google.gson.JsonObject();
+        row.addProperty("evidence","synthetic source only 0x00000138");
+        row.addProperty("fact","Static computed JSR candidate is not execution");
+        row.addProperty("relevance",1);
+        row.addProperty("timestamp",1);
+        row.addProperty("toolUsed","synthetic-listing");
+        rows.add(row);
+        payload.add("rows",rows);
+        payload.addProperty("run","GA12-NO-LLM-SYNTHETIC-RUN");
+        payload.addProperty("schema",1);
+        payload.addProperty("source_incomplete",false);
+        payload.addProperty("state","SUCCESS");
+        var envelope=new com.google.gson.JsonObject();
+        envelope.add("payload",payload);
+        envelope.addProperty("payload_sha256",
+            HardwareDurableStageStore.hash(gson.toJson(payload)));
+        Files.writeString(file,gson.toJson(envelope)+"\\n",
+            java.nio.file.StandardOpenOption.CREATE_NEW);
+    }
     public static void main(String[] args)throws Exception {
         require(args.length==5,"ghidra,project,proof,cache,phase");
         String phase=args[4];
         require(phase.equals("source-write")||phase.equals("source-read")||
             phase.equals("source-edit")||phase.equals("source-v1")||
             phase.equals("source-corrupt")||phase.equals("source-profile")||
-            phase.equals("source-mismatch")||phase.equals("source-incomplete"),
+            phase.equals("source-mismatch")||phase.equals("source-incomplete")||
+            phase.equals("source-name"),
             "unexpected isolated V2 phase");
         Path ghidra=Path.of(args[0]).toRealPath();
         Path projectDir=Path.of(args[1]).toRealPath();
@@ -208,6 +245,28 @@ public final class Ga12DurableSourceV2RealGhidraMain {
             boolean selected=!phase.equals("source-profile");
             var original=HardwareGhidraInputFingerprint.capture(
                 program,TaskMonitor.DUMMY,true).orElseThrow();
+            Path reviewSource=proofs.resolve("ga12-synthetic-agentic-review-source.json");
+            Path reviewBinding=proofs.resolve("ga12-review-program-binding.json");
+            if(phase.equals("source-write")) {
+                createSyntheticReviewSource(reviewSource,program);
+                AgenticReviewProgramBinding.save(reviewSource,reviewBinding,
+                    program,REVIEW_OBJECTIVE,true,TaskMonitor.DUMMY);
+                require(Files.isRegularFile(reviewBinding) &&
+                    Files.getPosixFilePermissions(reviewBinding).contains(
+                        java.nio.file.attribute.PosixFilePermission.OWNER_READ),
+                    "create private no-overwrite Review full-input binding");
+            }
+            if(phase.equals("source-name")) {
+                int renameTx=program.startTransaction(
+                    "GA12 SYNTHETIC FUNCTION RENAME; NO USER PROGRAM");
+                try {
+                    var function=program.getFunctionManager().getFunctionAt(
+                        program.getAddressFactory().getDefaultAddressSpace()
+                            .getAddress(0x130));
+                    function.setName("GA12_RENAMED_SOURCE_130",
+                        ghidra.program.model.symbol.SourceType.USER_DEFINED);
+                }finally{program.endTransaction(renameTx,true);}
+            }
             if(phase.equals("source-edit")) {
                 int tx=program.startTransaction(
                     "GA12 SYNTHETIC V2 BYTE CHANGE; NO USER PROGRAM");
@@ -224,9 +283,28 @@ public final class Ga12DurableSourceV2RealGhidraMain {
             }
             var actual=HardwareGhidraInputFingerprint.capture(
                 program,TaskMonitor.DUMMY,selected).orElseThrow();
+            boolean bindingRefused=false;
+            try {
+                var historical=AgenticReviewProgramBinding.load(
+                    reviewSource,reviewBinding,program,selected,TaskMonitor.DUMMY);
+                require(historical.toReviewQuery().contains(REVIEW_OBJECTIVE) &&
+                    historical.toReviewQuery().contains(
+                        "Untrusted historical observations"),
+                    "new Review contains only untrusted historical data");
+            }catch(IllegalArgumentException denied){
+                bindingRefused=true;
+            }
+            boolean expectBindingRefusal=phase.equals("source-edit")||
+                phase.equals("source-name")||phase.equals("source-profile");
+            require(bindingRefused==expectBindingRefusal,
+                "Full Program Review binding mismatch for "+phase);
+
             if(phase.equals("source-edit"))
                 require(!actual.inputSha256().equals(original.inputSha256()),
                     "edited bytes must change exact effective fingerprint");
+            if(phase.equals("source-name"))
+                require(!actual.inputSha256().equals(original.inputSha256()),
+                    "renamed function must modify full Program fingerprint");
             if(phase.equals("source-profile"))
                 require(!actual.mc68332() && original.mc68332() &&
                     !actual.equals(original),
@@ -292,6 +370,7 @@ public final class Ga12DurableSourceV2RealGhidraMain {
                 ",\"full_input_sha256\":\""+original.inputSha256()+"\""+
                 ",\"effective_input_sha256\":\""+actual.inputSha256()+"\""+
                 ",\"selected_mc68332\":"+selected+
+                ",\"review_binding_refused\":"+bindingRefused+
                 ",\"import_sha256\":\""+imported+"\""+
                 ",\"revision_unchanged\":"+
                     (program.getModificationNumber()==beforeRevision)+
