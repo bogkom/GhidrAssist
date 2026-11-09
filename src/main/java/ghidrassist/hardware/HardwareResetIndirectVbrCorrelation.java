@@ -56,7 +56,7 @@ public final class HardwareResetIndirectVbrCorrelation {
         public Result {
             rows=List.copyOf(rows);
             if(pageOffset<0 || pageLimit<1 || pageLimit>MAX_DISPLAY ||
-                    nextOffset<pageOffset || nextOffset>colocatedPairs ||
+                    nextOffset<pageOffset ||
                     rows.size()>pageLimit || hasMore!=(nextOffset<colocatedPairs) ||
                     displayTruncated!=(colocatedPairs>rows.size()))
                 throw new IllegalArgumentException("Inconsistent source page");
