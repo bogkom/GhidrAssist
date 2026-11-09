@@ -49,15 +49,16 @@ jobs:
           set -euo pipefail
           # Ghidra's isolated wrapper defaults to a 10s Gradle-download timeout.
           # Increase only this CI copy; preserve Ghidra/extension SHA checks.
-          wrapper="$GHIDRA_INSTALL_DIR/support/gradle/gradle/wrapper/gradle-wrapper.properties"
-          if test ! -f "$wrapper"; then
-            wrapper="$GHIDRA_INSTALL_DIR/support/gradle/wrapper/gradle-wrapper.properties"
-          fi
-          test -f "$wrapper"
-          if grep -q '^networkTimeout=' "$wrapper"; then
-            sed -i 's/^networkTimeout=.*/networkTimeout=120000/' "$wrapper"
+          wrapper="$(find "$GHIDRA_INSTALL_DIR/support/gradle" \
+            -type f -name 'gradle-wrapper.properties' -print -quit)"
+          if test -n "$wrapper"; then
+            if grep -q '^networkTimeout=' "$wrapper"; then
+              sed -i 's/^networkTimeout=.*/networkTimeout=120000/' "$wrapper"
+            else
+              printf '\nnetworkTimeout=120000\n' >> "$wrapper"
+            fi
           else
-            printf '\nnetworkTimeout=120000\n' >> "$wrapper"
+            echo "No editable Gradle wrapper properties; use the original verified Ghidra launcher."
           fi
           "$GHIDRA_INSTALL_DIR/support/gradle/gradlew" --no-daemon buildExtension
           EXTENSION="$(find dist -maxdepth 1 -name 'ghidra_12.1.4_PUBLIC_*_GhidrAssist.zip' -type f -print -quit)"
