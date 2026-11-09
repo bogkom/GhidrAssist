@@ -1,0 +1,171 @@
+package ghidrassist.hardware;
+
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
+import static ghidrassist.hardware.HardwareDataflow.Kind.*;
+
+/** GA-02/03/12: two-hop source agreement, missing contexts and revision race. */
+public final class HardwareTwoHopConsensusSelfTest {
+    private HardwareTwoHopConsensusSelfTest(){}
+    private static int checks;
+    private static void ok(boolean value,String why){
+        checks++;
+        if(!value)throw new AssertionError(why);
+    }
+    private static void denied(Runnable fn,String why){
+        boolean failed=false;
+        try{fn.run();}catch(IllegalArgumentException expected){failed=true;}
+        ok(failed,why);
+    }
+    private static HardwareCallsiteRegisterFlow.Call caller(
+            long entry,Long address,long word) {
+        return new HardwareCallsiteRegisterFlow.Call(entry,entry+0xCL,0x640L,
+            address==null?Map.of("D0",word):
+                Map.of("A0",address,"D0",word),false);
+    }
+    private static HardwareTwoHopRegisterFlow.Bridge bridge(){
+        return new HardwareTwoHopRegisterFlow.Bridge(0x640L,List.of(
+            new HardwareDataflow.Step(0x640L,COPY_POINTER,"A1","A0",
+                0,0,null,0,List.of(0x642L),"MOVEA.L"),
+            new HardwareDataflow.Step(0x642L,CALL_BARRIER,null,
+                0,0,null,0,List.of(0x648L),"JSR"),
+            new HardwareDataflow.Step(0x648L,OTHER,null,
+                0,0,null,0,List.of(),"RTS")),0x642L,0x700L,true);
+    }
+    private static HardwareCallsiteRegisterFlow.Callee leaf(){
+        return new HardwareCallsiteRegisterFlow.Callee(0x700L,List.of(
+            new HardwareDataflow.Step(0x700L,STORE_INDIRECT,"A1","D0",
+                0,0,null,16,List.of(0x702L),"MOVE.W"),
+            new HardwareDataflow.Step(0x702L,OTHER,null,
+                0,0,null,0,List.of(),"RTS")),true);
+    }
+    private static HardwareTwoHopRegisterFlow.Summary analyze(
+            List<HardwareCallsiteRegisterFlow.Call> calls,int limit){
+        return HardwareTwoHopRegisterFlow.analyze(calls,List.of(bridge()),
+            List.of(leaf()),Set.of(0xfffa00L,0xfffa68L),limit);
+    }
+    private static HardwareTwoHopConsensus.Finding inspect(
+            List<HardwareCallsiteRegisterFlow.Call> calls,int limit){
+        return HardwareTwoHopConsensus.inspect(calls,analyze(calls,limit),
+            0x700L,0x700L);
+    }
+    public static void main(String[] args){
+        long simcr=0xfffa00L,cs=0xfffa68L;
+        var a=caller(0x100L,simcr,0x40caL);
+        var b=caller(0x200L,simcr,0x40caL);
+        var c=caller(0x300L,cs,0x4848L);
+        var agreement=inspect(List.of(b,a),16);
+        ok(agreement.state()==HardwareTwoHopConsensus.State.SAMPLED_AGREEMENT &&
+                agreement.sampledOuterCalls()==2 &&
+                agreement.address()==simcr &&
+                agreement.word()==0x40ca &&
+                agreement.bits()==16 &&
+                agreement.provenance().size()==2,
+            "Two independent outer direct CALLs agree after one bridge");
+        ok(agreement.provenance().get(0).outerCaller()==0x100L &&
+                agreement.provenance().get(0).bridgeEntry()==0x640L &&
+                agreement.provenance().get(0).innerCallPc()==0x642L &&
+                agreement.provenance().get(0).leafEntry()==0x700L &&
+                agreement.provenance().get(0).storePc()==0x700L &&
+                agreement.provenance().get(1).outerCaller()==0x200L,
+            "Independent outer, bridge, nested and leaf PCs retained");
+        ok(!agreement.publishableAsHardwareProof(),
+            "Sampled two-hop agreement is never runtime MMIO proof");
+        var divergence=inspect(List.of(a,c),16);
+        ok(divergence.state()==HardwareTwoHopConsensus.State.SAMPLED_DIVERGENCE &&
+                divergence.address()==null && divergence.word()==null &&
+                divergence.provenance().size()==2,
+            "Different callers do not produce a globally proven MMIO address");
+        var missing=caller(0x400L,null,0x40caL);
+        ok(inspect(List.of(a,missing),16).state()==
+                HardwareTwoHopConsensus.State.INCOMPLETE,
+            "Unknown A0 in the outer caller poisons apparent agreement");
+        var partial=new HardwareCallsiteRegisterFlow.Call(
+            0x500L,0x50cL,0x640L,Map.of("A0",simcr,"D0",0x40caL),true);
+        ok(inspect(List.of(a,partial),16).state()==
+                HardwareTwoHopConsensus.State.INCOMPLETE,
+            "Unfinished outer caller cannot be promoted to agreement");
+        ok(inspect(List.of(a,b,c),1).state()==
+                HardwareTwoHopConsensus.State.INCOMPLETE,
+            "Display pagination cannot certify complete source contexts");
+        ok(HardwareTwoHopConsensus.inspect(List.of(),analyze(List.of(),16),
+                0x700L,0x700L).state()==
+                HardwareTwoHopConsensus.State.NO_SAMPLED_CALLS,
+            "No sampled outer source is explicitly unknown");
+        ok(HardwareTwoHopConsensus.inspect(List.of(a),analyze(List.of(a),16),
+                0x700L,0x702L).state()==
+                HardwareTwoHopConsensus.State.INCOMPLETE,
+            "Unobserved requested STORE cannot be declared absent");
+        ok(HardwareTwoHopConsensus.inspect(List.of(b),analyze(List.of(a),16),
+                0x700L,0x700L).state()==
+                HardwareTwoHopConsensus.State.INCOMPLETE,
+            "Foreign outer caller evidence cannot satisfy this inventory");
+        denied(()->HardwareTwoHopConsensus.inspect(List.of(a,a),
+                analyze(List.of(a),16),0x700L,0x700L),
+            "Duplicate outer CALL PC is rejected");
+        denied(()->HardwareTwoHopConsensus.inspect(List.of(a),
+                analyze(List.of(a),16),-1L,0x700L),
+            "Negative leaf entry rejected");
+
+        Object program=new Object();
+        var rev=HardwareAnalysisRevision.capture(program,8,
+            "68000:BE:32:CPU32","synthetic-sha",true);
+        var equal=HardwareAnalysisRevision.capture(program,8,
+            "68000:BE:32:CPU32","synthetic-sha",true);
+        var changed=HardwareAnalysisRevision.capture(program,9,
+            "68000:BE:32:CPU32","synthetic-sha",true);
+        var wrongProfile=HardwareAnalysisRevision.capture(program,8,
+            "68000:BE:32:CPU32","synthetic-sha",false);
+        var wrongOwner=HardwareAnalysisRevision.capture(new Object(),8,
+            "68000:BE:32:CPU32","synthetic-sha",true);
+        var summary=analyze(List.of(a,b),16);
+        var valid=HardwareTwoHopConsensus.inspectRevisionBound(rev,()->equal,
+            List.of(a,b),summary,0x700L,0x700L);
+        ok(valid.state()==HardwareTwoHopConsensus.State.SAMPLED_AGREEMENT,
+            "Matching source owner and revision permits sampled result");
+        for(var bad:List.of(changed,wrongProfile,wrongOwner)) {
+            var rejected=HardwareTwoHopConsensus.inspectRevisionBound(
+                rev,()->bad,List.of(a,b),summary,0x700L,0x700L);
+            ok(rejected.state()==HardwareTwoHopConsensus.State.STALE_REVISION &&
+                    rejected.address()==null && rejected.provenance().isEmpty(),
+                "Edited Ghidra Program, profile or owner discards provenance");
+        }
+        AtomicInteger reads=new AtomicInteger();
+        var raced=HardwareTwoHopConsensus.inspectRevisionBound(
+            rev,()->reads.getAndIncrement()==0?equal:changed,
+            List.of(a,b),summary,0x700L,0x700L);
+        ok(raced.state()==HardwareTwoHopConsensus.State.STALE_REVISION &&
+                raced.provenance().isEmpty() && reads.get()==2,
+            "Revision changed between source gates suppresses all evidence");
+        String agreedMarkdown=HardwareTwoHopConsensus.markdown(
+            List.of(a,b),summary,0,16,rev,()->equal);
+        ok(agreedMarkdown.contains("SAMPLED_AGREEMENT") &&
+                agreedMarkdown.contains("0x00FFFA00") &&
+                agreedMarkdown.contains("NOT HARDWARE PROOF"),
+            "Report labels sampled agreement as source-only");
+        String omission=HardwareTwoHopConsensus.markdown(
+            List.of(a,b),summary,1,16,rev,()->equal);
+        ok(omission.contains("INCOMPLETE INPUT") &&
+                !omission.contains("SAMPLED_AGREEMENT"),
+            "Unseen outer CALLs prevent apparent unanimous consensus");
+        String stale=HardwareTwoHopConsensus.markdown(
+            List.of(a,b),summary,0,16,rev,()->changed);
+        ok(stale.contains("STALE_REVISION") &&
+                !stale.contains("0x00FFFA00"),
+            "Stale revision strips even sampled source addresses");
+        String different=HardwareTwoHopConsensus.markdown(
+            List.of(a,c),analyze(List.of(a,c),16),0,16,rev,()->equal);
+        ok(different.contains("SAMPLED_DIVERGENCE") &&
+                different.contains("UNKNOWN"),
+            "Conflicting leaf source candidates reported without false address");
+        denied(()->HardwareTwoHopConsensus.markdown(List.of(a),summary,
+                -1,16,rev,()->equal),
+            "Negative omitted outer count rejected");
+        denied(()->HardwareTwoHopConsensus.markdown(List.of(a),summary,
+                0,HardwareTwoHopConsensus.MAX_REPORT_ROWS+1,rev,()->equal),
+            "Unbounded report rows rejected");
+        System.out.println("HardwareTwoHopConsensusSelfTest PASS: checks="+checks);
+    }
+}

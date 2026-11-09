@@ -1,5 +1,45 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
+## GA-02/03/12/18 — 2026-11-09: sampled two-hop CALL source provenance
+
+The two-hop CPU32 direct outer CALL -> fully decoded bridge with one
+inner direct CALL -> bounded leaf STORE solver was already implemented.
+This package does **not** duplicate that solver or promote its
+source-only MAY observations to a global callee effect.
+
+A bounded, read-only second-level reconciliation groups rows for one
+leaf STORE PC while retaining outer caller PC, outer CALL PC, bridge
+entry, nested CALL PC and final leaf/store origin. Independent sampled
+CALL contexts with matching width/address/word may be labeled
+SAMPLED_AGREEMENT; differing contexts are SAMPLED_DIVERGENCE.
+Any skipped/invalid outer or bridge, unknown inner A/D register, missing
+leaf, unresolved STORE alias, mismatched source/bridge origin, duplicate
+or foreign source, pagination or incomplete caller is INCOMPLETE.
+The report explicitly marks unsampled outer CALLs as UNKNOWN. Neither
+agreement nor divergence is runtime execution, active SIMCR/MM, global
+firmware completeness, a physical bus mapping or Review/Apply approval.
+
+A process-local HardwareAnalysisRevision comparison before **and after**
+reconciliation returns STALE_REVISION without address or provenance
+when program, profile, owner or modification changes. The existing
+GhidraHardwareFlowService analysis-epoch gate surrounds the new report.
+No ephemeral process modification number is added to cross-process
+GA-12 durable keys; contextual reports are never saved as complete
+function CFG stages.
+
+Java21 regressions exercise independent convergent/divergent outer
+callers, unresolved pointer, incomplete caller, truncated rows,
+missing/foreign source, duplicated CALL PC, Ghidra-revision changes
+before/between gates and fail-closed Markdown. Genuine Ghidra 12.1.4
+PUBLIC Java25 headless two-hop CPU32 synthetic CALL fixture verifies
+that two conflicting and a third unknown A0 source yield INCOMPLETE
+and no false global MMIO proof. Acceptance requires all exact-HEAD
+Actions workflows, full extension compile and deterministic reports.
+No Wyse, Precision, Supervisor, private ECU411, user project or Apply.
+
+GA-02/03/12/18 remain PARTIAL; GA-14 deferred.
+
+
 ## GA-02/03/12/18 — 2026-11-09: sampled CALL-site consensus and revision barrier
 
 The production one-hop source analyzer already resolves A/D context
