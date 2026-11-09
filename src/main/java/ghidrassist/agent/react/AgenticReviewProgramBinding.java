@@ -115,11 +115,22 @@ public final class AgenticReviewProgramBinding {
             throw new IllegalArgumentException("Missing review context/objective");
         // Full preflight of original retained evidence and import SHA. This
         // neither requests any old approval nor starts an Agentic session.
+        long revision=program.getModificationNumber();
+        byte[] source=bounded(checkpoint,MAX_CHECKPOINT);
         AgenticReviewDraft.loadSavedCheckpoint(checkpoint,program,objective);
         var key=HardwareGhidraInputFingerprint.capture(
             program,monitor,mc68332).orElseThrow(()->
                 new IllegalArgumentException("Unverifiable full Ghidra Program input"));
-        byte[] source=bounded(checkpoint,MAX_CHECKPOINT);
+        // Check the exact source bytes and entire Program AGAIN after the
+        // potentially long fingerprint scan, before creating any sidecar.
+        // This refuses swaps and in-flight edits, not only later loads.
+        var second=HardwareGhidraInputFingerprint.capture(
+            program,monitor,mc68332).orElseThrow(()->
+                new IllegalArgumentException("Program changed while binding Review"));
+        if(program.getModificationNumber()!=revision || !key.equals(second) ||
+                !java.util.Arrays.equals(source,bounded(checkpoint,MAX_CHECKPOINT)))
+            throw new IllegalStateException(
+                "Source or Program changed while creating Review binding");
         JsonObject data=new JsonObject();
         data.addProperty("schema",1);
         data.addProperty("kind",KIND);
@@ -141,13 +152,24 @@ public final class AgenticReviewProgramBinding {
         if(parent==null || Files.isSymbolicLink(parent) ||
                 !Files.isDirectory(parent,LinkOption.NOFOLLOW_LINKS))
             throw new IOException("Review binding directory missing/unsafe");
+        if(Files.exists(binding,LinkOption.NOFOLLOW_LINKS))
+            throw new java.nio.file.FileAlreadyExistsException(binding.toString());
         Path temp=Files.createTempFile(parent,".ga-review-binding-",".tmp");
         try {
             try{Files.setPosixFilePermissions(temp,EnumSet.of(
                 PosixFilePermission.OWNER_READ,PosixFilePermission.OWNER_WRITE));}
             catch(UnsupportedOperationException ignored){}
             Files.write(temp,serialized,StandardOpenOption.TRUNCATE_EXISTING);
-            // File creation is exclusive; a stale binding is never replaced.
+            // Recheck before committing local evidence; a blocked monitor or
+            // a changed Program must leave no published sidecar.
+            if(program.getModificationNumber()!=revision ||
+                    !second.equals(HardwareGhidraInputFingerprint.capture(
+                        program,monitor,mc68332).orElseThrow(()->
+                            new IllegalArgumentException("Program fingerprint unavailable"))) ||
+                    !java.util.Arrays.equals(source,bounded(checkpoint,MAX_CHECKPOINT)))
+                throw new IllegalStateException(
+                    "Program or checkpoint changed before binding publication");
+            // Exclusive create; a stale binding is never replaced.
             Files.createLink(binding,temp);
         }finally{Files.deleteIfExists(temp);}
     }
