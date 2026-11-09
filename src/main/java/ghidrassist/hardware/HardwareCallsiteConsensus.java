@@ -57,6 +57,10 @@ public final class HardwareCallsiteConsensus {
         if(calls==null || summary==null || omittedCallSites<0 ||
                 maxPairs<1 || maxPairs>48 || captured==null || current==null)
             throw new IllegalArgumentException("Invalid CALL reconciliation report");
+        // The report is a single publication unit. A per-row revision
+        // check alone can leave earlier known addresses in a stale report.
+        if(!captured.same(current.get()))
+            return staleMarkdown();
         StringBuilder out=new StringBuilder();
         out.append("## Cross-CALL MMIO source agreement (GA-02/03)\n\n")
             .append("- **SOURCE-ONLY MAY-CANDIDATES, NEVER HARDWARE PROOF**: ")
@@ -77,7 +81,8 @@ public final class HardwareCallsiteConsensus {
             .append("Candidate address | Word | Bits |\n")
             .append("|---|---|---:|---|---|---|---:|\n");
         int reported=0;
-        for(var target:locations.entrySet())
+        boolean clipped=false;
+        outer: for(var target:locations.entrySet())
             for(long storePc:target.getValue()){
                 int count=0;
                 for(var call:calls)
@@ -86,9 +91,8 @@ public final class HardwareCallsiteConsensus {
                         count++;
                 if(count<2)continue;
                 if(reported>=maxPairs){
-                    out.append("- **INCOMPLETE DISPLAY:** additional CALL ")
-                        .append("sites omitted by reconciliation row budget.\n");
-                    return out.append("\n").toString();
+                    clipped=true;
+                    break outer;
                 }
                 Finding observation=inspectRevisionBound(captured,current,
                     calls,summary,target.getKey(),storePc);
@@ -113,7 +117,23 @@ public final class HardwareCallsiteConsensus {
         if(reported==0)
             out.append("| — | — | 0 | NO_SAMPLED_CALLS | UNKNOWN | ")
                 .append("UNKNOWN | UNKNOWN |\n");
+        if(clipped)
+            out.append("- **INCOMPLETE DISPLAY:** additional CALL ")
+                .append("sites omitted by reconciliation row budget.\n");
+        // A Ghidra edit may happen after an earlier row was checked or
+        // while building the bounded display. Discard the ENTIRE text.
+        if(!captured.same(current.get()))
+            return staleMarkdown();
         return out.append("\n").toString();
+    }
+
+    private static String staleMarkdown() {
+        return "## Cross-CALL MMIO source agreement (GA-02/03)\n\n"
+            + "- **STALE_REVISION — ENTIRE REPORT WITHHELD.** "
+            + "Program, profile or input revision changed before publication. "
+            + "No sampled CALL, STORE, address or provenance is current. "
+            + "Rerun read-only analysis; never infer execution, SIMCR/MM, "
+            + "physical bus mapping, ISR activity or Review/Apply.\n";
     }
 
     private static String hex(long value) {
