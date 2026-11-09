@@ -208,6 +208,178 @@ def verify_source_pairs_checkpoint(source):
             "resume_authorized":False}
 
 
+REPORT_MAX_UNITS = 1024 * 1024
+REPORT_MAX_BYTES = 2500000
+REPORT_IDENTITY = ("format", "revision", "program_revision", "generation",
+                   "stage_epoch", "import_sha256", "profile", "program_path",
+                   "total_characters", "scope")
+
+
+def _utf16_units(content):
+    # Ghidra's String.length()/substring offsets count UTF-16 code units.
+    return len(content.encode("utf-16-le", "surrogatepass")) // 2
+
+
+def _report_identity(page):
+    if not isinstance(page, dict):
+        raise ValueError("Invalid report page")
+    try:
+        values = {key: page[key] for key in REPORT_IDENTITY}
+    except KeyError as error:
+        raise ValueError("Missing report provenance field") from error
+    if (values["format"] not in ("markdown", "config_csv", "names_csv")
+            or type(values["program_revision"]) != int
+            or values["program_revision"] < 0
+            or type(values["stage_epoch"]) != int
+            or values["stage_epoch"] < 0
+            or type(values["total_characters"]) != int
+            or not 0 <= values["total_characters"] <= REPORT_MAX_UNITS
+            or not isinstance(values["revision"], str)
+            or not 1 <= len(values["revision"]) <= 512
+            or not isinstance(values["generation"], str)
+            or re.fullmatch(r"[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}",
+                            values["generation"]) is None
+            or not isinstance(values["import_sha256"], str)
+            or re.fullmatch(r"[0-9a-fA-F]{64}", values["import_sha256"]) is None
+            or values["profile"] not in ("CPU32_SURVEY", "MC68332_USER_SELECTED")
+            or not isinstance(values["program_path"], str)
+            or not values["program_path"].startswith("/")
+            or not 1 <= len(values["program_path"]) <= 1024
+            or values["scope"] !=
+               "STATIC EVIDENCE ONLY; NO EXECUTION OR PHYSICAL MAPPING"):
+        raise ValueError("Invalid bounded report provenance")
+    return values
+
+
+def _report_page_check(page, expected, offset, page_size):
+    if _report_identity(page) != expected:
+        raise ValueError("Report Program, format, revision or generation changed")
+    text = page.get("text")
+    if (type(page.get("offset")) != int or page["offset"] != offset
+            or type(page.get("limit")) != int or page["limit"] != page_size
+            or type(page.get("more")) != bool or not isinstance(text, str)):
+        raise ValueError("Inconsistent report page cursor")
+    units = _utf16_units(text)
+    next_offset = offset + units
+    if (units > page_size or next_offset > expected["total_characters"]
+            or page["more"] != (next_offset < expected["total_characters"])):
+        raise ValueError("Incomplete or overlong report fragment")
+    if page["more"] and units == 0:
+        raise ValueError("Report page made no progress")
+    return units
+
+
+def capture_report_checkpoint(session, output, fmt="markdown", page_size=4096):
+    """Atomically capture all exact Ghidra report pages, no Analyze or Apply."""
+    if fmt not in ("markdown", "config_csv", "names_csv") or not 1 <= page_size <= 8192:
+        raise ValueError("Unsupported report format or page size")
+    first = rpc(session, "analysis.export", {
+        "format": fmt, "offset": 0, "limit": page_size})["report"]
+    metadata = _report_identity(first)
+    if metadata["format"] != fmt:
+        raise ValueError("Wrong report format returned")
+    offset = 0
+    fragments = []
+    current = first
+    while True:
+        units = _report_page_check(current, metadata, offset, page_size)
+        fragments.append(current["text"])
+        offset += units
+        if not current["more"]:
+            if offset != metadata["total_characters"]:
+                raise ValueError("Report ended before complete content")
+            break
+        current = rpc(session, "analysis.export", {
+            "format": fmt, "offset": offset, "limit": page_size,
+            "expected_revision": metadata["revision"],
+            "expected_generation": metadata["generation"]})["report"]
+    # One last exact-cursor request catches a Program/revision/same-revision
+    # Analyze rerun just after the last content page and before publication.
+    terminal = rpc(session, "analysis.export", {
+        "format": fmt, "offset": offset, "limit": page_size,
+        "expected_revision": metadata["revision"],
+        "expected_generation": metadata["generation"]})["report"]
+    if (_report_page_check(terminal, metadata, offset, page_size) != 0
+            or terminal["more"] or terminal["text"]):
+        raise ValueError("Changed or trailing report after final page")
+    # Normalize any UTF-16 surrogate pair split across two Ghidra pages.
+    content = "".join(fragments).encode("utf-16-le", "surrogatepass").decode("utf-16-le")
+    if _utf16_units(content) != offset:
+        raise ValueError("Report UTF-16 content changed after stitching")
+    payload = {
+        "schema": 1, "kind": "ghidrassist-readonly-hardware-report",
+        "metadata": metadata, "content": content, "complete": True,
+        "read_only": True, "apply_authorized": False,
+        "notice": "STATIC SOURCE EVIDENCE ONLY: not execution, signed provenance, Review/Apply approval or model resume",
+    }
+    canonical = json.dumps(payload, sort_keys=True, separators=(",",":"),
+                           ensure_ascii=True).encode("utf-8")
+    digest = hashlib.sha256(canonical).hexdigest()
+    data = (json.dumps({"payload":payload,"payload_sha256":digest},
+                       indent=2,ensure_ascii=True)+"\n").encode("utf-8")
+    if len(data) > REPORT_MAX_BYTES:
+        raise ValueError("Report checkpoint exceeds 2.5 MB")
+    target = Path(output).expanduser()
+    if not target.parent.is_dir() or target.parent.is_symlink():
+        raise ValueError("Report output directory must be an existing real directory")
+    temp = None
+    try:
+        descriptor, temp = tempfile.mkstemp(prefix=".ghidrassist-report-",dir=target.parent)
+        with os.fdopen(descriptor,"wb") as stream:
+            stream.write(data)
+            stream.flush()
+            os.fsync(stream.fileno())
+        # Exclusive local publication, never overwrite a reviewed receipt.
+        os.link(temp,target)
+    finally:
+        if temp is not None:
+            os.unlink(temp)
+    return {"saved":str(target),"report_sha256":digest,
+            "report_generation":metadata["generation"],
+            "total_characters":offset,
+            "complete":True,"read_only":True,"apply_authorized":False}
+
+
+def verify_report_checkpoint(source):
+    """Offline read-only verification; SHA-256 is NOT an actor signature."""
+    with Path(source).expanduser().open("rb") as handle:
+        raw = handle.read(REPORT_MAX_BYTES + 1)
+    if not raw or len(raw)>REPORT_MAX_BYTES:
+        raise ValueError("Missing or oversized report checkpoint")
+    envelope = json.loads(raw.decode("utf-8"))
+    if not isinstance(envelope,dict) or set(envelope)!={"payload","payload_sha256"}:
+        raise ValueError("Invalid report envelope")
+    payload = envelope["payload"]
+    if not isinstance(payload,dict) or set(payload)!={
+            "schema","kind","metadata","content","complete","read_only",
+            "apply_authorized","notice"}:
+        raise ValueError("Invalid report payload fields")
+    if (type(payload["schema"])!=int or payload["schema"]!=1
+            or payload["kind"]!="ghidrassist-readonly-hardware-report"
+            or payload["complete"] is not True
+            or payload["read_only"] is not True
+            or payload["apply_authorized"] is not False
+            or not isinstance(payload["content"],str)
+            or not isinstance(payload["notice"],str)
+            or not payload["notice"].startswith("STATIC SOURCE EVIDENCE ONLY")):
+        raise ValueError("Invalid report checkpoint scope or authority")
+    identity = _report_identity(payload["metadata"])
+    if (set(payload["metadata"])!=set(REPORT_IDENTITY) or
+            _utf16_units(payload["content"])!=identity["total_characters"]):
+        raise ValueError("Report content or provenance does not match")
+    canonical = json.dumps(payload,sort_keys=True,separators=(",",":"),
+                           ensure_ascii=True).encode("utf-8")
+    digest = hashlib.sha256(canonical).hexdigest()
+    if envelope["payload_sha256"]!=digest:
+        raise ValueError("Report checkpoint SHA-256 mismatch")
+    return {"verified":True,"read_only":True,"complete":True,
+            "apply_authorized":False,"model_state_restored":False,
+            "program_path":identity["program_path"],"format":identity["format"],
+            "report_generation":identity["generation"],
+            "total_characters":identity["total_characters"],
+            "payload_sha256":digest}
+
+
 def capture_agentic_checkpoint(session, output, page_size=100, parent=None):
     """Explicit local read-only evidence export; never a resumable AI session."""
     if not 1 <= page_size <= 100:
