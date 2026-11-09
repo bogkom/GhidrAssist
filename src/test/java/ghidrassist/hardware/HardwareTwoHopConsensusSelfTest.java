@@ -73,6 +73,20 @@ public final class HardwareTwoHopConsensusSelfTest {
             "Independent outer, bridge, nested and leaf PCs retained");
         ok(!agreement.publishableAsHardwareProof(),
             "Sampled two-hop agreement is never runtime MMIO proof");
+        var singleton=inspect(List.of(a),16);
+        ok(singleton.state()==HardwareTwoHopConsensus.State.INCOMPLETE &&
+                singleton.sampledOuterCalls()==1 &&
+                singleton.address()==null && singleton.word()==null &&
+                singleton.bits()==0 && singleton.provenance().size()==1 &&
+                !singleton.publishableAsHardwareProof(),
+            "One complete two-hop source is not an agreement among callers");
+        var singletonScoped=HardwareTwoHopConsensus.inspectScoped(
+            List.of(a),analyze(List.of(a),16),0x640L,0x700L,0x700L);
+        ok(singletonScoped.state()==HardwareTwoHopConsensus.State.INCOMPLETE &&
+                singletonScoped.sampledOuterCalls()==1 &&
+                singletonScoped.address()==null &&
+                singletonScoped.provenance().size()==1,
+            "Single outer CALL cannot certify even an exact bridge/leaf/STORE cohort");
         var divergence=inspect(List.of(a,c),16);
         ok(divergence.state()==HardwareTwoHopConsensus.State.SAMPLED_DIVERGENCE &&
                 divergence.address()==null && divergence.word()==null &&
@@ -228,6 +242,30 @@ public final class HardwareTwoHopConsensusSelfTest {
                         r.storePc()==store && r.innerCallPc()==0x64cL),
                 "Every independent STORE site retains correct convergent CALL provenance");
         }
+        var unevenOuter=List.of(a,outerC,outerD);
+        var uneven=HardwareTwoHopRegisterFlow.analyze(unevenOuter,
+            List.of(forkBridge,secondBridge),
+            List.of(multiStoreLeaf,secondLeaf),Set.of(simcr,cs),48);
+        var loneBridge=HardwareTwoHopConsensus.inspectScoped(
+            unevenOuter,uneven,0x640L,0x700L,0x700L);
+        var pairedBridge=HardwareTwoHopConsensus.inspectScoped(
+            unevenOuter,uneven,0x740L,0x780L,0x780L);
+        ok(loneBridge.state()==HardwareTwoHopConsensus.State.INCOMPLETE &&
+                loneBridge.sampledOuterCalls()==1 &&
+                loneBridge.provenance().size()==1 &&
+                loneBridge.address()==null &&
+                pairedBridge.state()==HardwareTwoHopConsensus.State.SAMPLED_AGREEMENT &&
+                pairedBridge.sampledOuterCalls()==2 &&
+                pairedBridge.address()==cs,
+            "Separate bridges cannot lend callers to a singleton cohort");
+        String unevenMarkdown=HardwareTwoHopConsensus.markdown(
+            unevenOuter,uneven,0,24,rev,()->equal);
+        ok(unevenMarkdown.contains(
+                "| 0x00000640 | 0x00000700 | 0x00000700 | 1 | INCOMPLETE") &&
+                unevenMarkdown.contains(
+                "| 0x00000740 | 0x00000780 | 0x00000780 | 2 | SAMPLED_AGREEMENT") &&
+                unevenMarkdown.contains("SOURCE-ONLY MAY-CANDIDATES"),
+            "Production two-hop report keeps singleton unknown and independent pair");
         var otherLeaf=HardwareTwoHopConsensus.inspectScoped(
             allOuter,multiple,0x740L,0x780L,0x780L);
         ok(otherLeaf.state()==HardwareTwoHopConsensus.State.SAMPLED_AGREEMENT &&

@@ -1,5 +1,35 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
+## GA-02/03/11/18 — 2026-11-09: require independent outer CALLs for two-hop MMIO agreement
+
+The read-only two-hop CPU32 pipeline (sampled outer CALL → verified
+acyclic bridge → exact inner CALL → leaf STORE) now requires **at least
+two distinct complete outer CALL PCs** before returning
+`SAMPLED_AGREEMENT`. This applies both to the public whole-sample
+inspector and to each exact bridge/leaf/STORE cohort independently.
+Previously one completely decoded outer CALL could be classified as
+cross-CALL agreement even though no second call supplied corroborating
+source context. Singleton cohorts now return `INCOMPLETE` with no
+approved address/word/bit width, while preserving bounded source-only
+provenance; a different bridge's independent pair cannot lend its
+caller count to the singleton bridge.
+
+The deterministic Java21 regressions cover a one-caller exact bridge
+and leaf, global and scoped inspectors, a mixed three-caller inventory
+with one singleton bridge and another independently agreeing pair,
+and the production Markdown representation. Existing divergent,
+branch-convergent, pagination, source-identity, revision, stack A7,
+RESET/ISR and Ghidra synthetic tests remain mandatory. The new
+restriction does **not** upgrade any sampled result into execution
+proof, active SIMCR/MM, physical CS mapping, active relocated VBR/ISR,
+or Review/Apply entitlement. The source register solver, native
+Ghidra Listing and transactional checkpoints are unchanged. Require
+exact final SHA Java21 workflow, full Ghidra 12.1.4 PUBLIC Java25
+extension build and relevant actual synthetic headless Actions.
+GA-01/02/03/11/18 remain PARTIAL; GA-14 remains deferred. No
+original ECU411 firmware, user Ghidra project/profile/OAuth or
+stopped Wyse/Precision/Supervisor workers touched.
+
 ## GA-02/03/12/18 — 2026-11-09: atomic revision-bound cross-CALL source report
 
 The existing one-hop sampled CALL-site reconciliation continues to

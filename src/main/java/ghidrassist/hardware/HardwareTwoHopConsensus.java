@@ -115,7 +115,10 @@ public final class HardwareTwoHopConsensus {
         }
         // Any spurious row or duplicate outer CALL context must suppress
         // agreement even if its target and word happen to match.
-        if(incomplete)return blank(State.INCOMPLETE,leaf,store,calls.size(),rows);
+        // One complete outer caller cannot establish cross-CALL agreement.
+        // Keep its bounded source provenance explicitly INCOMPLETE.
+        if(incomplete || calls.size()<2)
+            return blank(State.INCOMPLETE,leaf,store,calls.size(),rows);
         var first=rows.get(0);
         boolean agree=rows.stream().allMatch(row->
             first.effectiveAddress().equals(row.effectiveAddress()) &&
@@ -193,7 +196,10 @@ public final class HardwareTwoHopConsensus {
                 }
             if(found!=1)incomplete=true;
         }
-        if(incomplete)return blank(State.INCOMPLETE,leaf,store,selected.size(),rows);
+        // Same requirement for bridge/leaf/STORE cohorts: two independently
+        // observed outer CALL PCs, not merely two STOREs in one leaf.
+        if(incomplete || selected.size()<2)
+            return blank(State.INCOMPLETE,leaf,store,selected.size(),rows);
         var first=rows.get(0);
         boolean agreed=rows.stream().allMatch(r->
             Objects.equals(r.effectiveAddress(),first.effectiveAddress()) &&
