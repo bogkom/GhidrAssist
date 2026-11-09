@@ -73,12 +73,12 @@ public final class HardwareCfgSiteOrder {
     private static Set<Long> reachable(long start,Map<Long,List<Long>> edges) {
         Set<Long> seen=new HashSet<>();
         ArrayDeque<Long> pending=new ArrayDeque<>();
+        seen.add(start);
         pending.add(start);
         while(!pending.isEmpty()){
             long pc=pending.removeFirst();
-            if(!seen.add(pc))continue;
             for(Long next:edges.get(pc))
-                if(!seen.contains(next))pending.addLast(next);
+                if(seen.add(next))pending.addLast(next);
         }
         return seen;
     }
