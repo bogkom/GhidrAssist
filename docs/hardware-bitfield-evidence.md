@@ -188,6 +188,44 @@ Apply authorization. No original firmware/project changes or
 Wyse/Precision/Supervisor tests were performed.
 
 
+## 2026-11-09 — GA-06/10/16 MC68332UM Table D-2 chip-select address witnesses
+
+A separate read-only, bounded `HardwareSimChipSelectTableWitness` now
+checks **26 device-specific register addresses** against Table D-2
+SIM Address Map in the manufacturer manual, not merely names or general
+SIM aperture claims. The reviewed source is the **same publisher**
+MC68332UM SHA-256
+`02c2cb99738dd45a785798bba3e7dcc34bb0d54fb5fba42900e6ecb8356bf28a`
+with 265 pages; Table D-2 spans printed **D-4 / physical PDF 218**
+and **D-5 / physical PDF 219**.
+
+The exact reviewed rows are CSPAR0/1 (`$YFFA44/46`),
+CSBARBT/CSORBT (`$YFFA48/4A`), and CSBAR0–10 / CSOR0–10,
+at `$YFFA4C + 4*n` and `$YFFA4E + 4*n`. Each must appear
+on its exact table folio and agree with the explicitly selected
+MC68332 profile module, offset and 16-bit register metadata. The
+page break is critical: **CSBAR4 at $YFFA5C is on D-4/PDF 218,
+while CSOR4 at $YFFA5E is on D-5/PDF 219**. Neither matching a name
+on another page nor a wrong address under an otherwise correct name
+can satisfy the witness.
+
+This is intentionally an exact source-row cross-check, not a full
+register-field parser or bus simulation. Synthetic Java21 tests
+exercise 26 valid row agreements, changed address/name semantics,
+swapped/omitted folios, duplicate source rows, foreign CPU32 profile
+and text bounds. The official Actions job validates the publisher
+SHA and 265 physical pages **before** extracting physical PDF 218–221
+and requiring all 26 witnesses from the real extracted text.
+No local/RAG copy is authenticated by the parser.
+
+**Limit:** this proves reviewed manufacturer **source-page address
+rows** agree with selected metadata on the tested document. It
+does **not** establish execution, pin assertion, CSPAR/CSOR
+configuration, SIMCR/MM activation, CSBAR window presence on a
+physical external bus, or permission to change Ghidra symbols or
+memory blocks. Unmodeled device-specific registers and unverified
+folio citations remain hypotheses; GA-06/10/16 stay PARTIAL.
+
 ## 2026-11-09 — SIM Table D-2 address/byte-width/access witnesses (GA-06/10/16)
 
 The publisher `MC68332UM.pdf` Appendix **D-4** on physical PDF

@@ -9,6 +9,8 @@ on:
       - 'src/main/java/ghidrassist/hardware/HardwareBitfieldLayoutWitness.java'
       - 'src/main/java/ghidrassist/hardware/HardwareSimD2RegisterWitness.java'
       - 'src/test/java/ghidrassist/hardware/HardwareSimD2RegisterWitnessSelfTest.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareSimChipSelectTableWitness.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareSimChipSelectTableWitnessSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/HardwareBitfieldLayoutWitnessSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/HardwareBitfieldPageWitnessSelfTest.java'
       - 'docs/hardware-bitfield-evidence.md'
@@ -81,6 +83,8 @@ jobs:
             src/main/java/ghidrassist/hardware/HardwareProfileAudit.java \
             src/main/java/ghidrassist/hardware/HardwareSimD2RegisterWitness.java \
             src/test/java/ghidrassist/hardware/HardwareSimD2RegisterWitnessSelfTest.java \
+            src/main/java/ghidrassist/hardware/HardwareSimChipSelectTableWitness.java \
+            src/test/java/ghidrassist/hardware/HardwareSimChipSelectTableWitnessSelfTest.java \
             src/test/java/ghidrassist/hardware/HardwareBitfieldLayoutWitnessSelfTest.java \
             src/test/java/ghidrassist/hardware/HardwareBitfieldPageWitnessSelfTest.java
           java -cp "$RUNNER_TEMP/mc68332-field-witness" \
@@ -97,8 +101,16 @@ jobs:
             "$RUNNER_TEMP/page-219.txt" \
             "$RUNNER_TEMP/page-220.txt"
           echo 'REVIEWED DIAGRAM POSITION/MASK CLAIMS PASS; no MCU execution inferred'
+          # All 26 reviewed chip-select register identities and 16-bit
+          # addresses must match Table D-2 rows on the exact D-4/D-5
+          # folio, not merely appear somewhere else in MC68332UM.
+          java -cp "$RUNNER_TEMP/mc68332-field-witness" \
+            ghidrassist.hardware.HardwareSimChipSelectTableWitnessSelfTest \
+            "$RUNNER_TEMP/page-218.txt" \
+            "$RUNNER_TEMP/page-219.txt"
+          echo 'OFFICIAL MC68332UM TABLE D-2 CS REGISTER ADDRESS SOURCE PASS'
+
           java -cp "$RUNNER_TEMP/mc68332-field-witness" \
             ghidrassist.hardware.HardwareSimD2RegisterWitnessSelfTest \
             "$RUNNER_TEMP/page-218.txt" "$RUNNER_TEMP/page-219.txt"
           echo 'SIM D-2 REGISTER ROW/ACCESS/BYTE WIDTH PASS; no MM/CS execution inferred'
-
