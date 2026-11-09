@@ -119,6 +119,7 @@ def main():
                 work,env,out/"source-compile.log",timeout=120)
             source_proofs={}
             for source_phase in ("source-write","source-read","source-corrupt",
+                                 "source-mismatch","source-incomplete",
                                  "source-v1","source-edit","source-profile"):
                 helper.call([str(java/"bin/java"),
                     "-Djava.system.class.loader=ghidra.GhidraClassLoader",
@@ -144,7 +145,8 @@ def main():
                     raise RuntimeError(
                         "Cross-JVM source inventory/checkpoint did not retain/refuse")
                 if source_phase in ("source-write","source-read",
-                                    "source-corrupt","source-edit"):
+                                    "source-corrupt","source-mismatch",
+                                    "source-incomplete","source-edit"):
                     if (evidence["source_pairs"]!=2 or
                             evidence["omitted_indirect"]!=1):
                         raise RuntimeError("Missing bounded native V2 source pairs")
@@ -154,12 +156,16 @@ def main():
             initial=source_proofs["source-write"]
             restored=source_proofs["source-read"]
             corrupted=source_proofs["source-corrupt"]
+            mismatched=source_proofs["source-mismatch"]
+            incomplete=source_proofs["source-incomplete"]
             legacy=source_proofs["source-v1"]
             changed=source_proofs["source-edit"]
             generic=source_proofs["source-profile"]
             if not (initial["effective_input_sha256"]==
                     restored["effective_input_sha256"]==
                     corrupted["effective_input_sha256"]==
+                    mismatched["effective_input_sha256"]==
+                    incomplete["effective_input_sha256"]==
                     legacy["effective_input_sha256"] and
                     initial["import_sha256"]==
                     restored["import_sha256"]==
@@ -173,6 +179,10 @@ def main():
                     legacy["selected_mc68332"] and
                     corrupted["selected_mc68332"] and
                     not corrupted["reused"] and
+                    mismatched["selected_mc68332"] and
+                    not mismatched["reused"] and
+                    incomplete["selected_mc68332"] and
+                    not incomplete["reused"] and
                     changed["selected_mc68332"] and
                     not generic["selected_mc68332"]):
                 raise RuntimeError(
@@ -183,8 +193,10 @@ def main():
                 "edited_recomputed":True,
                 "source_data":"synthetic-only",
                 "tested_stage":"completed CFG Report",
-                "v2_source_processes":6,
+                "v2_source_processes":8,
                 "v2_corrupt_semantic_checksum_refused":True,
+                "v2_mismatched_reset_provenance_refused":True,
+                "v2_incomplete_cfg_checkpoint_refused":True,
                 "v2_source_cold_computed":True,
                 "v2_source_reopened_reused":True,
                 "v1_legacy_cfg_only_reused":True,
