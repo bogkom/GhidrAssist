@@ -1,5 +1,42 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
+## GA-12/15/18 — 2026-11-09: exact wire-format cursor identity for hardware and Agentic pagination
+
+The pre-existing stage-epoch, active Program and findings-run guards
+are preserved, but Automation API v3 now validates `expected_revision`,
+`expected_program_revision` and `expected_findings_revision`
+as **canonical, nonnegative, in-range, unquoted JSON integer numbers**.
+Strings that resemble numbers, fractions, exponent representations,
+Booleans, null, arrays, objects, leading zeros, negative values and
+64-bit overflow do not silently coerce to a permitted Ghidra revision.
+Hardware source-pair `expected_generation` and Agentic
+`expected_run` must be genuine UUID-formatted JSON strings, rather
+than arbitrary scalars or nonstring values.
+
+For nonzero offsets, the actual HTTP Listing page requires the
+prior Program revision; whole-function XREF pages require both
+Program revision and function entry; hardware JSR/MOVEC pages
+require revision and exact generation; Agentic findings pages require
+Program revision, findings revision and exact run UUID. The CLI now
+preflights the Listing/XREF requirements. The read-only Listing and
+function-body XREF collectors verify the Program modification number
+again **after** collecting page rows. Agentic likewise rechecks the
+active Program/epoch after obtaining the retained page. A valid
+cursor is NOT a completed analysis/Apply permission or a claim of
+executed CALL/MM/VBR/ISR.
+
+The real synthetic Ghidra 12.1.4 PUBLIC CodeBrowser/Bearer JSON-RPC
+tests exercise dozens of negative requests across all four endpoints,
+plus existing positive same-Program pagination, stale revisions,
+different Program and stage-epoch invalidation. These are actual
+production server requests, not a simulated HTTP validator.
+Existing full Java25 extension builds, Java21 host assertions,
+isolated CodeBrowser/Xvfb and GA-12 JVM restart regressions remain
+the acceptance path. No private ECU411, original Ghidra projects,
+OAuth or stopped Wyse/Precision/Supervisor workers. GA-12/15/18
+remain PARTIAL, GA-14 deferred.
+
+
 ## GA-12/13/15/18 — 2026-11-09: strict JSON-RPC binding identity and late Program-session guard
 
 The already merged GUI/API sidecar creation functionality from #259 is

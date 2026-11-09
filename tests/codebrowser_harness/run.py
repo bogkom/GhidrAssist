@@ -491,6 +491,46 @@ def main():
                                 if error.code!=400: raise
                             else:
                                 raise RuntimeError("Invalid body XREF request was accepted")
+                        # GA-12/15/18: real, authenticated public JSON-RPC
+                        # must refuse noncanonical expected revisions and
+                        # missing page identity without leaking mixed evidence.
+                        malformed=(str(revision),revision+0.5,True,False,
+                                   None,[],{},-1,2**63,1e100)
+                        refused=0
+                        for method,base in (
+                            ("listing.range",
+                                {"address":pc,"offset":1,"limit":1}),
+                            ("function.xrefs.body",
+                                {"direction":"outgoing","offset":1,"limit":1,
+                                 "expected_entry":entry})):
+                            for value in malformed:
+                                bad={**base,"expected_revision":value}
+                                try:
+                                    http_call(method,bad)
+                                except HTTPError as error:
+                                    if error.code!=400:raise
+                                else:
+                                    raise RuntimeError(
+                                        "Coerced Program revision accepted: "+
+                                        method+" "+str(value))
+                                refused+=1
+                            for bad in (base,{**base,"expected_revision":revision,
+                                             **({"expected_entry":""}
+                                                if method=="function.xrefs.body"
+                                                else {})}):
+                                if method=="listing.range" and "expected_revision" in bad:
+                                    continue
+                                try:
+                                    http_call(method,bad)
+                                except HTTPError as error:
+                                    if error.code!=400:raise
+                                else:
+                                    raise RuntimeError(
+                                        "Unbound continuation accepted: "+str(bad))
+                                refused+=1
+                        if refused<22:
+                            raise RuntimeError("Expected strict pagination negative coverage")
+                        print("GA-12/15 RPC CANONICAL REVISION AND PAGE IDENTITY PASS")
                         print("PASS: production HTTP Listing range + function body XREF guards")
                         # Production HTTP traversal, same actual CodeBrowser Program.
                         paths_reply=http_call("analysis.paths",
@@ -612,6 +652,38 @@ def main():
                                 else:
                                     raise RuntimeError("Untrusted source pair cursor accepted: "+
                                                        str(bad_params))
+                            # Real static source cursor: noncanonical JSON
+                            # revisions, non-UUID generation/run, missing
+                            # identity and out-of-range integers are denied.
+                            invalid_revision=(str(p1["revision"]),
+                                p1["revision"]+0.5,True,None,[],{},
+                                -1,2**63,1e100)
+                            invalid_generation=(True,None,[],{},1234,
+                                "old-generation",p1["generation"]+"-extra")
+                            refused=0
+                            for value in invalid_revision:
+                                bad={**params,"expected_revision":value}
+                                try:
+                                    http_call("hardware.source_pairs.page",bad)
+                                except HTTPError as error:
+                                    if error.code!=400:raise
+                                else:
+                                    raise RuntimeError(
+                                        "Invalid source revision accepted: "+str(value))
+                                refused+=1
+                            for value in invalid_generation:
+                                bad={**params,"expected_generation":value}
+                                try:
+                                    http_call("hardware.source_pairs.page",bad)
+                                except HTTPError as error:
+                                    if error.code!=400:raise
+                                else:
+                                    raise RuntimeError(
+                                        "Invalid source generation accepted: "+str(value))
+                                refused+=1
+                            if refused!=len(invalid_revision)+len(invalid_generation):
+                                raise RuntimeError("Missing strict source-pair denial")
+                            print("GA-12 SOURCE PAIRS EXACT REVISION/UUID PASS")
                             # Exercise actual installed CLI, versioned local
                             # no-overwrite checkpoint and offline verifier.
                             private=work/"ga18-source-pairs-session.json"

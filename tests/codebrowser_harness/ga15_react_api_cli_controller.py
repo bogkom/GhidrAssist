@@ -191,6 +191,47 @@ def main():
             success=False)
     command(args.session,"agentic-findings","--offset",0,"--limit",101,
             success=False)
+    # GA-12/15/18 strict bearer-authenticated JSON-RPC page receipts:
+    # a run UUID and BOTH Program/findings revisions must remain exact.
+    # These tests bypass CLI argparse deliberately to expose Gson coercion.
+    import_values=(str(evidence["programRevision"]),
+        evidence["programRevision"]+0.5,True,False,None,[],{},
+        -1,2**63,1e100)
+    received_bad=0
+    valid_page={
+        "offset":1,"limit":1,
+        "expected_run":evidence["run"],
+        "expected_program_revision":evidence["programRevision"],
+        "expected_findings_revision":evidence["findings"]["revision"],
+    }
+    cases=[]
+    for key in ("expected_program_revision","expected_findings_revision"):
+        for value in import_values:
+            cases.append((key,{**valid_page,key:value}))
+    for value in (True,None,[],{},55,"stale-run",
+                  evidence["run"]+"-extra"):
+        cases.append(("expected_run",{**valid_page,"expected_run":value}))
+    for key in ("expected_program_revision","expected_findings_revision",
+                "expected_run"):
+        cases.append(("missing "+key,
+                      {k:v for k,v in valid_page.items() if k!=key}))
+    for label,params in cases:
+        request=json.dumps({"method":"agentic.findings.page",
+                            "params":params},separators=(",",":")).encode()
+        endpoint=Request(f"http://127.0.0.1:{session['port']}/rpc",
+            data=request,headers={
+                "Authorization":"Bearer "+session["token"],
+                "Content-Type":"application/json"},method="POST")
+        try:
+            with urlopen(endpoint,timeout=20) as reply:
+                raise AssertionError(
+                    f"Agentic pagination accepted invalid {label}: {reply.status}")
+        except HTTPError as error:
+            assert error.code==400,(label,error.code,error.read()[:200])
+        received_bad+=1
+    assert received_bad>=30,received_bad
+    print("GA-12/15 AGENTIC EXACT PROGRAM/FINDINGS REVISION AND RUN PASS")
+
 
     # The CLI must fetch *all* real ReAct pages from HTTP and create one
     # private no-overwrite checkpoint, then verify/read it with no session.
