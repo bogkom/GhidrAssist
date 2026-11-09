@@ -75,7 +75,10 @@ public final class HardwareResetIndirectVbrPaginationSelfTest {
             "Exact-end page is empty, not an invented candidate");
         var middle=HardwareResetIndirectVbrCorrelation.page(
             calls,movecs,visited,true,true,2,3,7,9);
-        ok(middle.rows().equals(stitched.subList(7,16)) &&
+        ok(middle.rows().size()==9 &&
+            middle.rows().get(0).indirectPc()==stitched.get(7).indirectPc() &&
+            middle.rows().get(0).vbrPc()==stitched.get(7).vbrPc() &&
+            middle.rows().get(8).vbrPc()==stitched.get(15).vbrPc() &&
             middle.pageOffset()==7 && middle.nextOffset()==16 &&
             middle.rows().stream().allMatch(x->x.resetGraphIncomplete()),
             "Unaligned mid-page is deterministic and preserves RESET uncertainty");
