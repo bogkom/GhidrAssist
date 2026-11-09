@@ -114,6 +114,27 @@ public final class HardwareSimD2RegisterWitnessSelfTest {
             // The workflow first authenticates publisher bytes via a
             // SHA-256 pin. This pure Java method trusts neither local nor
             // arbitrary RAG PDF copies.
+            if(!publisher.completeSample()) {
+                // Diagnostic is bounded to selected TABLE ROWS from the
+                // immutable public NXP PDF, never arbitrary private files.
+                System.out.println("SIM D-2 PUBLISHER ROWS: matched="+
+                    publisher.matched()+" incomplete="+publisher.incomplete());
+                for(var failed:publisher.rows()) {
+                    if(failed.state()==HardwareSimD2RegisterWitness.State.MATCHED_TABLE_AND_PROFILE)
+                        continue;
+                    var ref=failed.reviewed();
+                    String text=java.nio.file.Files.readString(java.nio.file.Path.of(
+                        ref.physicalPage()==218?args[0]:args[1]));
+                    int at=text.indexOf(ref.tableAddress());
+                    int name=text.indexOf(ref.name());
+                    String context=at<0?"ADDRESS_NOT_FOUND":
+                        text.substring(at,Math.min(text.length(),at+125))
+                            .replaceAll("\\s+"," ");
+                    System.out.println("ROW "+ref.name()+" "+ref.tableAddress()+
+                        " state="+failed.state()+" address_index="+at+
+                        " name_index="+name+" context="+context);
+                }
+            }
             check(publisher.completeSample(),
                 "NXP MC68332UM exact D-4/D-5 Table D-2 address/width/access witness");
             System.out.println("PINNED NXP MC68332UM SIM TABLE D-2 TEN ROWS PASS");
