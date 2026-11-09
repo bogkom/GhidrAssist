@@ -140,3 +140,49 @@ until real local PDF authentication and page-region checks are
 implemented. No user files, ECU411 firmware or OAuth are read or
 modified. GA-06/10/16 remain PARTIAL; GA-08/13 retain their separate
 Review/Apply/Undo protection track.
+
+
+## 2026-11-09 — GA-06/10/16 SIMCR/SYNCR diagram bit positions and mask cross-check
+
+Manual visual inspection of the SHA-pinned **publisher** MC68332UM
+(Appendix **D-5, physical PDF 219** and **D-6, physical PDF 220**)
+established the following independent reviewed register-diagram
+positions. The profile values are then compared with masks derived
+*from those bit positions*, rather than just finding a field name
+somewhere in the PDF text:
+
+| Register | Diagram page | Reviewed fields (MSB:LSB = profile mask) | Bits intentionally unmodeled |
+|---|---|---|---|
+| SIMCR | D-5 / PDF 219 | EXOFF 15=8000, FRZSW 14=4000, FRZBM 13=2000, SLVEN 11=0800, SHEN 9:8=0300, SUPV 7=0080, MM 6=0040, IARB 3:0=000F | `0x1430` |
+| SYNCR | D-6 / PDF 220 | W 15=8000, X 14=4000, Y 13:8=3F00, EDIV 7=0080, RSTEN 2=0004, STSIM 1=0002, STEXT 0=0001 | `0x0078` (including status flags SLIMP/SLOCK) |
+
+**Physical diagram page and prose source-page claim are deliberately
+different fields.** For instance, the SUPV description is on PDF 220
+while its **bit position is drawn on PDF 219**. Likewise RSTEN,
+STSIM and STEXT are drawn on PDF 220 but their textual descriptions
+continue on PDF 221. A test must not use the following description
+folio as a substitute for the original diagram.
+
+`HardwareBitfieldLayoutWitness` is a bounded, read-only, manually
+reviewed 15-field reference. It compares independently computed masks
+against the selected concrete MC68332 profile and requires the
+characteristic bit-number header and **ordered diagram label row**
+on each exact physical page. It distinguishes matching, missing,
+mismatched or unexpected profile definitions and cannot independently
+authenticate arbitrary caller-supplied extracted PDF text.
+
+The existing official NXP PDF CI checks the immutable reviewed
+SHA-256 `02c2cb99738dd45a785798bba3e7dcc34bb0d54fb5fba42900e6ecb8356bf28a`,
+265 physical pages, and extracts exact pages 219–221; it now also
+tests the ordered D-5/D-6 diagram rows and **all 15 masks** against
+the separately reviewed bit positions on the *same pinned bytes*.
+Java21 synthetic adversarial tests reject changed masks, omitted or
+extra definitions, swapped/malformed diagram pages and unbounded text.
+
+This is stronger source checking than a field-name match, but still
+**not an automatic PDF image/layout parser, independent proof of
+all prose semantics, MCU identity, reset value, actual register write
+or active SIMCR/MM**. It does not authenticate local/RAG PDFs; the
+runtime bitfield ledger remains clearly source metadata, not an
+Apply authorization. No original firmware/project changes or
+Wyse/Precision/Supervisor tests were performed.
