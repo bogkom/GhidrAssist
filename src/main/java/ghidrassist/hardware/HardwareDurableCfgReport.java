@@ -2,6 +2,8 @@ package ghidrassist.hardware;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.CodingErrorAction;
 import java.util.*;
 
 /**
@@ -42,6 +44,14 @@ public final class HardwareDurableCfgReport {
                     pointersOmitted<0 || sites.size()>12000 ||
                     roles.size()>8000 || resetFunctions.size()>50000)
                 throw new IllegalArgumentException("Invalid CFG snapshot");
+            // A typed source inventory cannot contradict the CFG summary's
+            // RESET provenance. This gate applies before save AND after V2
+            // decode, even when the outer disk checksum is valid.
+            if(sourceInventory!=null &&
+                    (sourceInventory.resetRecognized()!=resetRecognized ||
+                     sourceInventory.resetIncomplete()!=resetIncomplete))
+                throw new IllegalArgumentException(
+                    "Contradictory V2 RESET source provenance");
             sites=List.copyOf(sites);roles=List.copyOf(roles);
             resetFunctions=List.copyOf(resetFunctions);
         }
@@ -74,7 +84,22 @@ public final class HardwareDurableCfgReport {
         if(count<0 || count>2_000_000 || count>in.available())
             throw new IOException("Bad checkpoint string length");
         byte[] bytes=in.readNBytes(count);
-        return new String(bytes,StandardCharsets.UTF_8);
+        // No silent U+FFFD substitution of corrupted provenance.
+        try {
+            return StandardCharsets.UTF_8.newDecoder()
+                .onMalformedInput(CodingErrorAction.REPORT)
+                .onUnmappableCharacter(CodingErrorAction.REPORT)
+                .decode(java.nio.ByteBuffer.wrap(bytes)).toString();
+        }catch(CharacterCodingException malformed){
+            throw new IOException("Invalid checkpoint UTF-8",malformed);
+        }
+    }
+    private static boolean readBoolean(DataInputStream in)throws IOException{
+        // Ghidra evidence cannot treat any nonzero byte as canonical TRUE.
+        int value=in.readUnsignedByte();
+        if(value!=0 && value!=1)
+            throw new IOException("Noncanonical checkpoint boolean");
+        return value==1;
     }
     public static byte[] encode(Snapshot s)throws IOException{
         if(s==null)throw new IOException("Null CFG snapshot");
@@ -145,23 +170,23 @@ public final class HardwareDurableCfgReport {
 
     private static HardwareResetIndirectVbrCorrelation.SourceInventory
             readInventory(DataInputStream in)throws IOException {
-        if(!in.readBoolean())return null;
-        boolean root=in.readBoolean(),incomplete=in.readBoolean();
+        if(!readBoolean(in))return null;
+        boolean root=readBoolean(in),incomplete=readBoolean(in);
         int omittedIndirect=in.readInt(),omittedVbr=in.readInt();
         int jsrs=count(in,HardwareResetIndirectVbrCorrelation.MAX_INDIRECT_SOURCES);
         List<HardwareResetIndirectVbrCorrelation.Indirect> indirect=new ArrayList<>();
         for(int i=0;i<jsrs;i++) {
             indirect.add(new HardwareResetIndirectVbrCorrelation.Indirect(
                 in.readLong(),in.readLong(),in.readLong(),
-                in.readBoolean(),in.readBoolean()));
+                readBoolean(in),readBoolean(in)));
         }
         int movecs=count(in,HardwareResetIndirectVbrCorrelation.MAX_VBR_SOURCES);
         List<HardwareResetIndirectVbrCorrelation.Vbr> vbr=new ArrayList<>();
         for(int i=0;i<movecs;i++) {
             long entry=in.readLong(),pc=in.readLong();
-            Long base=in.readBoolean()?in.readLong():null;
+            Long base=readBoolean(in)?in.readLong():null;
             vbr.add(new HardwareResetIndirectVbrCorrelation.Vbr(
-                entry,pc,base,in.readBoolean()));
+                entry,pc,base,readBoolean(in)));
         }
         int resetCount=count(in,50000);
         Set<Long> reset=new HashSet<>();
@@ -188,19 +213,19 @@ public final class HardwareDurableCfgReport {
             String markdown=readText(in),csv=readText(in);
             int functions=in.readInt(),indirect=in.readInt(),vbr=in.readInt(),
                 unresolved=in.readInt(),visited=in.readInt();
-            boolean limited=in.readBoolean(),resetRecognized=in.readBoolean(),
-                resetIncomplete=in.readBoolean(),review=in.readBoolean();
+            boolean limited=readBoolean(in),resetRecognized=readBoolean(in),
+                resetIncomplete=readBoolean(in),review=readBoolean(in);
             long cfgOmitted=in.readLong(),pointerOmitted=in.readLong();
             int siteCount=count(in,12000);
             List<Site> sites=new ArrayList<>();
             for(int i=0;i<siteCount;i++){
                 long fn=in.readLong(),pc=in.readLong();
                 String register=readText(in);long address=in.readLong();
-                boolean viaPointer=in.readBoolean();int width=in.readInt();
-                Integer word=in.readBoolean()?in.readInt():null;
+                boolean viaPointer=readBoolean(in);int width=in.readInt();
+                Integer word=readBoolean(in)?in.readInt():null;
                 int min=in.readInt(),max=in.readInt();
-                boolean call=in.readBoolean(),store=in.readBoolean(),
-                    incomplete=in.readBoolean();
+                boolean call=readBoolean(in),store=readBoolean(in),
+                    incomplete=readBoolean(in);
                 sites.add(new Site(fn,pc,register,address,viaPointer,width,
                     word,min,max,call,store,incomplete));
             }
