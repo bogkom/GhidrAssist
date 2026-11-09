@@ -201,6 +201,9 @@ public final class HardwareAnalysisTab extends JPanel {
         com.google.gson.JsonObject answer=new com.google.gson.JsonObject();
         answer.addProperty("format",format);
         answer.addProperty("revision",revision);
+        // The legacy revision string is an opaque per-capture object token.
+        // A stable numeric Ghidra modification counter is a separate fact.
+        answer.addProperty("program_revision",latestRevision.modificationNumber());
         answer.addProperty("generation",generation);
         answer.addProperty("stage_epoch",latestJointStageEpoch);
         answer.addProperty("import_sha256",
