@@ -1,5 +1,40 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
+## GA-02/03/12/18 — 2026-11-09: sampled CALL-site consensus and revision barrier
+
+The production one-hop source analyzer already resolves A/D context
+separately at each fully decoded direct CALL and conservatively joins
+predecessors; two-hop analysis also exists. Do NOT duplicate those
+solvers. A new bounded *reporting-only* reconciliation class inspects
+one callee STORE PC across independently observed direct caller sites.
+It distinguishes **SAMPLED_AGREEMENT** (same address, width, optional
+word and STORE kind), **SAMPLED_DIVERGENCE** (conflicting candidates),
+**INCOMPLETE** (pagination, unknown alias, incomplete caller/callee,
+missing/foreign/duplicate rows, unknown context), **NO_SAMPLED_CALLS**
+and **STALE_REVISION**. Every result retains source CALL/STORE
+provenance; even unanimous sampled contexts are explicitly MAY-source
+observations, not universal callee effects or runtime execution.
+
+A process-local HardwareAnalysisRevision gate must match both before
+and after reconciliation. If Ghidra changes its analysis revision
+while the reconciliation runs, it returns only STALE_REVISION, with
+zero candidate provenance and no address. It never writes GA-12 cache
+or Review/Apply state. Crucially, this does NOT modify the
+cross-process durable function checkpoints or assume that the
+imported executable SHA changes on Listing edits.
+
+Java21 deterministic regression covers same/different callers,
+multiple differing A0 values, truncated display, unknown pointer,
+incomplete caller, foreign row, missing STORE, duplicate CALL PC,
+profile/Program owner mismatch and revision transition between the
+two gates. Existing Ghidra 12.1.4 PUBLIC / Java25 genuine headless
+CALL-context and CodeBrowser/Xvfb regressions remain mandatory on
+the exact final commit. No original ECU411 firmware, user projects,
+local Wyse/Precision, Supervisor tests, runtime MCU claims or Apply.
+
+GA-02/03/12/18 remain PARTIAL; GA-14 stays deferred.
+
+
 ## GA-02/03/11/12/18 — 2026-11-09: real branch join and live Ghidra revision
 
 The existing isolated Ghidra 12.1.4 PUBLIC/Xvfb synthetic source
