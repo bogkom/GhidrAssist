@@ -173,7 +173,8 @@ public final class Ga12InterruptedCfgRestartFixture {
             require(insn!=null && function.getBody().contains(insn.getAddress()),
                 "Missing real Ghidra function instruction "+Long.toHexString(at));
             int memoryWrites=GhidraHardwareFlowService.pcodeMemoryWrites(insn);
-            if(at!=entry && at!=instructionOffsets[instructionOffsets.length-1])
+            if(at!=entry && at!=instructionOffsets[instructionOffsets.length-1]
+                    && !"NOP".equalsIgnoreCase(insn.getMnemonicString()))
                 require(memoryWrites==1,
                     "Real CPU32 memory effect count mismatch at "+
                     Long.toHexString(at)+": "+memoryWrites);
@@ -211,10 +212,29 @@ public final class Ga12InterruptedCfgRestartFixture {
         require(Integer.valueOf(0x4848).equals(
                 observations.get(2).knownPeripheralWords.get(0xfffa00L)),
             "Post-alias source must reflect only the last exact SIMCR store");
+        // A whole SIMCR word is invalidated by an overlapping byte;
+        // only a later complete 16-bit write can restore exact evidence.
+        RealFlow overlap=realFlow(program,0x80L,
+            new long[]{0x80L,0x86L,0x8aL,0x8eL,0x92L},3);
+        var o=overlap.result().snapshots;
+        require(Integer.valueOf(0x40ca).equals(
+                o.get(0).knownPeripheralWords.get(0xfffa00L)) &&
+                o.get(0).writeBits==16,
+            "First real full SIMCR word is not proven");
+        require(o.get(1).effectiveAddress!=null &&
+                o.get(1).effectiveAddress==0xfffa00L &&
+                o.get(1).writeBits==8 &&
+                !o.get(1).knownPeripheralWords.containsKey(0xfffa00L) &&
+                o.get(1).writtenWord==null,
+            "Real overlapping byte retained or invented a full SIMCR word");
+        require(Integer.valueOf(0x4848).equals(
+                o.get(2).knownPeripheralWords.get(0xfffa00L)) &&
+                o.get(2).writeBits==16,
+            "Real following complete word did not reestablish SIMCR evidence");
         Path dir=output.resolve("ga12-real-pcode-function-stages");
         Files.createDirectories(dir);
         StringBuilder hashes=new StringBuilder();
-        for(RealFlow flow:List.of(indirect,alias)) {
+        for(RealFlow flow:List.of(indirect,alias,overlap)) {
             byte[] serialized=HardwareFunctionResultCodec.encode(flow.result());
             String digest=HardwareDurableStageStore.hash(serialized);
             hashes.append(Long.toHexString(flow.entry())).append(':')
@@ -244,6 +264,87 @@ public final class Ga12InterruptedCfgRestartFixture {
         return HardwareDurableStageStore.hash(hashes.toString());
     }
 
+    /** Real decoded 22-instruction CPU32 source, not fabricated CFG Steps. */
+    private static RealFlow longTranslatedSource(Program program)
+            throws Exception {
+        long[] pcs=new long[20];
+        pcs[0]=0xa0L;
+        for(int i=1;i<=17;i++)pcs[i]=0xa4L+2L*i;
+        pcs[18]=0xc8L;pcs[19]=0xccL;
+        return realFlow(program,0xa0L,pcs,1);
+    }
+
+    private static Path realPendingDirectory(Path output) {
+        return output.resolve("ga12-real-translated-pending-stages");
+    }
+
+    /** First JVM stops after exactly one coherent fixed-point slice. */
+    private static int interruptRealTranslatedSource(Program program,
+            Path output,HardwareDurableStageStore.Key key) throws Exception {
+        RealFlow source=longTranslatedSource(program);
+        var slice=HardwareDataflow.analyzeSlice(source.entry(),
+            source.steps(),TARGETS,128,null,
+            HardwarePartialStageRunner.ITERATIONS_PER_SLICE);
+        require(slice.complete()==null && slice.progress()!=null &&
+                slice.progress().iterations()==
+                    HardwarePartialStageRunner.ITERATIONS_PER_SLICE &&
+                !slice.progress().pending().isEmpty(),
+            "Real translated CPU32 worklist did not stop mid-function");
+        Path dir=realPendingDirectory(output);
+        Files.createDirectories(dir);
+        require(HardwareDurableFunctionStages.saveProgress(dir,key,
+                source.entry(),128,source.steps(),TARGETS,slice.progress()),
+            "Real translated partial source was not saved to disk");
+        require(HardwareDurableFunctionStages.load(dir,key,
+                source.entry(),128,source.steps(),TARGETS).isEmpty(),
+            "Incomplete real translated source became Review evidence");
+        return slice.progress().iterations();
+    }
+
+    /** Second JVM must resume typed actual Listing/P-code CFG, not cold run. */
+    private static void resumeRealTranslatedSource(Program program,
+            Path output,HardwareDurableStageStore.Key key,int iterations)
+            throws Exception {
+        RealFlow source=longTranslatedSource(program);
+        Path dir=realPendingDirectory(output);
+        var pending=HardwareDurableFunctionStages.loadProgress(dir,key,
+            source.entry(),128,source.steps(),TARGETS).orElseThrow(
+                ()->new IllegalStateException(
+                    "Missing genuine translated Ghidra partial stage"));
+        require(pending.iterations()==iterations &&
+                HardwareDurableFunctionStages.load(dir,key,
+                    source.entry(),128,source.steps(),TARGETS).isEmpty(),
+            "Unfinished source checkpoint was published as complete");
+        require(HardwareDurableFunctionStages.loadProgress(dir,
+                changed(key,"analysis-input"),source.entry(),128,
+                source.steps(),TARGETS).isEmpty(),
+            "Edited Ghidra source was allowed to resume real worklist");
+        require(HardwareDurableFunctionStages.loadProgress(dir,
+                changed(key,"profile"),source.entry(),128,
+                source.steps(),TARGETS).isEmpty(),
+            "Changed MCU profile was allowed to resume worklist");
+        require(HardwareDurableFunctionStages.loadProgress(dir,key,
+                source.entry(),129,source.steps(),TARGETS).isEmpty(),
+            "Changed solver budget was allowed to resume real worklist");
+        var resumed=HardwarePartialStageRunner.analyze(source.entry(),
+            source.steps(),TARGETS,128,dir,key,TaskMonitor.DUMMY,()->true);
+        require(resumed.restoredPartial() && !resumed.result().truncated &&
+                Arrays.equals(HardwareFunctionResultCodec.encode(
+                    source.result()),
+                    HardwareFunctionResultCodec.encode(resumed.result())),
+            "Real translated CPU32 partial CFG differs from cold fixed point");
+        require(resumed.result().snapshots.size()==1 &&
+                resumed.result().snapshots.get(0).effectiveAddress==0xfffa00L &&
+                Integer.valueOf(0x4848).equals(
+                    resumed.result().snapshots.get(0).writtenWord),
+            "Real 22-instruction CPU32 resume lost final SIMCR source");
+        require(HardwareDurableFunctionStages.save(dir,key,source.entry(),
+                128,source.steps(),TARGETS,resumed.result()) &&
+                HardwareDurableFunctionStages.loadProgress(dir,key,
+                    source.entry(),128,source.steps(),TARGETS).isEmpty(),
+            "Real translated fixed point was not committed atomically");
+    }
+
     /** First genuine Ghidra process deliberately stops just after a saved slice. */
     public static void interruptInFirstJvm(Program program,Path output)
             throws Exception {
@@ -264,6 +365,8 @@ public final class Ga12InterruptedCfgRestartFixture {
         var key=identity(program);
         String realFlowDigest=verifyRealRegisterAndAliasFlow(
             program,output,key,false);
+        int realPendingIterations=interruptRealTranslatedSource(
+            program,output,key);
         var steps=graph();
         require(HardwareDurableFunctionStages.loadProgress(directory,key,
             ENTRY,BUDGET,steps,TARGETS).isEmpty(),"Unexpected saved worklist on first JVM");
@@ -294,6 +397,10 @@ public final class Ga12InterruptedCfgRestartFixture {
         report.addProperty("real_pcode_memory_effects_verified",true);
         report.addProperty("real_translated_flow_sha256",realFlowDigest);
         report.addProperty("real_indirect_mmio_proven",true);
+        report.addProperty("real_byte_overlap_invalidated",true);
+        report.addProperty("real_translated_partial_iterations",
+            realPendingIterations);
+        report.addProperty("real_translated_partial_not_review",true);
         report.addProperty("real_unknown_alias_poisoned",true);
         report.addProperty("deliberately_cancelled",cancelled);
         report.addProperty("partial_worklist_saved",true);
@@ -492,6 +599,8 @@ public final class Ga12InterruptedCfgRestartFixture {
         require(realFlowDigest.equals(
             first.get("real_translated_flow_sha256").getAsString()),
             "Real CPU32 A0 flow and unknown alias changed across JVMs");
+        resumeRealTranslatedSource(program,output,key,
+            first.get("real_translated_partial_iterations").getAsInt());
         var steps=graph();
         require(key.importedSha256().equals(first.get("import_sha256").getAsString())
                 && key.inputSha256().equals(first.get("full_input_sha256").getAsString())
@@ -558,6 +667,9 @@ public final class Ga12InterruptedCfgRestartFixture {
         report.addProperty("real_translated_flow_sha256",realFlowDigest);
         report.addProperty("real_indirect_checkpoint_restored",true);
         report.addProperty("real_alias_checkpoint_restored",true);
+        report.addProperty("real_byte_overlap_checkpoint_restored",true);
+        report.addProperty("real_translated_partial_restored",true);
+        report.addProperty("real_translated_cold_byte_equal",true);
         report.addProperty("real_pcode_memory_effects_verified",true);
         report.addProperty("source_identity_matches",true);
         report.addProperty("partial_restored",resumed.restoredPartial());
