@@ -765,7 +765,8 @@ def main():
                                 {"offset":0,"limit":1})["source_pairs"]
                             fresh_report=http_call("analysis.report",
                                 {"format":"markdown","offset":0,"limit":64})["report"]
-                            if (fresh_report["revision"]!=source_report_first["revision"] or
+                            if (fresh_report["program_revision"]!=
+                                    source_report_first["program_revision"] or
                                     fresh_report["generation"]==
                                     source_report_first["generation"]):
                                 raise RuntimeError(
