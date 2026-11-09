@@ -10,7 +10,9 @@ import java.util.*;
  */
 public final class HardwareDurableCfgReport {
     private HardwareDurableCfgReport(){}
-    public static final String SCHEMA="GA12-CFG-REPORT-1";
+    /** V2 includes optional bounded live JSR/MOVEC source provenance. */
+    public static final String SCHEMA="GA12-CFG-REPORT-2";
+    public static final String LEGACY_SCHEMA="GA12-CFG-REPORT-1";
     public record Site(long function,long pc,String register,long address,
             boolean indirect,int widthBits,Integer word,int mmMin,int mmMax,
             boolean unknownCall,boolean unknownStore,boolean incomplete) {}
@@ -21,7 +23,18 @@ public final class HardwareDurableCfgReport {
             int indirect,int vbr,int unresolved,int visited,boolean limited,
             boolean resetRecognized,boolean resetIncomplete,
             boolean cfgReviewComplete,long cfgOmitted,long pointersOmitted,
-            List<Site> sites,List<Role> roles,List<Long> resetFunctions) {
+            List<Site> sites,List<Role> roles,List<Long> resetFunctions,
+            HardwareResetIndirectVbrCorrelation.SourceInventory sourceInventory) {
+        /** V1 callers and historic snapshots have no typed source inventory. */
+        public Snapshot(String markdown,String csv,int functions,
+                int indirect,int vbr,int unresolved,int visited,boolean limited,
+                boolean resetRecognized,boolean resetIncomplete,
+                boolean cfgReviewComplete,long cfgOmitted,long pointersOmitted,
+                List<Site> sites,List<Role> roles,List<Long> resetFunctions) {
+            this(markdown,csv,functions,indirect,vbr,unresolved,visited,limited,
+                resetRecognized,resetIncomplete,cfgReviewComplete,cfgOmitted,
+                pointersOmitted,sites,roles,resetFunctions,null);
+        }
         public Snapshot {
             if(markdown==null || csv==null || sites==null || roles==null ||
                     resetFunctions==null || functions<0 || indirect<0 ||
@@ -96,11 +109,69 @@ public final class HardwareDurableCfgReport {
             }
             out.writeInt(s.resetFunctions().size());
             for(long entry:s.resetFunctions())out.writeLong(entry);
+            writeInventory(out,s.sourceInventory());
         }
         if(bytes.size()>HardwareDurableStageStore.MAX_PAYLOAD_BYTES)
             throw new IOException("Report too large for durable cache");
         return bytes.toByteArray();
     }
+    /** Version 2 retains the bounded observed source inventory only. */
+    private static void writeInventory(DataOutputStream out,
+            HardwareResetIndirectVbrCorrelation.SourceInventory sources)
+            throws IOException {
+        out.writeBoolean(sources!=null);
+        if(sources==null)return;
+        out.writeBoolean(sources.resetRecognized());
+        out.writeBoolean(sources.resetIncomplete());
+        out.writeInt(sources.omittedIndirect());
+        out.writeInt(sources.omittedVbr());
+        out.writeInt(sources.indirect().size());
+        for(var row:sources.indirect()) {
+            out.writeLong(row.caller());out.writeLong(row.pc());
+            out.writeLong(row.target());out.writeBoolean(row.mayMm());
+            out.writeBoolean(row.uncertain());
+        }
+        out.writeInt(sources.vbr().size());
+        for(var row:sources.vbr()) {
+            out.writeLong(row.function());out.writeLong(row.pc());
+            out.writeBoolean(row.tableBase()!=null);
+            if(row.tableBase()!=null)out.writeLong(row.tableBase());
+            out.writeBoolean(row.uncertain());
+        }
+        out.writeInt(sources.resetVisited().size());
+        for(long address:new TreeSet<>(sources.resetVisited()))
+            out.writeLong(address);
+    }
+
+    private static HardwareResetIndirectVbrCorrelation.SourceInventory
+            readInventory(DataInputStream in)throws IOException {
+        if(!in.readBoolean())return null;
+        boolean root=in.readBoolean(),incomplete=in.readBoolean();
+        int omittedIndirect=in.readInt(),omittedVbr=in.readInt();
+        int jsrs=count(in,HardwareResetIndirectVbrCorrelation.MAX_INDIRECT_SOURCES);
+        List<HardwareResetIndirectVbrCorrelation.Indirect> indirect=new ArrayList<>();
+        for(int i=0;i<jsrs;i++) {
+            indirect.add(new HardwareResetIndirectVbrCorrelation.Indirect(
+                in.readLong(),in.readLong(),in.readLong(),
+                in.readBoolean(),in.readBoolean()));
+        }
+        int movecs=count(in,HardwareResetIndirectVbrCorrelation.MAX_VBR_SOURCES);
+        List<HardwareResetIndirectVbrCorrelation.Vbr> vbr=new ArrayList<>();
+        for(int i=0;i<movecs;i++) {
+            long entry=in.readLong(),pc=in.readLong();
+            Long base=in.readBoolean()?in.readLong():null;
+            vbr.add(new HardwareResetIndirectVbrCorrelation.Vbr(
+                entry,pc,base,in.readBoolean()));
+        }
+        int resetCount=count(in,50000);
+        Set<Long> reset=new HashSet<>();
+        for(int i=0;i<resetCount;i++) {
+            if(!reset.add(in.readLong()))throw new IOException("Duplicate RESET entry");
+        }
+        return new HardwareResetIndirectVbrCorrelation.SourceInventory(
+            indirect,vbr,reset,root,incomplete,omittedIndirect,omittedVbr);
+    }
+
     private static int count(DataInputStream in,int cap)throws IOException{
         int n=in.readInt();
         if(n<0 || n>cap)throw new IOException("Invalid checkpoint record count");
@@ -111,7 +182,9 @@ public final class HardwareDurableCfgReport {
                 data.length>HardwareDurableStageStore.MAX_PAYLOAD_BYTES)
             return Optional.empty();
         try(DataInputStream in=new DataInputStream(new ByteArrayInputStream(data))){
-            if(!SCHEMA.equals(readText(in)))return Optional.empty();
+            String schema=readText(in);
+            boolean v2=SCHEMA.equals(schema);
+            if(!v2 && !LEGACY_SCHEMA.equals(schema))return Optional.empty();
             String markdown=readText(in),csv=readText(in);
             int functions=in.readInt(),indirect=in.readInt(),vbr=in.readInt(),
                 unresolved=in.readInt(),visited=in.readInt();
@@ -141,11 +214,12 @@ public final class HardwareDurableCfgReport {
             int resetCount=count(in,50000);
             List<Long> resets=new ArrayList<>();
             for(int i=0;i<resetCount;i++)resets.add(in.readLong());
+            var sourceInventory=v2?readInventory(in):null;
             if(in.available()!=0)return Optional.empty();
             return Optional.of(new Snapshot(markdown,csv,functions,indirect,
                 vbr,unresolved,visited,limited,resetRecognized,
                 resetIncomplete,review,cfgOmitted,pointerOmitted,
-                sites,roles,resets));
+                sites,roles,resets,sourceInventory));
         }catch(IOException|RuntimeException malformed){
             return Optional.empty();
         }
