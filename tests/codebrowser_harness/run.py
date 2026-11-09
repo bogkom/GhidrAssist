@@ -612,6 +612,12 @@ def main():
                                 time.sleep(0.07)
                             p1=http_call("hardware.source_pairs.page",
                                 {"offset":0,"limit":1})["source_pairs"]
+                            source_report_first=http_call("analysis.report",
+                                {"format":"markdown","offset":0,"limit":64})["report"]
+                            if (not source_report_first.get("generation") or
+                                    source_report_first.get("program_path")!=
+                                    "/synthetic-reset-indirect-vbr.bin"):
+                                raise RuntimeError("Real source report missing Program binding")
                             if (p1.get("schema")!=1 or p1.get("total_pairs")!=2
                                     or p1.get("offset")!=0 or p1.get("next_offset")!=1
                                     or p1.get("has_more") is not True
@@ -684,6 +690,18 @@ def main():
                             if refused!=len(invalid_revision)+len(invalid_generation):
                                 raise RuntimeError("Missing strict source-pair denial")
                             print("GA-12 SOURCE PAIRS EXACT REVISION/UUID PASS")
+                            for field in ("offset","limit"):
+                                for value in ("1",1.5,True,None,[],{},-1,
+                                              2**31,1e100):
+                                    untrusted={**params,field:value}
+                                    try:
+                                        http_call("hardware.source_pairs.page",untrusted)
+                                    except HTTPError as error:
+                                        if error.code!=400:raise
+                                    else:
+                                        raise RuntimeError(
+                                            "Noncanonical source page accepted: "+str(untrusted))
+                            print("GA-12 SOURCE-PAIR STRICT JSON PAGE LIMITS PASS")
                             # Exercise actual installed CLI, versioned local
                             # no-overwrite checkpoint and offline verifier.
                             private=work/"ga18-source-pairs-session.json"
@@ -717,6 +735,15 @@ def main():
                             # even when the original source bytes are unchanged.
                             http_call("project.program.open",{"path":"/guard-other.bin"})
                             try:
+                                http_call("analysis.export",{
+                                    "format":"markdown","offset":1,"limit":64,
+                                    "expected_revision":source_report_first["revision"],
+                                    "expected_generation":source_report_first["generation"]})
+                            except HTTPError as error:
+                                if error.code!=400:raise
+                            else:
+                                raise RuntimeError("Old report leaked after Program switch")
+                            try:
                                 http_call("hardware.source_pairs.page",params)
                             except HTTPError as error:
                                 if error.code!=400:raise
@@ -736,6 +763,23 @@ def main():
                                 time.sleep(0.07)
                             fresh=http_call("hardware.source_pairs.page",
                                 {"offset":0,"limit":1})["source_pairs"]
+                            fresh_report=http_call("analysis.report",
+                                {"format":"markdown","offset":0,"limit":64})["report"]
+                            if (fresh_report["revision"]!=source_report_first["revision"] or
+                                    fresh_report["generation"]==
+                                    source_report_first["generation"]):
+                                raise RuntimeError(
+                                    "Rerun with same Program revision revived old report generation")
+                            try:
+                                http_call("analysis.report",{
+                                    "format":"markdown","offset":1,"limit":64,
+                                    "expected_revision":source_report_first["revision"],
+                                    "expected_generation":source_report_first["generation"]})
+                            except HTTPError as error:
+                                if error.code!=400:raise
+                            else:
+                                raise RuntimeError(
+                                    "Old report cursor reused after same-input Analyze rerun")
                             if fresh.get("generation")==p1["generation"]:
                                 raise RuntimeError("New Analyze revived old source-pair cursor")
                             try:
