@@ -55,6 +55,7 @@ public class QueryTab extends JPanel {
     private JButton loadAgenticDraftButton;
     private JButton loadSavedCheckpointButton;
     private JButton loadBoundCheckpointButton;
+    private JButton createBoundCheckpointButton;
     private JTable chatHistoryTable;
     private DefaultTableModel chatHistoryModel;
     private JTextArea contextStatusLabel;
@@ -159,6 +160,9 @@ public class QueryTab extends JPanel {
         loadAgenticDraftButton = new JButton("Import Review Draft");
         loadSavedCheckpointButton = new JButton("Import Saved Checkpoint");
         loadBoundCheckpointButton = new JButton("Import Bound Checkpoint");
+        createBoundCheckpointButton = new JButton("Create Bound Checkpoint");
+        createBoundCheckpointButton.setToolTipText(
+            "Explicitly bind an existing complete Agentic checkpoint to the ACTIVE Program; no automatic Review/Apply.");
         loadBoundCheckpointButton.setToolTipText(
             "Explicit GA-12 full Program fingerprint binding; always a NEW Review and Approve Plan.");
         loadSavedCheckpointButton.setToolTipText("Review previous evidence as untrusted data; new plan and approval required.");
@@ -345,6 +349,7 @@ public class QueryTab extends JPanel {
         buttonPanel.add(loadAgenticDraftButton);
         buttonPanel.add(loadSavedCheckpointButton);
         buttonPanel.add(loadBoundCheckpointButton);
+        buttonPanel.add(createBoundCheckpointButton);
         add(buttonPanel, BorderLayout.SOUTH);
     }
 
@@ -373,6 +378,38 @@ public class QueryTab extends JPanel {
             if (objective == null) return;
             controller.handleSavedAgenticCheckpointImport(
                 chooser.getSelectedFile().toPath(), objective);
+        });
+
+        createBoundCheckpointButton.addActionListener(e -> {
+            JFileChooser input=new JFileChooser();
+            input.setDialogTitle(
+                "Select COMPLETED local Agentic evidence to bind");
+            if(input.showOpenDialog(this)!=JFileChooser.APPROVE_OPTION)return;
+            JFileChooser destination=new JFileChooser();
+            destination.setDialogTitle(
+                "Create a NEW local GA-12 Program binding (will not overwrite)");
+            if(destination.showSaveDialog(this)!=JFileChooser.APPROVE_OPTION)return;
+            String objective=JOptionPane.showInputDialog(this,
+                "New independent investigation objective (8..512 chars):",
+                "Create read-only Program binding",JOptionPane.QUESTION_MESSAGE);
+            if(objective==null)return;
+            Object profile=JOptionPane.showInputDialog(this,
+                "Select EXACT Program profile; no CPU32 MCU is inferred:",
+                "Create Program binding",JOptionPane.QUESTION_MESSAGE,
+                null,new Object[]{"CPU32 generic survey",
+                    "MC68332 explicitly selected"},null);
+            if(profile==null)return;
+            int acknowledge=JOptionPane.showConfirmDialog(this,
+                "Create a read-only fingerprint sidecar for the ACTIVE Ghidra "+
+                "Program? This neither proves historical authorship nor "+
+                "authorizes any previous plan or Apply.",
+                "Explicit Program binding consent",
+                JOptionPane.OK_CANCEL_OPTION,JOptionPane.WARNING_MESSAGE);
+            if(acknowledge!=JOptionPane.OK_OPTION)return;
+            controller.handleCreateBoundAgenticCheckpoint(
+                input.getSelectedFile().toPath(),
+                destination.getSelectedFile().toPath(),
+                objective,"MC68332 explicitly selected".equals(profile));
         });
 
         loadBoundCheckpointButton.addActionListener(e -> {
