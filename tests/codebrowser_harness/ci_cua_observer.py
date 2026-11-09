@@ -21,11 +21,21 @@ def main():
     d=Path(a.workspace)/"evidence"/("pilot-ghidra-"+a.run_id)
     ready=d/"cua-live-ready.json"
     end=time.monotonic()+a.timeout+20
-    while not ready.is_file():
+    # The CodeBrowser writes a small ready JSON file in the other process.
+    # is_file() can become true before json.dump()/flush() completes; a
+    # one-shot json.loads then races the writer, turning the expected
+    # window-changed BLOCKED test into an unrelated observer crash.
+    # Wait only until the original bounded deadline, never synthesize ACK.
+    obj=None
+    while obj is None:
         if time.monotonic()>end:
-            raise RuntimeError("NO_LIVE_CUA_READY")
-        time.sleep(.1)
-    obj=json.loads(ready.read_text())
+            raise RuntimeError("NO_COMPLETE_LIVE_CUA_READY")
+        try:
+            obj=json.loads(ready.read_text())
+            if not isinstance(obj,dict):
+                raise RuntimeError("INVALID_LIVE_CUA_READY")
+        except (FileNotFoundError,UnicodeError,json.JSONDecodeError):
+            time.sleep(.1)
     assert obj["action"]=="GA18_NATIVE_CUA_LIVE_READY"
     assert obj["run_id"]==a.run_id
     assert obj["window_class"]==CLASS and obj["window_title"]==TITLE
