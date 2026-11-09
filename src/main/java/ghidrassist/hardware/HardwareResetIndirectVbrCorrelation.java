@@ -51,8 +51,16 @@ public final class HardwareResetIndirectVbrCorrelation {
     public record Result(int indirectSources,int vbrSources,
             int colocatedPairs,int omittedIndirect,int omittedVbr,
             boolean displayTruncated,boolean resetRootRecognized,
-            boolean resetGraphIncomplete,List<Pair> rows) {
-        public Result { rows=List.copyOf(rows); }
+            boolean resetGraphIncomplete,List<Pair> rows,
+            int pageOffset,int pageLimit,int nextOffset,boolean hasMore) {
+        public Result {
+            rows=List.copyOf(rows);
+            if(pageOffset<0 || pageLimit<1 || pageLimit>MAX_DISPLAY ||
+                    nextOffset<pageOffset ||
+                    rows.size()>pageLimit || hasMore!=(nextOffset<colocatedPairs) ||
+                    displayTruncated!=(colocatedPairs>rows.size()))
+                throw new IllegalArgumentException("Inconsistent source page");
+        }
         private static String hex(long n) {
             return String.format(Locale.ROOT,"0x%08X",n);
         }
@@ -72,6 +80,10 @@ public final class HardwareResetIndirectVbrCorrelation {
                 .append("; MOVEC-to-VBR sources: ").append(vbrSources)
                 .append("; co-located pairs: ").append(colocatedPairs)
                 .append("; displayed: ").append(rows.size())
+                .append("; page offset: ").append(pageOffset)
+                .append("; page limit: ").append(pageLimit)
+                .append("; next offset: ").append(nextOffset)
+                .append("; has more pages: ").append(hasMore)
                 .append("; omitted indirect witnesses: ").append(omittedIndirect)
                 .append("; omitted MOVEC sites: ").append(omittedVbr)
                 .append("; RESET root recognized: ").append(resetRootRecognized)
@@ -109,10 +121,30 @@ public final class HardwareResetIndirectVbrCorrelation {
             Set<Long> resetVisited,boolean resetRootRecognized,
             boolean resetGraphIncomplete,int omittedIndirect,int omittedVbr,
             int maxRows) {
+        return page(indirect,vbr,resetVisited,resetRootRecognized,
+            resetGraphIncomplete,omittedIndirect,omittedVbr,0,maxRows);
+    }
+
+    /**
+     * GA-12/18: bounded deterministic offset/limit window over ALL observed
+     * same-function source pairs. No unbounded list of candidate pairs is
+     * materialized; each page repeats complete inventory/omission counts.
+     *
+     * A caller rendering this page must use the same exact-revision
+     * HardwareJointSourcePublication gate as the first report page.
+     * Offset is an index in the ordered SOURCE inventory, not Ghidra
+     * address space or a durable cross-revision cursor.
+     */
+    public static Result page(List<Indirect> indirect,List<Vbr> vbr,
+            Set<Long> resetVisited,boolean resetRootRecognized,
+            boolean resetGraphIncomplete,int omittedIndirect,int omittedVbr,
+            int offset,int limit) {
         if(indirect==null || vbr==null || resetVisited==null ||
                 indirect.size()>MAX_INDIRECT_SOURCES ||
                 vbr.size()>MAX_VBR_SOURCES || omittedIndirect<0 ||
-                omittedVbr<0 || maxRows<1 || maxRows>MAX_DISPLAY)
+                omittedVbr<0 || offset<0 ||
+                offset>MAX_INDIRECT_SOURCES*MAX_VBR_SOURCES ||
+                limit<1 || limit>MAX_DISPLAY)
             throw new IllegalArgumentException("Invalid bounded source join");
         for(Long entry:resetVisited)
             if(entry==null || entry<0 || entry>0xffffffffL || (entry&1)!=0)
@@ -138,7 +170,7 @@ public final class HardwareResetIndirectVbrCorrelation {
             for(Vbr movec:movecs) {
                 if(jsr.caller()!=movec.function())continue;
                 count++;
-                if(rows.size()>=maxRows)continue;
+                if(count<=offset || rows.size()>=limit)continue;
                 ResetRelation relation=!resetRootRecognized?
                     ResetRelation.RESET_ROOT_UNKNOWN:
                     resetVisited.contains(jsr.caller())?
@@ -150,8 +182,10 @@ public final class HardwareResetIndirectVbrCorrelation {
                     jsr.mayMm(),jsr.uncertain()||movec.uncertain()||
                         movec.tableBase()==null));
             }
+        int nextOffset=offset+rows.size();
         return new Result(jsrs.size(),movecs.size(),count,
             omittedIndirect,omittedVbr,count>rows.size(),
-            resetRootRecognized,resetGraphIncomplete,rows);
+            resetRootRecognized,resetGraphIncomplete,rows,
+            offset,limit,nextOffset,nextOffset<count);
     }
 }
