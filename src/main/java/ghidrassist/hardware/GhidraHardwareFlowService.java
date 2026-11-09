@@ -747,6 +747,8 @@ public final class GhidraHardwareFlowService {
         HardwareEvidenceBudget<HardwareCfgWriteAudit.Site> cfgMmioSites=
             new HardwareEvidenceBudget<>(MAX_CFG_MMIO_SITES);
         List<HardwareCfgStorePaths.Pair> cfgStoreRelations=new ArrayList<>();
+        // Captured only for bounded co-located JSR/MOVEC source functions.
+        Map<Long,List<HardwareCfgSiteOrder.Node>> cfgSiteGraphs=new HashMap<>();
         List<HardwareSimcrLocalFirst.Result> localFirstPaths=new ArrayList<>();
         int localFirstOmittedFunctions=0;
         int cfgPathLimitedFunctions=0;
@@ -762,6 +764,7 @@ public final class GhidraHardwareFlowService {
             List<HardwareDataflow.Step> steps=new ArrayList<>();
             List<Long> directCallees=new ArrayList<>();
             boolean localStore=false,localVbr=false,uncertainFlow=false;
+            boolean cfgSiteUnknownFlow=false;
             long decodedBytes=0;
             int firstFunctionCallSite=mmCallSites.size();
             InstructionIterator it=program.getListing().getInstructions(fun.getBody(),true);
@@ -772,14 +775,18 @@ public final class GhidraHardwareFlowService {
                 PcodeOp[] ops=insn.getPcode();
                 if(ops!=null)for(PcodeOp op:ops){
                     if(op.getOpcode()==PcodeOp.STORE)localStore=true;
-                    if(op.getOpcode()==PcodeOp.CALLOTHER)uncertainFlow=true;
+                    if(op.getOpcode()==PcodeOp.CALLOTHER){
+                        uncertainFlow=true;cfgSiteUnknownFlow=true;
+                    }
                 }
                 String mnemonic=opcode(insn);
                 if(mnemonic.equals("MOVEC") &&
                         op(insn,insn.getNumOperands()-1).equals("VBR"))
                     localVbr=true;
-                if(insn.getFlowType().isComputed())
+                if(insn.getFlowType().isComputed()){
                     uncertainFlow=true;
+                    if(!insn.getFlowType().isCall())cfgSiteUnknownFlow=true;
+                }
                 if(mc68332Selected && insn.getFlowType().isCall() &&
                         insn.getFlowType().isComputed()) {
                     // Display-only MAY evidence. The same byte-proven
@@ -822,11 +829,12 @@ public final class GhidraHardwareFlowService {
                     // behave like a call to other code without a CALL opcode.
                     // Never classify its effect as a closed/no-store graph.
                     Address[] jumpTargets=insn.getFlows();
-                    if(jumpTargets==null || jumpTargets.length==0)
-                        uncertainFlow=true;
-                    else for(Address destination:jumpTargets)
-                        if(!fun.getBody().contains(destination))
-                            uncertainFlow=true;
+                    if(jumpTargets==null || jumpTargets.length==0){
+                        uncertainFlow=true;cfgSiteUnknownFlow=true;
+                    }else for(Address destination:jumpTargets)
+                        if(!fun.getBody().contains(destination)){
+                            uncertainFlow=true;cfgSiteUnknownFlow=true;
+                        }
                 }
                 Long callTarget=null;
                 if(insn.getFlowType().isCall()){
@@ -948,6 +956,33 @@ public final class GhidraHardwareFlowService {
             }
             visited+=result.reachedNodes;
             limited|=result.truncated;
+            // Existing Ghidra Listing CFG, not byte-address ordering.
+            // Exclude incomplete, computed-jump and oversized functions;
+            // no source pair may borrow another Function's CFG.
+            if(mc68332Selected && localVbr && !cfgSiteUnknownFlow &&
+                    !result.truncated &&
+                    decodedBytes==fun.getBody().getNumAddresses() &&
+                    steps.size()<=HardwareCfgSiteOrder.MAX_NODES &&
+                    cfgSiteGraphs.size()<32 &&
+                    functionEntry>=0 && functionEntry<=0xffffffL &&
+                    (functionEntry&1)==0 &&
+                    indirectCandidates.stream().anyMatch(
+                        candidate->candidate.caller()==functionEntry)){
+                List<HardwareCfgSiteOrder.Node> nodes=new ArrayList<>();
+                boolean valid=true;
+                for(HardwareDataflow.Step step:steps){
+                    if(step.address<0 || step.address>0xffffffL ||
+                            (step.address&1)!=0){valid=false;break;}
+                    for(Long successor:step.successors)
+                        if(successor==null || successor<0 ||
+                                successor>0xffffffL || (successor&1)!=0)
+                            valid=false;
+                    if(!valid)break;
+                    nodes.add(new HardwareCfgSiteOrder.Node(
+                        step.address,step.successors));
+                }
+                if(valid)cfgSiteGraphs.put(functionEntry,List.copyOf(nodes));
+            }
             if(mc68332Selected)for(int idx=firstFunctionCallSite;
                     idx<mmCallSites.size();idx++){
                 if(callerContexts.size()>=
@@ -1466,13 +1501,32 @@ public final class GhidraHardwareFlowService {
                     row.tableState()!=
                         HardwareVbrRelocationEvidence.TableState.TABLE_BYTES_CANDIDATE))
                 .toList();
-            resetIndirectVbr=HardwareResetIndirectVbrCorrelation.inspect(
+            var correlation=HardwareResetIndirectVbrCorrelation.inspect(
                 indirectSources,movecSources,reset.visited(),
                 reset.recognized(),reset.incomplete(),
                 indirectMmEvidence.omittedWitnesses()+indirectCandidatesOmitted+
                     indirectMmEvidence.rows().size()-joinEligible.size(),
                 vbrSourceSitesOmitted+vbrSourceSites.size()-vbrPlan.rows().size(),
-                HardwareResetIndirectVbrCorrelation.MAX_DISPLAY).markdown();
+                HardwareResetIndirectVbrCorrelation.MAX_DISPLAY);
+            StringBuilder cfgRoutes=new StringBuilder(correlation.markdown())
+                .append("## Bounded same-function JSR / MOVEC CFG routes (GA-01/02/03/11)\n\n")
+                .append("STATIC POSSIBLE INSTRUCTION ROUTES ONLY; CALL fallthrough ")
+                .append("does not prove callee return, MM activation, MOVEC execution, ")
+                .append("selected VBR or interrupt activation. UNKNOWN means no ")
+                .append("complete trusted CFG source; NO_OBSERVED_ORDERED_ROUTE ")
+                .append("is not a runtime impossibility claim.\n\n")
+                .append("| Function | Indirect JSR PC | MOVEC PC | CFG relation |\n")
+                .append("|---|---|---|---|\n");
+            for(var pair:correlation.rows()){
+                var graph=cfgSiteGraphs.get(pair.function());
+                var relation=HardwareCfgSiteOrder.inspect(
+                    pair.function(),graph,graph!=null,
+                    pair.indirectPc(),pair.vbrPc());
+                cfgRoutes.append(String.format(java.util.Locale.ROOT,
+                    "| 0x%08X | 0x%08X | 0x%08X | %s |\n",
+                    pair.function(),pair.indirectPc(),pair.vbrPc(),relation));
+            }
+            resetIndirectVbr=cfgRoutes.append("\n").toString();
         }else
             resetIndirectVbr="## RESET / indirect MMIO / VBR source co-location\n\n"+
                 "Not evaluated: explicit MC68332 profile required. "+
