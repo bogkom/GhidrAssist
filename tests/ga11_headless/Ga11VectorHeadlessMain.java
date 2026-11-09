@@ -1213,6 +1213,109 @@ public final class Ga11VectorHeadlessMain {
                     check(repeated.equals(source) &&
                         full.getModificationNumber()==revision,
                         "GA-12 process-local replay mixed call-site contexts");
+                    // GA-12: actual in-memory Ghidra Listing mutation.
+                    // Decode the already validated synthetic CPU32 bridge
+                    // and leaf into real production Steps, then capture
+                    // genuine Program.getModificationNumber. A stale
+                    // source-only two-hop observation must lose its address
+                    // and *all* CALL provenance after the comment changes.
+                    var realBridgeMethod=GhidraHardwareFlowService.class
+                        .getDeclaredMethod("contextualBridge",Program.class,
+                            Function.class,TaskMonitor.class);
+                    realBridgeMethod.setAccessible(true);
+                    var realLeafMethod=GhidraHardwareFlowService.class
+                        .getDeclaredMethod("contextualCallee",Program.class,
+                            Function.class,TaskMonitor.class);
+                    realLeafMethod.setAccessible(true);
+                    var realBridge=(ghidrassist.hardware.HardwareTwoHopRegisterFlow.Bridge)
+                        realBridgeMethod.invoke(null,full,
+                            full.getFunctionManager().getFunctionAt(
+                                address(full,0x640L)),TaskMonitor.DUMMY);
+                    var realLeaf=(ghidrassist.hardware.HardwareCallsiteRegisterFlow.Callee)
+                        realLeafMethod.invoke(null,full,
+                            full.getFunctionManager().getFunctionAt(
+                                address(full,0x700L)),TaskMonitor.DUMMY);
+                    check(realBridge!=null && realBridge.complete() &&
+                            realLeaf!=null && realLeaf.complete() &&
+                            realBridge.finalTarget()==0x700L,
+                        "Actual Ghidra CPU32 direct bridge/leaf not fully decoded");
+                    var realOuter=List.of(
+                        new ghidrassist.hardware.HardwareCallsiteRegisterFlow.Call(
+                            0x600L,0x60cL,0x640L,
+                            Map.of("A0",0xfffa00L,"D0",0x40caL),false),
+                        new ghidrassist.hardware.HardwareCallsiteRegisterFlow.Call(
+                            0x680L,0x68cL,0x640L,
+                            Map.of("A0",0xfffa68L,"D0",0x4848L),false));
+                    var realTwoHop=ghidrassist.hardware.HardwareTwoHopRegisterFlow.analyze(
+                        realOuter,List.of(realBridge),List.of(realLeaf),
+                        Set.of(0xfffa00L,0xfffa68L),48);
+                    check(realTwoHop.possibleStores()==2 &&
+                            realTwoHop.rows().size()==2,
+                        "Actual decoded Listing two-hop source rows incomplete");
+                    var actualRevision=HardwareAnalysisRevision.capture(
+                        full,full.getModificationNumber(),
+                        full.getLanguage().getLanguageID().toString(),
+                        full.getExecutableSHA256(),true);
+                    java.util.function.Supplier<HardwareAnalysisRevision> currentRevision=
+                        ()->HardwareAnalysisRevision.capture(full,
+                            full.getModificationNumber(),
+                            full.getLanguage().getLanguageID().toString(),
+                            full.getExecutableSHA256(),true);
+                    var beforeEdit=ghidrassist.hardware.HardwareTwoHopConsensus
+                        .inspectScopedRevisionBound(actualRevision,currentRevision,
+                            realOuter,realTwoHop,0x640L,0x700L,0x700L);
+                    check(beforeEdit.state()==
+                            ghidrassist.hardware.HardwareTwoHopConsensus.State.SAMPLED_DIVERGENCE &&
+                            beforeEdit.provenance().size()==2,
+                        "Pre-edit actual Ghidra Listing lost divergent CALL origins");
+                    var editedInstruction=full.getListing().getInstructionAt(
+                        address(full,0x640L));
+                    byte sourceByte=full.getMemory().getByte(address(full,0x640L));
+                    int editTransaction=full.startTransaction(
+                        "GA12 isolated two-hop source revision invalidation");
+                    try {
+                        editedInstruction.setComment(
+                            ghidra.program.model.listing.CodeUnit.EOL_COMMENT,
+                            "GA12 disposable changed real two-hop Listing input");
+                        check(full.getModificationNumber()!=
+                                actualRevision.modificationNumber(),
+                            "Actual Ghidra Listing edit did not advance revision");
+                        var stale=ghidrassist.hardware.HardwareTwoHopConsensus
+                            .inspectScopedRevisionBound(actualRevision,currentRevision,
+                                realOuter,realTwoHop,0x640L,0x700L,0x700L);
+                        check(stale.state()==
+                                ghidrassist.hardware.HardwareTwoHopConsensus.State.STALE_REVISION &&
+                                stale.provenance().isEmpty() &&
+                                stale.address()==null && stale.word()==null,
+                            "Edited Listing incorrectly reused stale two-hop evidence");
+                        var staleMarkdown=ghidrassist.hardware.HardwareTwoHopConsensus
+                            .markdown(realOuter,realTwoHop,0,16,
+                                actualRevision,currentRevision);
+                        check(staleMarkdown.contains("STALE_REVISION") &&
+                                !staleMarkdown.contains("0x00FFFA00") &&
+                                !staleMarkdown.contains("0x00FFFA68"),
+                            "Edited Program leaked stale per-CALL source addresses");
+                    } finally {full.endTransaction(editTransaction,false);}
+                    check(full.getMemory().getByte(address(full,0x640L))==
+                            sourceByte &&
+                            full.getListing().getInstructionAt(
+                                address(full,0x640L))!=null,
+                        "Rollback damaged genuine CPU32 bridge Listing bytes");
+                    var postRollbackRevision=HardwareAnalysisRevision.capture(
+                        full,full.getModificationNumber(),
+                        full.getLanguage().getLanguageID().toString(),
+                        full.getExecutableSHA256(),true);
+                    var freshPostRollback=ghidrassist.hardware.HardwareTwoHopConsensus
+                        .inspectScopedRevisionBound(postRollbackRevision,
+                            currentRevision,realOuter,realTwoHop,
+                            0x640L,0x700L,0x700L);
+                    check(freshPostRollback.state()==
+                            ghidrassist.hardware.HardwareTwoHopConsensus.State.SAMPLED_DIVERGENCE,
+                        "After rollback, source-only proof could not be revalidated");
+                    result.addProperty("twohop_actual_listing_revision_invalidation",true);
+                    result.addProperty("twohop_actual_listing_rollback_safe",true);
+                    result.addProperty("twohop_real_source_provenance_no_stale_apply",true);
+
                     var generic=new GhidraHardwareFlowService().analyze(
                         full,TaskMonitor.DUMMY,false);
                     check(generic.markdown.contains(
