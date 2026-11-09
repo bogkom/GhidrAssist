@@ -725,7 +725,7 @@ public final class GhidraHardwareFlowService {
         // CALL/CFG rows, to one input revision and stage epoch.
         HardwareAnalysisRevision publicationRevision=
             HardwareAnalysisRevision.capture(program,functionScope.modification(),
-                functionScope.language(),functionScope.sourceSha256(),
+                functionScope.language(),functionScope.sourceSha(),
                 mc68332Selected);
         java.util.function.Supplier<HardwareAnalysisRevision> liveRevision=()->
             HardwareAnalysisRevision.capture(program,
