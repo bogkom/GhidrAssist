@@ -120,7 +120,8 @@ def main():
             source_proofs={}
             for source_phase in ("source-write","source-read","source-corrupt",
                                  "source-mismatch","source-incomplete",
-                                 "source-v1","source-edit","source-profile"):
+                                 "source-v1","source-edit","source-name",
+                                 "source-profile"):
                 helper.call([str(java/"bin/java"),
                     "-Djava.system.class.loader=ghidra.GhidraClassLoader",
                     "-Djava.awt.headless=true",
@@ -153,6 +154,12 @@ def main():
                 if source_phase!="source-edit" and not evidence["revision_unchanged"]:
                     raise RuntimeError("Read-only source restore mutated Program")
                 source_proofs[source_phase]=evidence
+            for source_phase,proof in source_proofs.items():
+                if proof["review_binding_refused"] != (
+                        source_phase in ("source-edit","source-name",
+                                         "source-profile")):
+                    raise RuntimeError(
+                        "Saved Review input/full fingerprint refusal mismatch")
             initial=source_proofs["source-write"]
             restored=source_proofs["source-read"]
             corrupted=source_proofs["source-corrupt"]
@@ -160,6 +167,7 @@ def main():
             incomplete=source_proofs["source-incomplete"]
             legacy=source_proofs["source-v1"]
             changed=source_proofs["source-edit"]
+            renamed=source_proofs["source-name"]
             generic=source_proofs["source-profile"]
             if not (initial["effective_input_sha256"]==
                     restored["effective_input_sha256"]==
@@ -170,10 +178,13 @@ def main():
                     initial["import_sha256"]==
                     restored["import_sha256"]==
                     changed["import_sha256"]==
+                    renamed["import_sha256"]==
                     legacy["import_sha256"]==
                     generic["import_sha256"] and
                     initial["effective_input_sha256"]!=
                     changed["effective_input_sha256"] and
+                    initial["effective_input_sha256"]!=
+                    renamed["effective_input_sha256"] and
                     initial["selected_mc68332"] and
                     restored["selected_mc68332"] and
                     legacy["selected_mc68332"] and
@@ -193,7 +204,11 @@ def main():
                 "edited_recomputed":True,
                 "source_data":"synthetic-only",
                 "tested_stage":"completed CFG Report",
-                "v2_source_processes":8,
+                "v2_source_processes":9,
+                "saved_review_binding_cross_jvm":True,
+                "saved_review_changed_bytes_denied":True,
+                "saved_review_renamed_function_denied":True,
+                "saved_review_wrong_mc68332_profile_denied":True,
                 "v2_corrupt_semantic_checksum_refused":True,
                 "v2_mismatched_reset_provenance_refused":True,
                 "v2_incomplete_cfg_checkpoint_refused":True,
