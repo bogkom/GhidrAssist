@@ -408,6 +408,16 @@ public final class HardwareAnalysisTab extends JPanel {
     private long automationUndoRevision = -1;
     private boolean automationUndoCopy;
 
+    // Explicit Automation Apply/Undo invalidates the scan cursor even when
+    // Ghidra's later Undo/Redo happens to restore identical program bytes or
+    // a matching modification counter. Only a NEW Analyze may issue tokens.
+    private void retirePublishedHardwarePages() {
+        latestReportGenerations=java.util.Map.of();
+        latestJointGeneration=null;
+        latestJointInventory=null;
+        latestJointStageEpoch=-1;
+    }
+
     /** Prepare ONE non-speculative memory row, without a database edit. */
     public com.google.gson.JsonObject automationApplyPrepare(int index) {
         return automationPrepare(index,false);
@@ -495,6 +505,7 @@ public final class HardwareAnalysisTab extends JPanel {
         automationUndoCopy=copy;
         automationUndoProgram=program;
         automationUndoRevision=program.getModificationNumber();
+        retirePublishedHardwarePages();
         com.google.gson.JsonObject result=new com.google.gson.JsonObject();
         result.addProperty("changed",outcome.changed);
         result.addProperty("skipped",outcome.skipped);
@@ -528,6 +539,7 @@ public final class HardwareAnalysisTab extends JPanel {
         long priorRevision=automationUndoRevision;
         automationUndoProgram=null;automationUndoRevision=-1;automationUndoCopy=false; // one-shot
         program.undo();
+        retirePublishedHardwarePages();
         com.google.gson.JsonObject result=new com.google.gson.JsonObject();
         result.addProperty("undone",true);
         result.addProperty("program",program.getName());
