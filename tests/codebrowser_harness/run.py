@@ -738,6 +738,45 @@ def main():
                                 str(private),"source-pairs-verify","--input",
                                 str(source_checkpoint)],
                                 work,env,out/"source-pairs-cli-verify.log",30)
+                            # Full hardware report is captured through
+                            # MULTIPLE real bearer RPC pages; no Ghidra Apply
+                            # or file writes inside the server. The CLI must
+                            # verify the same Program/generation at the final
+                            # end-of-report sentinel before atomic local save.
+                            report_checkpoint=out/"real-hardware-report-checkpoint.json"
+                            subprocess_checked([sys.executable,agent,"--session",
+                                str(private),"report-checkpoint","--output",
+                                str(report_checkpoint),"--format","markdown",
+                                "--page-size","128"],work,env,
+                                out/"report-checkpoint-cli-save.log",60)
+                            subprocess_checked([sys.executable,agent,"--session",
+                                str(out/"missing-offline-session.json"),
+                                "report-checkpoint-verify","--input",
+                                str(report_checkpoint)],work,env,
+                                out/"report-checkpoint-cli-verify.log",30)
+                            offline_report=json.loads(
+                                (out/"report-checkpoint-cli-verify.log").read_text())
+                            report_record=json.loads(report_checkpoint.read_text())
+                            if (not offline_report["verified"] or
+                                    not offline_report["complete"] or
+                                    offline_report["apply_authorized"] or
+                                    offline_report["model_state_restored"] or
+                                    offline_report["report_generation"]!=
+                                    source_report_first["generation"] or
+                                    len(report_record["payload"]["content"])<=128 or
+                                    report_record["payload"]["metadata"]["program_path"]!=
+                                    "/synthetic-reset-indirect-vbr.bin"):
+                                raise RuntimeError("Incomplete or stale full report checkpoint")
+                            duplicate_report=subprocess.run(
+                                [sys.executable,agent,"--session",str(private),
+                                 "report-checkpoint","--output",
+                                 str(report_checkpoint),"--format","markdown",
+                                 "--page-size","128"],
+                                cwd=work,env=env,capture_output=True,
+                                text=True,timeout=60)
+                            if duplicate_report.returncode==0:
+                                raise RuntimeError("Report checkpoint unexpectedly overwritten")
+                            print("GA-12 REAL GHIDRA MULTIPAGE ATOMIC REPORT SNAPSHOT PASS")
                             offline=json.loads((out/"source-pairs-cli-verify.log").read_text())
                             if (offline.get("verified") is not True or
                                     offline.get("total_pairs")!=2 or
