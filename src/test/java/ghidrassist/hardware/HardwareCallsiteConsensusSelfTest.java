@@ -77,6 +77,18 @@ public final class HardwareCallsiteConsensusSelfTest {
                 omittedMarkdown.contains("INCOMPLETE") &&
                 !omittedMarkdown.contains("SAMPLED_AGREEMENT"),
             "Unsampled caller budget suppresses a seemingly unanimous result");
+        var singleton=inspect(List.of(a),8);
+        check(singleton.state()==HardwareCallsiteConsensus.State.INCOMPLETE &&
+                singleton.sampledCallSites()==1 &&
+                singleton.address()==null && singleton.word()==null &&
+                singleton.bits()==0 && singleton.provenance().size()==1,
+            "One complete CALL is not cross-CALL agreement");
+        String singletonMarkdown=HardwareCallsiteConsensus.markdown(
+            List.of(a),analyze(List.of(a),8),0,24,
+            reportRevision,()->reportRevision);
+        check(!singletonMarkdown.contains("SAMPLED_AGREEMENT") &&
+                singletonMarkdown.contains("NO_SAMPLED_CALLS"),
+            "Single caller cannot enter production cross-CALL agreement report");
         var conflict=inspect(List.of(a,c),8);
         check(conflict.state()==HardwareCallsiteConsensus.State.SAMPLED_DIVERGENCE &&
                 conflict.address()==null && conflict.word()==null &&
