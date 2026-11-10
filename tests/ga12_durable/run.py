@@ -118,10 +118,15 @@ def main():
                 str(HERE/"Ga12DurableSourceV2RealGhidraMain.java")],
                 work,env,out/"source-compile.log",timeout=120)
             source_proofs={}
-            for source_phase in ("source-write","source-read","source-corrupt",
-                                 "source-mismatch","source-incomplete",
-                                 "source-v1","source-edit","source-name",
-                                 "source-profile","source-forged"):
+            # Forge the original exact-key V2 immediately after read.
+            # source-profile intentionally overwrites the same project slot
+            # with a DIFFERENT profile key, so it must run after forgery.
+            # The source-forged phase explicitly clears and cold-recomputes
+            # the true synthetic Listing source before the next phase.
+            for source_phase in ("source-write","source-read","source-forged",
+                                 "source-corrupt","source-mismatch",
+                                 "source-incomplete","source-v1",
+                                 "source-edit","source-name","source-profile"):
                 helper.call([str(java/"bin/java"),
                     "-Djava.system.class.loader=ghidra.GhidraClassLoader",
                     "-Djava.awt.headless=true",
