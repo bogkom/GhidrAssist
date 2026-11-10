@@ -1624,7 +1624,8 @@ public final class GhidraHardwareFlowService {
                .append(" (bounded unfinished computation only).\n\n")
            .append(reset.markdown())
            .append(GhidraInterruptVectorService.analyze(program,monitor,
-               reset.recognized(),reset.incomplete(),reset.visited(),staticCalls))
+               reset.recognized(),reset.incomplete(),reset.visited(),staticCalls,
+               mc68332Selected))
            .append(relocatedVbr)
            .append(detail).append(effects).append(interproceduralMm)
            .append(indirectCallEvidence)
