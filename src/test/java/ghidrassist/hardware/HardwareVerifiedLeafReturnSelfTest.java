@@ -84,6 +84,71 @@ public final class HardwareVerifiedLeafReturnSelfTest {
         try{caller.get(0).withVerifiedCallReturns(output);}
         catch(IllegalArgumentException expected){rejected=true;}
         ok(rejected,"summary cannot be attached to non-CALL instruction");
+        // CPU32 MOVEQ is exactly two bytes and sign-extends its eight-bit
+        // immediate across all 32 bits of Dn. These are actual post-RTS
+        // constants, not a guessed positive 0x80 or A-register assignment.
+        var moveqOnly=List.of(set(0x300,"MOVEQ","D0",0x7f,0x302L),
+            end(0x302,"RTS"));
+        ok(HardwareVerifiedLeafReturn.summarize(0x300,4,moveqOnly)
+                .equals(Map.of("D0",0x7fL)),
+            "Exact two-byte MOVEQ #127,D0 and RTS can certify a constant");
+        var signed=List.of(
+            set(0x300,"MOVEA.L","A0",0xfffa00L,0x306L),
+            set(0x306,"MOVEQ","D0",0xffff80L,0x308L),
+            end(0x308,"RTS"));
+        var signedReturns=HardwareVerifiedLeafReturn.summarize(
+            0x300,10,signed);
+        ok(signedReturns.equals(Map.of("A0",0xfffa00L,
+                "D0",0xffff80L)),
+            "MOVEQ #-128,D0 sign-extends into a full source register");
+        var signedCall=List.of(
+            new HardwareDataflow.Step(0x400,CALL_BARRIER,null,0,0,null,0,
+                List.of(0x406L),"JSR")
+                .withVerifiedCallReturns(signedReturns),
+            new HardwareDataflow.Step(0x406,STORE_INDIRECT,"A0","D0",
+                0,0,null,16,List.of(),"MOVE.W D0,(A0)"));
+        var signFlow=HardwareDataflow.analyze(
+            0x400,signedCall,Set.of(0xfffa00L),120);
+        ok(signFlow.snapshots.size()==1 &&
+                signFlow.snapshots.get(0).effectiveAddress==0xfffa00L &&
+                Integer.valueOf(0xff80).equals(
+                    signFlow.snapshots.get(0).writtenWord) &&
+                signFlow.snapshots.get(0).priorUnknownCall,
+            "Signed MOVEQ return propagates candidate word across CALL, not execution");
+        ok(HardwareVerifiedLeafReturn.summarize(0x300,10,List.of(
+            signed.get(0),
+            set(0x306,"MOVEQ","D0",0x80,0x308L),
+            signed.get(2))).isEmpty(),
+            "Unextended 0x80 must not be treated as a full positive D0 source");
+        ok(HardwareVerifiedLeafReturn.summarize(0x300,10,List.of(
+            signed.get(0),
+            set(0x306,"MOVEQ","D0",0x100,0x308L),
+            signed.get(2))).isEmpty(),
+            "MOVEQ with an unrepresentable 9-bit positive literal rejected");
+        ok(HardwareVerifiedLeafReturn.summarize(0x300,10,List.of(
+            signed.get(0),
+            set(0x306,"MOVEQ","A1",0xffff80L,0x308L),
+            signed.get(2))).isEmpty(),
+            "MOVEQ cannot assign an address register");
+        ok(HardwareVerifiedLeafReturn.summarize(0x300,12,signed).isEmpty(),
+            "Unexpected extra two bytes break exact short MOVEQ body coverage");
+        ok(HardwareVerifiedLeafReturn.summarize(0x300,10,List.of(
+            signed.get(0),
+            set(0x306,"MOVEQ","D0",0xffff80L,0x30aL),
+            signed.get(2))).isEmpty(),
+            "MOVEQ must have exact two-byte linear fallthrough");
+        ok(HardwareVerifiedLeafReturn.summarize(0x300,10,List.of(
+            signed.get(0),
+            signed.get(1).withSideEffects(Set.of("D1")),
+            signed.get(2))).isEmpty(),
+            "Unexpected P-code output clobber disables signed MOVEQ summary");
+        ok(HardwareVerifiedLeafReturn.summarize(0x300,10,List.of(
+            signed.get(0),signed.get(1),end(0x308,"RTE"))).isEmpty(),
+            "RTE cannot inherit input-independent MOVEQ/RTS summary");
+        ok(HardwareVerifiedLeafReturn.summarize(0x300,10,List.of(
+            signed.get(0),signed.get(1),end(0x308,"RTS")
+                .withSideEffects(Set.of("A7")))).equals(signedReturns),
+            "Real RTS stack pop remains allowed after full signed D0 proof");
         System.out.println("HardwareVerifiedLeafReturnSelfTest OK");
     }
 }
