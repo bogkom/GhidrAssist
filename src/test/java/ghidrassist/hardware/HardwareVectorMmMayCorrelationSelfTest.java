@@ -118,7 +118,7 @@ public final class HardwareVectorMmMayCorrelationSelfTest {
                 r.resetRelationUncertain()) &&
             relocated.rows().get(0).mmSource().equals(row.mmSource()) &&
             relocated.markdown().contains("relocated MOVEC-to-VBR source-image") &&
-            relocated.markdown().contains("not proof of an active VBR"),
+            relocated.markdown().contains("neither source is proof of an active VBR"),
             "candidate relocated VBR table cannot promote to runtime ISR or MM latch");
         var interiorOnly=HardwareVectorMmMayCorrelation.inspect(
             false,0,true,false,Set.of(0x130L),
