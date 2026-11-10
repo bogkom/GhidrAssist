@@ -103,7 +103,9 @@ public final class HardwareScopedVariableService {
                     live==null || live.getVariableStorage()==null?
                         null:live.getVariableStorage().toString(),
                     live!=null && live.getDataType() instanceof Pointer,
-                    live!=null && live.getSource()==SourceType.USER_DEFINED));
+                    live!=null && live.getSource()==SourceType.USER_DEFINED,
+                    live instanceof Parameter p &&
+                        (p.isAutoParameter() || p.isForcedIndirect())));
             }
         }
         if(program.getModificationNumber()!=before)
@@ -220,6 +222,18 @@ public final class HardwareScopedVariableService {
                 Variable v=targets.get(i);
                 var p=accepted.get(i);
                 v.setName(p.proposedName(),SourceType.USER_DEFINED);
+                // Re-resolve the exact typed Ghidra Variable after the write.
+                // A symbol rename which silently changed source type, storage
+                // or the Function-variable identity must roll back the
+                // entire batch with its Options receipts.
+                Variable persisted=get(v.getFunction(),p.original());
+                if(persisted==null || !p.proposedName().equals(persisted.getName()) ||
+                        persisted.getSource()!=SourceType.USER_DEFINED ||
+                        !(persisted.getDataType() instanceof Pointer) ||
+                        persisted instanceof Parameter arg &&
+                            (arg.isAutoParameter() || arg.isForcedIndirect()))
+                    throw new IllegalStateException(
+                        "Scoped pointer rename did not preserve reviewed identity");
                 String key=HardwareScopedVariableReceipt.optionKey(
                     p.original().functionEntry(),p.original().kind(),
                     p.original().ordinal());
