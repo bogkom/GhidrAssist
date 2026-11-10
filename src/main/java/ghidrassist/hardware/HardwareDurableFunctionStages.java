@@ -6,6 +6,10 @@ import java.util.Collection;
 import java.util.List;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.ArrayDeque;
+import java.util.Objects;
 import java.util.Optional;
 
 /**
@@ -17,6 +21,119 @@ public final class HardwareDurableFunctionStages {
     private HardwareDurableFunctionStages(){}
     /** Only the first N eligible functions are stored on disk per pass. */
     public static final int MAX_DURABLE_FUNCTIONS=64;
+
+    /**
+     * Independently audit a decoded durable payload against the ACTUAL
+     * translated, input-hashed CFG, not merely the outer SHA envelope.
+     * Only a bounded graph with an exact entry and source-reachable nodes
+     * may supply prior work or a completed post-CALL/MMIO/VBR fixed point.
+     * Missing/out-of-body successors are ignored as in HardwareDataflow;
+     * their dynamic execution is UNKNOWN, not invented by this gate.
+     */
+    private static Map<Long,HardwareDataflow.Step> reachableSource(
+            long entry,Collection<HardwareDataflow.Step> steps) {
+        if(entry<0 || steps==null || steps.isEmpty() ||
+                steps.size()>HardwareFunctionStageCache.MAX_STEPS_PER_FUNCTION)
+            return null;
+        Map<Long,HardwareDataflow.Step> graph=new HashMap<>();
+        long edges=0;
+        for(var step:steps) {
+            if(step==null || step.address<0 ||
+                    graph.putIfAbsent(step.address,step)!=null)
+                return null;
+            edges+=step.successors.size();
+            if(edges>HardwareDataflow.MAX_SOURCE_EDGES)return null;
+        }
+        if(!graph.containsKey(entry))return null;
+        Map<Long,HardwareDataflow.Step> visited=new HashMap<>();
+        ArrayDeque<Long> queue=new ArrayDeque<>();
+        queue.add(entry);
+        while(!queue.isEmpty()) {
+            long pc=queue.removeFirst();
+            var step=graph.get(pc);
+            if(step==null || visited.putIfAbsent(pc,step)!=null)continue;
+            for(Long next:step.successors)
+                if(next!=null && graph.containsKey(next) &&
+                        !visited.containsKey(next))
+                    queue.addLast(next);
+        }
+        return visited;
+    }
+
+    private static boolean sourceBoundProgress(long entry,
+            Collection<HardwareDataflow.Step> steps,
+            HardwareDataflow.Progress progress) {
+        if(progress==null || progress.entry()!=entry)return false;
+        var reachable=reachableSource(entry,steps);
+        return reachable!=null &&
+            reachable.keySet().containsAll(progress.atEntry().keySet()) &&
+            reachable.keySet().containsAll(progress.pending());
+    }
+
+    /**
+     * A valid digest is not independent proof of the semantic content of a
+     * decoded per-function snapshot. Check reachable source PC, exact Step
+     * kind/width/register, complete effect-site coverage and 24-bit model
+     * value bounds before restoring or replacing a completed checkpoint.
+     * Does not reconstruct execution order, caller context or active MM.
+     */
+    private static boolean sourceBoundComplete(long entry,
+            Collection<HardwareDataflow.Step> steps,
+            HardwareDataflow.Result result) {
+        if(result==null || result.truncated)return false;
+        var reachable=reachableSource(entry,steps);
+        if(reachable==null || result.reachedNodes!=reachable.size() ||
+                result.iterations<result.reachedNodes ||
+                !reachable.keySet().containsAll(
+                    result.knownPointersAtEntry.keySet()))
+            return false;
+        int expectedEffects=0;
+        for(var step:reachable.values())
+            if(step.kind==HardwareDataflow.Kind.STORE_DIRECT ||
+                    step.kind==HardwareDataflow.Kind.STORE_INDIRECT ||
+                    step.kind==HardwareDataflow.Kind.VBR_FROM_REGISTER ||
+                    step.kind==HardwareDataflow.Kind.VBR_CONSTANT)
+                expectedEffects++;
+        if(result.snapshots.size()!=expectedEffects)return false;
+        Set<Long> seenEffects=new HashSet<>();
+        for(var snapshot:result.snapshots) {
+            if(snapshot==null || !seenEffects.add(snapshot.instruction))
+                return false;
+            var step=reachable.get(snapshot.instruction);
+            if(step==null || snapshot.kind!=step.kind ||
+                    snapshot.writeBits!=step.writeBits ||
+                    !Objects.equals(snapshot.pointerRegister,step.register) ||
+                    snapshot.indirect!=
+                        (step.kind==HardwareDataflow.Kind.STORE_INDIRECT) ||
+                    !address24(snapshot.effectiveAddress) ||
+                    !address24(snapshot.vbr) ||
+                    snapshot.writtenWord!=null &&
+                        (snapshot.writtenWord<0 || snapshot.writtenWord>0xffff))
+                return false;
+            for(var peripheral:snapshot.knownPeripheralWords.entrySet())
+                if(peripheral.getKey()==null ||
+                        !address24(peripheral.getKey()) ||
+                        peripheral.getValue()==null ||
+                        peripheral.getValue()<0 ||
+                        peripheral.getValue()>0xffff)
+                    return false;
+        }
+        for(var states:result.knownPointersAtEntry.values()) {
+            if(states==null)return false;
+            for(var register:states.entrySet())
+                if(register.getKey()==null ||
+                        !register.getKey().matches("[AD][0-7]") ||
+                        register.getValue()==null ||
+                        !address24(register.getValue()))
+                    return false;
+        }
+        return true;
+    }
+
+    private static boolean address24(Long value) {
+        return value==null || value>=0 &&
+            value<=HardwareDataflow.MASK24;
+    }
 
     private static HardwareDurableStageStore.Key key(
             HardwareDurableStageStore.Key full,long functionEntry,int budget,
@@ -43,7 +160,8 @@ public final class HardwareDurableFunctionStages {
         HardwareDurableStageStore.Key k=key(full,entry,budget,steps,targets);
         if(directory==null || k==null)return Optional.empty();
         return HardwareDurableStageStore.load(directory,k)
-            .flatMap(HardwareFunctionResultCodec::decode);
+            .flatMap(HardwareFunctionResultCodec::decode)
+            .filter(result -> sourceBoundComplete(entry,steps,result));
     }
 
     /** The same stable function slot holds either incomplete work or a completed result. */
@@ -65,7 +183,8 @@ public final class HardwareDurableFunctionStages {
             .flatMap(HardwareFunctionProgressCodec::decode)
             .filter(progress -> progress.entry()==entry &&
                 progress.maxIterations()==budget &&
-                addresses.containsAll(progress.atEntry().keySet()));
+                addresses.containsAll(progress.atEntry().keySet()) &&
+                sourceBoundProgress(entry,steps,progress));
     }
     /** Never store progress unless its typed worklist can be fully encoded. */
     public static boolean saveProgress(Path directory,
@@ -74,7 +193,8 @@ public final class HardwareDurableFunctionStages {
             HardwareDataflow.Progress progress){
         HardwareDurableStageStore.Key k=key(full,entry,budget,steps,targets);
         if(directory==null || k==null || progress==null ||
-                progress.entry()!=entry || progress.maxIterations()!=budget)
+                progress.entry()!=entry || progress.maxIterations()!=budget ||
+                !sourceBoundProgress(entry,steps,progress))
             return false;
         try{
             HardwareDurableStageStore.save(directory,k,
@@ -90,7 +210,8 @@ public final class HardwareDurableFunctionStages {
             Collection<HardwareDataflow.Step> steps,Collection<Long> targets,
             HardwareDataflow.Result complete){
         HardwareDurableStageStore.Key k=key(full,entry,budget,steps,targets);
-        if(directory==null || k==null || complete==null || complete.truncated)
+        if(directory==null || k==null ||
+                !sourceBoundComplete(entry,steps,complete))
             return false;
         try{
             HardwareDurableStageStore.save(directory,k,
