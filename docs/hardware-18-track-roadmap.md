@@ -1,3 +1,24 @@
+## GA-02/03/18 — 2026-11-10: separate observed-UNKNOWN and bounded frontier paths
+
+CALL-site transitive SIMCR/MM reporting now distinguishes the shortest
+**observed** unknown-flow or missing-function chain from the independently
+bounded **uninspected** frontier chain. A depth/node/batch cutoff seen
+while inspecting an earlier BFS sibling no longer hides a later,
+shorter observed UNKNOWN candidate in the primary witness. The original
+cutoff-only unknown-chain API remains compatible. Both witnesses retain
+canonical traversal order, typed causes and conservative UNKNOWN/LIMITED
+flags; no new graph edges, executed CALL/RESET assertions, active MM
+latch, VBR/ISR activity, physical hardware map, database mutations or
+checkpoint publication are inferred.
+
+Java21 determinism/negative tests cover depth plus observed flow, missing
+target plus cutoff, node cap plus observed UNKNOWN, reversed input order,
+cutoff-only compatibility and forged contradictory evidence. Java25 full
+Ghidra 12.1.4 PUBLIC extension build and synthetic headless GitHub Actions
+remain required before merge. See
+[interprocedural MM source witnesses](hardware-interprocedural-mm-source-witnesses.md).
+GA-02/03/18 remain PARTIAL.
+
 ## GA-06/10/16/18 — 2026-11-10: ten immutable publisher D-10/D-11 excerpt SHA-256 references
 
 On top of the new ten SYPCR/PICR/PITR source fields, the exact

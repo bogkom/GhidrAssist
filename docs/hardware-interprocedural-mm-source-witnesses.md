@@ -52,3 +52,35 @@ PUBLIC / Java25 extension build and isolated synthetic headless regressions.
 
 GA-02/03 remain PARTIAL. No original ECU411 firmware, production Ghidra
 project, local profile/OAuth, or stopped Wyse/Precision/Supervisor tests.
+
+
+## 2026-11-10 — independent observed UNKNOWN and skipped-frontier witnesses
+
+The initial source report had only `unknownWitness`. When an earlier BFS
+sibling reached a depth/node/batch cutoff before another queued sibling
+showed `UNKNOWN_FLOW` or an absent function, that single witness could
+misrepresent the **shorter actually inspected uncertainty** as an
+uninspected endpoint. This did not clear the existing UNKNOWN/LIMITED
+flags but obscured actionable provenance.
+
+The report now carries **two distinct, bounded views**. The primary
+`unknownWitness` selects the earliest shortest observed `UNKNOWN_FLOW`
+or `MISSING_TARGET` chain whenever one exists; otherwise it retains the
+first cutoff for backward-compatible clients. The independent
+`frontierWitness` always retains the first canonical
+`DEPTH_CUTOFF`, `NODE_CUTOFF` or `BATCH_CUTOFF` chain, even when
+an observed unknown chain also exists. Each is independently typed;
+malformed or self-contradictory combined evidence is rejected. BFS node
+ordering plus numerically canonical adjacency makes both reproducible,
+and there is no extra graph traversal or budget. A frontier chain's
+last address was **not inspected as a source**. A missing target was
+scheduled and checked but had no matching recognized function. Both are
+static evidence only, never instructions proved to execute.
+
+Java21 adversarial tests exercise a shallower observed unknown after an
+earlier deeper depth frontier; a separately missing function after the
+same cutoff; NODE cutoff plus an inspected unknown; reversed source
+enumeration; cutoff-only API compatibility; two malformed summary forms
+and Markdown disclosure of both paths. The existing exact-head Ghidra
+12.1.4 PUBLIC Java25 build and synthetic headless Actions remain the
+integration gates. GA-02/03/18 remain PARTIAL.

@@ -151,6 +151,61 @@ public final class HardwareInterproceduralMmEffectsSelfTest {
             "depth budget must prevent negative effect claims");
         ok(run(diamond,List.of(calls.get(0)),4,1,20)
             .rows().get(0).summary().limited(),"node cap explicit");
+        // A depth frontier is first discovered at the earlier 0x160
+        // sibling, but the later 0x190 function contains directly observed
+        // unresolved control flow at a SHORTER source distance. Preserve
+        // the frontier independently instead of hiding the observation.
+        var mixedGraph=List.of(
+            node(0x130,false,false,false,0x190L,0x160L),
+            node(0x160,false,false,false,0x300L),
+            node(0x190,false,false,true),
+            node(0x300,true,false,false));
+        var mixed=run(mixedGraph,sourceCall,1,20,20)
+            .rows().get(0).summary();
+        ok(mixed.unknownWitness().kind()==
+                HardwareInterproceduralMmEffects.WitnessKind.UNKNOWN_FLOW &&
+            mixed.unknownWitness().chain().equals(List.of(0x130L,0x190L)) &&
+            mixed.frontierWitness().kind()==
+                HardwareInterproceduralMmEffects.WitnessKind.DEPTH_CUTOFF &&
+            mixed.frontierWitness().chain().equals(
+                List.of(0x130L,0x160L,0x300L)) &&
+            mixed.unknownControl() && mixed.limited() && !mixed.mayMm(),
+            "observed UNKNOWN at shallower distance and omitted MM frontier both survive");
+        var mixedReordered=run(List.of(mixedGraph.get(2),
+                node(0x130,false,false,false,0x160L,0x190L),
+                mixedGraph.get(3),mixedGraph.get(1)),sourceCall,1,20,20);
+        ok(mixedReordered.rows().get(0).summary().equals(mixed) &&
+            mixedReordered.markdown().contains("uninspected frontier chain=") &&
+            mixedReordered.markdown().contains("UNKNOWN_FLOW:"),
+            "dual source witnesses deterministic across enumeration order and rendered");
+        var missingSibling=run(List.of(
+                node(0x130,false,false,false,0x190L,0x160L),
+                node(0x160,false,false,false,0x300L)),
+            sourceCall,1,20,20).rows().get(0).summary();
+        ok(missingSibling.unknownWitness().kind()==
+                HardwareInterproceduralMmEffects.WitnessKind.MISSING_TARGET &&
+            missingSibling.unknownWitness().chain().equals(
+                List.of(0x130L,0x190L)) &&
+            missingSibling.frontierWitness().chain().equals(
+                List.of(0x130L,0x160L,0x300L)),
+            "missing target is an observed absence, never confused with unvisited cutoff");
+        var nodeFrontier=run(List.of(
+                node(0x130,false,false,false,0x190L,0x160L),
+                node(0x160,false,false,true),
+                node(0x190,true,false,false)),
+            sourceCall,2,2,20).rows().get(0).summary();
+        ok(nodeFrontier.unknownWitness().kind()==
+                HardwareInterproceduralMmEffects.WitnessKind.UNKNOWN_FLOW &&
+            nodeFrontier.frontierWitness().kind()==
+                HardwareInterproceduralMmEffects.WitnessKind.NODE_CUTOFF &&
+            nodeFrontier.frontierWitness().chain().equals(
+                List.of(0x130L,0x190L)) &&
+            !nodeFrontier.mayMm() && nodeFrontier.limited(),
+            "node cap does not suppress visited unknown or invent omitted MM STORE");
+        ok(depth.rows().get(0).summary().frontierWitness()!=null &&
+            depth.rows().get(0).summary().frontierWitness()
+                .equals(depth.rows().get(0).summary().unknownWitness()),
+            "legacy cutoff-only unknown witness remains compatible");
         var closed=run(List.of(node(0x130,false,false,false)),
             List.of(calls.get(0)),4,20,20);
         ok(!closed.rows().get(0).summary().uncertainOrMm(),
@@ -379,6 +434,27 @@ public final class HardwareInterproceduralMmEffectsSelfTest {
                     List.of(0x130L)),null,null);
         }catch(IllegalArgumentException expected){invalid=true;}
         ok(invalid,"typed false MM sources cannot carry a positive MM witness");
+        invalid=false;
+        try {
+            new HardwareInterproceduralMmEffects.Summary(
+                false,false,true,false,true,1,null,null,
+                new HardwareInterproceduralMmEffects.SourceWitness(
+                    HardwareInterproceduralMmEffects.WitnessKind.UNKNOWN_FLOW,
+                    List.of(0x130L)),
+                new HardwareInterproceduralMmEffects.SourceWitness(
+                    HardwareInterproceduralMmEffects.WitnessKind.UNKNOWN_FLOW,
+                    List.of(0x130L)));
+        }catch(IllegalArgumentException expected){invalid=true;}
+        ok(invalid,"observed source may not impersonate uninspected frontier");
+        invalid=false;
+        try {
+            new HardwareInterproceduralMmEffects.Summary(
+                false,false,true,false,false,1,null,null,null,
+                new HardwareInterproceduralMmEffects.SourceWitness(
+                    HardwareInterproceduralMmEffects.WitnessKind.NODE_CUTOFF,
+                    List.of(0x130L)));
+        }catch(IllegalArgumentException expected){invalid=true;}
+        ok(invalid,"cutoff cannot be reported with closed/unlimited summary");
         ok(!closed.rows().get(0).summary().uncertainOrMm() &&
             closed.rows().get(0).summary().mmWitness()==null &&
             closed.rows().get(0).summary().aliasWitness()==null &&
