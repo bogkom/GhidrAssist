@@ -36,9 +36,33 @@ public final class HardwareFunctionStageCache<K> {
     public record Scope(long modification,String language,String sourceSha,
                         boolean mc68332) {
         public Scope {
-            if(modification<0 || language==null || language.isBlank())
+            if(modification<0 || language==null || language.isBlank() ||
+                    language.length()>128 ||
+                    sourceSha!=null && sourceSha.length()>256)
                 throw new IllegalArgumentException("Invalid analysis scope");
+            for(String label:new String[]{language,sourceSha}) {
+                if(label==null)continue;
+                for(int i=0;i<label.length();) {
+                    int ch=label.codePointAt(i);
+                    if(Character.isISOControl(ch) ||
+                            Character.getType(ch)==Character.FORMAT ||
+                            Character.getType(ch)==Character.LINE_SEPARATOR ||
+                            Character.getType(ch)==Character.PARAGRAPH_SEPARATOR)
+                        throw new IllegalArgumentException(
+                            "Hidden control in checkpoint scope identity");
+                    i+=Character.charCount(ch);
+                }
+            }
         }
+    }
+    /** A missing import identity is not a stable analysis checkpoint.
+     * Legacy and explicitly UNKNOWN scopes may be inspected, but never
+     * published/reused. No claims of hash authentication are made here:
+     * the separate disk checkpoint requires full four-part SHA-256 keys. */
+    private static boolean cacheable(Scope scope) {
+        return scope!=null && scope.sourceSha()!=null &&
+            !scope.sourceSha().isBlank() &&
+            !"UNKNOWN".equalsIgnoreCase(scope.sourceSha().strip());
     }
     private record Key(long entry,String stepsSha256,int iterationsBudget){}
     private record Saved(Key key,HardwareDataflow.Result result){}
@@ -169,7 +193,8 @@ public final class HardwareFunctionStageCache<K> {
     public synchronized HardwareDataflow.Result get(K owner,long generation,
             Scope scope,long entry,int iterationsBudget,
             Collection<HardwareDataflow.Step> steps,Collection<Long> targets){
-        if(owner==null || scope==null || !epochs.current(owner,generation))
+        if(owner==null || !cacheable(scope) ||
+                !epochs.current(owner,generation))
             return null;
         OwnerStages existing=completed.get(owner);
         if(existing==null || existing.exactOwner.get()!=owner)
@@ -202,7 +227,8 @@ public final class HardwareFunctionStageCache<K> {
             long entry,int iterationsBudget,
             Collection<HardwareDataflow.Step> steps,Collection<Long> targets,
             HardwareDataflow.Result result){
-        if(owner==null || scope==null || result==null || result.truncated ||
+        if(owner==null || !cacheable(scope) || result==null ||
+                result.truncated ||
                 !epochs.current(owner,generation) ||
                 result.snapshots.size()>MAX_SNAPSHOTS_PER_FUNCTION ||
                 result.knownPointersAtEntry.size()>MAX_STEPS_PER_FUNCTION ||
