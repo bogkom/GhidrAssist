@@ -24,14 +24,17 @@ import java.util.function.Supplier;
 public final class HardwareScopedVariableReceipt {
     private HardwareScopedVariableReceipt() {}
     public static final String OPTIONS_CATEGORY="GhidrAssist Pointer Variable Rename Receipts";
-    public static final String VERSION="GA13-POINTER-VARIABLE-1";
-    public static final int MAX_BYTES=3072;
+    public static final String VERSION="GA13-POINTER-VARIABLE-2";
+    public static final String LEGACY_VERSION="GA13-POINTER-VARIABLE-1";
+    public static final int MAX_BYTES=4096;
+    private static final String UNKNOWN_TYPE=
+        HardwareScopedVariableReview.LEGACY_TYPE_UNVERIFIED;
     public static final int MAX_ROWS=4096;
 
     public record Entry(long function,
             HardwareScopedVariableReview.Kind kind,int ordinal,String storage,
             String beforeName,String afterName,long reviewedModification,
-            String importSha256) {
+            String importSha256,String dataTypeIdentity,int firstUseOffset) {
         public Entry {
             if(function<0 || function>0xffffffL || kind==null ||
                     ordinal<0 || ordinal>1024 ||
@@ -41,8 +44,26 @@ public final class HardwareScopedVariableReceipt {
                     afterName==null || afterName.isBlank() ||
                     afterName.length()>128 || reviewedModification<0 ||
                     importSha256==null || importSha256.isBlank() ||
-                    importSha256.length()>128)
+                    importSha256.length()>128 ||
+                    dataTypeIdentity==null || dataTypeIdentity.isBlank() ||
+                    dataTypeIdentity.length()>1024 ||
+                    (UNKNOWN_TYPE.equals(dataTypeIdentity) !=
+                        (firstUseOffset==Integer.MIN_VALUE)) ||
+                    dataTypeIdentity.codePoints().anyMatch(cp->
+                        Character.isISOControl(cp) ||
+                        Character.getType(cp)==Character.FORMAT))
                 throw new IllegalArgumentException("Invalid variable rename receipt");
+        }
+        /** Existing GA13-v1 records stay readable, not verified typed identities. */
+        public Entry(long function,HardwareScopedVariableReview.Kind kind,
+                int ordinal,String storage,String beforeName,String afterName,
+                long reviewedModification,String importSha256) {
+            this(function,kind,ordinal,storage,beforeName,afterName,
+                reviewedModification,importSha256,UNKNOWN_TYPE,Integer.MIN_VALUE);
+        }
+        public boolean hasTypedIdentity() {
+            return !UNKNOWN_TYPE.equals(dataTypeIdentity) &&
+                firstUseOffset!=Integer.MIN_VALUE;
         }
         public String optionKey(){return HardwareScopedVariableReceipt.optionKey(
             function,kind,ordinal);}
@@ -80,11 +101,15 @@ public final class HardwareScopedVariableReceipt {
     }
     public static String encode(Entry receipt) {
         if(receipt==null)throw new IllegalArgumentException("Null variable receipt");
-        String source=String.join("\t",VERSION,receipt.optionKey(),
-            Integer.toString(receipt.ordinal()),encoded(receipt.storage()),
-            encoded(receipt.beforeName()),encoded(receipt.afterName()),
-            Long.toString(receipt.reviewedModification()),
+        String source=String.join("\t",
+            receipt.hasTypedIdentity()?VERSION:LEGACY_VERSION,
+            receipt.optionKey(),Integer.toString(receipt.ordinal()),
+            encoded(receipt.storage()),encoded(receipt.beforeName()),
+            encoded(receipt.afterName()),Long.toString(receipt.reviewedModification()),
             encoded(receipt.importSha256()));
+        if(receipt.hasTypedIdentity())
+            source+="\t"+encoded(receipt.dataTypeIdentity())+
+                "\t"+receipt.firstUseOffset();
         String payload=source+"\t"+checksum(source);
         if(payload.getBytes(StandardCharsets.UTF_8).length>MAX_BYTES)
             throw new IllegalArgumentException("Oversized variable receipt");
@@ -95,13 +120,15 @@ public final class HardwareScopedVariableReceipt {
                 encodedReceipt.getBytes(StandardCharsets.UTF_8).length>MAX_BYTES)
             throw new IllegalArgumentException("Missing/oversized variable receipt");
         String[] p=encodedReceipt.split("\t",-1);
-        if(p.length!=9 || !VERSION.equals(p[0]) ||
+        boolean typed=VERSION.equals(p[0]);
+        if(!((typed && p.length==11) ||
+                    (LEGACY_VERSION.equals(p[0]) && p.length==9)) ||
                 !p[1].matches("PV_[0-9A-F]{8}_[PL]_[0-9]{4}") ||
-                !p[8].matches("[0-9a-f]{64}"))
+                !p[p.length-1].matches("[0-9a-f]{64}"))
             throw new IllegalArgumentException("Unsupported variable receipt version");
         String source=encodedReceipt.substring(0,encodedReceipt.lastIndexOf('\t'));
         if(!MessageDigest.isEqual(checksum(source).getBytes(StandardCharsets.US_ASCII),
-                p[8].getBytes(StandardCharsets.US_ASCII)))
+                p[p.length-1].getBytes(StandardCharsets.US_ASCII)))
             throw new IllegalArgumentException("Variable receipt checksum mismatch");
         try {
             String[] key=p[1].split("_");
@@ -109,9 +136,14 @@ public final class HardwareScopedVariableReceipt {
             var kind="P".equals(key[2])?
                 HardwareScopedVariableReview.Kind.PARAMETER:
                 HardwareScopedVariableReview.Kind.LOCAL;
-            var entry=new Entry(function,kind,Integer.parseInt(p[2]),
-                decoded(p[3]),decoded(p[4]),decoded(p[5]),
-                Long.parseLong(p[6]),decoded(p[7]));
+            var entry=typed ?
+                new Entry(function,kind,Integer.parseInt(p[2]),
+                    decoded(p[3]),decoded(p[4]),decoded(p[5]),
+                    Long.parseLong(p[6]),decoded(p[7]),
+                    decoded(p[8]),Integer.parseInt(p[9])) :
+                new Entry(function,kind,Integer.parseInt(p[2]),
+                    decoded(p[3]),decoded(p[4]),decoded(p[5]),
+                    Long.parseLong(p[6]),decoded(p[7]));
             if(!entry.optionKey().equals(p[1]) ||
                     !encode(entry).equals(encodedReceipt))
                 throw new IllegalArgumentException("Noncanonical variable receipt");
@@ -124,14 +156,22 @@ public final class HardwareScopedVariableReceipt {
     public enum State {
         CURRENT_APPROVED_NAME, NAME_CHANGED_AFTER_APPROVAL,
         VARIABLE_MISSING, STORAGE_CHANGED, TYPE_OR_SOURCE_CHANGED,
-        SOURCE_CHANGED, SOURCE_UNVERIFIED
+        SOURCE_CHANGED, SOURCE_UNVERIFIED,
+        LEGACY_TYPE_UNVERIFIED, TYPE_IDENTITY_UNVERIFIED, TYPE_IDENTITY_CHANGED
     }
     /** One decoded stored record correlated with the *current* live Variable. */
     public record Observation(String optionKey,String serialized,
             String liveName,String liveStorage,
-            boolean pointerType,boolean userDefined,boolean autoParameter) {
-        /** Compatibility for read-only historical observations. An old row
-         * does not assert a Ghidra auto/forced parameter. */
+            boolean pointerType,boolean userDefined,boolean autoParameter,
+            String liveTypeIdentity,int liveFirstUseOffset) {
+        /** Source-only callers can inspect v1/v2 records, but cannot certify
+         * current approved typed identity without live Ghidra observations. */
+        public Observation(String key,String serialized,String liveName,
+                String liveStorage,boolean pointerType,boolean userDefined,
+                boolean autoParameter) {
+            this(key,serialized,liveName,liveStorage,pointerType,userDefined,
+                autoParameter,UNKNOWN_TYPE,Integer.MIN_VALUE);
+        }
         public Observation(String key,String serialized,String liveName,
                 String liveStorage,boolean pointerType,boolean userDefined) {
             this(key,serialized,liveName,liveStorage,pointerType,userDefined,false);
@@ -140,15 +180,24 @@ public final class HardwareScopedVariableReceipt {
             if(optionKey==null || serialized==null ||
                     optionKey.length()>64 ||
                     (liveName!=null && liveName.length()>512) ||
-                    (liveStorage!=null && liveStorage.length()>512))
+                    (liveStorage!=null && liveStorage.length()>512) ||
+                    (liveTypeIdentity!=null && liveTypeIdentity.length()>1024))
                 throw new IllegalArgumentException("Invalid variable audit observation");
         }
     }
     public record Row(Entry receipt,String currentName,
                       String currentStorage,boolean pointerType,
-                      boolean userDefined,boolean autoParameter,State state) {
+                      boolean userDefined,boolean autoParameter,
+                      String liveTypeIdentity,int liveFirstUseOffset,State state) {
+        public Row(Entry receipt,String currentName,String currentStorage,
+                boolean pointerType,boolean userDefined,boolean autoParameter,
+                State state) {
+            this(receipt,currentName,currentStorage,pointerType,userDefined,
+                autoParameter,UNKNOWN_TYPE,Integer.MIN_VALUE,state);
+        }
         public Row {
-            if(receipt==null || state==null)
+            if(receipt==null || state==null ||
+                    (liveTypeIdentity!=null && liveTypeIdentity.length()>1024))
                 throw new IllegalArgumentException("Malformed variable audit row");
         }
     }
@@ -160,7 +209,8 @@ public final class HardwareScopedVariableReceipt {
      */
     private static State classify(Entry receipt,String liveName,
             String liveStorage,boolean pointerType,boolean userDefined,
-            boolean autoParameter,String importSha256) {
+            boolean autoParameter,String liveTypeIdentity,
+            int liveFirstUseOffset,String importSha256) {
         if(liveName==null)return State.VARIABLE_MISSING;
         if(!HardwareAnalysisRevision.isVerifiableExecutableSha256(
                     receipt.importSha256()) ||
@@ -175,6 +225,14 @@ public final class HardwareScopedVariableReceipt {
             return State.TYPE_OR_SOURCE_CHANGED;
         if(!receipt.afterName().equals(liveName))
             return State.NAME_CHANGED_AFTER_APPROVAL;
+        if(!receipt.hasTypedIdentity())return State.LEGACY_TYPE_UNVERIFIED;
+        if(liveTypeIdentity==null || liveTypeIdentity.isBlank() ||
+                UNKNOWN_TYPE.equals(liveTypeIdentity) ||
+                liveFirstUseOffset==Integer.MIN_VALUE)
+            return State.TYPE_IDENTITY_UNVERIFIED;
+        if(!receipt.dataTypeIdentity().equals(liveTypeIdentity) ||
+                receipt.firstUseOffset()!=liveFirstUseOffset)
+            return State.TYPE_IDENTITY_CHANGED;
         return State.CURRENT_APPROVED_NAME;
     }
     private static final Comparator<Row> ROW_ORDER=
@@ -191,7 +249,8 @@ public final class HardwareScopedVariableReceipt {
                 if(row==null || prior!=null && ROW_ORDER.compare(prior,row)>=0 ||
                         row.state()!=classify(row.receipt(),row.currentName(),
                             row.currentStorage(),row.pointerType(),row.userDefined(),
-                            row.autoParameter(),sourceSha256))
+                            row.autoParameter(),row.liveTypeIdentity(),
+                            row.liveFirstUseOffset(),sourceSha256))
                     throw new IllegalArgumentException(
                         "Forged, reordered or contradictory variable receipt audit");
                 prior=row;
@@ -205,7 +264,9 @@ public final class HardwareScopedVariableReceipt {
             StringBuilder b=new StringBuilder(
                 "function,kind,ordinal,storage,before_name,approved_name,"+
                 "current_name,current_storage,reviewed_revision,program_revision,"+
-                "reviewed_sha256,current_sha256,state,operation_origin\n");
+                "reviewed_sha256,current_sha256,state,operation_origin,"+
+                "reviewed_type_identity,reviewed_first_use,"+
+                "current_type_identity,current_first_use\n");
             for(var row:rows) {
                 var r=row.receipt();
                 List<String> values=List.of(r.optionKey(),r.kind().name(),
@@ -214,7 +275,12 @@ public final class HardwareScopedVariableReceipt {
                         "(variable missing)":row.currentName(),
                     row.currentStorage()==null?"UNKNOWN":row.currentStorage(),
                     Long.toString(r.reviewedModification()),Long.toString(revision),
-                    r.importSha256(),sourceSha256,row.state().name(),r.origin());
+                    r.importSha256(),sourceSha256,row.state().name(),r.origin(),
+                    r.dataTypeIdentity(),
+                    r.hasTypedIdentity()?Integer.toString(r.firstUseOffset()):"UNKNOWN",
+                    row.liveTypeIdentity()==null?"UNKNOWN":row.liveTypeIdentity(),
+                    row.liveFirstUseOffset()==Integer.MIN_VALUE?
+                        "UNKNOWN":Integer.toString(row.liveFirstUseOffset()));
                 if(b.length()>64_000_000)
                     throw new IllegalStateException("Unbounded variable receipt CSV");
                 for(int i=0;i<values.size();i++) {
@@ -257,10 +323,13 @@ public final class HardwareScopedVariableReceipt {
                 throw new IllegalArgumentException("Variable receipt option key mismatch");
             State state=classify(record,observed.liveName(),
                 observed.liveStorage(),observed.pointerType(),
-                observed.userDefined(),observed.autoParameter(),importSha256);
+                observed.userDefined(),observed.autoParameter(),
+                observed.liveTypeIdentity(),observed.liveFirstUseOffset(),
+                importSha256);
             rows.add(new Row(record,observed.liveName(),observed.liveStorage(),
                 observed.pointerType(),observed.userDefined(),
-                observed.autoParameter(),state));
+                observed.autoParameter(),observed.liveTypeIdentity(),
+                observed.liveFirstUseOffset(),state));
         }
         rows.sort(ROW_ORDER);
         return new Snapshot(rows,revision,importSha256);
