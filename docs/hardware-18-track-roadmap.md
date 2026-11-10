@@ -1,3 +1,7 @@
+## GA-01/02/03/11/18 — 2026-11-10: RESET/CALL public report source consistency
+
+Generic CPU32 transitive CALL effect summaries now reject impossible zero-visit STORE/VBR findings, contradictory recursive/truncated flags, and typed witness chains whose observed prefixes exceed the inspected-node budget. Missing roots and skipped frontiers retain correct zero-visit and not-inspected semantics. RESET static flow reports validate visited node counts, typed evidence depth and chain endpoint syntax, source membership in the inspected function set, and duplicate evidence identities. Deterministic Java21 adversarial self-tests, full Java25/Ghidra 12.1.4 PUBLIC compilation and genuine isolated synthetic headless CI are merge requirements at exact SHA. Static candidates remain distinct from actual instruction execution, active ISR/VBR, latched MM, and physical mapping. GA-01/02/03/11/18 PARTIAL; GA-14 deferred.
+
 ## GA-01/02/03/11/18 — 2026-11-10: CPU32 source graph U32 address envelope
 
 Both read-only transitive CALL source engines and RESET root/evidence\nvalidation enforce the unsigned
