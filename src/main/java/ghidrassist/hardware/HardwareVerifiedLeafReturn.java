@@ -7,7 +7,7 @@ import java.util.Map;
 
 /**
  * A deliberately narrow, input-independent interprocedural register summary:
- * consecutive MOVE.L/MOVEA.L immediate-to-register steps and exactly one RTS.
+ * consecutive full-register MOVE.L/MOVEA.L/MOVEQ immediate steps and exactly one RTS.
  * Reject branch paths, calls, unmodeled outputs, memory writes, RTE and
  * everything not demonstrably returning those constants on ALL paths.
  */
@@ -40,19 +40,27 @@ public final class HardwareVerifiedLeafReturn {
                         !step.successors.isEmpty())return Map.of();
                 count+=2;
             }else{
+                boolean moveq="MOVEQ".equals(step.mnemonic);
                 if(step.kind!=HardwareDataflow.Kind.SET_POINTER ||
                         step.register==null ||
-                        !step.register.matches("[AD][0-6]|D7") ||
-                        !("MOVE.L".equals(step.mnemonic) ||
-                          "MOVEA.L".equals(step.mnemonic)) ||
+                        (moveq ? !step.register.matches("D[0-7]") ||
+                            // MOVEQ is a sign-extended 8-bit immediate,
+                            // not a 16/32-bit move or an A-register write.
+                            // Reject raw forged 0x80 (=+128) rather than
+                            // silently changing it into a positive Dn.
+                            (step.operand&HardwareDataflow.MASK24)!=
+                                (((long)(byte)step.operand)&
+                                    HardwareDataflow.MASK24) :
+                            !step.register.matches("[AD][0-6]|D7") ||
+                            !("MOVE.L".equals(step.mnemonic) ||
+                              "MOVEA.L".equals(step.mnemonic))) ||
                         step.successors.size()!=1)
                     return Map.of();
-                // A byte length cannot be learned solely from Step. Callers
-                // supply a fully decoded contiguous body; for MOVE.L #imm
-                // to Dn/An the canonical 68k encoding is exactly 6 bytes.
-                // Thus any alternate encoding fails closed.
-                cursor+=6;
-                count+=6;
+                // The exact contiguous Ghidra Listing determines 2-byte
+                // MOVEQ or 6-byte immediate long MOVE/MOVEA encoding.
+                int length=moveq?2:6;
+                cursor+=length;
+                count+=length;
                 if(step.successors.get(0)!=cursor)return Map.of();
                 constants.put(step.register,step.operand&HardwareDataflow.MASK24);
             }
