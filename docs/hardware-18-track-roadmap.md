@@ -1,3 +1,16 @@
+## GA-06/10/16/18 — 2026-11-10: PDF folio and bitfield source-claim integrity
+
+A coherent metadata-trust package rejects revision dates disguised as
+printed PDF folios, checks public pagination classification against both
+physical and printed page observations, and requires public decoded bitfield
+reports to match static register word, width, mask inventory, untyped
+remainder and one syntactically consistent physical PDF-page claim per
+field. These are validation of *claims*, not authentication of a manual
+edition/hash or observation of CPU execution, latched SIMCR MM or active
+interrupts. Java21 regressions, full Java25 Ghidra 12.1.4 PUBLIC build and
+real isolated synthetic Ghidra CI remain exact-HEAD gates. GA-06/10/16/18
+are PARTIAL; GA-14 remains deferred.
+
 ## GA-01/02/03/11/18 — 2026-11-10: RESET/CALL public report source consistency
 
 Generic CPU32 transitive CALL effect summaries now reject impossible zero-visit STORE/VBR findings, contradictory recursive/truncated flags, and typed witness chains whose observed prefixes exceed the inspected-node budget. Missing roots and skipped frontiers retain correct zero-visit and not-inspected semantics. RESET static flow reports validate visited node counts, typed evidence depth and chain endpoint syntax, source membership in the inspected function set, and duplicate evidence identities. Deterministic Java21 adversarial self-tests, full Java25/Ghidra 12.1.4 PUBLIC compilation and genuine isolated synthetic headless CI are merge requirements at exact SHA. Static candidates remain distinct from actual instruction execution, active ISR/VBR, latched MM, and physical mapping. GA-01/02/03/11/18 PARTIAL; GA-14 deferred.
