@@ -121,7 +121,7 @@ def main():
             for source_phase in ("source-write","source-read","source-corrupt",
                                  "source-mismatch","source-incomplete",
                                  "source-v1","source-edit","source-name",
-                                 "source-profile"):
+                                 "source-profile","source-forged"):
                 helper.call([str(java/"bin/java"),
                     "-Djava.system.class.loader=ghidra.GhidraClassLoader",
                     "-Djava.awt.headless=true",
@@ -140,9 +140,10 @@ def main():
                         not evidence["ghidra_real"] or
                         not evidence["checkpoint_exists"] or
                         evidence["reused"] !=
-                        (source_phase in ("source-read","source-v1")) or
+                        (source_phase in ("source-read","source-v1","source-forged")) or
                         evidence["source_inventory_retained"] !=
-                        (source_phase not in ("source-v1","source-profile"))):
+                        (source_phase not in ("source-read","source-v1",
+                                              "source-forged","source-profile"))):
                     raise RuntimeError(
                         "Cross-JVM source inventory/checkpoint did not retain/refuse")
                 if source_phase in ("source-write","source-read",
@@ -160,6 +161,12 @@ def main():
                                          "source-profile")):
                     raise RuntimeError(
                         "Saved Review input/full fingerprint refusal mismatch")
+            forged=source_proofs["source-forged"]
+            if (not forged["reused"] or forged["source_inventory_retained"] or
+                    forged["source_pairs"]!=0 or
+                    forged["omitted_indirect"]!=0):
+                raise RuntimeError(
+                    "Correctly resealed fabricated MAY-MM source leaked after restart")
             initial=source_proofs["source-write"]
             restored=source_proofs["source-read"]
             corrupted=source_proofs["source-corrupt"]
@@ -204,7 +211,9 @@ def main():
                 "edited_recomputed":True,
                 "source_data":"synthetic-only",
                 "tested_stage":"completed CFG Report",
-                "v2_source_processes":9,
+                "v2_source_processes":10,
+                "v2_resealed_forged_may_mm_pages_refused":True,
+                "v2_cfg_only_restored_source_inventory_denied":True,
                 "saved_review_binding_cross_jvm":True,
                 "saved_review_changed_bytes_denied":True,
                 "saved_review_renamed_function_denied":True,

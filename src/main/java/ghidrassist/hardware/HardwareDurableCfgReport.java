@@ -86,7 +86,7 @@ public final class HardwareDurableCfgReport {
         if(!eligibleForCompletedRestore(saved))
             throw new IllegalArgumentException("Incomplete GA-12 disk source");
         final String warning=
-            "## GA-12 RESTORED AGGREGATE — SOURCE INVENTORY UNVERIFIED\\n\\n"+
+            "## GA-12 RESTORED AGGREGATE — SOURCE INVENTORY UNVERIFIED\n\n"+
             "This report was restored from a full-input-keyed disk checkpoint. "+
             "Any JSR/MOVEC/RESET or MMIO source claims shown below are cached "+
             "text, NOT independently replayed live Ghidra source evidence. "+
@@ -94,7 +94,7 @@ public final class HardwareDurableCfgReport {
             "Analyze is recomputed from the current Listing (clear the "+
             "completed checkpoint first). Missing or bounded source paths "+
             "remain UNKNOWN; this does not prove execution, active MM/VBR, "+
-            "ISR dispatch or physical mapping.\\n\\n";
+            "ISR dispatch or physical mapping.\n\n";
         // Preserve the same 1 MiB report bound as the completed-stage
         // cache. An oversized warning+body is a cold-analysis miss.
         if(saved.markdown().length()>1_000_000-warning.length())
