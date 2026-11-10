@@ -125,6 +125,50 @@ public final class HardwarePointerRoleReviewSelfTest {
             HardwarePointerRoleReview.csvRows(hints)
             .contains("p_hw_sim_mm1_candidate"),
             "ordinary pointer-role rows stay unchanged");
+        // One static instruction can be listed repeatedly as the SAME
+        // witness, but a different register, target or function name at
+        // that PC must not generate a confident register-role proposal.
+        var contradictoryPc=new java.util.ArrayList<>(sites);
+        contradictoryPc.add(hit(0x2bca,"CSOR0",false));
+        var ambiguous=HardwarePointerRoleReview.propose(
+            true,contradictoryPc,false);
+        check(ambiguous.size()==1 &&
+            ambiguous.get(0).status()==HardwarePointerRoleReview.Status.PATH_UNCERTAIN &&
+            ambiguous.get(0).hint().isBlank(),
+            "same PC with different MMIO targets cannot produce stable A-register hint");
+        var reversedWitness=new java.util.ArrayList<>(contradictoryPc);
+        java.util.Collections.reverse(reversedWitness);
+        check(HardwarePointerRoleReview.propose(true,reversedWitness,false)
+                .get(0).status()==HardwarePointerRoleReview.Status.PATH_UNCERTAIN,
+            "PC source conflict classification must not depend on input order");
+        var switchedName=new java.util.ArrayList<>(sites);
+        switchedName.add(new HardwarePointerRoleReview.Site(
+            0x2bc0,"name_after_edit",0x2bd0,"A0","SIM",1,"CSBAR0",false));
+        check(HardwarePointerRoleReview.propose(true,switchedName,false)
+                .get(0).status()==HardwarePointerRoleReview.Status.PATH_UNCERTAIN,
+            "mixed function names from two revisions cannot promote pointer hint");
+        var differentPtrAtPc=new java.util.ArrayList<>(sites);
+        differentPtrAtPc.add(new HardwarePointerRoleReview.Site(
+            0x2bc0,"fun_reset",0x2bd0,"A1","SIM",1,"CSBAR0",false));
+        check(HardwarePointerRoleReview.propose(true,differentPtrAtPc,false)
+                .get(0).status()==HardwarePointerRoleReview.Status.PATH_UNCERTAIN,
+            "same PC cannot prove two distinct pointer register roles");
+        var validDuplicated=HardwarePointerRoleReview.propose(true,
+            List.of(hit(0x2bd0,"CSBAR0",false),
+                    hit(0x2bd0,"CSBAR0",false),
+                    hit(0x2bca,"SIMCR",false)),false);
+        check(validDuplicated.size()==1 &&
+            validDuplicated.get(0).status()==HardwarePointerRoleReview.Status.REVIEW_ONLY,
+            "identical duplicated source PC is deduplicated, not an invented ambiguity");
+        boolean refusedOversized=false;
+        try {
+            HardwarePointerRoleReview.propose(true,
+                java.util.Collections.nCopies(
+                    HardwarePointerRoleReview.MAX_SOURCE_SITES+1,
+                    hit(0x2bca,"SIMCR",false)),false);
+        }catch(IllegalArgumentException expected){refusedOversized=true;}
+        check(refusedOversized,
+            "oversized pointer-role source catalog rejected before grouping");
         System.out.println("HardwarePointerRoleReviewSelfTest OK");
     }
 }
