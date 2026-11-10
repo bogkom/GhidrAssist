@@ -41,6 +41,14 @@ public final class HardwareCallEffects {
     }
     public record Summary(boolean possibleMemoryStore,boolean possibleVbrWrite,
             boolean unresolved,boolean recursive,boolean truncated,int visited) {
+        public Summary {
+            if(visited<0 || visited>MAX_SOURCE_FUNCTIONS ||
+                    recursive && (!unresolved || visited==0) ||
+                    truncated && !unresolved ||
+                    visited==0 && (possibleMemoryStore || possibleVbrWrite))
+                throw new IllegalArgumentException(
+                    "Contradictory bounded CALL effect summary");
+        }
         public String description(){
             return "transitive_memory_STORE_candidate="+possibleMemoryStore+
                 "; transitive_VBR_write_candidate="+possibleVbrWrite+
@@ -86,9 +94,26 @@ public final class HardwareCallEffects {
                     vbrWitness!=null && !summary.possibleVbrWrite() ||
                     observedUnknownWitness!=null && !summary.unresolved() ||
                     frontierWitness!=null &&
-                        (!summary.truncated() || !summary.unresolved()))
+                        (!summary.truncated() || !summary.unresolved()) ||
+                    !visitedPrefix(storeWitness,summary.visited()) ||
+                    !visitedPrefix(vbrWitness,summary.visited()) ||
+                    !visitedPrefix(observedUnknownWitness,summary.visited()) ||
+                    !visitedPrefix(frontierWitness,summary.visited()))
                 throw new IllegalArgumentException(
                     "Contradictory transitive CALL source witnesses");
+        }
+        /**
+         * Every hop of an observed STORE, VBR or UNKNOWN_FLOW source chain
+         * must have been inspected. A missing definition or an omitted
+         * frontier ends at a NOT-INSPECTED function identity. This gate
+         * checks report consistency, not whether Ghidra executed that path.
+         */
+        private static boolean visitedPrefix(SourceWitness witness,int visited) {
+            if(witness==null)return true;
+            boolean absent=witness.kind()==WitnessKind.MISSING_TARGET ||
+                witness.kind()==WitnessKind.DEPTH_CUTOFF ||
+                witness.kind()==WitnessKind.NODE_CUTOFF;
+            return visited>=witness.chain().size()-(absent?1:0);
         }
         private static boolean valid(long root,SourceWitness witness,
                 WitnessKind... allowed) {

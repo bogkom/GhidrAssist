@@ -110,12 +110,58 @@ public final class HardwareResetFlow {
     }
 
     public record Evidence(long functionEntry, String chain, int depth,
-                           boolean possibleMemoryStore, boolean possibleVbrWrite) {}
+                           boolean possibleMemoryStore, boolean possibleVbrWrite) {
+        public Evidence {
+            if(functionEntry<0 ||
+                    functionEntry>HardwareCallEffects.MAX_CPU32_ADDRESS ||
+                    depth<0 || depth>MAX_DEPTH || chain==null)
+                throw new IllegalArgumentException("Invalid RESET source evidence");
+            String[] steps=chain.split(" -> ",-1);
+            if(steps.length!=depth+1 ||
+                    !steps[steps.length-1].equals(hex(functionEntry)))
+                throw new IllegalArgumentException(
+                    "RESET evidence chain/depth does not reach source");
+            for(String step:steps)
+                if(!step.matches("0x[0-9A-F]{8}"))
+                    throw new IllegalArgumentException(
+                        "Invalid CPU32 RESET evidence source identity");
+        }
+    }
 
     public record Summary(boolean rootRecognized, int visitedFunctions,
                           boolean unresolved, boolean recursive,
                           boolean truncated, List<Evidence> evidence, Set<Long> visitedEntries) {
         public Summary {
+            if(evidence==null || visitedEntries==null ||
+                    evidence.size()>MAX_EVIDENCE ||
+                    visitedFunctions<0 || visitedFunctions>MAX_NODES ||
+                    visitedEntries.size()!=visitedFunctions ||
+                    !rootRecognized && visitedFunctions!=0 ||
+                    recursive && (!unresolved || visitedFunctions==0) ||
+                    truncated && !unresolved)
+                throw new IllegalArgumentException(
+                    "Contradictory RESET CALL inventory");
+            for(Long entry:visitedEntries)
+                if(entry==null || entry<0 ||
+                        entry>HardwareCallEffects.MAX_CPU32_ADDRESS)
+                    throw new IllegalArgumentException(
+                        "Invalid RESET visited-function identity");
+            Set<Long> evidenceIds=new HashSet<>();
+            for(Evidence source:evidence) {
+                if(source==null || !evidenceIds.add(source.functionEntry()) ||
+                        !visitedEntries.contains(source.functionEntry()))
+                    throw new IllegalArgumentException(
+                        "Missing or duplicate RESET source function");
+                // Every source-only direct-CALL hop is a function already
+                // observed in the bounded BFS. An unvisited frontier is
+                // never displayed as an observed hardware source.
+                for(String step:source.chain().split(" -> ",-1)) {
+                    long id=Long.parseUnsignedLong(step.substring(2),16);
+                    if(!visitedEntries.contains(id))
+                        throw new IllegalArgumentException(
+                            "Unvisited function in RESET source chain");
+                }
+            }
             evidence=List.copyOf(evidence);
             visitedEntries=Set.copyOf(visitedEntries);
         }

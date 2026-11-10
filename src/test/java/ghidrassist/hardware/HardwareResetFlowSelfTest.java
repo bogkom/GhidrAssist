@@ -1,6 +1,7 @@
 package ghidrassist.hardware;
 
 import java.util.List;
+import java.util.Set;
 
 public final class HardwareResetFlowSelfTest {
     private static void ok(boolean value,String why){
@@ -310,6 +311,53 @@ public final class HardwareResetFlowSelfTest {
         ok(u32Reset.rootRecognized() && u32Reset.visitedFunctions()==1 &&
             u32Reset.evidence().size()==1,
             "full unsigned U32 RESET identity stays valid without MC68332 remapping");
+        var badResetReports=new java.util.ArrayList<Runnable>();
+        badResetReports.add(()->new HardwareResetFlow.Summary(
+            true,1,false,false,false,List.of(),Set.of()));
+        badResetReports.add(()->new HardwareResetFlow.Summary(
+            false,1,true,false,false,List.of(),Set.of(0L)));
+        badResetReports.add(()->new HardwareResetFlow.Summary(
+            true,1,false,true,false,List.of(),Set.of(0L)));
+        badResetReports.add(()->new HardwareResetFlow.Summary(
+            true,1,false,false,true,List.of(),Set.of(0L)));
+        badResetReports.add(()->new HardwareResetFlow.Evidence(
+            0L,"0x00000001",0,true,false));
+        badResetReports.add(()->new HardwareResetFlow.Evidence(
+            0L,"0x00000000 -> 0x00000001",1,true,false));
+        badResetReports.add(()->new HardwareResetFlow.Evidence(
+            0L,"0x00000000 -> 0x00000000",0,true,false));
+        badResetReports.add(()->new HardwareResetFlow.Summary(
+            true,1,false,false,false,
+            List.of(new HardwareResetFlow.Evidence(
+                1L,"0x00000000 -> 0x00000001",1,true,false)),
+            Set.of(1L)));
+        badResetReports.add(()->new HardwareResetFlow.Summary(
+            true,1,false,false,false,
+            List.of(new HardwareResetFlow.Evidence(
+                1L,"0x00000001",0,true,false),
+                new HardwareResetFlow.Evidence(
+                1L,"0x00000001",0,false,true)),
+            Set.of(1L)));
+        for(Runnable forged:badResetReports) {
+            boolean denied=false;
+            try {forged.run();}
+            catch(IllegalArgumentException expected){denied=true;}
+            ok(denied,
+                "RESET cannot publish forged source paths, duplicates or visit counts");
+        }
+        var properReport=HardwareResetFlow.trace(0L,
+            List.of(fn(0L,false,false,false,1L),
+                    fn(1L,true,false,false)),
+            List.of(1L),2,2,2);
+        ok(properReport.evidence().size()==1 &&
+            properReport.evidence().get(0).chain().equals(
+                "0x00000000 -> 0x00000001") &&
+            properReport.visitedFunctions()==2,
+            "observed RESET source path is consistent with two inspected nodes");
+        var rootAbsent=HardwareResetFlow.trace(0L,List.of(),List.of(),0,1,1);
+        ok(!rootAbsent.rootRecognized() && rootAbsent.visitedFunctions()==0 &&
+            rootAbsent.evidence().isEmpty(),
+            "missing RESET root preserves an explicit zero-visit unknown report");
         System.out.println("HardwareResetFlowSelfTest OK");
     }
 }
