@@ -556,14 +556,22 @@ snapshot logic without opening a second GUI or modifying a project.
 
 ## Bounded Listing pages and whole-function XREFs (GA-18)
 
-New read-only RPC `listing.range` accepts optional `address` (otherwise the
-active Listing location), `offset` in decoded instructions (0..4096),
-`limit` (1..64, default 32), and optional `expected_revision` from the
-first page. The result `listing_range` includes `start`, `revision`,
+New read-only RPC `listing.range` accepts optional `address` **only
+on its first page** (otherwise the active Listing location), `offset`
+in decoded instructions (0..4096), `limit` (1..64, default 32), and
+`expected_revision` from the first page (**mandatory for nonzero offsets**). The result `listing_range` includes `start`, `revision`,
 `offset`, `limit`, `returned`, `next_offset`, `has_more`,
 `offset_unit`, and `rows` (each row uses the existing single-instruction
 `listing.snapshot` schema, retaining bytes/ref caps). Use the **same
 explicit start** with a new offset and the original revision on later pages.
+The RPC server, underlying Listing-range method and agent CLI now reject a
+nonzero-offset page request **without an explicit start**. Moving the
+CodeBrowser cursor does not change the Program revision; the older
+implicit-current-location fallback could therefore splice a different
+Listing window into a revision-matching next page. Offset zero keeps the
+original interactive current-location default. The start is still caller
+metadata, not an authenticated cross-request cursor; clients must reuse
+the first response's `start` and `revision` exactly.
 Instructions are in Ghidra address order; they may be separated by gaps or
 cross functions. This is not an execution trace or raw byte disassembly.
 Bad bounds/start, changed program revision or mismatched active ProgramLocation
