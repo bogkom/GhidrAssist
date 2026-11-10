@@ -7,6 +7,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * STRICT preview-only manifest parser. External profile input is untrusted:
@@ -20,18 +21,123 @@ public final class HardwareProfileManifestPreview {
     public static final int MAX_BYTES=1_048_576;
     public static final int MAX_ROWS=1024;
     public record Source(String device,String manualId,String url,
-                         String edition,String claimedSha256) {}
+                         String edition,String claimedSha256) {
+        public Source {
+            id(device,0);
+            id(manualId,0);
+            documentUrl(url,0);
+            if(edition==null || !edition.matches("[A-Za-z0-9 ._/-]{1,64}") ||
+                    claimedSha256==null ||
+                    !("UNKNOWN".equals(claimedSha256) ||
+                        claimedSha256.matches("[a-fA-F0-9]{64}")))
+                throw new IllegalArgumentException("Invalid external profile provenance");
+        }
+    }
     public record Module(String id,int offset,int size,String page) {
+        public Module {
+            id(id,0);
+            page(page,0);
+            if(offset<0 || size<1 || (long)offset+size>4096)
+                throw new IllegalArgumentException("Invalid external module aperture");
+        }
         public int end(){return offset+size;}
     }
     public record Register(String module,String name,int offset,
                            int widthBits,String page) {
+        public Register {
+            id(module,0);
+            id(name,0);
+            page(page,0);
+            if(widthBits!=8 && widthBits!=16 && widthBits!=32 ||
+                    offset<0 || (long)offset+widthBits/8>4096 ||
+                    offset%(widthBits/8)!=0)
+                throw new IllegalArgumentException("Invalid external register definition");
+        }
         public int end(){return offset+widthBits/8;}
     }
-    public record Field(String register,String name,long mask,String page) {}
+    public record Field(String register,String name,long mask,String page) {
+        public Field {
+            id(register,0);
+            id(name,0);
+            page(page,0);
+            if(mask<1 || mask>0xffffffffL)
+                throw new IllegalArgumentException("Invalid external field mask");
+        }
+    }
     public record Preview(Source source,List<Module> modules,List<Register> registers,
                           List<Field> fields,int ambiguousPages) {
         public Preview {
+            // Public records are also built by other callers, not necessarily
+            // by parse(). Protect the Comparison boundary from fabricated
+            // "VALIDATED STRUCTURE" reports built from raw arbitrary records.
+            if(source==null || modules==null || registers==null ||
+                    fields==null || modules.isEmpty() || registers.isEmpty() ||
+                    (long)modules.size()+registers.size()+fields.size()>MAX_ROWS ||
+                    modules.stream().anyMatch(Objects::isNull) ||
+                    registers.stream().anyMatch(Objects::isNull) ||
+                    fields.stream().anyMatch(Objects::isNull) ||
+                    ambiguousPages<0 ||
+                    ambiguousPages>modules.size()+registers.size()+fields.size())
+                throw new IllegalArgumentException(
+                    "Unbounded or incomplete external profile snapshot");
+            Map<String,Module> moduleById=new LinkedHashMap<>();
+            Map<String,Register> registerById=new LinkedHashMap<>();
+            Map<String,Long> masksByRegister=new LinkedHashMap<>();
+            Map<String,Boolean> fieldNames=new LinkedHashMap<>();
+            int ambiguous=0;
+            for(Module module:modules) {
+                String key=module.id().toUpperCase(Locale.ROOT);
+                if(moduleById.putIfAbsent(key,module)!=null)
+                    throw new IllegalArgumentException(
+                        "Duplicate external module identity");
+                for(Module old:moduleById.values())
+                    if(old!=module && module.offset()<old.end() &&
+                            old.offset()<module.end())
+                        throw new IllegalArgumentException(
+                            "Overlapping external module apertures");
+                if(!paginated(module.page()))ambiguous++;
+            }
+            for(Register register:registers) {
+                Module owner=moduleById.get(
+                    register.module().toUpperCase(Locale.ROOT));
+                if(owner==null || !owner.id().equals(register.module()) ||
+                        register.offset()<owner.offset() ||
+                        register.end()>owner.end())
+                    throw new IllegalArgumentException(
+                        "Register outside declared canonical module aperture");
+                String key=register.name().toUpperCase(Locale.ROOT);
+                if(registerById.putIfAbsent(key,register)!=null)
+                    throw new IllegalArgumentException(
+                        "Duplicate external register identity");
+                for(Register old:registerById.values())
+                    if(old!=register && register.offset()<old.end() &&
+                            old.offset()<register.end())
+                        throw new IllegalArgumentException(
+                            "Overlapping external register apertures");
+                if(!paginated(register.page()))ambiguous++;
+            }
+            for(Field field:fields) {
+                Register owner=registerById.get(
+                    field.register().toUpperCase(Locale.ROOT));
+                if(owner==null || !owner.name().equals(field.register()) ||
+                        (field.mask() & ~((1L<<owner.widthBits())-1))!=0)
+                    throw new IllegalArgumentException(
+                        "External bitfield without exact register/width source");
+                String key=owner.name().toUpperCase(Locale.ROOT);
+                String qualified=key+"/"+field.name().toUpperCase(Locale.ROOT);
+                if(fieldNames.putIfAbsent(qualified,Boolean.TRUE)!=null)
+                    throw new IllegalArgumentException(
+                        "Duplicate external field identity");
+                long used=masksByRegister.getOrDefault(key,0L);
+                if((used&field.mask())!=0)
+                    throw new IllegalArgumentException(
+                        "Overlapping external bitfield mask");
+                masksByRegister.put(key,used|field.mask());
+                if(!paginated(field.page()))ambiguous++;
+            }
+            if(ambiguous!=ambiguousPages)
+                throw new IllegalArgumentException(
+                    "Claimed missing PDF page count contradicts manifest source");
             modules=List.copyOf(modules);
             registers=List.copyOf(registers);
             fields=List.copyOf(fields);
