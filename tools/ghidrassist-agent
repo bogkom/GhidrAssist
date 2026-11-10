@@ -81,16 +81,35 @@ def _decode_checkpoint_json(raw):
         raise ValueError("Malformed offline checkpoint JSON") from error
 
 
+SESSION_MAX_BYTES = 16384
+RPC_RESPONSE_MAX_BYTES = 1048576
+
+
 def load_session(path):
+    """Read only a bounded local Automation v3 bearer session receipt."""
     location = Path(path).expanduser()
-    session = json.loads(location.read_text(encoding="utf-8"))
-    if session.get("schema") != 3 or not (0 < session["port"] < 65536):
-        raise ValueError("Invalid Automation session")
+    with location.open("rb") as stream:
+        raw = stream.read(SESSION_MAX_BYTES + 1)
+    if not raw or len(raw) > SESSION_MAX_BYTES:
+        raise ValueError("Missing or oversized Automation session receipt")
+    session = _decode_checkpoint_json(raw)
+    port = session.get("port") if isinstance(session, dict) else None
+    token = session.get("token") if isinstance(session, dict) else None
+    if (not isinstance(session, dict)
+            or type(session.get("schema")) is not int or session["schema"] != 3
+            or type(port) is not int or not 0 < port < 65536
+            or not isinstance(token, str) or not 1 <= len(token) <= 256
+            or re.fullmatch(r"[A-Za-z0-9._~+/-]+={0,2}", token) is None):
+        raise ValueError("Invalid Automation session schema, port or bearer token")
+    # Preserve launcher-specific metadata such as pid/mode; no new authority
+    # or write permission is inferred from a locally edited receipt.
     return session
 
 
 def rpc(session, method, params=None):
-    payload = json.dumps({"method": method, "params": params or {}}).encode()
+    """One bounded loopback Bearer JSON-RPC exchange; never guess truncation."""
+    payload = json.dumps({"method": method, "params": params or {}},
+                         allow_nan=False).encode("utf-8")
     req = Request(
         "http://127.0.0.1:%d/rpc" % session["port"],
         data=payload,
@@ -99,7 +118,15 @@ def rpc(session, method, params=None):
         method="POST",
     )
     with urlopen(req, timeout=45) as answer:
-        return json.loads(answer.read(1048576))
+        raw = answer.read(RPC_RESPONSE_MAX_BYTES + 1)
+    # An otherwise valid JSON object followed by >1 MiB of whitespace is
+    # still an oversized reply. Reading only 1 MiB silently accepted it.
+    if not raw or len(raw) > RPC_RESPONSE_MAX_BYTES:
+        raise ValueError("Empty or oversized Automation JSON-RPC response")
+    response = _decode_checkpoint_json(raw)
+    if not isinstance(response, dict):
+        raise ValueError("Automation JSON-RPC response must be an object")
+    return response
 
 
 def _source_pairs_metadata(page):
