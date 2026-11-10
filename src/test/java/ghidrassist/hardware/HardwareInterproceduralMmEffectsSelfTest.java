@@ -572,6 +572,36 @@ public final class HardwareInterproceduralMmEffectsSelfTest {
             closed.rows().get(0).summary().aliasWitness()==null &&
             closed.rows().get(0).summary().unknownWitness()==null,
             "closed observed leaf has no source-witness chain");
+        long wideAddress=0x1_0000_0000L;
+        java.util.List<Runnable> invalidCpu32=java.util.List.of(
+            ()->node(wideAddress,false,false,false),
+            ()->node(0x130L,false,false,false,wideAddress),
+            ()->call(wideAddress,0x108L,0x130L),
+            ()->call(0x100L,wideAddress,0x130L),
+            ()->call(0x100L,0x108L,wideAddress),
+            ()->new HardwareInterproceduralMmEffects.SourceWitness(
+                HardwareInterproceduralMmEffects.WitnessKind.MM_SOURCE,
+                List.of(0x130L,wideAddress)),
+            ()->HardwareInterproceduralMmEffects.inspectRoots(
+                List.of(node(0x130L,true,false,false)),
+                List.of(wideAddress),2,10),
+            ()->HardwareInterproceduralMmEffects.analyze(
+                List.of(node(0x130L,true,false,false)),
+                List.of(call(0x100L,0x108L,0x130L)),
+                List.of(wideAddress),2,10,10));
+        for(Runnable probe:invalidCpu32) {
+            boolean rejected=false;
+            try {probe.run();}
+            catch(IllegalArgumentException expected){rejected=true;}
+            ok(rejected,
+                "wide CPU32 node, CALL PC, target, root or source chain must fail closed");
+        }
+        var cpu32Max=HardwareInterproceduralMmEffects.inspectRoots(
+            List.of(node(0xffffffffL,true,false,false)),
+            List.of(0xffffffffL),0,1).get(0xffffffffL);
+        ok(cpu32Max.mayMm() && cpu32Max.visited()==1 &&
+            cpu32Max.mmWitness().chain().equals(List.of(0xffffffffL)),
+            "unsigned 32-bit maximum stays a valid generic CPU32 source identity");
         System.out.println("HardwareInterproceduralMmEffectsSelfTest OK");
     }
 }
