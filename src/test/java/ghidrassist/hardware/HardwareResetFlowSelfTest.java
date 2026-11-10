@@ -166,6 +166,47 @@ public final class HardwareResetFlowSelfTest {
             fn(1,true,false,false,0L)),List.of(1L),8,50,20);
         ok(recursion.recursive() && recursion.unresolved() && recursion.visitedFunctions()==2,
             "recursive edges are not safe closed graphs");
+        // Already-scheduled targets do not become unknown simply because
+        // their referring CALL edge is encountered at the maximum depth.
+        var selfAtDepth0=HardwareResetFlow.trace(0,List.of(
+            fn(0,true,false,false,0L,0L)),List.of(0L),0,1,3);
+        ok(selfAtDepth0.visitedFunctions()==1 &&
+            selfAtDepth0.evidence().size()==1 &&
+            selfAtDepth0.recursive() && selfAtDepth0.unresolved() &&
+            !selfAtDepth0.truncated(),
+            "RESET self-loop at depth zero is cycle-only, not an omitted frontier");
+        var cycleAtDepth1=HardwareResetFlow.trace(0,List.of(
+            fn(0,false,false,false,2L),
+            fn(2,true,false,false,0L)),List.of(2L),1,2,3);
+        ok(cycleAtDepth1.recursive() && cycleAtDepth1.unresolved() &&
+            cycleAtDepth1.visitedFunctions()==2 &&
+            !cycleAtDepth1.truncated() && cycleAtDepth1.evidence().size()==1,
+            "two-function loop at depth cap is fully observed recursion");
+        var sharedAtDepth1=HardwareResetFlow.trace(0,List.of(
+            fn(0,false,false,false,2L,4L),
+            fn(2,false,false,false,4L),
+            fn(4,true,false,false)),List.of(4L),1,3,3);
+        ok(!sharedAtDepth1.recursive() &&
+            !sharedAtDepth1.unresolved() &&
+            !sharedAtDepth1.truncated() &&
+            sharedAtDepth1.visitedFunctions()==3 &&
+            sharedAtDepth1.evidence().size()==1 &&
+            sharedAtDepth1.evidence().get(0).chain()
+                .equals("0x00000000 -> 0x00000004"),
+            "RESET convergent known target at boundary is not an unknown frontier");
+        var absentAtDepth0=HardwareResetFlow.trace(0,List.of(
+            fn(0,false,false,false,6L)),List.of(6L),0,2,3);
+        ok(absentAtDepth0.visitedFunctions()==1 &&
+            absentAtDepth0.unresolved() && !absentAtDepth0.truncated() &&
+            absentAtDepth0.evidence().isEmpty(),
+            "missing direct-call target is observed UNKNOWN even at depth cap");
+        var unseenAtDepth1=HardwareResetFlow.trace(0,List.of(
+            fn(0,false,false,false,2L),
+            fn(2,false,false,false,4L),
+            fn(4,true,false,false)),List.of(4L),1,3,3);
+        ok(unseenAtDepth1.truncated() && unseenAtDepth1.unresolved() &&
+            unseenAtDepth1.evidence().isEmpty(),
+            "only genuinely unexamined decoded function requires RESET depth cap");
         var depth=HardwareResetFlow.trace(0,List.of(
             fn(0,false,false,false,1L),
             fn(1,false,false,false,2L),
