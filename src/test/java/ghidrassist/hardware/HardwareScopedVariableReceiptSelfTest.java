@@ -24,8 +24,10 @@ public final class HardwareScopedVariableReceiptSelfTest {
         var kind=HardwareScopedVariableReview.Kind.PARAMETER;
         var original=new HardwareScopedVariableReceipt.Entry(0x5a0L,kind,0,
             "stack:00000008:4","param_1","ga_arg_ptr_candidate_0",3,
-            "a".repeat(64));
+            "a".repeat(64),"/pointer#length=4",0);
         String serialized=HardwareScopedVariableReceipt.encode(original);
+        ok(serialized.startsWith(HardwareScopedVariableReceipt.VERSION+"\t"),
+            "New typed pointer approval must serialize a v2 receipt");
         ok(HardwareScopedVariableReceipt.decode(serialized).equals(original) &&
                 original.optionKey().equals("PV_000005A0_P_0000") &&
                 original.origin().contains("actor UNKNOWN"),
@@ -33,19 +35,77 @@ public final class HardwareScopedVariableReceiptSelfTest {
         var local=new HardwareScopedVariableReceipt.Entry(0x640L,
             HardwareScopedVariableReview.Kind.LOCAL,0,
             "stack:fffffff8:4","local_8","ga_local_ptr_candidate_0",3,
-            "a".repeat(64));
+            "a".repeat(64),"/pointer#length=4",-8);
         var rows=List.of(
             new HardwareScopedVariableReceipt.Observation(
                 original.optionKey(),serialized,original.afterName(),
-                original.storage(),true,true),
+                original.storage(),true,true,false,
+                original.dataTypeIdentity(),original.firstUseOffset()),
             new HardwareScopedVariableReceipt.Observation(
                 local.optionKey(),HardwareScopedVariableReceipt.encode(local),
-                local.afterName(),local.storage(),true,true));
+                local.afterName(),local.storage(),true,true,false,
+                local.dataTypeIdentity(),local.firstUseOffset()));
         var audit=HardwareScopedVariableReceipt.inspect(rows,5,"a".repeat(64));
         ok(audit.count(HardwareScopedVariableReceipt.State.CURRENT_APPROVED_NAME)==2 &&
                 audit.csv().lines().count()==3 &&
                 audit.csv().contains("actor UNKNOWN"),
             "Read-only Program Options audit correlates two current approved variables");
+        ok(audit.rows().stream().allMatch(r->
+                r.receipt().hasTypedIdentity() &&
+                r.liveTypeIdentity().equals(r.receipt().dataTypeIdentity()) &&
+                r.liveFirstUseOffset()==r.receipt().firstUseOffset()) &&
+                audit.csv().contains("reviewed_type_identity,reviewed_first_use,"+
+                    "current_type_identity,current_first_use"),
+            "Reopened v2 receipt and CSV preserve exact live typed scope");
+        var legacy=new HardwareScopedVariableReceipt.Entry(
+            original.function(),original.kind(),original.ordinal(),
+            original.storage(),original.beforeName(),original.afterName(),
+            original.reviewedModification(),original.importSha256());
+        String oldBytes=HardwareScopedVariableReceipt.encode(legacy);
+        ok(oldBytes.startsWith(HardwareScopedVariableReceipt.LEGACY_VERSION+"\t") &&
+                HardwareScopedVariableReceipt.decode(oldBytes).equals(legacy),
+            "Historical v1 bytes remain canonically readable without fake type data");
+        var oldAudit=HardwareScopedVariableReceipt.inspect(List.of(
+            new HardwareScopedVariableReceipt.Observation(
+                legacy.optionKey(),oldBytes,legacy.afterName(),
+                legacy.storage(),true,true,false,
+                original.dataTypeIdentity(),original.firstUseOffset())),
+            5,original.importSha256());
+        ok(oldAudit.count(HardwareScopedVariableReceipt.State.LEGACY_TYPE_UNVERIFIED)==1 &&
+                oldAudit.count(HardwareScopedVariableReceipt.State.CURRENT_APPROVED_NAME)==0,
+            "v1 cannot retroactively prove the original pointer datatype/first use");
+        var typeChanged=HardwareScopedVariableReceipt.inspect(List.of(
+            new HardwareScopedVariableReceipt.Observation(
+                original.optionKey(),serialized,original.afterName(),
+                original.storage(),true,true,false,"/new_pointer#length=4",0)),
+            5,original.importSha256());
+        ok(typeChanged.count(HardwareScopedVariableReceipt.State.TYPE_IDENTITY_CHANGED)==1,
+            "Changed pointee datatype invalidates a reopened v2 approval");
+        var scopeChanged=HardwareScopedVariableReceipt.inspect(List.of(
+            new HardwareScopedVariableReceipt.Observation(
+                original.optionKey(),serialized,original.afterName(),
+                original.storage(),true,true,false,
+                original.dataTypeIdentity(),4)),5,original.importSha256());
+        ok(scopeChanged.count(HardwareScopedVariableReceipt.State.TYPE_IDENTITY_CHANGED)==1,
+            "Changed first-use scope invalidates a reopened v2 approval");
+        var noLiveType=HardwareScopedVariableReceipt.inspect(List.of(
+            new HardwareScopedVariableReceipt.Observation(
+                original.optionKey(),serialized,original.afterName(),
+                original.storage(),true,true)),5,original.importSha256());
+        ok(noLiveType.count(HardwareScopedVariableReceipt.State.TYPE_IDENTITY_UNVERIFIED)==1,
+            "Old source-only observation never certifies new v2 receipt");
+        rejects(()->new HardwareScopedVariableReceipt.Entry(
+            original.function(),original.kind(),original.ordinal(),
+            original.storage(),original.beforeName(),original.afterName(),
+            original.reviewedModification(),original.importSha256(),
+            original.dataTypeIdentity(),Integer.MIN_VALUE),
+            "Incomplete typed receipt is not silently downgraded to v1");
+        rejects(()->new HardwareScopedVariableReceipt.Entry(
+            original.function(),original.kind(),original.ordinal(),
+            original.storage(),original.beforeName(),original.afterName(),
+            original.reviewedModification(),original.importSha256(),
+            "/pointer\tforged#length=4",0),
+            "Control-character-bearing datatype identities cannot enter receipts");
         var revisionOwner=new Object();
         var snapshot=HardwareAnalysisRevision.capture(revisionOwner,5,
             "68000:BE:32:CPU32","a".repeat(64),true);
@@ -110,12 +170,14 @@ public final class HardwareScopedVariableReceiptSelfTest {
         var uppercase=new HardwareScopedVariableReceipt.Entry(
             original.function(),original.kind(),original.ordinal(),
             original.storage(),original.beforeName(),original.afterName(),
-            original.reviewedModification(),"A".repeat(64));
+            original.reviewedModification(),"A".repeat(64),
+            original.dataTypeIdentity(),original.firstUseOffset());
         ok(HardwareScopedVariableReceipt.inspect(List.of(
                 new HardwareScopedVariableReceipt.Observation(
                     original.optionKey(),
                     HardwareScopedVariableReceipt.encode(uppercase),
-                    original.afterName(),original.storage(),true,true)),
+                    original.afterName(),original.storage(),true,true,false,
+                    original.dataTypeIdentity(),original.firstUseOffset())),
                 5,"a".repeat(64)).count(
                 HardwareScopedVariableReceipt.State.CURRENT_APPROVED_NAME)==1,
             "valid upper/lower hexadecimal SHA forms compare as equivalent");
