@@ -3545,6 +3545,15 @@ public final class Ga11VectorHeadlessMain {
                         md.contains("STATIC SOURCE CANDIDATES ONLY"),
                         "Relocated byte table promoted to active hardware VBR");
                     String relocated=md.substring(md.indexOf(baseTag));
+                    check(relocated.contains(
+                            "## MC68332 vector-handler SIMCR/MM low-byte MAY sources") &&
+                        relocated.contains("relocated MOVEC-to-VBR source-image "+
+                            "candidate at 0x00000800") &&
+                        relocated.contains("No vector pointer is added as a CALL edge") &&
+                        relocated.contains("MM0/MM1 are conditional alternatives") &&
+                        relocated.contains("interior pointers (not analyzed as complete handlers): 1"),
+                        "real relocated vector table must have separate exact-handler "+
+                        "SIMCR/MM MAY evidence without active ISR/MM assertions");
                     check(relocated.contains("relocated MOVEC-to-VBR "+
                             "source-image candidate at 0x00000800") &&
                         relocated.contains("| Vector | Relocated source-image pointer |") &&
