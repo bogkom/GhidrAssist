@@ -137,3 +137,20 @@ active VBR/ISR, physical mapping or permission to Apply is inferred.
 Analysis remains revision-local, bounded and read-only. Java21 regressions
 plus full Ghidra 12.1.4 PUBLIC/Java25 synthetic integration must pass on
 the final SHA. GA-01/02/03/11/18 remain PARTIAL.
+
+## 2026-11-10 — fail-closed public CALL-site report source integrity
+
+Source-only CALL-site SIMCR/MM reports now reject public rows with
+unrooted function evidence or a claimed observed function-chain length
+larger than the bounded inspected count. A missing target or a skipped
+frontier endpoint is explicitly not an inspected function. A computed
+CALL without a resolved target remains zero-visit UNKNOWN and cannot
+inherit any invented callee STORE/alias/flow evidence. Duplicate or
+out-of-order caller/PC/target rows, negative omitted-row counts, null
+rows and overlong published inventories are rejected before Markdown.
+
+This checks internal source-report consistency, not authenticity against
+Program bytes or executed CALL/RESET paths. No MCU24 bus mapping, active
+VBR/IRQ, actual SIMCR write, or latched MM is inferred. Java21 adverse
+source regression and exact-commit full Java25/Ghidra 12.1.4 PUBLIC
+synthetic CI remain required.

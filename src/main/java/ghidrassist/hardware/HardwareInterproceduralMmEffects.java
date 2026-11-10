@@ -93,9 +93,68 @@ public final class HardwareInterproceduralMmEffects {
             kind==WitnessKind.NODE_CUTOFF ||
             kind==WitnessKind.BATCH_CUTOFF;
     }
-    public record Row(CallSite call,Summary summary){}
+    public record Row(CallSite call,Summary summary){
+        public Row {
+            if(call==null || summary==null)
+                throw new IllegalArgumentException("Missing MM CALL evidence row");
+            Long root=call.target();
+            if(root==null) {
+                // Unknown computed CALL never inherits a fabricated callee
+                // traversal. No static MM evidence is published for it.
+                if(summary.visited()!=0 || summary.mayMm() ||
+                        summary.unknownAlias() || !summary.unknownControl() ||
+                        summary.cycle() || summary.limited() ||
+                        summary.mmWitness()!=null || summary.aliasWitness()!=null ||
+                        summary.unknownWitness()!=null || summary.frontierWitness()!=null)
+                    throw new IllegalArgumentException(
+                        "Unresolved CALL cannot have invented callee evidence");
+            }else {
+                if(!rooted(summary.mmWitness(),root) ||
+                        !rooted(summary.aliasWitness(),root) ||
+                        !rooted(summary.unknownWitness(),root) ||
+                        !rooted(summary.frontierWitness(),root) ||
+                        !visitBound(summary.mmWitness(),summary.visited()) ||
+                        !visitBound(summary.aliasWitness(),summary.visited()) ||
+                        !visitBound(summary.unknownWitness(),summary.visited()) ||
+                        !visitBound(summary.frontierWitness(),summary.visited()) ||
+                        summary.cycle() && summary.visited()==0)
+                    throw new IllegalArgumentException(
+                        "Unrooted or overclaimed CALL-source evidence");
+            }
+        }
+    }
+    private static boolean rooted(SourceWitness path,long root) {
+        return path==null || path.chain().get(0)==root;
+    }
+    private static boolean visitBound(SourceWitness path,int visited) {
+        if(path==null)return true;
+        boolean skipped=path.kind()==WitnessKind.MISSING_TARGET ||
+            isFrontier(path.kind());
+        return visited>=path.chain().size()-(skipped?1:0);
+    }
     public record Report(List<Row> rows,int omitted){
-        public Report {rows=List.copyOf(rows);}
+        public Report {
+            if(rows==null || omitted<0 || rows.size()>1000 ||
+                    rows.stream().anyMatch(Objects::isNull))
+                throw new IllegalArgumentException("Invalid bounded CALL report");
+            CallSite previous=null;
+            for(Row row:rows) {
+                CallSite site=row.call();
+                if(previous!=null && compareSites(previous,site)>=0)
+                    throw new IllegalArgumentException(
+                        "Duplicate or unordered CALL source evidence");
+                previous=site;
+            }
+            rows=List.copyOf(rows);
+        }
+        private static int compareSites(CallSite a,CallSite b) {
+            int function=Long.compare(a.function(),b.function());
+            if(function!=0)return function;
+            int pc=Long.compare(a.pc(),b.pc());
+            if(pc!=0)return pc;
+            return Comparator.nullsFirst(Long::compare)
+                .compare(a.target(),b.target());
+        }
         public String markdown(){
             StringBuilder b=new StringBuilder(
                 "## Interprocedural SIMCR/MM candidates by CALL instruction\n\n")

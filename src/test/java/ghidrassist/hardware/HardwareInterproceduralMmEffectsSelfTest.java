@@ -268,6 +268,72 @@ public final class HardwareInterproceduralMmEffectsSelfTest {
             node(0x130,false,false,false)),List.of(calls.get(0)),4,20,20);}
         catch(IllegalArgumentException expected){fail=true;}
         ok(fail,"reject duplicate functions");
+        var validRoot=evidence.rows().get(0).summary();
+        boolean invalid=false;
+        try {
+            new HardwareInterproceduralMmEffects.Row(
+                call(0x100,0x118,0x400L),validRoot);
+        }catch(IllegalArgumentException expected){invalid=true;}
+        ok(invalid,"source witness from another target cannot be reattributed");
+        invalid=false;
+        try {
+            new HardwareInterproceduralMmEffects.Row(
+                call(0x100,0x118,null),validRoot);
+        }catch(IllegalArgumentException expected){invalid=true;}
+        ok(invalid,"unknown indirect CALL cannot inherit observed callee MM");
+        invalid=false;
+        try {
+            new HardwareInterproceduralMmEffects.Row(
+                call(0x100,0x118,null),
+                new HardwareInterproceduralMmEffects.Summary(
+                    false,false,false,false,false,0));
+        }catch(IllegalArgumentException expected){invalid=true;}
+        ok(invalid,"unknown CALL cannot claim closed control flow");
+        var forgedVisit=new HardwareInterproceduralMmEffects.Summary(
+            true,false,false,false,false,1,
+            new HardwareInterproceduralMmEffects.SourceWitness(
+                HardwareInterproceduralMmEffects.WitnessKind.MM_SOURCE,
+                List.of(0x130L,0x190L)),null,null,null);
+        invalid=false;
+        try {
+            new HardwareInterproceduralMmEffects.Row(
+                call(0x100,0x108,0x130L),forgedVisit);
+        }catch(IllegalArgumentException expected){invalid=true;}
+        ok(invalid,"two observed function identities cannot fit one inspected visit");
+        ok(new HardwareInterproceduralMmEffects.Row(
+                call(0x100,0x108,0x130L),missing.rows().get(0).summary())
+                    .summary().visited()==0,
+            "missing target root valid with zero visited function nodes");
+        ok(new HardwareInterproceduralMmEffects.Row(
+                call(0x100,0x108,null),
+                new HardwareInterproceduralMmEffects.Summary(
+                    false,false,true,false,false,0))
+                    .summary().unknownControl(),
+            "unresolved CALL retains conservative zero-visit UNKNOWN");
+        invalid=false;
+        try {
+            new HardwareInterproceduralMmEffects.Report(
+                List.of(evidence.rows().get(1),evidence.rows().get(0)),0);
+        }catch(IllegalArgumentException expected){invalid=true;}
+        ok(invalid,"public report cannot reorder CALL sites");
+        invalid=false;
+        try {
+            new HardwareInterproceduralMmEffects.Report(
+                List.of(evidence.rows().get(0),evidence.rows().get(0)),0);
+        }catch(IllegalArgumentException expected){invalid=true;}
+        ok(invalid,"duplicate CALL evidence rows rejected");
+        invalid=false;
+        try {
+            new HardwareInterproceduralMmEffects.Report(
+                List.of(evidence.rows().get(0)),-1);
+        }catch(IllegalArgumentException expected){invalid=true;}
+        ok(invalid,"negative omitted-row count rejected");
+        invalid=false;
+        try {
+            new HardwareInterproceduralMmEffects.Report(
+                java.util.Arrays.asList(evidence.rows().get(0),null),0);
+        }catch(IllegalArgumentException expected){invalid=true;}
+        ok(invalid,"null report row rejected explicitly");
         // More than a few thousand nodes can all be reachable in one
         // BFS step (root fan-out), yet form a much deeper DFS cross-edge
         // chain. Recursive cycle detection can overflow the Java stack.
@@ -464,7 +530,7 @@ public final class HardwareInterproceduralMmEffectsSelfTest {
         ok(cycle.rows().get(0).summary().cycle() &&
             cycle.rows().get(0).summary().unknownWitness()==null,
             "cycle-only uncertainty remains explicit, without a fake source witness");
-        boolean invalid=false;
+        invalid=false;
         try {
             new HardwareInterproceduralMmEffects.SourceWitness(
                 HardwareInterproceduralMmEffects.WitnessKind.MM_SOURCE,
