@@ -5,10 +5,15 @@ import java.util.*;
 /** Read-only transitive CALL-site MM effects, not executed RESET ordering. */
 public final class HardwareInterproceduralMmEffects {
     private HardwareInterproceduralMmEffects(){}
+    private static final long MAX_CPU32_ADDRESS=0xffffffffL;
+    private static boolean address(long id){
+        return id>=0 && id<=MAX_CPU32_ADDRESS;
+    }
     public record FunctionNode(long entry,boolean mm,boolean unknownAlias,
             boolean unknownControl,List<Long> calls) {
         public FunctionNode {
-            if(entry<0 || calls==null || calls.stream().anyMatch(x->x==null || x<0))
+            if(!address(entry) || calls==null ||
+                    calls.stream().anyMatch(x->x==null || !address(x)))
                 throw new IllegalArgumentException("Invalid function node");
             // A FunctionNode contains target identities, not CALL-PC
             // ordering. The shared finite BFS budget must never depend
@@ -22,7 +27,8 @@ public final class HardwareInterproceduralMmEffects {
     }
     public record CallSite(long function,long pc,Long target) {
         public CallSite {
-            if(function<0 || pc<0 || target!=null && target<0)
+            if(!address(function) || !address(pc) ||
+                    target!=null && !address(target))
                 throw new IllegalArgumentException("Invalid CALL site");
         }
     }
@@ -41,7 +47,7 @@ public final class HardwareInterproceduralMmEffects {
                     chain.size()>34)
                 throw new IllegalArgumentException("Invalid source witness");
             for(Long entry:chain)
-                if(entry==null || entry<0)
+                if(entry==null || !address(entry))
                     throw new IllegalArgumentException("Invalid witness function");
             chain=List.copyOf(chain);
         }
@@ -401,7 +407,7 @@ public final class HardwareInterproceduralMmEffects {
         Map<Long,FunctionNode> graph=sourceGraph(functions);
         TreeSet<Long> sorted=new TreeSet<>();
         for(Long root:roots)
-            if(root==null || root<0 || !sorted.add(root))
+            if(root==null || !address(root) || !sorted.add(root))
                 throw new IllegalArgumentException("Invalid or repeated MM root");
         BatchBudget budget=new BatchBudget();
         Map<Long,Summary> result=new LinkedHashMap<>();
@@ -428,7 +434,7 @@ public final class HardwareInterproceduralMmEffects {
         if(interestingCallers.size()>50000)
             throw new IllegalArgumentException("Unbounded interesting caller set");
         for(Long caller:interestingCallers)
-            if(caller==null || caller<0)
+            if(caller==null || !address(caller))
                 throw new IllegalArgumentException("Invalid interesting caller");
         Set<Long> interesting=new HashSet<>(interestingCallers);
         // Reserve bounded computation and display for selected callers FIRST.
