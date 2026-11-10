@@ -58,6 +58,12 @@ public final class HardwareBitfieldDecoder {
                 .append(hex(unspecifiedMask, widthBits))
                 .append("); static constant only, PDF edition/page claim UNVERIFIED, "+
                     "not proven hardware state or write order");
+            if(register.equals("SYPCR"))
+                b.append("; SYPCR write-once register; watchdog enablement "+
+                    "and first accepted write NOT PROVEN");
+            if(register.equals("PICR") || register.equals("PITR"))
+                b.append("; no active interrupt, vector, timer, ISR "+
+                    "or actual period established");
             return b.toString();
         }
     }
