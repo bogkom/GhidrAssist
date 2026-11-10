@@ -4,6 +4,9 @@ on:
     paths:
       - 'src/main/java/ghidrassist/hardware/HardwareManualFieldExcerptEvidence.java'
       - 'src/main/java/ghidrassist/hardware/HardwareManualPublisherExcerptPins.java'
+      - 'src/main/java/ghidrassist/core/RAGIndexedPdfPageEvidence.java'
+      - 'src/main/java/ghidrassist/core/RAGManualFieldCitationView.java'
+      - 'src/test/java/ghidrassist/core/RAGManualFieldCitationViewSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/HardwareManualFieldExcerptEvidenceSelfTest.java'
       - 'src/main/java/ghidrassist/hardware/HardwareBitfieldLayoutWitness.java'
       - 'src/main/java/ghidrassist/hardware/HardwareBitfieldSourceLedger.java'
@@ -33,7 +36,14 @@ jobs:
             src/main/java/ghidrassist/hardware/HardwareBitfieldLayoutWitness.java \
             src/main/java/ghidrassist/hardware/HardwareManualFieldExcerptEvidence.java \
             src/main/java/ghidrassist/hardware/HardwareManualPublisherExcerptPins.java \
+            src/main/java/ghidrassist/core/RAGIndexedPdfPageEvidence.java \
+            src/main/java/ghidrassist/core/SearchResult.java \
+            src/main/java/ghidrassist/core/RAGSourceProvenance.java \
+            src/main/java/ghidrassist/core/RAGManualFieldCitationView.java \
+            src/test/java/ghidrassist/core/RAGManualFieldCitationViewSelfTest.java \
             src/test/java/ghidrassist/hardware/HardwareManualFieldExcerptEvidenceSelfTest.java
           java -cp "$RUNNER_TEMP/ga061016-excerpt" \
             ghidrassist.hardware.HardwareManualFieldExcerptEvidenceSelfTest
+          java -cp "$RUNNER_TEMP/ga061016-excerpt" \
+            ghidrassist.core.RAGManualFieldCitationViewSelfTest
           echo '15 SOURCE-CLAIM CANDIDATES TESTED, NO LOCAL PDF OR FIRMWARE UPLOADED'
