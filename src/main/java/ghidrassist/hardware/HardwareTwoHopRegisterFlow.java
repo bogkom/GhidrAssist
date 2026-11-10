@@ -41,10 +41,8 @@ public final class HardwareTwoHopRegisterFlow {
     public record Bridge(long entry,List<HardwareDataflow.Step> steps,
             long innerCallPc,Long finalTarget,boolean complete) {
         public Bridge {
-            if(!sourcePc(entry) || !sourcePc(innerCallPc) ||
-                    innerCallPc<entry ||
-                    finalTarget!=null && (!sourcePc(finalTarget) ||
-                        finalTarget==entry) ||
+            if(entry<0 || innerCallPc<0 ||
+                    finalTarget!=null && finalTarget<0 ||
                     steps==null || steps.size()>MAX_BRIDGE_STEPS ||
                     steps.stream().anyMatch(java.util.Objects::isNull))
                 throw new IllegalArgumentException("Invalid two-hop bridge");
@@ -178,7 +176,12 @@ public final class HardwareTwoHopRegisterFlow {
     }
 
     private static boolean safeBridge(Bridge bridge){
-        if(!bridge.complete() || bridge.steps().isEmpty())return false;
+        if(!sourcePc(bridge.entry()) || !sourcePc(bridge.innerCallPc()) ||
+                bridge.innerCallPc()<bridge.entry() ||
+                bridge.finalTarget()!=null &&
+                    (!sourcePc(bridge.finalTarget()) ||
+                     bridge.finalTarget()==bridge.entry()) ||
+                !bridge.complete() || bridge.steps().isEmpty())return false;
         Map<Long,HardwareDataflow.Step> nodes=new HashMap<>();
         Map<Long,Integer> degree=new HashMap<>();
         int calls=0,returns=0,edges=0;
