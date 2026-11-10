@@ -1,5 +1,7 @@
 package ghidrassist.hardware;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
@@ -14,6 +16,22 @@ public final class HardwareResetIndirectVbrCorrelationSelfTest {
         boolean refused=false;
         try{action.run();}catch(IllegalArgumentException expected){refused=true;}
         check(refused,reason);
+    }
+    private static HardwareResetIndirectVbrCorrelation.Result republish(
+            HardwareResetIndirectVbrCorrelation.Result r,
+            List<HardwareResetIndirectVbrCorrelation.Pair> rows) {
+        return new HardwareResetIndirectVbrCorrelation.Result(
+            r.indirectSources(),r.vbrSources(),r.colocatedPairs(),
+            r.omittedIndirect(),r.omittedVbr(),r.displayTruncated(),
+            r.resetRootRecognized(),r.resetGraphIncomplete(),rows,
+            r.pageOffset(),r.pageLimit(),r.nextOffset(),r.hasMore());
+    }
+    private static List<HardwareResetIndirectVbrCorrelation.Pair> replacing(
+            HardwareResetIndirectVbrCorrelation.Result r,int index,
+            HardwareResetIndirectVbrCorrelation.Pair replacement) {
+        var rows=new ArrayList<>(r.rows());
+        rows.set(index,replacement);
+        return rows;
     }
     private static HardwareResetIndirectVbrCorrelation.Result join(
             List<HardwareResetIndirectVbrCorrelation.Indirect> jsr,
@@ -139,6 +157,111 @@ public final class HardwareResetIndirectVbrCorrelationSelfTest {
             "Display cap greater than maximum rejected");
         reject(()->join(List.of(j1),List.of(v1),true,false,-1,0,10),
             "Negative omitted witness count rejected");
+        // Caller-constructed Result and Pair records must obey the same
+        // source-only MCU24 and pagination constraints as the live adapter:
+        // no invented current pair, RESET membership or duplicate PC facts.
+        check(republish(r,r.rows()).equals(r),
+            "Canonical public source page round-trips without altering provenance");
+        reject(()->new HardwareResetIndirectVbrCorrelation.Pair(
+            0x130L,0x138L,0x1000000L,0x152L,0x800L,
+            HardwareResetIndirectVbrCorrelation.ResetRelation
+                .IN_OBSERVED_RESET_CALL_SUBSET,false,true,false),
+            "Forged MCU24 target outside 24-bit envelope must be rejected");
+        reject(()->new HardwareResetIndirectVbrCorrelation.Pair(
+            0x130L,0x139L,0x500L,0x152L,0x800L,
+            HardwareResetIndirectVbrCorrelation.ResetRelation
+                .IN_OBSERVED_RESET_CALL_SUBSET,false,true,false),
+            "Forged odd JSR PC cannot be printed as a decoded source");
+        reject(()->new HardwareResetIndirectVbrCorrelation.Pair(
+            0x130L,0x138L,0x500L,0x138L,0x800L,
+            HardwareResetIndirectVbrCorrelation.ResetRelation
+                .IN_OBSERVED_RESET_CALL_SUBSET,false,true,false),
+            "One PC cannot encode both JSR and MOVEC in a single pair");
+        reject(()->new HardwareResetIndirectVbrCorrelation.Pair(
+            0x130L,0x138L,0x500L,0x152L,0x1000000L,
+            HardwareResetIndirectVbrCorrelation.ResetRelation
+                .IN_OBSERVED_RESET_CALL_SUBSET,false,true,false),
+            "Forged over-MCU24 candidate MOVEC/VBR base rejected");
+        reject(()->new HardwareResetIndirectVbrCorrelation.Pair(
+            0x130L,0x138L,0x500L,0x152L,0x800L,
+            null,false,true,false),
+            "Missing RESET relation is not a source witness");
+        reject(()->new HardwareResetIndirectVbrCorrelation.Pair(
+            0x130L,0x138L,0x500L,0x152L,0x800L,
+            HardwareResetIndirectVbrCorrelation.ResetRelation
+                .RESET_ROOT_UNKNOWN,false,true,false),
+            "Unknown RESET root requires incomplete flag");
+        reject(()->republish(r,null),
+            "Null page rows rejected as explicit invalid input, not NullPointerException");
+        reject(()->republish(r,r.rows().subList(0,2)),
+            "Public page cannot omit rows and claim the old cursor/count");
+        reject(()->new HardwareResetIndirectVbrCorrelation.Result(
+            1,1,2,0,0,false,true,false,List.of(),0,2,0,true),
+            "Pair count cannot exceed bounded source cross-product");
+        reject(()->new HardwareResetIndirectVbrCorrelation.Result(
+            65,1,0,0,0,false,true,false,List.of(),0,2,0,false),
+            "Indirect source inventory count bounded in public Result");
+        reject(()->new HardwareResetIndirectVbrCorrelation.Result(
+            r.indirectSources(),r.vbrSources(),r.colocatedPairs(),
+            0,0,false,true,false,r.rows(),
+            r.pageOffset(),r.pageLimit(),r.nextOffset(),r.hasMore()),
+            "Contradictory displayTruncated claim cannot fake full evidence");
+        reject(()->new HardwareResetIndirectVbrCorrelation.Result(
+            r.indirectSources(),r.vbrSources(),r.colocatedPairs(),
+            0,0,r.displayTruncated(),true,false,r.rows(),
+            r.pageOffset(),r.pageLimit(),r.nextOffset()+1,r.hasMore()),
+            "Cursor cannot advance without a published row");
+        var reversedRows=new ArrayList<>(r.rows());
+        Collections.reverse(reversedRows);
+        reject(()->republish(r,reversedRows),
+            "Public source result cannot fabricate noncanonical row order");
+        var row0=r.rows().get(0);
+        var row1=r.rows().get(1);
+        var row2=r.rows().get(2);
+        reject(()->republish(r,replacing(r,1,
+            new HardwareResetIndirectVbrCorrelation.Pair(
+                row1.function(),row1.indirectPc(),0x510L,row1.vbrPc(),
+                row1.candidateVbrBase(),row1.resetRelation(),
+                row1.resetGraphIncomplete(),row1.mayMm(),row1.uncertain()))),
+            "Same decoded JSR PC cannot cite two different CALL targets");
+        reject(()->republish(r,replacing(r,1,
+            new HardwareResetIndirectVbrCorrelation.Pair(
+                row1.function(),row1.indirectPc(),row1.indirectTarget(),
+                row1.vbrPc(),row1.candidateVbrBase(),row1.resetRelation(),
+                row1.resetGraphIncomplete(),false,row1.uncertain()))),
+            "Same JSR source PC cannot both claim and deny an MM MAY effect");
+        reject(()->republish(r,replacing(r,2,
+            new HardwareResetIndirectVbrCorrelation.Pair(
+                row2.function(),row2.indirectPc(),row2.indirectTarget(),
+                row2.vbrPc(),0xc00L,row2.resetRelation(),
+                row2.resetGraphIncomplete(),row2.mayMm(),row2.uncertain()))),
+            "Same MOVEC PC cannot cite different candidate VBR bases");
+        reject(()->republish(r,replacing(r,2,
+            new HardwareResetIndirectVbrCorrelation.Pair(
+                row2.function(),row2.indirectPc(),row2.indirectTarget(),
+                row2.vbrPc(),row2.candidateVbrBase(),
+                HardwareResetIndirectVbrCorrelation.ResetRelation
+                    .OUTSIDE_OBSERVED_RESET_CALL_SUBSET,
+                row2.resetGraphIncomplete(),row2.mayMm(),row2.uncertain()))),
+            "One function cannot be inside and outside the same RESET snapshot");
+        reject(()->new HardwareResetIndirectVbrCorrelation.Result(
+            r.indirectSources(),r.vbrSources(),r.colocatedPairs(),
+            0,0,r.displayTruncated(),false,false,r.rows(),
+            r.pageOffset(),r.pageLimit(),r.nextOffset(),r.hasMore()),
+            "Public page cannot claim a missing RESET root with known relation rows");
+        reject(()->new HardwareResetIndirectVbrCorrelation.Result(
+            r.indirectSources(),r.vbrSources(),r.colocatedPairs(),
+            0,0,r.displayTruncated(),true,true,r.rows(),
+            r.pageOffset(),r.pageLimit(),r.nextOffset(),r.hasMore()),
+            "Public RESET incompleteness must match each displayed pair");
+        var crossing=new HardwareResetIndirectVbrCorrelation.Pair(
+            0x130L,0x152L,0x500L,0x160L,0x800L,
+            HardwareResetIndirectVbrCorrelation.ResetRelation
+                .IN_OBSERVED_RESET_CALL_SUBSET,false,true,false);
+        reject(()->new HardwareResetIndirectVbrCorrelation.Result(
+            2,2,2,0,0,false,true,false,List.of(row0,crossing),
+            0,2,2,false),
+            "One page cannot reuse an instruction PC as JSR in one row and MOVEC in another");
         boolean immutable=false;
         try{r.rows().clear();}catch(UnsupportedOperationException expected){
             immutable=true;
