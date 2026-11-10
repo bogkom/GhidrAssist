@@ -26,7 +26,13 @@ public final class HardwareCallEffects {
                     directCallees.stream().anyMatch(callee ->
                         callee==null || callee<0))
                 throw new IllegalArgumentException("Invalid call graph node");
-            directCallees=List.copyOf(directCallees);
+            // CALL targets are identities, not execution or source-PC
+            // order. Canonical adjacency keeps both finite BFS search
+            // membership and RESET witness chains invariant under the
+            // order of Ghidra's references. Repeated edges remain present.
+            List<Long> canonical=new ArrayList<>(directCallees);
+            canonical.sort(Long::compare);
+            directCallees=List.copyOf(canonical);
         }
     }
     public record Summary(boolean possibleMemoryStore,boolean possibleVbrWrite,

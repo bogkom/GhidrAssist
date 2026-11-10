@@ -39,6 +39,33 @@ public final class HardwareCallEffectsSelfTest {
         var countLimited=HardwareCallEffects.summarize(0,graph,10,2);
         ok(countLimited.truncated() && countLimited.unresolved(),
             "bounded node count must remain explicit");
+        // A bounded source inventory must not change its observed subset
+        // merely because Ghidra enumerates the same CALL references in a
+        // different order. The late positive STORE remains UNKNOWN, not
+        // a false complete negative, when the canonical smaller target
+        // fits the sole remaining budget slot.
+        var unsortedRoot=n(0,false,false,false,0x400L,0x100L);
+        var sortedRoot=n(0,false,false,false,0x100L,0x400L);
+        var orderNodes=List.of(n(0x100L,false,false,false),
+            n(0x400L,true,false,false));
+        ok(unsortedRoot.directCallees().equals(List.of(0x100L,0x400L)) &&
+            unsortedRoot.directCallees().equals(sortedRoot.directCallees()),
+            "source direct-CALL adjacency canonically sorted, duplicate edges retained");
+        var limitedA=HardwareCallEffects.summarize(0,
+            List.of(unsortedRoot,orderNodes.get(1),orderNodes.get(0)),3,2);
+        var limitedB=HardwareCallEffects.summarize(0,
+            List.of(orderNodes.get(0),sortedRoot,orderNodes.get(1)),3,2);
+        ok(limitedA.equals(limitedB) && limitedA.truncated() &&
+            limitedA.unresolved() && limitedA.visited()==2 &&
+            !limitedA.possibleMemoryStore(),
+            "canonical budget selects the same source subset, omitted STORE stays UNKNOWN");
+        var fullA=HardwareCallEffects.summarize(0,
+            List.of(unsortedRoot,orderNodes.get(1),orderNodes.get(0)),3,3);
+        var fullB=HardwareCallEffects.summarize(0,
+            List.of(orderNodes.get(0),sortedRoot,orderNodes.get(1)),3,3);
+        ok(fullA.equals(fullB) && fullA.possibleMemoryStore() &&
+            !fullA.truncated() && !fullA.unresolved(),
+            "complete source graph still observes positive MMIO STORE");
         // Depth-first traversal used to cache function 4 first at depth=3,
         // then skip the *shorter* root->4 edge. That wrongly omitted node 5
         // (STORE) despite a bounded two-hop direct-call path.

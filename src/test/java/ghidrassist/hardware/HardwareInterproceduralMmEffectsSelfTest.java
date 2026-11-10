@@ -39,6 +39,12 @@ public final class HardwareInterproceduralMmEffectsSelfTest {
         ok(evidence.markdown().contains("NOT execution") &&
             evidence.markdown().contains("latched MM"),
             "no runtime/latched-MM inference");
+        ok(evidence.rows().get(0).summary().mmWitness().chain()
+                .equals(List.of(0x130L,0x190L)) &&
+            evidence.rows().get(1).summary().mmWitness().chain()
+                .equals(List.of(0x160L,0x190L)) &&
+            evidence.markdown().contains("MM source chain=MM_SOURCE:0x00000130 -> 0x00000190"),
+            "convergent CALL candidates expose bounded shortest witness chains");
         // A capped batch must not privilege whichever Ghidra reference
         // happened to be enumerated first. One branch includes a possible
         // SIMCR/MM STORE; the other is a closed source leaf. Both input
@@ -82,17 +88,30 @@ public final class HardwareInterproceduralMmEffectsSelfTest {
             node(0x160,false,false,false),
             node(0x400,true,false,false)),sourceCall,3,2,5);
         ok(!highMm.rows().get(0).summary().mayMm() &&
+            highMm.rows().get(0).summary().mmWitness()==null &&
+            highMm.rows().get(0).summary().unknownWitness().kind()==
+                HardwareInterproceduralMmEffects.WitnessKind.NODE_CUTOFF &&
+            highMm.rows().get(0).summary().unknownWitness().chain()
+                .equals(List.of(0x130L,0x400L)) &&
             highMm.rows().get(0).summary().limited() &&
             highMm.rows().get(0).summary().uncertainOrMm(),
             "Skipped later MM candidate retains UNKNOWN/LIMITED, not absence of MM");
 
         var missing=run(List.of(node(0x100,false,false,false)),
             List.of(calls.get(0)),4,20,20);
-        ok(missing.rows().get(0).summary().unknownControl(),
+        ok(missing.rows().get(0).summary().unknownControl() &&
+            missing.rows().get(0).summary().unknownWitness().kind()==
+                HardwareInterproceduralMmEffects.WitnessKind.MISSING_TARGET &&
+            missing.rows().get(0).summary().unknownWitness().chain()
+                .equals(List.of(0x130L)),
             "missing callee must not be interpreted as pure");
         var alias=run(List.of(node(0x130,false,true,false)),
             List.of(calls.get(0)),4,20,20);
         ok(alias.rows().get(0).summary().unknownAlias() &&
+            alias.rows().get(0).summary().aliasWitness().kind()==
+                HardwareInterproceduralMmEffects.WitnessKind.STORE_ALIAS &&
+            alias.rows().get(0).summary().aliasWitness().chain()
+                .equals(List.of(0x130L)) &&
             alias.rows().get(0).summary().uncertainOrMm(),
             "unknown effective STORE address may alias SIMCR");
         ok(HardwareInterproceduralMmEffects.unknownMemoryWrite(
@@ -112,8 +131,9 @@ public final class HardwareInterproceduralMmEffectsSelfTest {
             unknownWidth.rows().get(0).summary().uncertainOrMm(),
             "unmodeled-width direct callee STORE cannot prove no MM effects");
         var indirect=run(diamond,List.of(call(0x100,0x108,null)),4,20,20);
-        ok(indirect.rows().get(0).summary().unknownControl(),
-            "indirect unresolved CALL remains unknown");
+        ok(indirect.rows().get(0).summary().unknownControl() &&
+            indirect.rows().get(0).summary().unknownWitness()==null,
+            "unresolved CALL has no invented callee source chain");
         var cycle=run(List.of(node(0x130,false,false,false,0x160L),
             node(0x160,false,false,false,0x130L)),
             List.of(calls.get(0)),4,20,20);
@@ -123,6 +143,10 @@ public final class HardwareInterproceduralMmEffectsSelfTest {
         var depth=run(diamond,List.of(calls.get(0)),0,20,20);
         ok(depth.rows().get(0).summary().limited() &&
             !depth.rows().get(0).summary().mayMm() &&
+            depth.rows().get(0).summary().unknownWitness().kind()==
+                HardwareInterproceduralMmEffects.WitnessKind.DEPTH_CUTOFF &&
+            depth.rows().get(0).summary().unknownWitness().chain()
+                .equals(List.of(0x130L,0x190L)) &&
             depth.rows().get(0).summary().uncertainOrMm(),
             "depth budget must prevent negative effect claims");
         ok(run(diamond,List.of(calls.get(0)),4,1,20)
@@ -233,6 +257,10 @@ public final class HardwareInterproceduralMmEffectsSelfTest {
             second.unknownControl() && !second.limited(),
             "first two distinct roots fully inspect unresolved targets");
         ok(after.visited()==0 && !after.mayMm() &&
+            after.mmWitness()==null &&
+            after.unknownWitness().kind()==
+                HardwareInterproceduralMmEffects.WitnessKind.BATCH_CUTOFF &&
+            after.unknownWitness().chain().equals(List.of(0x190L)) &&
             after.limited() && after.unknownControl() &&
             after.uncertainOrMm(),
             "exhaustion before known MM leaf must be explicit UNKNOWN/LIMITED");
@@ -314,6 +342,48 @@ public final class HardwareInterproceduralMmEffectsSelfTest {
         ok(prioritized.markdown().contains("Selected source callers receive") &&
             prioritized.markdown().contains("UNKNOWN"),
             "human-facing evidence declares priority, incomplete horizon and scope");
+        // Equal-distance witnesses must use canonical CALL target order,
+        // not input enumeration order or source Listing reference order.
+        var diamondSource=node(0x130L,false,false,false,0x500L,0x200L);
+        var reversedSource=node(0x130L,false,false,false,0x200L,0x500L);
+        var witnessNodes=List.of(node(0x500L,true,true,false),
+            node(0x200L,true,false,true));
+        var witnessA=run(List.of(diamondSource,witnessNodes.get(0),
+                witnessNodes.get(1)),sourceCall,3,3,10);
+        var witnessB=run(List.of(witnessNodes.get(1),reversedSource,
+                witnessNodes.get(0)),sourceCall,3,3,10);
+        ok(witnessA.equals(witnessB) &&
+            witnessA.rows().get(0).summary().mmWitness().chain()
+                .equals(List.of(0x130L,0x200L)) &&
+            witnessA.rows().get(0).summary().aliasWitness().chain()
+                .equals(List.of(0x130L,0x500L)) &&
+            witnessA.rows().get(0).summary().unknownWitness().chain()
+                .equals(List.of(0x130L,0x200L)),
+            "stable independent MM, alias and unknown-flow source witnesses");
+        ok(cycle.rows().get(0).summary().cycle() &&
+            cycle.rows().get(0).summary().unknownWitness()==null,
+            "cycle-only uncertainty remains explicit, without a fake source witness");
+        boolean invalid=false;
+        try {
+            new HardwareInterproceduralMmEffects.SourceWitness(
+                HardwareInterproceduralMmEffects.WitnessKind.MM_SOURCE,
+                List.of(-1L));
+        }catch(IllegalArgumentException expected){invalid=true;}
+        ok(invalid,"invalid witness addresses rejected");
+        invalid=false;
+        try {
+            new HardwareInterproceduralMmEffects.Summary(
+                false,false,false,false,false,1,
+                new HardwareInterproceduralMmEffects.SourceWitness(
+                    HardwareInterproceduralMmEffects.WitnessKind.MM_SOURCE,
+                    List.of(0x130L)),null,null);
+        }catch(IllegalArgumentException expected){invalid=true;}
+        ok(invalid,"typed false MM sources cannot carry a positive MM witness");
+        ok(!closed.rows().get(0).summary().uncertainOrMm() &&
+            closed.rows().get(0).summary().mmWitness()==null &&
+            closed.rows().get(0).summary().aliasWitness()==null &&
+            closed.rows().get(0).summary().unknownWitness()==null,
+            "closed observed leaf has no source-witness chain");
         System.out.println("HardwareInterproceduralMmEffectsSelfTest OK");
     }
 }

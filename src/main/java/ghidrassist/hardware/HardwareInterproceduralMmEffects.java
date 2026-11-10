@@ -26,8 +26,47 @@ public final class HardwareInterproceduralMmEffects {
                 throw new IllegalArgumentException("Invalid CALL site");
         }
     }
+    /**
+     * One shortest, canonical function-only chain to an observed modeled
+     * source or an explicitly uninspected frontier. No CALL-site PCs,
+     * branch feasibility, register propagation or execution are asserted.
+     */
+    public enum WitnessKind {
+        MM_SOURCE, STORE_ALIAS, UNKNOWN_FLOW, MISSING_TARGET,
+        DEPTH_CUTOFF, NODE_CUTOFF, BATCH_CUTOFF
+    }
+    public record SourceWitness(WitnessKind kind,List<Long> chain) {
+        public SourceWitness {
+            if(kind==null || chain==null || chain.isEmpty() ||
+                    chain.size()>34)
+                throw new IllegalArgumentException("Invalid source witness");
+            for(Long entry:chain)
+                if(entry==null || entry<0)
+                    throw new IllegalArgumentException("Invalid witness function");
+            chain=List.copyOf(chain);
+        }
+    }
     public record Summary(boolean mayMm,boolean unknownAlias,
-            boolean unknownControl,boolean cycle,boolean limited,int visited){
+            boolean unknownControl,boolean cycle,boolean limited,int visited,
+            SourceWitness mmWitness,SourceWitness aliasWitness,
+            SourceWitness unknownWitness){
+        public Summary {
+            if(visited<0 || mmWitness!=null &&
+                    (!mayMm || mmWitness.kind()!=WitnessKind.MM_SOURCE) ||
+                    aliasWitness!=null &&
+                    (!unknownAlias ||
+                        aliasWitness.kind()!=WitnessKind.STORE_ALIAS) ||
+                    unknownWitness!=null &&
+                    (!unknownControl || unknownWitness.kind()==WitnessKind.MM_SOURCE ||
+                        unknownWitness.kind()==WitnessKind.STORE_ALIAS))
+                throw new IllegalArgumentException("Contradictory source witness");
+        }
+        /** Preserve existing read-only summary callers without fabricated paths. */
+        public Summary(boolean mayMm,boolean unknownAlias,
+                boolean unknownControl,boolean cycle,boolean limited,int visited){
+            this(mayMm,unknownAlias,unknownControl,cycle,limited,visited,
+                null,null,null);
+        }
         public boolean uncertainOrMm(){
             return mayMm || unknownAlias || unknownControl || cycle || limited;
         }
@@ -40,6 +79,9 @@ public final class HardwareInterproceduralMmEffects {
                 "## Interprocedural SIMCR/MM candidates by CALL instruction\n\n")
                 .append("Static possible paths only: NOT execution, feasible ")
                 .append("RESET ordering, a latched MM bit, or physical mapping. ")
+                .append("Chains are shortest function-only source witnesses or ")
+                .append("uninspected frontiers, not executed paths; NONE does ")
+                .append("not negate a true uncertainty/cycle flag. ")
                 .append("No caller/callee values propagated. An unresolved ")
                 .append("callee or alias is not evidence of no MM write.\n")
                 .append("- Rows: ").append(rows.size())
@@ -58,13 +100,23 @@ public final class HardwareInterproceduralMmEffects {
                     .append("; unknown callee/flow=").append(s.unknownControl())
                     .append("; cycle=").append(s.cycle())
                     .append("; cap=").append(s.limited())
-                    .append("; examined=").append(s.visited()).append("\n");
+                    .append("; examined=").append(s.visited())
+                    .append("; MM source chain=").append(witness(s.mmWitness()))
+                    .append("; alias source chain=").append(witness(s.aliasWitness()))
+                    .append("; unknown/frontier chain=")
+                    .append(witness(s.unknownWitness())).append("\n");
             }
             return b.append("\n").toString();
         }
     }
     private static String hex(long n){
         return String.format(Locale.ROOT,"0x%08X",n);
+    }
+    private static String witness(SourceWitness w){
+        if(w==null)return "NONE";
+        StringJoiner out=new StringJoiner(" -> ",w.kind()+":","\u0020");
+        for(long entry:w.chain())out.add(hex(entry));
+        return out.toString().trim();
     }
 
     /**
@@ -85,6 +137,26 @@ public final class HardwareInterproceduralMmEffects {
     }
     private record Work(long pc,int depth){}
     private record DfsFrame(long pc,Iterator<Long> remaining){}
+
+    /** Parent tree follows the canonical bounded BFS, not Listing order. */
+    private static List<Long> chain(Map<Long,Long> parent,long node){
+        ArrayDeque<Long> reversed=new ArrayDeque<>();
+        Long current=node;
+        while(current!=null){
+            if(reversed.size()>=34)
+                throw new IllegalStateException("Unbounded source witness");
+            reversed.addFirst(current);
+            current=parent.get(current);
+        }
+        return List.copyOf(reversed);
+    }
+    /** The cutoff target has NOT been visited or verified as a source. */
+    private static List<Long> frontier(Map<Long,Long> parent,
+            long known,long unknownTarget){
+        List<Long> path=new ArrayList<>(chain(parent,known));
+        path.add(unknownTarget);
+        return List.copyOf(path);
+    }
 
     /**
      * An explicit DFS stack avoids stack overflow in a wide graph where all
@@ -123,7 +195,8 @@ public final class HardwareInterproceduralMmEffects {
             int maxDepth,int maxCount,BatchBudget budget){
         if(target==null)return new Summary(false,false,true,false,false,0);
         // Exhaustion is UNKNOWN, never a closed negative MM conclusion.
-        if(budget.remaining==0)return new Summary(false,false,true,false,true,0);
+        if(budget.remaining==0)return new Summary(false,false,true,false,true,0,
+            null,null,new SourceWitness(WitnessKind.BATCH_CUTOFF,List.of(target)));
         budget.remaining--;
         Set<Long> seen=new HashSet<>();
         // One queue entry per distinct PC, including missing targets.
@@ -133,34 +206,67 @@ public final class HardwareInterproceduralMmEffects {
         ArrayDeque<Work> queue=new ArrayDeque<>();
         queue.add(new Work(target,0));
         scheduled.add(target);
+        Map<Long,Long> parent=new HashMap<>();
+        parent.put(target,null);
+        SourceWitness mmWitness=null,aliasWitness=null,unknownWitness=null;
         boolean mm=false,alias=false,unknown=false,limit=false;
         while(!queue.isEmpty()){
             Work w=queue.removeFirst();
             if(seen.contains(w.pc()))continue;
-            if(seen.size()>=maxCount){limit=true;unknown=true;break;}
+            if(seen.size()>=maxCount){
+                limit=true;unknown=true;
+                if(unknownWitness==null)
+                    unknownWitness=new SourceWitness(WitnessKind.NODE_CUTOFF,
+                        chain(parent,w.pc()));
+                break;
+            }
             FunctionNode n=graph.get(w.pc());
-            if(n==null){unknown=true;continue;}
+            if(n==null){
+                unknown=true;
+                if(unknownWitness==null)
+                    unknownWitness=new SourceWitness(WitnessKind.MISSING_TARGET,
+                        chain(parent,w.pc()));
+                continue;
+            }
             seen.add(w.pc());
+            if(n.mm() && mmWitness==null)
+                mmWitness=new SourceWitness(WitnessKind.MM_SOURCE,
+                    chain(parent,w.pc()));
+            if(n.unknownAlias() && aliasWitness==null)
+                aliasWitness=new SourceWitness(WitnessKind.STORE_ALIAS,
+                    chain(parent,w.pc()));
+            if(n.unknownControl() && unknownWitness==null)
+                unknownWitness=new SourceWitness(WitnessKind.UNKNOWN_FLOW,
+                    chain(parent,w.pc()));
             mm|=n.mm();alias|=n.unknownAlias();unknown|=n.unknownControl();
             for(long callee:n.calls()){
                 if(w.depth()>=maxDepth){
                     limit=true;unknown=true;
+                    if(unknownWitness==null)
+                        unknownWitness=new SourceWitness(WitnessKind.DEPTH_CUTOFF,
+                            frontier(parent,w.pc(),callee));
                 }else if(!scheduled.contains(callee)){
-                    // An omitted node may contain a STORE or unknown
-                    // control flow. Preserve the cap as uncertainty; never
-                    // publish a negative MM conclusion from a truncated set.
+                    // A frontier is NOT a decoded MMIO source: retain the
+                    // missing observation, not a fabricated false result.
                     if(scheduled.size()>=maxCount || budget.remaining==0){
                         limit=true;unknown=true;
+                        if(unknownWitness==null)
+                            unknownWitness=new SourceWitness(
+                                budget.remaining==0?WitnessKind.BATCH_CUTOFF:
+                                    WitnessKind.NODE_CUTOFF,
+                                frontier(parent,w.pc(),callee));
                     }else{
                         scheduled.add(callee);
                         budget.remaining--;
+                        parent.put(callee,w.pc());
                         queue.addLast(new Work(callee,w.depth()+1));
                     }
                 }
             }
         }
         boolean cyclic=cycle(target,graph,seen);
-        return new Summary(mm,alias,unknown||cyclic,cyclic,limit,seen.size());
+        return new Summary(mm,alias,unknown||cyclic,cyclic,limit,seen.size(),
+            mmWitness,aliasWitness,unknownWitness);
     }
     public static Report analyze(Collection<FunctionNode> functions,
             Collection<CallSite> calls,Collection<Long> interestingCallers,
