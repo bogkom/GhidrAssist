@@ -1,5 +1,57 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
+## GA-02/03/12/18 — 2026-11-10: source-equivalent value witnesses in durable CALL/CFG checkpoints
+
+Beyond the already integrated exact Program/JAR/Step hashes, rooted CFG
+reachability, site identity and bounded 24-bit value domains, the GA-12
+**completed per-function** disk `save` and `load` paths now cross-check
+each typed read-only MMIO/VBR snapshot's derived **values** against the
+same translated CPU32 source `Step` and recorded pre-instruction
+registers. For a direct STORE, its effective address must equal the
+source literal modulo the modeled 24-bit address space. For an indirect
+STORE, address derivation must match the known base, displacement and
+optional signed 16-bit/32-bit index and scale; a missing source register
+must not reappear as a concrete target. A 16-bit written word must be
+exactly the source immediate or known D/A register low word, including
+verified post-CALL return registers. No known-source register means
+**UNKNOWN**, not a zero or fabricated SIMCR value. `MOVEC/VBR`
+immediate and register-source snapshots must match their source base.
+
+The bounded peripheral after-STORE lattice is also checked: all
+retained full-register keys must be among the explicitly tracked source
+targets; an unmodeled-width or unknown-pointer STORE must clear them.
+Byte/long/spanning stores invalidate overlapped 16-bit register values.
+Only a known, aligned, complete 16-bit tracked STORE can establish a
+new register constant, and it must agree with the recorded source
+word. This is **source-data consistency**, NOT proof that an MMIO
+write occurred, MM latched, physical 24-bit bus mapping exists, or a
+particular CALL/ISR/RESET path was executed.
+
+The check is bounded and does **not** re-run the full CFG solver when
+restoring a completed checkpoint. It can catch value-level lies that
+pass an externally recomputed SHA-256 and the structural guards, but
+the recorded predecessor register lattice and MMIO state from other
+predecessors are not independently re-derived. Consequently neither
+a completed checkpoint nor a partial intermediate worklist is treated
+as authenticated proof of its writer or of full value-propagation
+correctness. Partial worklists continue to be unpublishable until
+normal solver convergence; the existing strict exact-input fingerprint,
+typed bounds, rooted CFG and epoch/revision gates remain mandatory.
+
+Deterministic Java 21 tests use only synthetic CPU32 source graphs
+including indexed signed `D1.W * 2`, verified post-RTS `A0/D0`,
+direct/unknown/partial MMIO STORE, `MOVEC` constant/register and
+modulo-24 address wrap. Every hostile completed snapshot is written
+inside a deliberately **rehashed, exact-key durable envelope** and
+must fail `load` even with a valid checksum; a rejected `save`
+must not overwrite prior valid evidence. Both the combined GA-02/03 +
+GA-12 and durable per-function Java21 workflows run the adversarial
+suite. GitHub Actions retains full Java25 Ghidra 12.1.4 PUBLIC
+extension builds and actual isolated synthetic Ghidra headless
+integration. No private ECU411 firmware, original Ghidra projects,
+user profiles, OAuth, or stopped Wyse/Precision/Supervisor work
+is involved. GA-02/03/12/18 remain PARTIAL; GA-14 deferred.
+
 ## GA-02/03/12/18 — 2026-11-10: deterministic bounded CALL source traversal and CFG-bound durable evidence
 
 The read-only `HardwareInterproceduralMmEffects` solver now canonicalizes

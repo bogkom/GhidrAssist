@@ -79,10 +79,111 @@ public final class HardwareDurableFunctionStages {
      * value bounds before restoring or replacing a completed checkpoint.
      * Does not reconstruct execution order, caller context or active MM.
      */
+    /**
+     * GA-02/03 + GA-12: check a decoded STORE/VBR value witness against
+     * the SAME exact translated Step and pre-instruction register map
+     * already carried by the completed fixed point. This intentionally
+     * avoids re-running the expensive whole-function fixed point.
+     * It cannot independently prove that an upstream register value
+     * was derived correctly; that requires the original CFG solve.
+     */
+    private static Long sourceAddress(HardwareDataflow.Step step,
+            Map<String,Long> pointers) {
+        if(step.kind==HardwareDataflow.Kind.STORE_DIRECT)
+            return step.operand&HardwareDataflow.MASK24;
+        if(step.kind!=HardwareDataflow.Kind.STORE_INDIRECT)
+            return null;
+        Long base=step.register==null?null:pointers.get(step.register);
+        if(base==null)return null;
+        long offset=0;
+        if(step.indexRegister!=null){
+            Long index=pointers.get(step.indexRegister);
+            if(index==null)return null;
+            long signed=step.indexBits==16?
+                (short)(index&0xffffL):index;
+            offset=signed*step.indexScale;
+        }
+        return (base+step.displacement+offset)&HardwareDataflow.MASK24;
+    }
+
+    private static Integer sourceWord(HardwareDataflow.Step step,
+            Map<String,Long> pointers) {
+        if(step.writeBits!=16)return null;
+        // Do NOT use a Long/long conditional here: Java would
+        // silently unbox the absent register value and throw NPE.
+        // An unknown D/A source is legitimate source uncertainty.
+        Long known;
+        if(step.literalWord!=null)
+            known=step.literalWord.longValue();
+        else if(step.sourceRegister!=null)
+            known=pointers.get(step.sourceRegister);
+        else
+            known=null;
+        return known==null?null:(int)(known&0xffff);
+    }
+
+    private static boolean overlaps(long address,int bytes,long register) {
+        for(int a=0;a<bytes;a++)
+            for(int r=0;r<2;r++)
+                if(((address+a)&HardwareDataflow.MASK24)==
+                        ((register+r)&HardwareDataflow.MASK24))
+                    return true;
+        return false;
+    }
+
+    private static boolean sourceValueWitness(
+            HardwareDataflow.Step step,HardwareDataflow.Snapshot snapshot,
+            Map<String,Long> pointers,Set<Long> tracked) {
+        Long expectedAddress=sourceAddress(step,pointers);
+        if(!Objects.equals(expectedAddress,snapshot.effectiveAddress) ||
+                !Objects.equals(sourceWord(step,pointers),snapshot.writtenWord))
+            return false;
+        if(step.kind==HardwareDataflow.Kind.VBR_CONSTANT &&
+                !Objects.equals(snapshot.vbr,
+                    step.operand&HardwareDataflow.MASK24))
+            return false;
+        if(step.kind==HardwareDataflow.Kind.VBR_FROM_REGISTER &&
+                !Objects.equals(snapshot.vbr,step.register==null?
+                    null:pointers.get(step.register)))
+            return false;
+        if(!tracked.containsAll(snapshot.knownPeripheralWords.keySet()))
+            return false;
+
+        if(step.kind!=HardwareDataflow.Kind.STORE_DIRECT &&
+                step.kind!=HardwareDataflow.Kind.STORE_INDIRECT)
+            return true;
+        // The source-level peripheral lattice stores ONLY whole 16-bit
+        // register values. Unknown address/width clears the whole table;
+        // partial/overlapping stores invalidate old values, and ONLY an
+        // aligned complete known 16-bit write can reintroduce a constant.
+        int bytes=switch(step.writeBits){
+            case 8 -> 1;
+            case 16 -> 2;
+            case 32 -> 4;
+            default -> 0;
+        };
+        if(expectedAddress==null || bytes==0)
+            return snapshot.knownPeripheralWords.isEmpty();
+        boolean canWrite=step.writeBits==16 &&
+            (expectedAddress&1L)==0 && tracked.contains(expectedAddress) &&
+            snapshot.writtenWord!=null;
+        if(canWrite &&
+                !Objects.equals(snapshot.knownPeripheralWords.get(
+                    expectedAddress),snapshot.writtenWord))
+            return false;
+        for(Long register:snapshot.knownPeripheralWords.keySet()){
+            if(overlaps(expectedAddress,bytes,register) &&
+                    (!canWrite || !register.equals(expectedAddress)))
+                return false;
+        }
+        return true;
+    }
+
     private static boolean sourceBoundComplete(long entry,
             Collection<HardwareDataflow.Step> steps,
-            HardwareDataflow.Result result) {
-        if(result==null || result.truncated)return false;
+            Collection<Long> targets,HardwareDataflow.Result result) {
+        if(result==null || result.truncated || targets==null)return false;
+        Set<Long> tracked=new HashSet<>(targets);
         var reachable=reachableSource(entry,steps);
         if(reachable==null || result.reachedNodes!=reachable.size() ||
                 result.iterations<result.reachedNodes ||
@@ -110,7 +211,10 @@ public final class HardwareDurableFunctionStages {
                     !address24(snapshot.effectiveAddress) ||
                     !address24(snapshot.vbr) ||
                     snapshot.writtenWord!=null &&
-                        (snapshot.writtenWord<0 || snapshot.writtenWord>0xffff))
+                        (snapshot.writtenWord<0 || snapshot.writtenWord>0xffff) ||
+                    !sourceValueWitness(step,snapshot,
+                        result.knownPointersAtEntry.getOrDefault(
+                            snapshot.instruction,Map.of()),tracked))
                 return false;
             for(var peripheral:snapshot.knownPeripheralWords.entrySet())
                 if(peripheral.getKey()==null ||
@@ -163,7 +267,7 @@ public final class HardwareDurableFunctionStages {
         if(directory==null || k==null)return Optional.empty();
         return HardwareDurableStageStore.load(directory,k)
             .flatMap(HardwareFunctionResultCodec::decode)
-            .filter(result -> sourceBoundComplete(entry,steps,result));
+            .filter(result -> sourceBoundComplete(entry,steps,targets,result));
     }
 
     /** The same stable function slot holds either incomplete work or a completed result. */
@@ -213,7 +317,7 @@ public final class HardwareDurableFunctionStages {
             HardwareDataflow.Result complete){
         HardwareDurableStageStore.Key k=key(full,entry,budget,steps,targets);
         if(directory==null || k==null ||
-                !sourceBoundComplete(entry,steps,complete))
+                !sourceBoundComplete(entry,steps,targets,complete))
             return false;
         try{
             HardwareDurableStageStore.save(directory,k,
