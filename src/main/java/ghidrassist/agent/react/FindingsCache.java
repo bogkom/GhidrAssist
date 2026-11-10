@@ -95,6 +95,11 @@ public class FindingsCache {
     private long totalIterationSummaries;
     private long acceptedFindings;
     private long evictedFindings;
+    // An uncited finding can remain in the ranked cache as a hypothesis,
+    // but no terminal run may certify the findings set as source-complete.
+    // Count accepted omissions, not just retained rows: pruning cannot
+    // erase earlier evidence gaps.
+    private long unattributedFindings;
     private long findingsRevision;
     public static final int MAX_PAGE_SIZE=100;
 
@@ -140,7 +145,7 @@ public class FindingsCache {
         return new FindingsPage(findingsRevision,offset,limit,ordered.size(),
             acceptedFindings,evictedFindings,sourceIncomplete,more,
             offset==0 && !more && !sourceIncomplete &&
-                evictedFindings==0,
+                evictedFindings==0 && unattributedFindings==0,
             views);
     }
 
@@ -200,6 +205,9 @@ public class FindingsCache {
                 (toolUsed!=null && toolUsed.length()>128))
             sourceIncomplete=true;
         acceptedFindings++;
+        if(evidence==null || evidence.isBlank() ||
+                toolUsed==null || toolUsed.isBlank())
+            unattributedFindings++;
         findingsRevision++;
         findings.add(new Finding(bounded(fact,MAX_FACT_CHARS),
             bounded(evidence,MAX_EVIDENCE_CHARS),bounded(toolUsed,128),
@@ -462,6 +470,7 @@ public class FindingsCache {
         totalIterationSummaries=0;
         acceptedFindings=0;
         evictedFindings=0;
+        unattributedFindings=0;
         sourceIncomplete=false;
     }
 
