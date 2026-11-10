@@ -55,6 +55,44 @@ public final class RAGIndexedPdfPageEvidenceSelfTest {
             new SearchResult("manual.pdf","SIMCR",0.95,1,
                 "/manual.pdf","pdf",219,false,"0123")),
             "Legacy hit without library claim cannot inherit current page");
+        var group=java.util.Map.of(
+            219,new RAGIndexedPdfPageEvidence.Page(219,"SIMCR",
+                "a".repeat(64),"/manual.pdf","hardware",1),
+            220,new RAGIndexedPdfPageEvidence.Page(220,"SYNCR",
+                "a".repeat(64),"/manual.pdf","hardware",1),
+            221,new RAGIndexedPdfPageEvidence.Page(221,"STEXT",
+                "a".repeat(64),"/manual.pdf","hardware",1));
+        RAGIndexedPdfPageEvidence.requireOneIndexedDocument(group);
+        checks++;
+        var changed=new java.util.HashMap<>(group);
+        changed.put(221,new RAGIndexedPdfPageEvidence.Page(221,"STEXT",
+            "b".repeat(64),"/manual.pdf","hardware",1));
+        refuse(()->RAGIndexedPdfPageEvidence.requireOneIndexedDocument(changed),
+            "Different indexed SHA between D-5/D-6/D-7 refused");
+        changed.put(221,new RAGIndexedPdfPageEvidence.Page(221,"STEXT",
+            "a".repeat(64),"/other.pdf","hardware",1));
+        refuse(()->RAGIndexedPdfPageEvidence.requireOneIndexedDocument(changed),
+            "Other local path cannot borrow indexed source identity");
+        changed.put(221,new RAGIndexedPdfPageEvidence.Page(221,"STEXT",
+            "a".repeat(64),"/manual.pdf","other",1));
+        refuse(()->RAGIndexedPdfPageEvidence.requireOneIndexedDocument(changed),
+            "Cross-library indexed source group refused");
+        changed.put(221,new RAGIndexedPdfPageEvidence.Page(221,"STEXT",
+            null,"/manual.pdf","hardware",1));
+        refuse(()->RAGIndexedPdfPageEvidence.requireOneIndexedDocument(changed),
+            "Legacy page missing SHA cannot gain publisher-page evidence");
+        changed.put(221,new RAGIndexedPdfPageEvidence.Page(220,"STEXT",
+            "a".repeat(64),"/manual.pdf","hardware",1));
+        refuse(()->RAGIndexedPdfPageEvidence.requireOneIndexedDocument(changed),
+            "Wrong physical folio/key mismatch rejected");
+        refuse(()->RAGIndexedPdfPageEvidence.requireOneIndexedDocument(
+            java.util.Map.of(219,new RAGIndexedPdfPageEvidence.Page(
+                219,"SIMCR","0123","/manual.pdf","hardware",1))),
+            "Short bogus hash is not real source evidence");
+        refuse(()->RAGIndexedPdfPageEvidence.requireOneIndexedDocument(
+            java.util.Map.of()),
+            "Empty reviewed source group is not complete");
+
         refuse(()->RAGIndexedPdfPageEvidence.join(
             219,List.of(first,chunk(219,2,"MM","deadbeef",
                 "/manual.pdf","hardware","pdf"))),

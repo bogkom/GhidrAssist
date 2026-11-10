@@ -697,44 +697,71 @@ public class RAGEngine {
     }
 
     /**
-     * Read one indexed PDF page AND its SHA/source/library metadata from
-     * the SAME Lucene snapshot. Conflicting duplicate chunks or mismatched
-     * document provenance are not merged into misleading RAG evidence.
+     * Read a bounded page group inside ONE Lucene DirectoryReader snapshot.
+     * An independent publisher SHA pin is checked by the caller; this
+     * method does NOT authenticate the present PDF file or page content.
      */
-    public static RAGIndexedPdfPageEvidence.Page getIndexedPdfPageEvidence(
-            String filename,int physicalPage) throws IOException {
-        if(filename==null || filename.isBlank() ||
-                physicalPage<1 || physicalPage>100000)
-            throw new IllegalArgumentException("Provide exact filename and bounded PDF page");
+    public static Map<Integer,RAGIndexedPdfPageEvidence.Page>
+            getIndexedPdfPagesEvidence(String filename,List<Integer> physicalPages)
+            throws IOException {
+        if(filename==null || filename.isBlank() || physicalPages==null ||
+                physicalPages.isEmpty() || physicalPages.size()>16 ||
+                physicalPages.stream().anyMatch(p->p==null || p<1 || p>100000))
+            throw new IllegalArgumentException("Invalid bounded PDF page request");
+        var wanted=new java.util.TreeSet<>(physicalPages);
+        if(wanted.size()!=physicalPages.size())
+            throw new IllegalArgumentException("Duplicate requested physical folio");
         indexLock.lock();
         try(DirectoryReader reader=DirectoryReader.open(indexWriter)) {
             IndexSearcher searcher=new IndexSearcher(reader);
             TopDocs hits=searcher.search(
                 new TermQuery(new Term("filename",filename)),reader.numDocs());
-            List<RAGIndexedPdfPageEvidence.Chunk> chunks=new ArrayList<>();
+            Map<Integer,List<RAGIndexedPdfPageEvidence.Chunk>> groups=
+                new java.util.TreeMap<>();
             for(ScoreDoc hit:hits.scoreDocs) {
                 Document doc=searcher.storedFields().document(hit.doc);
-                IndexableField page=doc.getField("page_number");
-                if(page==null || page.numericValue()==null ||
-                        page.numericValue().intValue()!=physicalPage)continue;
-                IndexableField id=doc.getField("chunk_id");
-                int chunkId=id==null || id.numericValue()==null?
-                    hit.doc:id.numericValue().intValue();
-                chunks.add(new RAGIndexedPdfPageEvidence.Chunk(
-                    physicalPage,chunkId,doc.get("content"),
-                    doc.get("sha256"),doc.get("source_path"),
-                    doc.get("source_type"),libraryOf(doc)));
+                IndexableField field=doc.getField("page_number");
+                if(field==null || field.numericValue()==null)continue;
+                int physical=field.numericValue().intValue();
+                if(!wanted.contains(physical))continue;
+                IndexableField chunk=doc.getField("chunk_id");
+                int chunkId=chunk==null || chunk.numericValue()==null?
+                    hit.doc:chunk.numericValue().intValue();
+                try {
+                    groups.computeIfAbsent(physical,k->new ArrayList<>())
+                        .add(new RAGIndexedPdfPageEvidence.Chunk(
+                            physical,chunkId,doc.get("content"),
+                            doc.get("sha256"),doc.get("source_path"),
+                            doc.get("source_type"),libraryOf(doc)));
+                }catch(IllegalArgumentException bad) {
+                    throw new IOException("Untrusted indexed PDF chunk: "+
+                        filename+" page "+physical,bad);
+                }
             }
-            if(chunks.isEmpty())
-                throw new IOException("Physical PDF page not indexed: "+
-                    filename+" page "+physicalPage);
-            try {
-                return RAGIndexedPdfPageEvidence.join(physicalPage,chunks);
-            }catch(IllegalArgumentException conflicting) {
-                throw new IOException("Inconsistent indexed PDF page provenance: "+
-                    filename+" page "+physicalPage,conflicting);
+            Map<Integer,RAGIndexedPdfPageEvidence.Page> result=
+                new java.util.TreeMap<>();
+            for(int physical:wanted){
+                List<RAGIndexedPdfPageEvidence.Chunk> chunks=groups.get(physical);
+                if(chunks==null || chunks.isEmpty())
+                    throw new IOException("Physical PDF page not indexed: "+
+                        filename+" page "+physical);
+                try{
+                    result.put(physical,RAGIndexedPdfPageEvidence.join(
+                        physical,chunks));
+                }catch(IllegalArgumentException bad) {
+                    throw new IOException("Conflicting indexed PDF page: "+
+                        filename+" page "+physical,bad);
+                }
             }
+            return java.util.Collections.unmodifiableMap(result);
         }finally{indexLock.unlock();}
+    }
+
+    /** Existing one-page reader preserves legacy index behavior. */
+    public static RAGIndexedPdfPageEvidence.Page getIndexedPdfPageEvidence(
+            String filename,int physicalPage) throws IOException {
+        return getIndexedPdfPagesEvidence(filename,List.of(physicalPage))
+            .get(physicalPage);
     }
 
     /** Legacy callers receive the same verified page text, no cross-page stitch. */
