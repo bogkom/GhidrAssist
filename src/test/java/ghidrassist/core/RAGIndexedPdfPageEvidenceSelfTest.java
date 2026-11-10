@@ -22,17 +22,17 @@ public final class RAGIndexedPdfPageEvidenceSelfTest {
             page,chunk,text,sha,path,type,lib);
     }
     public static void main(String[] args) {
-        var first=chunk(219,1,"SIMCR SHEN", "0123", "/manual.pdf","hardware","pdf");
-        var second=chunk(219,2,"MM EXOFF","0123","/manual.pdf","hardware","pdf");
+        var first=chunk(219,1,"SIMCR SHEN", "a".repeat(64), "/manual.pdf","hardware","pdf");
+        var second=chunk(219,2,"MM EXOFF","a".repeat(64),"/manual.pdf","hardware","pdf");
         var page=RAGIndexedPdfPageEvidence.join(
             219,List.of(second,first));
         ok(page.physicalPage()==219 &&
             page.text().equals("SIMCR SHEN\n\nMM EXOFF") &&
-            page.chunks()==2 && "0123".equals(page.indexedSha256()) &&
+            page.chunks()==2 && "a".repeat(64).equals(page.indexedSha256()) &&
             "hardware".equals(page.libraryId()),
             "Correct same-index sources joined in numeric chunk order");
         var hit=new SearchResult("manual.pdf","SIMCR",0.95,1,
-            "/manual.pdf","pdf",219,false,"0123","hardware");
+            "/manual.pdf","pdf",219,false,"a".repeat(64),"hardware");
         RAGIndexedPdfPageEvidence.requireSameSource(page,hit);
         checks++;
         refuse(()->RAGIndexedPdfPageEvidence.requireSameSource(page,
@@ -41,19 +41,19 @@ public final class RAGIndexedPdfPageEvidenceSelfTest {
             "Stale search-result SHA cannot borrow a new indexed page");
         refuse(()->RAGIndexedPdfPageEvidence.requireSameSource(page,
             new SearchResult("manual.pdf","SIMCR",0.95,1,
-                "/manual.pdf","pdf",219,false,"0123","other")),
+                "/manual.pdf","pdf",219,false,"a".repeat(64),"other")),
             "Moving source to another library invalidates former result");
         refuse(()->RAGIndexedPdfPageEvidence.requireSameSource(page,
             new SearchResult("manual.pdf","SIMCR",0.95,1,
-                "/new-location.pdf","pdf",219,false,"0123","hardware")),
+                "/new-location.pdf","pdf",219,false,"a".repeat(64),"hardware")),
             "Same digest at another location is not the selected source");
         refuse(()->RAGIndexedPdfPageEvidence.requireSameSource(page,
             new SearchResult("manual.pdf","SIMCR",0.95,1,
-                "/manual.pdf","pdf",220,false,"0123","hardware")),
+                "/manual.pdf","pdf",220,false,"a".repeat(64),"hardware")),
             "Reindexed physical PDF page mismatch requires new selection");
         refuse(()->RAGIndexedPdfPageEvidence.requireSameSource(page,
             new SearchResult("manual.pdf","SIMCR",0.95,1,
-                "/manual.pdf","pdf",219,false,"0123")),
+                "/manual.pdf","pdf",219,false,"a".repeat(64))),
             "Legacy hit without library claim cannot inherit current page");
         var group=java.util.Map.of(
             219,new RAGIndexedPdfPageEvidence.Page(219,"SIMCR",
@@ -87,7 +87,7 @@ public final class RAGIndexedPdfPageEvidenceSelfTest {
             "Wrong physical folio/key mismatch rejected");
         refuse(()->RAGIndexedPdfPageEvidence.requireOneIndexedDocument(
             java.util.Map.of(219,new RAGIndexedPdfPageEvidence.Page(
-                219,"SIMCR","0123","/manual.pdf","hardware",1))),
+                219,"SIMCR","short","/manual.pdf","hardware",1))),
             "Short bogus hash is not real source evidence");
         refuse(()->RAGIndexedPdfPageEvidence.requireOneIndexedDocument(
             java.util.Map.of()),
@@ -98,23 +98,23 @@ public final class RAGIndexedPdfPageEvidenceSelfTest {
                 "/manual.pdf","hardware","pdf"))),
             "Conflicting original PDF digest never silently stitched");
         refuse(()->RAGIndexedPdfPageEvidence.join(
-            219,List.of(first,chunk(219,2,"MM","0123",
+            219,List.of(first,chunk(219,2,"MM","a".repeat(64),
                 "/another.pdf","hardware","pdf"))),
             "Filename index collision cannot borrow a different source path");
         refuse(()->RAGIndexedPdfPageEvidence.join(
-            219,List.of(first,chunk(219,2,"MM","0123",
+            219,List.of(first,chunk(219,2,"MM","a".repeat(64),
                 "/manual.pdf","other","pdf"))),
             "Active-library scope is single-snapshot consistent");
         refuse(()->RAGIndexedPdfPageEvidence.join(
-            219,List.of(first,chunk(219,2,"MM","0123",
+            219,List.of(first,chunk(219,2,"MM","a".repeat(64),
                 "/manual.pdf","hardware","text"))),
             "Non-PDF same-filename row cannot gain physical PDF semantics");
         refuse(()->RAGIndexedPdfPageEvidence.join(
-            219,List.of(first,chunk(220,2,"MM","0123",
+            219,List.of(first,chunk(220,2,"MM","a".repeat(64),
                 "/manual.pdf","hardware","pdf"))),
             "Neighboring physical folio cannot be included");
         refuse(()->RAGIndexedPdfPageEvidence.join(
-            219,List.of(first,chunk(219,1,"another","0123",
+            219,List.of(first,chunk(219,1,"another","a".repeat(64),
                 "/manual.pdf","hardware","pdf"))),
             "Duplicate chunk IDs cannot overwrite source evidence");
         refuse(()->RAGIndexedPdfPageEvidence.join(219,List.of()),
@@ -124,7 +124,7 @@ public final class RAGIndexedPdfPageEvidenceSelfTest {
         refuse(()->RAGIndexedPdfPageEvidence.join(
             219,List.of(chunk(219,1,"A".repeat(
                 RAGIndexedPdfPageEvidence.MAX_PAGE_CHARACTERS),
-                "0123","/manual.pdf","hardware","pdf"),second)),
+                "a".repeat(64),"/manual.pdf","hardware","pdf"),second)),
             "Oversized multi-chunk page remains unpublishable");
         var legacy=RAGIndexedPdfPageEvidence.join(219,List.of(
             chunk(219,0,"legacy PDF text",null,"/manual.pdf",null,"pdf")));
@@ -139,6 +139,51 @@ public final class RAGIndexedPdfPageEvidenceSelfTest {
         refuse(()->new RAGIndexedPdfPageEvidence.Chunk(
             219,0,null,null,null,"pdf",null),
             "Null indexed page text rejected");
+        // A matching pair of *absent* legacy metadata fields was formerly
+        // accepted by Objects.equals(null,null), and a short digest could
+        // masquerade as a proof of indexed PDF identity. Neither is enough
+        // for a safe RAG document-open selection.
+        var legacyPage=new RAGIndexedPdfPageEvidence.Page(
+            219,"old indexed source",null,"/manual.pdf",null,1);
+        refuse(()->RAGIndexedPdfPageEvidence.requireSameSource(
+            legacyPage,new SearchResult("manual.pdf","excerpt",0.7,1,
+                "/manual.pdf","pdf",219,false,null)),
+            "matching missing source fields do not authenticate legacy PDF hit");
+        var shortPage=new RAGIndexedPdfPageEvidence.Page(
+            219,"old indexed source","abcd","/manual.pdf","hardware",1);
+        refuse(()->RAGIndexedPdfPageEvidence.requireSameSource(
+            shortPage,new SearchResult("manual.pdf","excerpt",0.7,1,
+                "/manual.pdf","pdf",219,false,"abcd","hardware")),
+            "matching short hashes cannot authenticate indexed document");
+        var blankPath=new RAGIndexedPdfPageEvidence.Page(
+            219,"old indexed source","a".repeat(64),"","hardware",1);
+        refuse(()->RAGIndexedPdfPageEvidence.requireSameSource(
+            blankPath,new SearchResult("manual.pdf","excerpt",0.7,1,
+                "","pdf",219,false,"a".repeat(64),"hardware")),
+            "matching blank paths cannot authenticate selected document");
+        var spoofedPath=new RAGIndexedPdfPageEvidence.Page(
+            219,"source text","a".repeat(64),"/manual\\nFAKE.pdf","hardware",1);
+        refuse(()->RAGIndexedPdfPageEvidence.requireSameSource(
+            spoofedPath,new SearchResult("manual.pdf","excerpt",0.7,1,
+                "/manual\\nFAKE.pdf","pdf",219,false,
+                "a".repeat(64),"hardware")),
+            "control characters cannot spoof provenance in PDF path");
+        refuse(()->RAGIndexedPdfPageEvidence.requireOneIndexedDocument(
+            java.util.Map.of(219,spoofedPath)),
+            "the same provenance safety bound guards page-group citations");
+        var noLibrary=new RAGIndexedPdfPageEvidence.Page(
+            219,"source text","a".repeat(64),"/manual.pdf",null,1);
+        refuse(()->RAGIndexedPdfPageEvidence.requireSameSource(
+            noLibrary,new SearchResult("manual.pdf","excerpt",0.7,1,
+                "/manual.pdf","pdf",219,false,"a".repeat(64))),
+            "missing library IDs cannot match as a confirmed source");
+        var longLibrary=new RAGIndexedPdfPageEvidence.Page(
+            219,"source text","a".repeat(64),"/manual.pdf","x".repeat(257),1);
+        refuse(()->RAGIndexedPdfPageEvidence.requireSameSource(
+            longLibrary,new SearchResult("manual.pdf","excerpt",0.7,1,
+                "/manual.pdf","pdf",219,false,
+                "a".repeat(64),"x".repeat(257))),
+            "overlong RAG source metadata cannot be trusted in a selected hit");
         System.out.println("RAGIndexedPdfPageEvidenceSelfTest PASS: checks="+checks);
     }
 }
