@@ -1,3 +1,18 @@
+## GA-08/12/13/18 — 2026-11-10: durable pointer datatype and first-use receipt v2
+
+The previously live-checked Function-DB pointer DataType path/length and
+first-use offset now persist inside the same native undoable rename
+transaction as `GA13-POINTER-VARIABLE-2`. Cross-JVM read-only audit checks
+both against the current Ghidra Program and labels mismatches
+`TYPE_IDENTITY_CHANGED`. Existing `GA13-POINTER-VARIABLE-1` receipts
+remain canonically readable but `LEGACY_TYPE_UNVERIFIED`, never silently
+promoted to typed current approval. Audit CSV appends reviewed/current type
+and first-use columns. This is a consistency/Undo safeguard, not
+authentication or unattended Apply permission. Java21 source regressions,
+full Java25 extension build and genuine isolated Ghidra 12.1.4 PUBLIC
+headless tests are exact-SHA integration gates. GA-08/12/13/18 PARTIAL,
+GA-14 deferred.
+
 ## GA-08/12/13/18 — 2026-11-10: exact live scoped-pointer datatype/first-use Review identity
 
 The existing Ghidra Function-DB scoped pointer parameter/local Review now

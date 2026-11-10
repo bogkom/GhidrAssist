@@ -142,3 +142,35 @@ hint a stable HighVariable, prove runtime execution or authorize new names
 without explicit user Review. The existing v1 durable receipt format does
 not yet contain the entire datatype path and must not be over-interpreted
 as cross-restart proof of pointee type equality.
+
+## 2026-11-10 — GA-08/12/13 typed pointer receipt v2 (cross-JVM audit)
+
+The **same** existing explicitly approved Ghidra Function-DB Review→Apply
+transaction now saves an immutable `GA13-POINTER-VARIABLE-2` Option value:
+function entry, kind, ordinal, exact storage, original and approved names,
+source SHA-256 and reviewed revision **plus exact Ghidra DataType path/length
+and function-relative first-use offset**. The new fields come from the
+already live-rechecked typed preview, not from A-register hypotheses or
+decompiler HighVariable inference. Every receipt is written atomically with
+its corresponding name; native Ghidra Undo/Redo controls both.
+
+A fresh read-only Program audit resolves each current Ghidra variable and
+rechecks pointer type, USER_DEFINED SourceType, ABI auto/forced status,
+storage, imported source identity, **datatype path/size and first use**.
+Changed type or first-use is `TYPE_IDENTITY_CHANGED`; unavailable live
+type/scope is `TYPE_IDENTITY_UNVERIFIED`. The canonical audit CSV retains
+its original columns and appends four explicit reviewed/current type/scope
+columns. Historical `GA13-POINTER-VARIABLE-1` records remain readable and
+checksum-verified, but are **`LEGACY_TYPE_UNVERIFIED`**, never upgraded
+retroactively to an approved typed identity. There is no silent schema
+migration or weakening of existing Review/Apply permissions.
+
+Java21 policy tests cover v1 canonical reopening, v2 typed round-trips,
+changed pointee identity, first use, missing live evidence, invalid metadata,
+forged current states and CSV. Real isolated Ghidra 12.1.4 PUBLIC/Java25
+CI checks Option bytes, typed audit, forged audit witnesses and native
+Undo/Redo. The receipt checksum detects corruption; it does not authenticate
+a user or firmware bytes. Static source evidence does not prove executed
+MMIO, active ISR/VBR or latched SIMCR MM. No user firmware/project,
+Wyse/Precision/Supervisor work, OAuth or host settings are modified.
+GA-08/12/13/18 remain PARTIAL and GA-14 remains deferred.

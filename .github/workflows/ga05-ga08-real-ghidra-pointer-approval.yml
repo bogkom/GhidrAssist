@@ -5,6 +5,8 @@ on:
       - '.github/workflows/ga05-ga08-real-ghidra-pointer-approval.yml'
       - 'src/main/java/ghidrassist/hardware/HardwareScopedVariableReview.java'
       - 'src/main/java/ghidrassist/hardware/HardwareScopedVariableService.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareScopedVariableReceipt.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareScopedVariableReceiptSelfTest.java'
       - 'src/main/java/ghidrassist/ui/tabs/HardwareAnalysisTab.java'
       - 'tests/ga11_headless/Ga11VectorHeadlessMain.java'
       - 'tests/ga11_headless/run.py'
@@ -67,6 +69,7 @@ jobs:
           assert summary["status"]=="PASSED_SYNTHETIC_REAL_GHIDRA_HEADLESS",summary
           assert summary["ghidra_version"]=="12.1.4",summary
           for key in (
+              "scoped_v2_type_use_receipts",
               "scoped_real_pointer_param_local","scoped_atomic_rejection",
               "scoped_explicit_apply","scoped_native_undo_redo",
               "scoped_stale_revision_rejected"

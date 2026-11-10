@@ -2779,10 +2779,47 @@ public final class Ga11VectorHeadlessMain {
                     check(initialReceipts.rows().stream().allMatch(r->
                             r.pointerType() && r.userDefined() &&
                             !r.autoParameter() &&
+                            r.receipt().hasTypedIdentity() &&
+                            r.receipt().dataTypeIdentity().equals(r.liveTypeIdentity()) &&
+                            r.receipt().firstUseOffset()==r.liveFirstUseOffset() &&
                             r.state()==ghidrassist.hardware.HardwareScopedVariableReceipt
                                 .State.CURRENT_APPROVED_NAME),
                         "Real Ghidra pointer receipt auditor must rederive each" +
                             " approved label from exact persisted typed variable state");
+                    // Re-read the v2 serialized Option at each exact Function
+                    // variable key. A current name without the original type
+                    // and first-use provenance is not a valid cross-JVM audit.
+                    var persistedPointerOptions=full.getOptions(
+                        ghidrassist.hardware.HardwareScopedVariableReceipt.OPTIONS_CATEGORY);
+                    for(var receiptRow:initialReceipts.rows()) {
+                        var savedPointerEntry=receiptRow.receipt();
+                        var storedReceipt=persistedPointerOptions.getString(
+                            savedPointerEntry.optionKey(),null);
+                        check(storedReceipt!=null && storedReceipt.startsWith(
+                                ghidrassist.hardware.HardwareScopedVariableReceipt.VERSION+"\t") &&
+                                ghidrassist.hardware.HardwareScopedVariableReceipt
+                                    .decode(storedReceipt).equals(savedPointerEntry),
+                            "Real Ghidra stored v2 typed receipt must reopen canonically");
+                        var tamperedReceiptType=new ghidrassist.hardware.HardwareScopedVariableReceipt
+                            .Observation(savedPointerEntry.optionKey(),storedReceipt,savedPointerEntry.afterName(),
+                                savedPointerEntry.storage(),true,true,false,
+                                savedPointerEntry.dataTypeIdentity()+"_different",savedPointerEntry.firstUseOffset());
+                        var forgedScope=new ghidrassist.hardware.HardwareScopedVariableReceipt
+                            .Observation(savedPointerEntry.optionKey(),storedReceipt,savedPointerEntry.afterName(),
+                                savedPointerEntry.storage(),true,true,false,
+                                savedPointerEntry.dataTypeIdentity(),savedPointerEntry.firstUseOffset()+1);
+                        check(ghidrassist.hardware.HardwareScopedVariableReceipt.inspect(
+                                List.of(tamperedReceiptType),full.getModificationNumber(),
+                                    full.getExecutableSHA256()).count(
+                                        ghidrassist.hardware.HardwareScopedVariableReceipt
+                                            .State.TYPE_IDENTITY_CHANGED)==1 &&
+                              ghidrassist.hardware.HardwareScopedVariableReceipt.inspect(
+                                List.of(forgedScope),full.getModificationNumber(),
+                                    full.getExecutableSHA256()).count(
+                                        ghidrassist.hardware.HardwareScopedVariableReceipt
+                                            .State.TYPE_IDENTITY_CHANGED)==1,
+                            "Persisted v2 typed receipt cannot certify changed type or first use");
+                    }
                     String initialReceiptCsv=ghidrassist.hardware
                         .HardwareScopedVariableService.auditCsv(full);
                     check(initialReceiptCsv.lines().count()==3 &&
@@ -2998,6 +3035,7 @@ public final class Ga11VectorHeadlessMain {
                     }catch(IllegalStateException expected){staleMultiRefused=true;}
                     check(staleMultiRefused,
                         "Pre-Undo reviewed source revision must not permit replay");
+                    result.addProperty("scoped_v2_type_use_receipts",true);
                     result.addProperty("scoped_variable_approval_receipts",true);
                     result.addProperty("scoped_variable_receipt_undo_redo",true);
                     result.addProperty("scoped_variable_receipt_revision_stale",true);
@@ -3336,8 +3374,19 @@ public final class Ga11VectorHeadlessMain {
                             pointerAudit.rows().stream().allMatch(r->
                                 r.receipt().function()==0x5a0L &&
                                 r.receipt().reviewedModification()==
-                                    pointerReviewed.modificationNumber()),
-                        "First JVM failed to write two variable receipts with approved names");
+                                    pointerReviewed.modificationNumber() &&
+                                r.receipt().hasTypedIdentity() &&
+                                r.receipt().dataTypeIdentity().equals(
+                                    r.liveTypeIdentity()) &&
+                                r.receipt().firstUseOffset()==r.liveFirstUseOffset() &&
+                                r.state()==ghidrassist.hardware.HardwareScopedVariableReceipt
+                                    .State.CURRENT_APPROVED_NAME),
+                        "First JVM failed to save fully typed current pointer receipts");
+                    result.addProperty("ga13_pointer_restart_typed_current",true);
+                    result.addProperty("ga13_pointer_restart_type_use",
+                        String.join("|",pointerAudit.rows().stream().map(r->
+                            r.receipt().dataTypeIdentity()+"@"+
+                                r.receipt().firstUseOffset()).toList()));
                     result.addProperty("ga13_pointer_restart_first_jvm_saved",true);
                     result.addProperty("ga13_pointer_restart_source",
                         pointerAudit.rows().get(0).receipt().importSha256());
@@ -3412,10 +3461,21 @@ public final class Ga11VectorHeadlessMain {
                                 r.currentName().equals(r.receipt().afterName()) &&
                                 r.currentStorage()!=null &&
                                 r.currentStorage().equals(r.receipt().storage()) &&
+                                r.receipt().hasTypedIdentity() &&
+                                r.receipt().dataTypeIdentity().equals(
+                                    r.liveTypeIdentity()) &&
+                                r.receipt().firstUseOffset()==r.liveFirstUseOffset() &&
+                                r.state()==ghidrassist.hardware.HardwareScopedVariableReceipt
+                                    .State.CURRENT_APPROVED_NAME &&
                                 r.receipt().origin().contains("actor UNKNOWN")) &&
                             ghidrassist.hardware.HardwareScopedVariableService
                                 .auditCsv(full).lines().count()==3,
-                        "Second JVM lost exact persisted pointer parameter/local receipts");
+                        "Second JVM lost exact persisted typed pointer parameter/local receipts");
+                    result.addProperty("ga13_pointer_restart_typed_current",true);
+                    result.addProperty("ga13_pointer_restart_type_use",
+                        String.join("|",reloadPointers.rows().stream().map(r->
+                            r.receipt().dataTypeIdentity()+"@"+
+                                r.receipt().firstUseOffset()).toList()));
                     result.addProperty("ga13_pointer_restart_second_jvm_verified",true);
                     result.addProperty("ga13_pointer_restart_source",
                         reloadPointers.rows().get(0).receipt().importSha256());

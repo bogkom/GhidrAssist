@@ -167,7 +167,8 @@ def main():
                 if (first.get("state")!="PASSED_SYNTHETIC_REAL_GHIDRA_HEADLESS"
                     or first.get("rename_receipt_first_jvm_saved") is not True
                     or first.get("rename_receipt_first_jvm_source") is not True
-                    or first.get("ga13_pointer_restart_first_jvm_saved") is not True):
+                    or first.get("ga13_pointer_restart_first_jvm_saved") is not True
+                    or first.get("ga13_pointer_restart_typed_current") is not True):
                     raise RuntimeError("First Ghidra JVM did not save rename receipt")
                 summary["ga13_first_jvm_saved"]=True
                 mode="receipt-restart-read"
@@ -189,10 +190,15 @@ def main():
                     or first["ga13_process_pid"]==proof["ga13_process_pid"]):
                     raise RuntimeError("Ghidra restart did not use two JVM PIDs")
                 if (proof.get("ga13_pointer_restart_second_jvm_verified") is not True
+                    or proof.get("ga13_pointer_restart_typed_current") is not True
                     or first.get("ga13_pointer_restart_source") !=
-                       proof.get("ga13_pointer_restart_source")):
+                       proof.get("ga13_pointer_restart_source")
+                    or first.get("ga13_pointer_restart_type_use") !=
+                       proof.get("ga13_pointer_restart_type_use")
+                    or not first.get("ga13_pointer_restart_type_use")):
                     raise RuntimeError("Second JVM lost pointer variable receipts")
                 summary["ga13_pointer_receipts_survive_restart"]=True
+                summary["ga13_pointer_type_use_cross_jvm"]=True
                 summary["ga13_matching_persisted_fields"]=4
                 summary["ga13_different_process_pids"]=True
             required=("function_entry_and_body_verified",
@@ -437,6 +443,7 @@ def main():
                         "agentic_source_incomplete_remains_explicit",
                         "agentic_read_only_revision_unchanged"),
                     "scoped-variable":(
+                        "scoped_v2_type_use_receipts",
                         "scoped_real_pointer_param_local",
                         "scoped_atomic_rejection",
                         "scoped_explicit_apply",
