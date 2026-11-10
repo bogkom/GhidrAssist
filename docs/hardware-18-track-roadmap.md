@@ -1,3 +1,16 @@
+## GA-06/17/18 — 2026-11-10: bounded fail-closed source-profile structural audit
+
+The standalone GA-06 profile metadata audit now rejects oversized raw
+catalogs, names/modules with invalid identities, unaligned word/long
+register sites and forged public citation coverage totals. All structural
+findings, not only width/range collisions, make collisionFree() false;
+missing PDF-page labels remain independently counted UNKNOWN and are
+never reinterpreted as authenticated manual evidence. Deterministic
+Java21 tests, full Java25/Ghidra 12.1.4 PUBLIC extension build and
+real isolated synthetic CI are exact-SHA merge gates. No physical bus
+mapping, MCU auto-identification, executed MMIO or production Apply is
+inferred. GA-06/17/18 remain PARTIAL; GA-14 deferred.
+
 ## GA-06/10/16/18 — 2026-11-10: PDF folio and bitfield source-claim integrity
 
 A coherent metadata-trust package rejects revision dates disguised as
