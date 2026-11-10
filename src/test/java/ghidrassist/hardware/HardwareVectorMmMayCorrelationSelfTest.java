@@ -204,6 +204,28 @@ public final class HardwareVectorMmMayCorrelationSelfTest {
         bad(()->HardwareVectorMmMayCorrelation.inspect(false,0,
             true,false,Set.of(),oversized,graph,2),
             "source inventory max recognized slots enforced before sorting");
+        var duplicateSameRoot=report.rows().get(1);
+        var forgedDuplicate=new HardwareVectorMmMayCorrelation.Row(
+            duplicateSameRoot.vectorNumber(),duplicateSameRoot.pointer(),
+            duplicateSameRoot.functionEntry(),duplicateSameRoot.resetRelation(),
+            duplicateSameRoot.resetRelationUncertain(),duplicateSameRoot.mmLowByte(),
+            duplicateSameRoot.unknownAlias(),duplicateSameRoot.unknownControl(),
+            duplicateSameRoot.cycle(),duplicateSameRoot.limited(),
+            duplicateSameRoot.examined()+1,
+            duplicateSameRoot.mmSource(),duplicateSameRoot.aliasSource(),
+            duplicateSameRoot.observedUnknownSource(),duplicateSameRoot.frontierSource());
+        bad(()->new HardwareVectorMmMayCorrelation.Report(
+            false,0,true,false,6,5,1,3,true,
+            List.of(report.rows().get(0),forgedDuplicate,
+                report.rows().get(2),report.rows().get(3))),
+            "same MC68332 handler cannot claim different inspected-function totals");
+        bad(()->new HardwareVectorMmMayCorrelation.Row(
+            2,0x130L,0x130L,
+            HardwareVectorResetCorrelation.Relation.IN_RESET_STATIC_CALL_SUBSET,
+            false,"STATIC_MAY_MM_LOW_BYTE",false,false,false,false,1,
+            "MM_SOURCE -> 0x00000130 -> 0x0000000100000000",
+            "NONE","NONE","NONE"),
+            "MC68332 function witnesses cannot encode 64-bit addresses");
         bad(()->new HardwareVectorMmMayCorrelation.Row(
             2,0x130L,0x130L,
             HardwareVectorResetCorrelation.Relation.IN_RESET_STATIC_CALL_SUBSET,
