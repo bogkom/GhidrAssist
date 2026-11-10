@@ -13,6 +13,17 @@ This is deliberately **not** silent `& 0xFFFFFF` address
 normalization: physical alias/remapping and actual execution are
 unknown. Normal 24-bit source-vector roots continue to work.
 
+The **image-zero vector/ISR inventory** uses the same explicit
+MC68332-only 24-bit scope as the previously verified relocated
+VBR source-table scanner: a 32-bit pointer outside MCU24 remains
+visible as `OUTSIDE_SELECTED_MCU24_RANGE` and is NOT upgraded
+to a recognized handler, even if Ghidra maps a 32-bit CPU32
+address. Generic CPU32 retains the wider source interpretation.
+The pre-existing read-only `HardwareInterruptVectors` classification
+is reused, rather than creating a second contradictory vector
+counter. Source-only RESET reachability, VBR selection and any
+ISR execution remain UNKNOWN.
+
 The initial SSP is now separately classified as an **unsigned
 32-bit source word**: null/erased, odd (a possible alignment
 risk), aligned but memory-unverified, candidate one-past-the-24-bit
@@ -39,11 +50,13 @@ Java21 deterministic regressions include a 32-bit high PC
 distinguishing generic CPU32 from MC68332, erased/odd stack,
 one-past device edge, wider stack context, and ordinary
 MC68332 source. The existing genuine synthetic Ghidra
-12.1.4 PUBLIC Java25 headless test invokes the production
-Analyze path for the normal vector and checks the new
-source-quality line; it temporarily changes only the
-synthetic vector high byte and asserts the actual Program
-source-root gate (then restores the byte). Full extension
+12.1.4 PUBLIC Java25 headless tests invoke the production
+Analyze path for the normal RESET and image-zero vector inventory.
+Two independent existing headless fixtures temporarily change only
+their own synthetic vector high bytes: RESET PC source-root gating
+and image-zero ISR vector 26 (`OUTSIDE` for selected MC68332
+vs `UNMAPPED` for generic CPU32). Both restore original bytes
+and retain the source-only guarantees. Full extension
 build plus existing hardware source regressions remain
 mandatory. No ECU411 firmware, original user Ghidra
 projects, OAuth or stopped Wyse/Precision/Supervisor
