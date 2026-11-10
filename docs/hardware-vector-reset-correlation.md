@@ -134,3 +134,59 @@ and vector-row display caps. Java25 full Ghidra 12.1.4 PUBLIC extension
 build, real isolated synthetic headless/vector correlation and existing
 Actions security gates are required on the exact final PR SHA.
 GA-01/02/03/11/18 remain PARTIAL.
+
+
+## 2026-11-10 — selected MC68332 exact-vector SIMCR/MM MAY root correlation
+
+The previous vector/RESET source report identified transitive generic P-code
+`MEMORY_STORE`, which is **not** a device-specific SIMCR/MM hit. The
+existing `HardwareInterproceduralMmEffects` analysis already models
+potential STORE overlap with the MC68332 SIMCR/MM **low byte**, including
+unresolved STORE aliases/widths, missing targets and bounded function
+witnesses. That source graph was not correlated with handler candidates.
+
+The new read-only `HardwareVectorMmMayCorrelation` section joins **only
+exact-entry vector pointers** to independently observed MC68332
+SIMCR/MM MAY source summaries. The source solver now accepts bounded
+function-entry `inspectRoots` directly rather than fabricating a
+CALL-site instruction PC for each vector pointer. Both source inventories
+were gathered from the SAME Program analysis. The result exposes:
+`STATIC_MAY_MM_LOW_BYTE`, `UNKNOWN` or
+`NOT_OBSERVED_IN_BOUNDED_SOURCE`; independent typed shortest
+`MM_SOURCE`, `STORE_ALIAS`, observed
+`UNKNOWN_FLOW`/`MISSING_TARGET` and uninspected
+`DEPTH_CUTOFF`/`NODE_CUTOFF`/`BATCH_CUTOFF` function chains;
+cycle/limit flags and bounded inspected function counts.
+A generic STORE elsewhere in the handler subtree does not create a
+SIMCR/MM candidate.
+
+The service appends this section separately to BOTH the image-zero
+vector scan and each scanned candidate relocated MOVEC-to-VBR table,
+**only if MC68332 was explicitly selected**. Generic CPU32 retains
+its existing 32-bit pointer survey and never receives device-specific
+SIMCR/MM semantics. Existing `GhidraInterruptVectorService` overloads
+remain compatible; the new optional source graph is provided by the
+full Hardware Analysis path.
+
+A maximum of 32 image-zero (12 per relocated table) displayed exact
+handler slots receive detailed source inspection. Duplicate vector
+slots sharing one exact handler reuse one revision-local summary; at
+most 100 functions per handler and four direct CALL hops are examined.
+The full validated vector slot inventory is counted, including
+interior pointers (which never inherit full-function effects) and
+uninspected overflow rows. Source roots are canonically ordered and
+share a bounded aggregate solver budget. The report explicitly labels
+partial display/analysis and separates the independent RESET graph
+confidence horizon.
+
+An image-zero vector or relocated source table is NOT an active
+interrupt vector, proven VBR value, executed ISR, feasible CALL route,
+latched SIMCR/MM first write, or physical chip-select mapping. The
+model does not propagate register values across unresolved CALLs, does
+not promote computed CALLs into direct RESET/ISR edges, never writes to
+the Program and never grants Review/Apply/Undo permission.
+Deterministic Java21 source-only regressions include duplicate exact
+targets, missing bodies, alias/unknown/cycles, depth/row caps, 24-bit
+MCU boundaries and input reordering. Genuine Ghidra 12.1.4 PUBLIC
+headless synthetic integration checks selected/generic image-zero and
+relocated reports on exact CI SHA. GA-01/02/03/11/18 remain PARTIAL.
