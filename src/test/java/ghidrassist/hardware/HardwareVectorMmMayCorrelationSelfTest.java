@@ -1,289 +1,276 @@
 package ghidrassist.hardware;
 
 import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Comparator;
-import java.util.HashSet;
+import java.util.Collections;
 import java.util.List;
-import java.util.Locale;
-import java.util.Map;
 import java.util.Set;
 
-/**
- * GA-02/03/11: static-only SIMCR/MM source candidates below exact vector
- * function entries for an explicitly selected MC68332. A vector pointer
- * does NOT create a CALL/ISR edge, VBR selection or runtime MM write.
- */
-public final class HardwareVectorMmMayCorrelation {
-    private HardwareVectorMmMayCorrelation() {}
-    public static final int MAX_ROWS=32;
-    public static final int MAX_ROOT_DEPTH=4;
-    public static final int MAX_ROOT_NODES=100;
-    private static final long MCU_MAX=0xffffffL;
+/** Pure-Java21 bounded vector/MC68332 MM evidence, not a hardware trace. */
+public final class HardwareVectorMmMayCorrelationSelfTest {
+    private HardwareVectorMmMayCorrelationSelfTest() {}
+    private static int assertions;
+    private static void ok(boolean condition,String why) {
+        assertions++;
+        if(!condition)throw new AssertionError(why);
+    }
+    private static void bad(Runnable action,String why) {
+        boolean rejected=false;
+        try {action.run();}catch(IllegalArgumentException expected){rejected=true;}
+        ok(rejected,why);
+    }
+    private static HardwareInterproceduralMmEffects.FunctionNode node(
+            long entry,boolean mm,boolean alias,boolean unknown,Long... callees) {
+        return new HardwareInterproceduralMmEffects.FunctionNode(
+            entry,mm,alias,unknown,List.of(callees));
+    }
+    private static HardwareVectorResetCorrelation.Target vector(
+            int slot,long pointer,long entry,boolean exact) {
+        return new HardwareVectorResetCorrelation.Target(slot,pointer,entry,exact);
+    }
+    public static void main(String[] args) {
+        var graph=List.of(
+            node(0x130,false,false,false,0x160L,0x140L,0x150L,0x130L),
+            node(0x140,true,false,false),
+            node(0x150,false,true,false),
+            node(0x160,false,false,true),
+            node(0x300,false,false,false),
+            node(0x400,false,false,false,0x402L),
+            node(0x402,false,false,false,0x404L),
+            node(0x404,false,false,false,0x406L),
+            node(0x406,false,false,false,0x408L),
+            node(0x408,false,false,false,0x40AL),
+            node(0x40A,true,false,false));
+        var targets=List.of(
+            vector(9,0x400L,0x400L,true),
+            vector(7,0x300L,0x300L,true),
+            vector(4,0x132L,0x130L,false),
+            vector(6,0x200L,0x200L,true),
+            vector(3,0x130L,0x130L,true),
+            vector(2,0x130L,0x130L,true));
+        var report=HardwareVectorMmMayCorrelation.inspect(false,0,
+            true,false,Set.of(0x100L,0x130L),targets,graph,4);
+        ok(report.recognizedTargets()==6 && report.exactEntries()==5 &&
+            report.interiorPointers()==1 && report.rows().size()==4 &&
+            report.distinctShownRoots()==3 && report.displayTruncated(),
+            "bounded exact-entry display has independent full numeric counts");
+        var row=report.rows().get(0);
+        ok(row.vectorNumber()==2 && row.pointer()==0x130L &&
+            row.mmLowByte().equals("STATIC_MAY_MM_LOW_BYTE") &&
+            row.resetRelation()==
+                HardwareVectorResetCorrelation.Relation.IN_RESET_STATIC_CALL_SUBSET &&
+            row.mmSource().equals(
+                "MM_SOURCE -> 0x00000130 -> 0x00000140") &&
+            row.aliasSource().equals(
+                "STORE_ALIAS -> 0x00000130 -> 0x00000150") &&
+            row.observedUnknownSource().equals(
+                "UNKNOWN_FLOW -> 0x00000130 -> 0x00000160") &&
+            row.frontierSource().equals("NONE") &&
+            row.cycle() && row.unknownControl() && row.unknownAlias() &&
+            !row.limited(),
+            "exact handler root preserves typed MM, alias, inspected unknown and cycle");
+        ok(!row.resetRelationUncertain() && row.mmEvidenceUncertain() &&
+            report.rows().get(2).mmEvidenceUncertain() &&
+            !report.rows().get(3).mmEvidenceUncertain(),
+            "MM alias/unknown/cycle never corrupts a complete RESET relation");
+        ok(report.displayedMay()==2 && report.displayedUnknown()==1 &&
+            report.displayedNoObservation()==1 &&
+            report.markdown().contains(
+                "DISPLAYED-ONLY MM classifications (not whole table): MAY=2, UNKNOWN=1, NOT_OBSERVED=1") &&
+            report.markdown().contains("MM source uncertain") &&
+            report.markdown().contains("RESET relation uncertainty describes ONLY RESET"),
+            "displayed-only MM aggregates and independent confidence columns");
+        ok(report.rows().get(1).vectorNumber()==3 &&
+            report.rows().get(1).mmSource().equals(row.mmSource()),
+            "two vector slots share one canonical source-only function root");
+        ok(report.rows().get(2).vectorNumber()==6 &&
+            report.rows().get(2).mmLowByte().equals("UNKNOWN") &&
+            report.rows().get(2).observedUnknownSource().equals(
+                "MISSING_TARGET -> 0x00000200") &&
+            report.rows().get(2).frontierSource().equals("NONE"),
+            "exact entry missing from analysis inventory is not a closed MM negative");
+        ok(report.rows().get(3).vectorNumber()==7 &&
+            report.rows().get(3).mmLowByte().equals(
+                "NOT_OBSERVED_IN_BOUNDED_SOURCE") &&
+            report.rows().get(3).resetRelation()==
+                HardwareVectorResetCorrelation.Relation.OUTSIDE_OBSERVED_RESET_SUBSET &&
+            !report.rows().get(3).resetRelationUncertain(),
+            "closed local non-MM source remains a bounded negative, not ISR proof");
+        ok(report.markdown().contains("explicit MC68332 profile required") &&
+            report.markdown().contains("MM0/MM1 are") &&
+            report.markdown().contains("No vector pointer is added as a CALL edge") &&
+            report.markdown().contains("INCOMPLETE VECTOR DISPLAY") &&
+            report.markdown().contains("undisplayed exact rows: 1"),
+            "static/report scope, source priority and omitted roots are explicit");
+        var full=HardwareVectorMmMayCorrelation.inspect(false,0,
+            true,false,Set.of(0x130L),targets,graph,8);
+        ok(full.rows().size()==5 && !full.displayTruncated() &&
+            full.distinctShownRoots()==4 &&
+            full.rows().get(4).frontierSource().equals(
+                "DEPTH_CUTOFF -> 0x00000400 -> 0x00000402 -> "+
+                    "0x00000404 -> 0x00000406 -> 0x00000408 -> 0x0000040A") &&
+            full.rows().get(4).mmLowByte().equals("UNKNOWN") &&
+            full.rows().get(4).mmSource().equals("NONE"),
+            "true uninspected fifth-hop MM leaf retains typed depth uncertainty");
+        var reversed=new ArrayList<>(targets);
+        Collections.reverse(reversed);
+        var graphReversed=new ArrayList<>(graph);
+        Collections.reverse(graphReversed);
+        ok(report.equals(HardwareVectorMmMayCorrelation.inspect(
+            false,0,true,false,Set.of(0x100L,0x130L),
+            reversed,graphReversed,4)),
+            "target and function inventory order cannot change capped source evidence");
+        var relocated=HardwareVectorMmMayCorrelation.inspect(
+            true,0x800L,false,true,Set.of(0x130L),targets,graph,3);
+        ok(relocated.relocated() && relocated.tableBase()==0x800L &&
+            relocated.rows().size()==3 &&
+            relocated.rows().stream().allMatch(r->
+                r.resetRelation()==
+                    HardwareVectorResetCorrelation.Relation.RESET_ROOT_UNKNOWN &&
+                r.resetRelationUncertain()) &&
+            relocated.rows().get(0).mmSource().equals(row.mmSource()) &&
+            relocated.markdown().contains("relocated MOVEC-to-VBR source-image") &&
+            relocated.markdown().contains("neither source is proof of an active VBR"),
+            "candidate relocated VBR table cannot promote to runtime ISR or MM latch");
+        var resetIncomplete=HardwareVectorMmMayCorrelation.inspect(
+            false,0,true,true,Set.of(0x130L),
+            List.of(vector(3,0x300L,0x300L,true)),graph,2);
+        ok(resetIncomplete.rows().get(0).resetRelationUncertain() &&
+            !resetIncomplete.rows().get(0).mmEvidenceUncertain() &&
+            resetIncomplete.rows().get(0).mmLowByte().equals(
+                "NOT_OBSERVED_IN_BOUNDED_SOURCE"),
+            "unknown RESET completeness must not fabricate an MM source");
+        var interiorOnly=HardwareVectorMmMayCorrelation.inspect(
+            false,0,true,false,Set.of(0x130L),
+            List.of(vector(2,0x132L,0x130L,false)),graph,2);
+        ok(interiorOnly.exactEntries()==0 &&
+            interiorOnly.interiorPointers()==1 &&
+            interiorOnly.rows().isEmpty() &&
+            interiorOnly.distinctShownRoots()==0,
+            "interior vector pointer cannot borrow whole-function MM source");
+        var missingGraph=HardwareVectorMmMayCorrelation.inspect(
+            false,0,true,false,Set.of(0x130L),
+            List.of(vector(3,0x130L,0x130L,true)),List.of(),2);
+        ok(missingGraph.rows().get(0).mmLowByte().equals("UNKNOWN") &&
+            missingGraph.rows().get(0).observedUnknownSource().equals(
+                "MISSING_TARGET -> 0x00000130"),
+            "an empty truncated scanner never implies no SIMCR source");
 
-    public record Row(int vectorNumber,long pointer,long functionEntry,
-            HardwareVectorResetCorrelation.Relation resetRelation,
-            boolean resetRelationUncertain,String mmLowByte,
-            boolean unknownAlias,boolean unknownControl,
-            boolean cycle,boolean limited,int examined,
-            String mmSource,String aliasSource,String observedUnknownSource,
-            String frontierSource) {
-        public Row {
-            if(vectorNumber<2 || vectorNumber>255 || pointer<=0 ||
-                    pointer>MCU_MAX || (pointer&1)!=0 ||
-                    functionEntry!=pointer || resetRelation==null ||
-                    mmLowByte==null || mmSource==null || aliasSource==null ||
-                    observedUnknownSource==null || frontierSource==null ||
-                    examined<0 || examined>MAX_ROOT_NODES ||
-                    !List.of("STATIC_MAY_MM_LOW_BYTE", "UNKNOWN",
-                        "NOT_OBSERVED_IN_BOUNDED_SOURCE").contains(mmLowByte))
-                throw new IllegalArgumentException("Invalid vector MM source row");
-            boolean may=mmLowByte.equals("STATIC_MAY_MM_LOW_BYTE");
-            boolean uncertain=unknownAlias || unknownControl || cycle || limited;
-            if(resetRelation==HardwareVectorResetCorrelation.Relation.RESET_ROOT_UNKNOWN
-                    && !resetRelationUncertain ||
-                    may==mmSource.equals("NONE") ||
-                    unknownAlias==aliasSource.equals("NONE") ||
-                    limited==frontierSource.equals("NONE") ||
-                    cycle && !unknownControl ||
-                    limited && !unknownControl ||
-                    !unknownControl && !observedUnknownSource.equals("NONE") ||
-                    mmLowByte.equals("UNKNOWN")!=(!may && uncertain) ||
-                    !validWitness(mmSource,functionEntry,"MM_SOURCE") ||
-                    !validWitness(aliasSource,functionEntry,"STORE_ALIAS") ||
-                    !validWitness(observedUnknownSource,functionEntry,
-                        "UNKNOWN_FLOW","MISSING_TARGET") ||
-                    !validWitness(frontierSource,functionEntry,
-                        "DEPTH_CUTOFF","NODE_CUTOFF","BATCH_CUTOFF"))
-                throw new IllegalArgumentException(
-                    "Contradictory or unbounded vector MM evidence");
+        // Verify public entry-root solver validates the *whole* source
+        // graph, canonicalizes roots and cannot manufacture CALL sites.
+        var roots=HardwareInterproceduralMmEffects.inspectRoots(
+            graph,List.of(0x300L,0x130L,0x200L),4,100);
+        ok(new ArrayList<>(roots.keySet())
+                .equals(List.of(0x130L,0x200L,0x300L)) &&
+            roots.get(0x130L).mmWitness().chain()
+                .equals(List.of(0x130L,0x140L)) &&
+            roots.get(0x200L).unknownWitness().kind()==
+                HardwareInterproceduralMmEffects.WitnessKind.MISSING_TARGET,
+            "direct function-entry roots are sorted and inspected without fake CALL PCs");
+        boolean immutable=false;
+        try {roots.clear();}catch(UnsupportedOperationException expected){
+            immutable=true;
         }
-        /** Uncertainty in the handler's MM source tree, not its RESET relation. */
-        public boolean mmEvidenceUncertain() {
-            return unknownAlias || unknownControl || cycle || limited;
+        ok(immutable,"root summary map is immutable, scoped to one source inventory");
+        bad(()->HardwareInterproceduralMmEffects.inspectRoots(
+            graph,List.of(0x130L,0x130L),4,100),
+            "duplicate inspected roots are not silently made ambiguous");
+        bad(()->HardwareInterproceduralMmEffects.inspectRoots(
+            graph,java.util.Arrays.asList(0x130L,null),4,100),
+            "null synthetic CALL-free root rejected");
+        bad(()->HardwareInterproceduralMmEffects.inspectRoots(
+            List.of(node(0x130,false,false,false),
+                    node(0x130,true,false,false)),
+            List.of(0x130L),4,100),
+            "duplicate function source cannot manufacture MM witness");
+        bad(()->HardwareVectorMmMayCorrelation.inspect(false,0,true,false,
+            Set.of(0x130L),List.of(targets.get(4),targets.get(4)),graph,8),
+            "duplicate vector slot rejected");
+        bad(()->HardwareVectorMmMayCorrelation.inspect(false,0,true,false,
+            Set.of(0x130L),List.of(vector(10,0x1000000L,0x1000000L,true)),
+            graph,8),"32-bit CPU32 pointer never aliases MC68332 24-bit handler");
+        bad(()->HardwareVectorMmMayCorrelation.inspect(false,0,true,false,
+            Set.of(0x1000000L),targets,graph,8),
+            "wide RESET source cannot confer MCU24 relation");
+        bad(()->HardwareVectorMmMayCorrelation.inspect(true,0xfffffcL,
+            true,false,Set.of(),targets,graph,8),
+            "relocated table crossing MCU24 top rejected");
+        bad(()->HardwareVectorMmMayCorrelation.inspect(false,0,
+            true,false,Set.of(),targets,graph,33),
+            "display cap prevents unbounded vector source audits");
+        var oversized=new ArrayList<HardwareVectorResetCorrelation.Target>();
+        for(int i=2;i<=255;i++)
+            oversized.add(vector(i,0x130L,0x130L,true));
+        oversized.add(vector(2,0x130L,0x130L,true));
+        bad(()->HardwareVectorMmMayCorrelation.inspect(false,0,
+            true,false,Set.of(),oversized,graph,2),
+            "source inventory max recognized slots enforced before sorting");
+        bad(()->new HardwareVectorMmMayCorrelation.Row(
+            2,0x130L,0x130L,
+            HardwareVectorResetCorrelation.Relation.IN_RESET_STATIC_CALL_SUBSET,
+            false,"NOT_OBSERVED_IN_BOUNDED_SOURCE",true,true,true,false,1,
+            "NONE","NONE","NONE","NONE"),
+            "a closed MM classification cannot contradict unknown source flags");
+        bad(()->new HardwareVectorMmMayCorrelation.Row(
+            2,0x130L,0x130L,
+            HardwareVectorResetCorrelation.Relation.IN_RESET_STATIC_CALL_SUBSET,
+            false,"STATIC_MAY_MM_LOW_BYTE",false,false,false,false,1,
+            "MM_SOURCE -> 0x00000140","NONE","NONE","NONE"),
+            "forged MM witness rooted at another handler must be refused");
+        bad(()->new HardwareVectorMmMayCorrelation.Row(
+            2,0x130L,0x130L,
+            HardwareVectorResetCorrelation.Relation.IN_RESET_STATIC_CALL_SUBSET,
+            false,"STATIC_MAY_MM_LOW_BYTE",false,false,false,false,1,
+            "MM_SOURCE -> 0x00000130 | forged","NONE","NONE","NONE"),
+            "Markdown injection cannot enter public vector source rows");
+        bad(()->new HardwareVectorMmMayCorrelation.Row(
+            2,0x130L,0x130L,
+            HardwareVectorResetCorrelation.Relation.RESET_ROOT_UNKNOWN,
+            false,"STATIC_MAY_MM_LOW_BYTE",false,false,false,false,1,
+            "MM_SOURCE -> 0x00000130","NONE","NONE","NONE"),
+            "unknown RESET root must be marked uncertain");
+        bad(()->new HardwareVectorMmMayCorrelation.Report(
+            false,0,true,false,6,5,1,2,true,report.rows()),
+            "incorrect distinct handler-root count cannot be published");
+        bad(()->new HardwareVectorMmMayCorrelation.Report(
+            false,0,true,false,6,5,1,3,true,
+            List.of(report.rows().get(1),report.rows().get(0),
+                report.rows().get(2),report.rows().get(3))),
+            "noncanonical vector order cannot enter a public report");
+        bad(()->new HardwareVectorMmMayCorrelation.Report(
+            false,0,true,false,6,5,1,3,true,
+            List.of(new HardwareVectorMmMayCorrelation.Row(
+                2,0x130L,0x130L,
+                HardwareVectorResetCorrelation.Relation.IN_RESET_STATIC_CALL_SUBSET,
+                true,"STATIC_MAY_MM_LOW_BYTE",true,true,true,false,4,
+                "MM_SOURCE -> 0x00000130 -> 0x00000140",
+                "STORE_ALIAS -> 0x00000130 -> 0x00000150",
+                "UNKNOWN_FLOW -> 0x00000130 -> 0x00000160","NONE"))),
+            "RESET certainty cannot depend on a handler's MM uncertainty");
+        bad(()->new HardwareVectorMmMayCorrelation.Report(
+            false,0,true,false,1,1,0,0,true,null),
+            "null row inventory fails closed without throwing NPE");
+        bad(()->new HardwareVectorMmMayCorrelation.Report(
+            false,0,true,false,1,1,0,1,false,
+            java.util.Collections.singletonList(null)),
+            "null row fails closed without throwing NPE");
+        bad(()->new HardwareVectorMmMayCorrelation.Row(
+            2,0x130L,0x130L,
+            HardwareVectorResetCorrelation.Relation.IN_RESET_STATIC_CALL_SUBSET,
+            false,"STATIC_MAY_MM_LOW_BYTE",false,false,false,false,1,
+            "MM_SOURCE -> 0x00000130"+(" -> 0x00000130").repeat(10),
+            "NONE","NONE","NONE"),
+            "overlong function chains are not bounded source evidence");
+        bad(()->new HardwareVectorMmMayCorrelation.Report(
+            false,0,true,false,6,5,1,3,true,
+            List.of(report.rows().get(0),report.rows().get(0),
+                report.rows().get(2),report.rows().get(3))),
+            "duplicate vector slot is rejected");
+        boolean immReport=false;
+        try {full.rows().clear();}catch(UnsupportedOperationException expected){
+            immReport=true;
         }
-    }
-    public record Report(boolean relocated,long tableBase,
-            boolean resetRecognized,boolean resetIncomplete,
-            int recognizedTargets,int exactEntries,int interiorPointers,
-            int distinctShownRoots,boolean displayTruncated,List<Row> rows) {
-        public Report {
-            if(tableBase<0 || (tableBase&3)!=0 ||
-                    relocated && tableBase>MCU_MAX-1023 ||
-                    !relocated && tableBase!=0 ||
-                    recognizedTargets<0 ||
-                    recognizedTargets>HardwareVectorResetCorrelation.MAX_RECOGNIZED_VECTOR_TARGETS ||
-                    exactEntries<0 || interiorPointers<0 ||
-                    exactEntries+interiorPointers!=recognizedTargets ||
-                    rows==null ||
-                    distinctShownRoots<0 || distinctShownRoots>rows.size() ||
-                    rows.size()>MAX_ROWS ||
-                    rows.stream().anyMatch(java.util.Objects::isNull) ||
-                    rows.size()>exactEntries ||
-                    exactEntries>0 && rows.isEmpty() ||
-                    displayTruncated!=(rows.size()<exactEntries))
-                throw new IllegalArgumentException("Inconsistent vector MM report");
-            Set<Long> uniqueRoots=new HashSet<>();
-            int previousSlot=1;
-            for(Row row:rows) {
-                if(row.vectorNumber()<=previousSlot ||
-                        resetRecognized &&
-                        row.resetRelation()==
-                            HardwareVectorResetCorrelation.Relation.RESET_ROOT_UNKNOWN ||
-                        !resetRecognized &&
-                        row.resetRelation()!=
-                            HardwareVectorResetCorrelation.Relation.RESET_ROOT_UNKNOWN ||
-                        row.resetRelationUncertain()!=
-                            (!resetRecognized || resetIncomplete))
-                    throw new IllegalArgumentException(
-                        "Contradictory vector MM report row");
-                previousSlot=row.vectorNumber();
-                uniqueRoots.add(row.functionEntry());
-            }
-            if(uniqueRoots.size()!=distinctShownRoots)
-                throw new IllegalArgumentException(
-                    "Incorrect distinct inspected handler count");
-            rows=List.copyOf(rows);
-        }
-        public long displayedMay() {
-            return rows.stream().filter(r->
-                r.mmLowByte().equals("STATIC_MAY_MM_LOW_BYTE")).count();
-        }
-        public long displayedUnknown() {
-            return rows.stream().filter(r->
-                r.mmLowByte().equals("UNKNOWN")).count();
-        }
-        public long displayedNoObservation() {
-            return rows.stream().filter(r->
-                r.mmLowByte().equals("NOT_OBSERVED_IN_BOUNDED_SOURCE")).count();
-        }
-        public String markdown() {
-            StringBuilder out=new StringBuilder(
-                "## MC68332 vector-handler SIMCR/MM low-byte MAY sources (GA-02/03/11)\n\n")
-                .append("- **STATIC SOURCE ONLY; explicit MC68332 profile required**. ")
-                .append("Vector bytes come from ")
-                .append(relocated?"a relocated MOVEC-to-VBR source-image candidate at "+
-                    hex(tableBase):"image-zero")
-                .append("; neither source is proof of an active VBR or an ")
-                .append("executed ISR. No vector pointer is added as a CALL edge.\n")
-                .append("- Recognized vector pointers: ").append(recognizedTargets)
-                .append("; exact function entries: ").append(exactEntries)
-                .append("; interior pointers (not analyzed as complete handlers): ")
-                .append(interiorPointers)
-                .append("; distinct analyzed exact roots in displayed rows: ")
-                .append(distinctShownRoots)
-                .append("; displayed exact rows: ").append(rows.size())
-                .append("; undisplayed exact rows: ").append(exactEntries-rows.size())
-                .append("; DISPLAYED-ONLY MM classifications (not whole table): MAY=")
-                .append(displayedMay()).append(", UNKNOWN=")
-                .append(displayedUnknown()).append(", NOT_OBSERVED=")
-                .append(displayedNoObservation())
-                .append("; RESET root recognized: ").append(resetRecognized)
-                .append("; RESET direct-CALL graph incomplete: ")
-                .append(resetIncomplete).append(".\n")
-                .append("- MAY MM is a bounded potential STORE that overlaps the ")
-                .append("selected-device SIMCR/MM low byte. MM0/MM1 are ")
-                .append("conditional alternatives, NOT a latched first-write ")
-                .append("value. Unknown alias/width, missing call targets, ")
-                .append("computed flow and depth/node/batch cutoffs remain ")
-                .append("UNKNOWN. Source paths are function-entry chains ")
-                .append("rooted at the exact vector handler, not decoded ")
-                .append("instruction traces or executed calls. NONE is ")
-                .append("not proof of no MM effect. RESET relationship ")
-                .append("is separately bounded, not execution order. ")
-                .append("RESET relation uncertainty describes ONLY RESET ")
-                .append("root/graph completeness; handler MM source uncertainty ")
-                .append("is a different evidence horizon.\n");
-            if(displayTruncated)
-                out.append("- **INCOMPLETE VECTOR DISPLAY:** omitted exact handlers ")
-                    .append("were not analyzed for MM source effects.\n");
-            if(rows.isEmpty())
-                return out.append("- No displayed exact handler source. ")
-                    .append("This does not prove absent MMIO or interrupts.\n\n").toString();
-            out.append("\n| Vector | Source-image pointer | RESET relation | ")
-                .append("RESET uncertain | SIMCR/MM MAY | MM source uncertain | ")
-                .append("Alias/width unknown | ")
-                .append("Unknown control | Cycle | Limited | Inspected functions | ")
-                .append("MM source function chain | Alias function chain | ")
-                .append("Observed unknown/missing chain | Uninspected frontier chain |\n")
-                .append("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n");
-            for(Row row:rows)
-                out.append("| ").append(row.vectorNumber())
-                    .append(" | ").append(hex(row.pointer()))
-                    .append(" | ").append(row.resetRelation())
-                    .append(" | ").append(row.resetRelationUncertain())
-                    .append(" | ").append(row.mmLowByte())
-                    .append(" | ").append(row.mmEvidenceUncertain())
-                    .append(" | ").append(row.unknownAlias())
-                    .append(" | ").append(row.unknownControl())
-                    .append(" | ").append(row.cycle())
-                    .append(" | ").append(row.limited())
-                    .append(" | ").append(row.examined())
-                    .append(" | ").append(row.mmSource())
-                    .append(" | ").append(row.aliasSource())
-                    .append(" | ").append(row.observedUnknownSource())
-                    .append(" | ").append(row.frontierSource())
-                    .append(" |\n");
-            return out.append("\n").toString();
-        }
-    }
-    private static String hex(long id) {
-        return String.format(Locale.ROOT,"0x%08X",id);
-    }
-    /** Fail closed on injected text, unbounded or cross-root source paths. */
-    private static boolean validWitness(String value,long root,String... kinds) {
-        if("NONE".equals(value))return true;
-        String[] parts=value.split(" -> ",-1);
-        if(parts.length<2 || parts.length>MAX_ROOT_DEPTH+3 ||
-                !List.of(kinds).contains(parts[0]) ||
-                !parts[1].equals(hex(root)))return false;
-        for(int i=1;i<parts.length;i++)
-            if(!parts[i].matches("0x[0-9A-F]{8,16}"))return false;
-        return true;
-    }
-    private static String witness(
-            HardwareInterproceduralMmEffects.SourceWitness path) {
-        if(path==null)return "NONE";
-        StringBuilder result=new StringBuilder(path.kind().name());
-        for(long id:path.chain())result.append(" -> ").append(hex(id));
-        return result.toString();
-    }
-    private static String observed(
-            HardwareInterproceduralMmEffects.Summary s) {
-        var path=s.unknownWitness();
-        return path!=null &&
-            (path.kind()==HardwareInterproceduralMmEffects.WitnessKind.UNKNOWN_FLOW ||
-                path.kind()==HardwareInterproceduralMmEffects.WitnessKind.MISSING_TARGET)?
-            witness(path):"NONE";
-    }
-    private static String mmClass(HardwareInterproceduralMmEffects.Summary s) {
-        return s.mayMm()?"STATIC_MAY_MM_LOW_BYTE":
-            s.uncertainOrMm()?"UNKNOWN":"NOT_OBSERVED_IN_BOUNDED_SOURCE";
-    }
-    public static Report inspect(boolean relocated,long tableBase,
-            boolean resetRecognized,boolean resetIncomplete,
-            Set<Long> resetVisited,
-            List<HardwareVectorResetCorrelation.Target> vectorTargets,
-            Collection<HardwareInterproceduralMmEffects.FunctionNode> graph,
-            int maxRows) {
-        if(resetVisited==null || vectorTargets==null || graph==null ||
-                maxRows<1 || maxRows>MAX_ROWS ||
-                vectorTargets.size()>HardwareVectorResetCorrelation.MAX_RECOGNIZED_VECTOR_TARGETS ||
-                resetVisited.size()>HardwareCallEffects.MAX_SOURCE_FUNCTIONS ||
-                tableBase<0 || (tableBase&3)!=0 ||
-                relocated && tableBase>MCU_MAX-1023 ||
-                !relocated && tableBase!=0)
-            throw new IllegalArgumentException("Invalid bounded vector MM source inventory");
-        for(Long entry:resetVisited)
-            if(entry==null || entry<0 || entry>MCU_MAX || (entry&1)!=0)
-                throw new IllegalArgumentException("Invalid selected-MCU RESET entry");
-        List<HardwareVectorResetCorrelation.Target> sorted=new ArrayList<>(vectorTargets);
-        if(sorted.contains(null))
-            throw new IllegalArgumentException("Null vector source");
-        sorted.sort(Comparator.comparingInt(
-            HardwareVectorResetCorrelation.Target::vectorNumber));
-        Set<Integer> slots=new HashSet<>();
-        Set<Long> selectedRoots=new HashSet<>();
-        int exact=0,interior=0;
-        List<HardwareVectorResetCorrelation.Target> displayed=new ArrayList<>();
-        for(var target:sorted) {
-            if(!slots.add(target.vectorNumber()) ||
-                    target.pointer()>MCU_MAX ||
-                    target.functionEntry()>MCU_MAX)
-                throw new IllegalArgumentException(
-                    "Duplicate or out-of-range MC68332 vector source");
-            if(!target.exactEntry()) {
-                interior++;
-                continue;
-            }
-            exact++;
-            if(displayed.size()<maxRows) {
-                displayed.add(target);
-                selectedRoots.add(target.functionEntry());
-            }
-        }
-        // No fabricated CALL-site PC or inferred ISR edge. Every root is
-        // independently obtained from an exact source-image pointer.
-        // One finite batch budget and immutable per-report root cache.
-        Map<Long,HardwareInterproceduralMmEffects.Summary> sources=
-            HardwareInterproceduralMmEffects.inspectRoots(
-                graph,selectedRoots,MAX_ROOT_DEPTH,MAX_ROOT_NODES);
-        List<Row> rows=new ArrayList<>();
-        for(var target:displayed) {
-            long root=target.functionEntry();
-            var s=sources.get(root);
-            var relation=!resetRecognized?
-                HardwareVectorResetCorrelation.Relation.RESET_ROOT_UNKNOWN:
-                resetVisited.contains(root)?
-                    HardwareVectorResetCorrelation.Relation.IN_RESET_STATIC_CALL_SUBSET:
-                    HardwareVectorResetCorrelation.Relation.OUTSIDE_OBSERVED_RESET_SUBSET;
-            rows.add(new Row(target.vectorNumber(),target.pointer(),root,
-                relation,!resetRecognized || resetIncomplete,
-                mmClass(s),s.unknownAlias(),s.unknownControl(),s.cycle(),s.limited(),
-                s.visited(),witness(s.mmWitness()),witness(s.aliasWitness()),
-                observed(s),witness(s.frontierWitness())));
-        }
-        return new Report(relocated,tableBase,resetRecognized,resetIncomplete,
-            sorted.size(),exact,interior,sources.size(),displayed.size()<exact,rows);
+        ok(immReport,"source report immutable and detached from input lists");
+        System.out.println("HardwareVectorMmMayCorrelationSelfTest PASS: assertions="+
+            assertions);
     }
 }
