@@ -97,6 +97,76 @@ public final class HardwareVerifiedBranchReturnSelfTest {
         ok(HardwareVerifiedBranchReturn.summarize(
             0x100,24,List.of(),Map.of()).isEmpty(),
             "empty or missing Listing never proves callee output");
+        // Real CPU32 MOVEQ is two bytes, writes only Dn, and sign-extends
+        // an eight-bit immediate to the full 32-bit return value. This
+        // permits strict, path-independent branch return proofs, not
+        // branch execution or active MMIO.
+        var moveqBranch=List.of(
+            step(0x300,SET_POINTER,"MOVEQ","D0",0xffff80L,0x302L),
+            step(0x302,OTHER,"BNE",null,0,0x304L,0x30cL),
+            step(0x304,SET_POINTER,"MOVEA.L","A0",0xfffa00L,0x30aL),
+            step(0x30a,OTHER,"BRA",null,0,0x312L),
+            step(0x30c,SET_POINTER,"MOVEA.L","A0",0xfffa00L,0x312L),
+            step(0x312,OTHER,"RTS",null,0));
+        var moveqSizes=Map.of(0x300L,2,0x302L,2,0x304L,6,
+            0x30aL,2,0x30cL,6,0x312L,2);
+        var moveqAgree=HardwareVerifiedBranchReturn.summarize(
+            0x300,20,moveqBranch,moveqSizes);
+        ok(moveqAgree.equals(Map.of("D0",0xffff80L,"A0",0xfffa00L)),
+            "Two convergent BNE/BRA branches preserve canonical MOVEQ #-128,D0");
+        var signCaller=List.of(
+            step(0x400,CALL_BARRIER,"JSR",null,0,0x406L)
+                .withVerifiedCallReturns(moveqAgree),
+            new HardwareDataflow.Step(0x406,STORE_INDIRECT,"A0","D0",
+                0,0,null,16,List.of(),"MOVE.W D0,(A0)"));
+        var signFlow=HardwareDataflow.analyze(0x400,signCaller,
+            Set.of(0xfffa00L),120);
+        ok(signFlow.snapshots.size()==1 &&
+            signFlow.snapshots.get(0).effectiveAddress==0xfffa00L &&
+            Integer.valueOf(0xff80).equals(
+                signFlow.snapshots.get(0).writtenWord) &&
+            signFlow.snapshots.get(0).priorUnknownCall,
+            "MOVEQ sign extension survives branch leaf CALL as static SIMCR MAY source");
+        var moveqDifferent=new ArrayList<>(moveqBranch);
+        moveqDifferent.set(4,step(0x30c,SET_POINTER,"MOVEA.L","A0",
+            0xfffa68L,0x312L));
+        ok(HardwareVerifiedBranchReturn.summarize(
+            0x300,20,moveqDifferent,moveqSizes)
+            .equals(Map.of("D0",0xffff80L)),
+            "Divergent A0 branch paths retain only path-independent MOVEQ D0");
+        var malformedValue=new ArrayList<>(moveqBranch);
+        malformedValue.set(0,step(0x300,SET_POINTER,"MOVEQ","D0",0x80,0x302L));
+        ok(HardwareVerifiedBranchReturn.summarize(
+            0x300,20,malformedValue,moveqSizes).isEmpty(),
+            "Unextended MOVEQ 0x80 cannot invent positive D0 branch proof");
+        var badRegister=new ArrayList<>(moveqBranch);
+        badRegister.set(0,step(0x300,SET_POINTER,"MOVEQ","A0",
+            0xffff80L,0x302L));
+        ok(HardwareVerifiedBranchReturn.summarize(
+            0x300,20,badRegister,moveqSizes).isEmpty(),
+            "MOVEQ cannot write A-register in branching return");
+        var badLength=new LinkedHashMap<>(moveqSizes);
+        badLength.put(0x300L,4);
+        ok(HardwareVerifiedBranchReturn.summarize(
+            0x300,20,moveqBranch,badLength).isEmpty(),
+            "MOVEQ length 4 never proves contiguous Ghidra source bytes");
+        var alteredSuccessor=new ArrayList<>(moveqBranch);
+        alteredSuccessor.set(0,step(0x300,SET_POINTER,"MOVEQ","D0",
+            0xffff80L,0x30cL));
+        ok(HardwareVerifiedBranchReturn.summarize(
+            0x300,20,alteredSuccessor,moveqSizes).isEmpty(),
+            "MOVEQ cannot skip conditional branch fallthrough");
+        var hiddenClobber=new ArrayList<>(moveqBranch);
+        hiddenClobber.set(0,moveqBranch.get(0)
+            .withSideEffects(Set.of("A1")));
+        ok(HardwareVerifiedBranchReturn.summarize(
+            0x300,20,hiddenClobber,moveqSizes).isEmpty(),
+            "Unknown P-code register effect invalidates MOVEQ branch proof");
+        var notRts=new ArrayList<>(moveqBranch);
+        notRts.set(5,step(0x312,OTHER,"RTE",null,0));
+        ok(HardwareVerifiedBranchReturn.summarize(
+            0x300,20,notRts,moveqSizes).isEmpty(),
+            "MOVEQ with return-from-exception cannot cross CALL as RTS");
         System.out.println("HardwareVerifiedBranchReturnSelfTest OK");
     }
 }
