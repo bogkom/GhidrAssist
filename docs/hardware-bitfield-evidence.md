@@ -367,3 +367,25 @@ All tests use synthetic data, GitHub Actions, and isolated Ghidra only:
 no real ECU411 firmware, user Ghidra project, OAuth, or paused
 Wyse/Precision/Supervisor tests are touched. GA-06/10/16 remain PARTIAL.
 
+
+### Exact source-excerpt fingerprints (additional D-10/D-11 guarantee)
+
+The publisher-PDF CI lane, after validating the original NXP-hosted
+265-page MC68332UM SHA-256, matched all ten full heading/meaning sections
+on printed **D-10/D-11** (physical PDF **224/225**) and independently
+computed a **SHA-256 of each normalized, bounded field-description
+excerpt**. Those ten originally checked SHA-256 values are frozen in
+`HardwareSimProtectionTimerPublisherPins` and **rechecked at every new
+official PDF workflow run**; they are not updated automatically when a
+website or text extraction changes. The corresponding Java21 synthetic
+fixtures must NOT match the genuine publisher excerpts by accident.
+
+The read-only native `ga_mc68332_field_citations` tool now reports both
+the SHA-256 computed from the indexed excerpt and the frozen
+publisher-origin excerpt SHA-256, plus
+`MATCHES_PINNED_EXCERPT` and the global ten-row status. Even a match
+cannot prove that arbitrary Lucene text, the current on-disk PDF or
+real MCU execution is independently authenticated. The full manual
+PDF digest remains pinned separately in official publisher CI and in
+index-time RAG metadata; the two cannot be conflated.
+

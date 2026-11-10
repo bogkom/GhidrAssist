@@ -1,3 +1,27 @@
+## GA-06/10/16/18 — 2026-11-10: ten immutable publisher D-10/D-11 excerpt SHA-256 references
+
+On top of the new ten SYPCR/PICR/PITR source fields, the exact
+publisher-hosted MC68332UM SHA-256/265-page PDF CI verified **10/10
+full nearby heading-and-meaning excerpts** on physical PDF pages
+224/D-10 and 225/D-11, and logged the ten independent excerpt
+SHA-256 fingerprints (Actions run 42816712499, source SHA
+`02d14ace320a159daecb24ec8237a365bba49d62`). The manually
+reviewed fingerprints are now frozen in
+`HardwareSimProtectionTimerPublisherPins` and verified on every
+official PDF CI run. No automatic acceptance of changed PDF/excerpts.
+The exact register mask/width checks remain separately validated
+against the original diagrams and the already pinned Table D-2
+physical register list.
+
+`ga_mc68332_field_citations` now reports both the source's
+**index-time excerpt SHA** and the **frozen publisher excerpt SHA**
+and distinguishes `MATCHES_PINNED_EXCERPT` from textual candidates.
+This still does **not** independently authenticate caller-supplied
+RAG text, live local PDF bytes, physical MMIO, SYPCR first write,
+active watchdog, PIT timer or ISR. No paused Wyse/Precision/Supervisor
+workloads, real ECU411 firmware, user Ghidra projects or OAuth
+data are touched. GA-06/10/16/18 remain PARTIAL, GA-14 deferred.
+
 ## GA-06/10/16/18 — 2026-11-10: ten MC68332 protection/periodic timer bitfields
 
 The next MC68332-only source review expands beyond the previously verified
