@@ -290,6 +290,56 @@ public final class HardwareDurableCfgReportSelfTest {
         ok(!eligibleForCompletedRestore(interrupted) &&
             !eligibleForCompleteSourceInventory(interrupted),
             "Limited CFG cannot be revived as a complete source report");
+        // A locally resealed, checksum-valid V2 source can lie about a
+        // modeled JSR MAY-MM bit while retaining exact RESET sets, PCs and
+        // count bounds. Only a live Ghidra source replay could endorse it.
+        // The aggregate disk restore must publish NO JSR/VBR source cursor.
+        var originalJsr=confident.indirect().get(0);
+        var forgedSources=new HardwareResetIndirectVbrCorrelation.SourceInventory(
+            List.of(new HardwareResetIndirectVbrCorrelation.Indirect(
+                originalJsr.caller(),originalJsr.pc(),originalJsr.target(),
+                false,originalJsr.uncertain())),
+            confident.vbr(),confident.resetVisited(),
+            confident.resetRecognized(),confident.resetIncomplete(),0,0);
+        var forged=new Snapshot(
+            confidentlyObserved.markdown(),confidentlyObserved.csv(),
+            confidentlyObserved.functions(),confidentlyObserved.indirect(),
+            confidentlyObserved.vbr(),confidentlyObserved.unresolved(),
+            confidentlyObserved.visited(),confidentlyObserved.limited(),
+            confidentlyObserved.resetRecognized(),
+            confidentlyObserved.resetIncomplete(),
+            confidentlyObserved.cfgReviewComplete(),
+            confidentlyObserved.cfgOmitted(),
+            confidentlyObserved.pointersOmitted(),confidentlyObserved.sites(),
+            confidentlyObserved.roles(),confidentlyObserved.resetFunctions(),
+            forgedSources);
+        var root=java.nio.file.Files.createTempDirectory(
+            "ga12-resealed-may-source-");
+        var key=new HardwareDurableStageStore.Key(
+            HardwareDurableStageStore.hash("project"),
+            HardwareDurableStageStore.hash("firmware"),
+            HardwareDurableStageStore.hash("listing"),
+            HardwareDurableStageStore.hash("extension"),"68000:BE:32:CPU32",true);
+        try {
+            var rewritten=encode(forged);
+            HardwareDurableStageStore.save(root,key,rewritten);
+            var reread=HardwareDurableStageStore.load(root,key).orElseThrow();
+            ok(Arrays.equals(rewritten,reread) &&
+                eligibleForCompleteSourceInventory(decode(reread).orElseThrow()) &&
+                !decode(reread).orElseThrow().sourceInventory()
+                    .indirect().get(0).mayMm(),
+                "Forged MAY is structurally complete inside exact rehashed envelope");
+            var safe=restoredForReadOnlyDisplay(decode(reread).orElseThrow());
+            ok(safe.sourceInventory()==null &&
+                eligibleForCompletedRestore(safe) &&
+                !eligibleForCompleteSourceInventory(safe) &&
+                safe.markdown().contains("SOURCE INVENTORY UNVERIFIED"),
+                "Rehashed false MAY cannot become fresh source in restored report");
+        } finally {
+            java.nio.file.Files.deleteIfExists(
+                HardwareDurableStageStore.checkpointPath(root,key));
+            java.nio.file.Files.deleteIfExists(root);
+        }
         System.out.println("HardwareDurableCfgReportSelfTest OK");
     }
 }

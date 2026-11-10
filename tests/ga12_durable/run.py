@@ -146,9 +146,9 @@ def main():
                                               "source-forged","source-profile"))):
                     raise RuntimeError(
                         "Cross-JVM source inventory/checkpoint did not retain/refuse")
-                if source_phase in ("source-write","source-read",
-                                    "source-corrupt","source-mismatch",
-                                    "source-incomplete","source-edit","source-name"):
+                if source_phase in ("source-write","source-corrupt",
+                                    "source-mismatch","source-incomplete",
+                                    "source-edit","source-name"):
                     if (evidence["source_pairs"]!=2 or
                             evidence["omitted_indirect"]!=1):
                         raise RuntimeError("Missing bounded native V2 source pairs")
@@ -164,7 +164,10 @@ def main():
             forged=source_proofs["source-forged"]
             if (not forged["reused"] or forged["source_inventory_retained"] or
                     forged["source_pairs"]!=0 or
-                    forged["omitted_indirect"]!=0):
+                    forged["omitted_indirect"]!=0 or
+                    restored["source_inventory_retained"] or
+                    restored["source_pairs"]!=0 or
+                    restored["omitted_indirect"]!=0):
                 raise RuntimeError(
                     "Correctly resealed fabricated MAY-MM source leaked after restart")
             initial=source_proofs["source-write"]
