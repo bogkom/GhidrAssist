@@ -3,6 +3,9 @@ package ghidrassist.hardware;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Objects;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -76,19 +79,97 @@ public final class HardwareResetIndirectVbrCorrelation {
     public record Pair(long function,long indirectPc,long indirectTarget,
             long vbrPc,Long candidateVbrBase,
             ResetRelation resetRelation,boolean resetGraphIncomplete,
-            boolean mayMm,boolean uncertain) {}
+            boolean mayMm,boolean uncertain) {
+        public Pair {
+            // Public source results can be reconstructed outside the
+            // trusted Listing adapter. Never print a fabricated 32-bit
+            // address as an exact selected-MC68332 instruction witness.
+            if(function<0 || function>MCU_MAX || (function&1)!=0 ||
+                    indirectPc<function || indirectPc>MCU_MAX ||
+                    (indirectPc&1)!=0 ||
+                    indirectTarget<0 || indirectTarget>MCU_MAX ||
+                    (indirectTarget&1)!=0 ||
+                    vbrPc<function || vbrPc>MCU_MAX || (vbrPc&1)!=0 ||
+                    indirectPc==vbrPc ||
+                    candidateVbrBase!=null &&
+                        (candidateVbrBase<0 || candidateVbrBase>MCU_MAX) ||
+                    resetRelation==null ||
+                    resetRelation==ResetRelation.RESET_ROOT_UNKNOWN &&
+                        !resetGraphIncomplete)
+                throw new IllegalArgumentException(
+                    "Invalid selected-MCU static JSR/MOVEC source pair");
+        }
+    }
     public record Result(int indirectSources,int vbrSources,
             int colocatedPairs,int omittedIndirect,int omittedVbr,
             boolean displayTruncated,boolean resetRootRecognized,
             boolean resetGraphIncomplete,List<Pair> rows,
             int pageOffset,int pageLimit,int nextOffset,boolean hasMore) {
         public Result {
-            rows=List.copyOf(rows);
-            if(pageOffset<0 || pageLimit<1 || pageLimit>MAX_DISPLAY ||
-                    nextOffset<pageOffset ||
-                    rows.size()>pageLimit || hasMore!=(nextOffset<colocatedPairs) ||
+            if(rows==null || rows.stream().anyMatch(Objects::isNull) ||
+                    indirectSources<0 || indirectSources>MAX_INDIRECT_SOURCES ||
+                    vbrSources<0 || vbrSources>MAX_VBR_SOURCES ||
+                    colocatedPairs<0 ||
+                    colocatedPairs>indirectSources*vbrSources ||
+                    omittedIndirect<0 || omittedVbr<0 ||
+                    pageOffset<0 || pageOffset>MAX_INDIRECT_SOURCES*MAX_VBR_SOURCES ||
+                    pageLimit<1 || pageLimit>MAX_DISPLAY ||
+                    rows.size()!=Math.min(pageLimit,
+                        Math.max(0,colocatedPairs-pageOffset)) ||
+                    nextOffset!=pageOffset+rows.size() ||
+                    hasMore!=(nextOffset<colocatedPairs) ||
                     displayTruncated!=(colocatedPairs>rows.size()))
                 throw new IllegalArgumentException("Inconsistent source page");
+            // A caller can construct public Result/Pair records. Recheck
+            // source-instruction identity and RESET relationship across the
+            // displayed page, not merely its visible pagination counters.
+            Map<Long,Pair> byJsrPc=new HashMap<>();
+            Map<Long,Pair> byMovecPc=new HashMap<>();
+            Map<Long,ResetRelation> byFunction=new HashMap<>();
+            Pair previous=null;
+            for(Pair row:rows) {
+                if(previous!=null && comparePairs(previous,row)>=0 ||
+                        !resetRootRecognized &&
+                            row.resetRelation()!=ResetRelation.RESET_ROOT_UNKNOWN ||
+                        resetRootRecognized &&
+                            row.resetRelation()==ResetRelation.RESET_ROOT_UNKNOWN ||
+                        row.resetGraphIncomplete()!=
+                            (resetGraphIncomplete || !resetRootRecognized))
+                    throw new IllegalArgumentException(
+                        "Contradictory RESET/JSR/MOVEC page identity");
+                Pair jsr=byJsrPc.putIfAbsent(row.indirectPc(),row);
+                if(jsr!=null && (jsr.function()!=row.function() ||
+                        jsr.indirectTarget()!=row.indirectTarget() ||
+                        jsr.mayMm()!=row.mayMm()))
+                    throw new IllegalArgumentException(
+                        "Same indirect JSR PC has conflicting target/MM source");
+                Pair movec=byMovecPc.putIfAbsent(row.vbrPc(),row);
+                if(movec!=null && (movec.function()!=row.function() ||
+                        !Objects.equals(movec.candidateVbrBase(),
+                            row.candidateVbrBase())))
+                    throw new IllegalArgumentException(
+                        "Same MOVEC PC has conflicting VBR source");
+                ResetRelation relation=byFunction.putIfAbsent(
+                    row.function(),row.resetRelation());
+                if(relation!=null && relation!=row.resetRelation())
+                    throw new IllegalArgumentException(
+                        "Same function has conflicting RESET membership");
+                previous=row;
+            }
+            for(Long pc:byJsrPc.keySet())
+                if(byMovecPc.containsKey(pc))
+                    throw new IllegalArgumentException(
+                        "JSR and MOVEC source instructions overlap");
+            rows=List.copyOf(rows);
+        }
+        private static int comparePairs(Pair left,Pair right) {
+            int c=Long.compare(left.function(),right.function());
+            if(c!=0)return c;
+            c=Long.compare(left.indirectPc(),right.indirectPc());
+            if(c!=0)return c;
+            c=Long.compare(left.indirectTarget(),right.indirectTarget());
+            if(c!=0)return c;
+            return Long.compare(left.vbrPc(),right.vbrPc());
         }
         private static String hex(long n) {
             return String.format(Locale.ROOT,"0x%08X",n);

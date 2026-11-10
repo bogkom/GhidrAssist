@@ -126,3 +126,36 @@ cycles, limited depth with a positive skipped leaf, reversed inventory,
 foreign-root chains, same-PC JSR/MOVEC collision and later-page refusal.
 Real Ghidra 12.1.4 PUBLIC Java25 extension/headless CI must pass before
 integration. GA-01/02/03/11/18 remain PARTIAL.
+
+## 2026-11-10 — public RESET/JSR/MOVEC pair and page consistency
+
+The existing selected-MC68332 same-Function source correlation has a
+bounded `SourceInventory`, canonical per-PC decoded JSR and MOVEC
+observations and revision-fenced on-demand pages. The public `Pair`
+and `Result` records are also constructible by other Java callers,
+so their own constructors now enforce the same conservative evidence
+**shape** before any Markdown can be published:
+
+- Even bounded 24-bit function, indirect target, JSR and MOVEC PC
+  identities; PC must be at/after the indicated Function entry.
+  Candidate VBR source base must stay within the selected MCU24
+  candidate envelope; one decoded PC cannot be both kinds of instruction.
+- Exact complete page windows, inventory-product bound, stable
+  cursor/has-more/truncation semantics and deterministic ordered
+  distinct displayed pairs. There is no implicit skipped row in a
+  supposedly complete page.
+- Same JSR PC must retain one target and MM MAY verdict; same MOVEC PC
+  retains one candidate VBR base. Both instruction inventories remain
+  disjoint within the page. Repeated Function rows cannot disagree
+  on observed RESET relation or graph incompleteness.
+- Unknown RESET roots cannot be forged into known reachability. No
+  partial proof authorizes new CALL edges, ISR firing, MM latch,
+  actual VBR relocation or Review/Apply.
+
+These checks are in addition to (not a replacement for) the original
+source-inventory full-set identity checks and the same-Program revision
+epoch fence. Java21 source-only adversarial tests assert accepted
+canonical/fully stitched pages and rejected conflicting user-created
+records; complete Java25 extension compilation and real isolated
+Ghidra 12.1.4 PUBLIC synthetic CI remain required before integration.
+GA-01/02/03/11/12/18 remain PARTIAL.
