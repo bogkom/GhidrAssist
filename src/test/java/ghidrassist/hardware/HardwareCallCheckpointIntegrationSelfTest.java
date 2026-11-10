@@ -143,6 +143,161 @@ public final class HardwareCallCheckpointIntegrationSelfTest {
             }
             Files.deleteIfExists(dir);
         }
+        // A source-matching disk envelope is an integrity check, NOT
+        // semantic proof of its decoded contents. Even locally rehashed
+        // binary snapshots must be checked against CURRENT translated
+        // CALL/CFG nodes before restoring or overwriting a valid slot.
+        Path adversarial=Files.createTempDirectory("ga02-ga12-source-gate-");
+        try {
+            var full=key("full-original-program");
+            var site=result.snapshots.get(0);
+            var changedKind=HardwareDataflow.Snapshot.restore(
+                site.instruction,VBR_CONSTANT,site.effectiveAddress,
+                site.writtenWord,site.writeBits,site.pointerRegister,site.vbr,
+                site.knownPeripheralWords,false,site.priorMmCandidateMin,
+                site.priorMmCandidateMax,site.priorUnknownCall,
+                site.priorUnknownStore);
+            var wrongKind=HardwareDataflow.Result.restore(
+                List.of(changedKind),result.reachedNodes,result.iterations,
+                result.knownPointersAtEntry);
+            check(!HardwareDurableFunctionStages.save(adversarial,full,
+                0x100,1000,positive,targets,wrongKind),
+                "Cross-CALL STORE cannot be replaced by forged VBR evidence");
+            var changedWidth=HardwareDataflow.Snapshot.restore(
+                site.instruction,site.kind,site.effectiveAddress,
+                site.writtenWord,8,site.pointerRegister,site.vbr,
+                site.knownPeripheralWords,site.indirect,
+                site.priorMmCandidateMin,site.priorMmCandidateMax,
+                site.priorUnknownCall,site.priorUnknownStore);
+            var wrongWidth=HardwareDataflow.Result.restore(
+                List.of(changedWidth),result.reachedNodes,result.iterations,
+                result.knownPointersAtEntry);
+            check(!HardwareDurableFunctionStages.save(adversarial,full,
+                0x100,1000,positive,targets,wrongWidth),
+                "Saved STORE width must match the actual 16-bit source Step");
+            var moved=HardwareDataflow.Snapshot.restore(
+                0x900L,site.kind,site.effectiveAddress,site.writtenWord,
+                site.writeBits,site.pointerRegister,site.vbr,
+                site.knownPeripheralWords,site.indirect,
+                site.priorMmCandidateMin,site.priorMmCandidateMax,
+                site.priorUnknownCall,site.priorUnknownStore);
+            var foreignPc=HardwareDataflow.Result.restore(
+                List.of(moved),result.reachedNodes,result.iterations,
+                result.knownPointersAtEntry);
+            check(!HardwareDurableFunctionStages.save(adversarial,full,
+                0x100,1000,positive,targets,foreignPc),
+                "Off-graph MMIO source cannot be smuggled into a completed checkpoint");
+            var partialCount=HardwareDataflow.Result.restore(
+                result.snapshots,result.reachedNodes-1,result.iterations,
+                result.knownPointersAtEntry);
+            check(!HardwareDurableFunctionStages.save(adversarial,full,
+                0x100,1000,positive,targets,partialCount),
+                "Forgeable visited-node count must match closed source CFG");
+            var roguePointers=new LinkedHashMap<>(
+                result.knownPointersAtEntry);
+            roguePointers.put(0x900L,Map.of("A0",0xfffa00L));
+            var rogueState=HardwareDataflow.Result.restore(
+                result.snapshots,result.reachedNodes,result.iterations,
+                roguePointers);
+            check(!HardwareDurableFunctionStages.save(adversarial,full,
+                0x100,1000,positive,targets,rogueState),
+                "Unreachable register state cannot authorize downstream SIMCR evidence");
+            var highPointer=new LinkedHashMap<>(
+                result.knownPointersAtEntry);
+            highPointer.put(0x106L,Map.of("A0",0x1000000L));
+            var impossiblePointer=HardwareDataflow.Result.restore(
+                result.snapshots,result.reachedNodes,result.iterations,
+                highPointer);
+            check(!HardwareDurableFunctionStages.save(adversarial,full,
+                0x100,1000,positive,targets,impossiblePointer),
+                "Persisted A0 values must fit the explicitly modeled 24-bit source");
+            var badPeripherals=new LinkedHashMap<>(
+                site.knownPeripheralWords);
+            badPeripherals.put(0x1000000L,1);
+            var bogusMmio=HardwareDataflow.Snapshot.restore(
+                site.instruction,site.kind,site.effectiveAddress,
+                site.writtenWord,site.writeBits,site.pointerRegister,
+                site.vbr,badPeripherals,site.indirect,
+                site.priorMmCandidateMin,site.priorMmCandidateMax,
+                site.priorUnknownCall,site.priorUnknownStore);
+            var bogusMmioResult=HardwareDataflow.Result.restore(
+                List.of(bogusMmio),result.reachedNodes,result.iterations,
+                result.knownPointersAtEntry);
+            check(!HardwareDurableFunctionStages.save(adversarial,full,
+                0x100,1000,positive,targets,bogusMmioResult),
+                "High 32-bit peripheral state cannot be restored as MC68332 evidence");
+
+            check(HardwareDurableFunctionStages.save(adversarial,full,
+                0x100,1000,positive,targets,result) &&
+                HardwareDurableFunctionStages.load(adversarial,full,
+                    0x100,1000,positive,targets).isPresent(),
+                "Valid complete verified CALL result survives strict source-bound restore");
+
+            // Test a correct outer SHA-256 and matching full-input envelope
+            // containing a *semantic* lie. Reflection is limited to the
+            // pure-Java test to derive the private exact key; no real
+            // Program/firmware/authorization object is accessed.
+            var keyMethod=HardwareDurableFunctionStages.class
+                .getDeclaredMethod("key",
+                    HardwareDurableStageStore.Key.class,long.class,
+                    int.class,java.util.Collection.class,java.util.Collection.class);
+            keyMethod.setAccessible(true);
+            var derived=(HardwareDurableStageStore.Key)keyMethod.invoke(
+                null,full,0x100L,1000,positive,targets);
+            HardwareDurableStageStore.save(adversarial,derived,
+                HardwareFunctionResultCodec.encode(wrongKind));
+            check(HardwareDurableFunctionStages.load(adversarial,full,
+                    0x100,1000,positive,targets).isEmpty(),
+                "Rehashed matching disk envelope cannot launder VBR-for-STORE");
+            HardwareDurableStageStore.save(adversarial,derived,
+                HardwareFunctionResultCodec.encode(foreignPc));
+            check(HardwareDurableFunctionStages.load(adversarial,full,
+                    0x100,1000,positive,targets).isEmpty(),
+                "Rehashed matching envelope cannot launder a foreign MMIO PC");
+
+            var extraNodes=new LinkedHashMap<>(decoded.atEntry());
+            extraNodes.put(0x900L,new HardwareDataflow.EntryState(
+                Map.of("A0",0xfffa00L),Map.of(),null,0,0,false,false));
+            var alienProgress=new HardwareDataflow.Progress(
+                0x100L,1000,decoded.iterations(),
+                extraNodes,decoded.pending());
+            check(!HardwareDurableFunctionStages.saveProgress(
+                adversarial,full,0x100,1000,positive,targets,alienProgress),
+                "Cannot overwrite valid disk slot with off-CFG saved CALL worklist");
+            HardwareDurableStageStore.save(adversarial,derived,
+                HardwareFunctionProgressCodec.encode(alienProgress));
+            check(HardwareDurableFunctionStages.loadProgress(
+                adversarial,full,0x100,1000,positive,targets).isEmpty(),
+                "Rehashed off-graph partial checkpoint must be refused on restart");
+
+            check(HardwareDurableFunctionStages.saveProgress(
+                    adversarial,full,0x100,1000,positive,targets,decoded) &&
+                HardwareDurableFunctionStages.loadProgress(
+                    adversarial,full,0x100,1000,positive,targets).isPresent(),
+                "Legitimate incomplete verified-CALL source worklist still resumes");
+
+            var unreachableStep=new ArrayList<>(positive);
+            unreachableStep.add(new HardwareDataflow.Step(
+                0x900L,STORE_DIRECT,null,0xfffa00L,0,
+                0x40ca,16,List.of(),"unreachable synthetic MMIO"));
+            var bogusReachable=new LinkedHashMap<>(decoded.atEntry());
+            bogusReachable.put(0x900L,new HardwareDataflow.EntryState(
+                Map.of(),Map.of(),null,0,0,false,false));
+            var graphOrphan=new HardwareDataflow.Progress(
+                0x100L,1000,decoded.iterations(),
+                bogusReachable,decoded.pending());
+            check(!HardwareDurableFunctionStages.saveProgress(
+                adversarial,full,0x100,1000,unreachableStep,targets,graphOrphan),
+                "Declared but UNREACHABLE source Step must not revive forged MMIO progress");
+            check(!HardwareDurableFunctionStages.save(adversarial,full,
+                0x100,1000,unreachableStep,targets,foreignPc),
+                "Declared disconnected source cannot satisfy a saved MMIO write witness");
+        }finally{
+            try(var files=Files.list(adversarial)) {
+                for(Path entry:files.toList())Files.deleteIfExists(entry);
+            }
+            Files.deleteIfExists(adversarial);
+        }
         check(HardwareDataflow.mayTouchSimcrMmLowByte(0xfffa00L,16) &&
               HardwareDataflow.mayTouchSimcrMmLowByte(0xfff9ffL,32) &&
               !HardwareDataflow.mayTouchSimcrMmLowByte(0xfffa02L,16),
