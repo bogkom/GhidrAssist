@@ -100,6 +100,51 @@ public class GA18VerifyVectorResetCorrelation extends GhidraScript {
                     !selectedText.contains("CFG relation"))
                 throw new IllegalStateException(
                     "GA18 RESET-MM-VBR FAIL: selected MC68332 bounded static report");
+            // The production image-zero ISR source scan must apply the
+            // same explicit selected-device width gate as relocated VBR.
+            // Modify only one vector of this synthetic Ghidra Program and
+            // restore it in a separate committed test transaction.
+            Class<?> vectorService=Class.forName(
+                "ghidrassist.hardware.GhidraInterruptVectorService",true,loader);
+            Method imageZero=vectorService.getMethod("analyze",
+                Program.class,TaskMonitor.class,boolean.class,boolean.class,
+                java.util.Set.class,java.util.List.class,boolean.class);
+            var slot=currentProgram.getAddressFactory()
+                .getDefaultAddressSpace().getAddress(26L*4);
+            byte before=currentProgram.getMemory().getByte(slot);
+            check(before==0,"original synthetic vector 26 high byte");
+            int edit=currentProgram.startTransaction(
+                "GA18 isolated image-zero MCU24 vector pointer probe");
+            try {
+                currentProgram.getMemory().setByte(slot,(byte)0x01);
+            }finally{
+                currentProgram.endTransaction(edit,true);
+            }
+            try {
+                String mc=(String)imageZero.invoke(null,currentProgram,monitor,
+                    false,true,java.util.Set.of(),java.util.List.of(),true);
+                String cpu=(String)imageZero.invoke(null,currentProgram,monitor,
+                    false,true,java.util.Set.of(),java.util.List.of(),false);
+                check(mc.contains("outside explicitly selected MCU24 width: 1") &&
+                      mc.contains("0x00000068 | 0x01000130 | OUTSIDE_SELECTED_MCU24_RANGE") &&
+                      !mc.contains("0x01000130 | RECOGNIZED_FUNCTION_CANDIDATE"),
+                      "selected MC68332 image-zero high ISR pointer never becomes a function");
+                check(cpu.contains("outside explicitly selected MCU24 width: 0") &&
+                      cpu.contains("0x00000068 | 0x01000130 | UNMAPPED_TARGET") &&
+                      !cpu.contains("OUTSIDE_SELECTED_MCU24_RANGE"),
+                      "generic CPU32 source scan retains full 32-bit unmapped pointer");
+            }finally {
+                int restore=currentProgram.startTransaction(
+                    "GA18 restore isolated vector 26 bytes");
+                try{
+                    currentProgram.getMemory().setByte(slot,before);
+                }finally{
+                    currentProgram.endTransaction(restore,true);
+                }
+            }
+            check(currentProgram.getMemory().getByte(slot)==before,
+                "image-zero synthetic pointer restored exactly");
+            println("GA18 REAL IMAGE-ZERO MCU24 ISR SOURCE PASS: selected=OUTSIDE generic=UNMAPPED");
             println("GA18 CFG JSR MOVEC ROUTE REPORT PASS: bounded Listing CFG source only");
             println("GA18 RESET INDIRECT MM VBR PASS: selected-device gate, "+
                 "bounded same-Program evidence, no hardware execution claim");
