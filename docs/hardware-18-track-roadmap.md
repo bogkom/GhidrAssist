@@ -1,3 +1,27 @@
+## GA-12/15/18 — 2026-11-10: explicit Listing page anchor across UI navigation
+
+Automation API v3 `listing.range` may use the active CodeBrowser cursor
+only for its first read-only page. Previously a later page with a
+matching Program revision but no address could silently reuse a
+newly selected GUI cursor: CodeBrowser navigation does not increment
+the Program modification number, so two adjacent pages could come
+from different Listing ranges. The RPC server, underlying Listing
+implementation and `ghidrassist-agent` CLI now require an explicit
+first-page start address **and** the original Program revision for
+every nonzero offset. First-page interactive navigation and explicit
+same-start requests remain unchanged. `start`, `revision`,
+`next_offset` and static-source warnings provide bounded pagination
+coordinates but are not independently authenticated cross-request cursors.
+
+Deterministic Python3 CLI negative tests reject absent/blank start and
+absent revision before RPC; Java25 full Ghidra 12.1.4 PUBLIC extension
+build and isolated synthetic headless integration are exact-SHA
+integration gates. No executable CALL, MMIO/ISR execution, Review/
+Apply/Undo authorization, Program writes, user profiles, OAuth, original
+ECU411 firmware, or stopped Wyse/Precision/Supervisor tests are used.
+See [Automation API v3](ga18-automation-api-v3.md).
+GA-12/15/18 remain PARTIAL; GA-14 deferred.
+
 ## GA-01/02/03/11/18 — 2026-11-10: target-rooted computed JSR/MMIO chains and MOVEC identity gate
 
 The byte-witnessed indirect CPU32 JSR -> SIMCR/MM MAY report now
