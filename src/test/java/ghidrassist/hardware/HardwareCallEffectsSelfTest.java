@@ -382,7 +382,8 @@ public final class HardwareCallEffectsSelfTest {
             missingRoot.observedUnknownWitness().chain().equals(List.of(0L)),
             "missing RESET/CALL function root remains an honest zero-visit unknown");
         var limitedRoot=HardwareCallEffects.inspect(0L,
-            List.of(n(0L,false,false,false,1L)),0,1);
+            List.of(n(0L,false,false,false,1L),
+                    n(1L,false,false,false)),0,1);
         ok(limitedRoot.frontierWitness().kind()==
                 HardwareCallEffects.WitnessKind.DEPTH_CUTOFF &&
             limitedRoot.frontierWitness().chain().equals(List.of(0L,1L)),
