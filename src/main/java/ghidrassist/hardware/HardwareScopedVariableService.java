@@ -50,7 +50,9 @@ public final class HardwareScopedVariableService {
                 v.getVariableStorage().toString(),
             v.getDataType() instanceof Pointer,
             v.getSource()==SourceType.USER_DEFINED,
-            v instanceof Parameter p && (p.isAutoParameter() || p.isForcedIndirect()));
+            v instanceof Parameter p && (p.isAutoParameter() || p.isForcedIndirect()),
+            v.getDataType().getPathName()+"#length="+v.getDataType().getLength(),
+            v.getFirstUseOffset());
     }
 
     /** Exact Function/kind/ordinal selection, to detect stale storage in audits. */
@@ -136,11 +138,15 @@ public final class HardwareScopedVariableService {
     public static List<HardwareScopedVariableReview.Proposal> preview(Function fn) {
         if(fn==null)throw new IllegalArgumentException("Missing function");
         List<HardwareScopedVariableReview.Observation> observations=new ArrayList<>();
-        for(Parameter p:fn.getParameters()) {
+        Parameter[] params=fn.getParameters();
+        Variable[] locals=fn.getLocalVariables();
+        if(params.length+locals.length>2048)
+            throw new IllegalArgumentException(
+                "Function has too many typed variables for bounded Review");
+        for(Parameter p:params) {
             if(p.getOrdinal()<0)continue;
             observations.add(observe(fn,p,p.getOrdinal()));
         }
-        Variable[] locals=fn.getLocalVariables();
         for(int i=0;i<locals.length;i++)
             observations.add(observe(fn,locals[i],i));
         return HardwareScopedVariableReview.propose(observations);
@@ -162,6 +168,7 @@ public final class HardwareScopedVariableService {
         Set<String> selected=new HashSet<>();
         for(var p:accepted) {
             if(p==null || p.decision()!=HardwareScopedVariableReview.Decision.READY ||
+                    !p.original().hasLiveTypeIdentity() ||
                     !selected.add(p.original().functionEntry()+"/"+
                         p.original().kind()+"/"+p.original().ordinal()))
                 throw new IllegalArgumentException("Duplicate or unreviewed variable");
@@ -231,9 +238,13 @@ public final class HardwareScopedVariableService {
                         persisted.getSource()!=SourceType.USER_DEFINED ||
                         !(persisted.getDataType() instanceof Pointer) ||
                         persisted instanceof Parameter arg &&
-                            (arg.isAutoParameter() || arg.isForcedIndirect()))
+                            (arg.isAutoParameter() || arg.isForcedIndirect()) ||
+                        !p.original().dataTypeIdentity().equals(
+                            persisted.getDataType().getPathName()+"#length="+
+                                persisted.getDataType().getLength()) ||
+                        p.original().firstUseOffset()!=persisted.getFirstUseOffset())
                     throw new IllegalStateException(
-                        "Scoped pointer rename did not preserve reviewed identity");
+                        "Scoped pointer rename did not preserve reviewed type/use identity");
                 String key=HardwareScopedVariableReceipt.optionKey(
                     p.original().functionEntry(),p.original().kind(),
                     p.original().ordinal());
