@@ -2,6 +2,7 @@
 """Launch isolated Ghidra GUI with opt-in local Automation API, no Supervisor."""
 import argparse
 import json
+import math
 import os
 from pathlib import Path
 import secrets
@@ -33,7 +34,21 @@ def _parse_unambiguous_json(raw):
     def reject_constant(name):
         raise ValueError("Non-finite Automation JSON number: " + name)
 
+    def bounded_integer(token):
+        if len(token.lstrip("-")) > 64:
+            raise ValueError("Oversized Automation JSON integer")
+        return int(token)
+
+    def bounded_float(token):
+        if len(token) > 128:
+            raise ValueError("Oversized Automation JSON float")
+        number = float(token)
+        if not math.isfinite(number):
+            raise ValueError("Non-finite Automation JSON number")
+        return number
+
     value = json.loads(raw.decode("utf-8"), object_pairs_hook=unique_object,
+                       parse_int=bounded_integer, parse_float=bounded_float,
                        parse_constant=reject_constant)
     if not isinstance(value, dict):
         raise ValueError("Automation receipt/response must be a JSON object")
