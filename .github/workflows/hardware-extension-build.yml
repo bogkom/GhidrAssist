@@ -110,7 +110,7 @@ jobs:
           grep -E 'GA18 (CALLGRAPH|PRODUCTION PATHS|VECTOR RESET|DECOMPILER TASK|LISTING)|ERROR|Exception' "$RUNNER_TEMP/ga18-paths.log" || true
           grep -q 'GA18 CALLGRAPH PASS: functions=20 edges=19 mmio_static_writes=4 reset_reachable=6 assertions=110' "$RUNNER_TEMP/ga18-paths.log"
           grep -q 'GA18 PRODUCTION PATHS PASS: assertions=22' "$RUNNER_TEMP/ga18-paths.log"
-          if ! grep -q 'GA18 VECTOR RESET CORRELATION PASS: assertions=13' "$RUNNER_TEMP/ga18-paths.log"; then
+          if ! grep -q 'GA18 VECTOR RESET CORRELATION PASS: assertions=15' "$RUNNER_TEMP/ga18-paths.log"; then
             echo 'Native synthetic vector/RESET correlation evidence missing'
             tail -n 120 "$RUNNER_TEMP/ga18-paths.log"
             exit 1
