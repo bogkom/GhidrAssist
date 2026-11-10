@@ -3,6 +3,7 @@ on:
   pull_request:
     paths:
       - 'src/main/java/ghidrassist/hardware/HardwareManualFieldExcerptEvidence.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareManualPublisherExcerptPins.java'
       - 'src/test/java/ghidrassist/hardware/HardwareManualFieldExcerptEvidenceSelfTest.java'
       - 'src/main/java/ghidrassist/hardware/HardwareBitfieldLayoutWitness.java'
       - 'src/main/java/ghidrassist/hardware/HardwareBitfieldSourceLedger.java'
@@ -31,6 +32,7 @@ jobs:
             src/main/java/ghidrassist/hardware/HardwareBitfieldSourceLedger.java \
             src/main/java/ghidrassist/hardware/HardwareBitfieldLayoutWitness.java \
             src/main/java/ghidrassist/hardware/HardwareManualFieldExcerptEvidence.java \
+            src/main/java/ghidrassist/hardware/HardwareManualPublisherExcerptPins.java \
             src/test/java/ghidrassist/hardware/HardwareManualFieldExcerptEvidenceSelfTest.java
           java -cp "$RUNNER_TEMP/ga061016-excerpt" \
             ghidrassist.hardware.HardwareManualFieldExcerptEvidenceSelfTest

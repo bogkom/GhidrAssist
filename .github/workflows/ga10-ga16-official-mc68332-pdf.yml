@@ -8,6 +8,7 @@ on:
       - 'src/main/java/ghidrassist/hardware/HardwareBitfieldPageWitness.java'
       - 'src/main/java/ghidrassist/hardware/HardwareBitfieldLayoutWitness.java'
       - 'src/main/java/ghidrassist/hardware/HardwareManualFieldExcerptEvidence.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareManualPublisherExcerptPins.java'
       - 'src/test/java/ghidrassist/hardware/HardwareManualFieldExcerptEvidenceSelfTest.java'
       - 'src/main/java/ghidrassist/hardware/HardwareSimD2RegisterWitness.java'
       - 'src/test/java/ghidrassist/hardware/HardwareSimD2RegisterWitnessSelfTest.java'
@@ -83,6 +84,7 @@ jobs:
             src/main/java/ghidrassist/hardware/HardwareBitfieldPageWitness.java \
             src/main/java/ghidrassist/hardware/HardwareBitfieldLayoutWitness.java \
             src/main/java/ghidrassist/hardware/HardwareManualFieldExcerptEvidence.java \
+            src/main/java/ghidrassist/hardware/HardwareManualPublisherExcerptPins.java \
             src/main/java/ghidrassist/hardware/HardwareProfileAudit.java \
             src/main/java/ghidrassist/hardware/HardwareSimD2RegisterWitness.java \
             src/test/java/ghidrassist/hardware/HardwareSimD2RegisterWitnessSelfTest.java \

@@ -70,6 +70,11 @@ public final class HardwareManualFieldExcerptEvidenceSelfTest {
             find(positive,"SYNCR/Y").state()==
                 HardwareManualFieldExcerptEvidence.State.MATCHED_TEXT_CANDIDATE,
             "Short W/X/Y source witnesses require full descriptive headings");
+        check(!HardwareManualPublisherExcerptPins.allPinnedExcerptsMatch(positive) &&
+            HardwareManualPublisherExcerptPins.expected("SIMCR","MM")!=null &&
+            !HardwareManualPublisherExcerptPins.matches(
+                find(positive,"SIMCR/MM")),
+            "Plausible synthetic source text cannot claim 15 pinned publisher excerpts");
         check(positive.markdown().contains("PURE TEXT COMPARISON, NOT PDF AUTHENTICATION") &&
                 positive.markdown().contains("Motorola 1995") &&
                 positive.markdown().contains("SIMCR/MM") &&
@@ -170,11 +175,13 @@ public final class HardwareManualFieldExcerptEvidenceSelfTest {
                 profile,Map.of(219,Files.readString(Path.of(args[0])),
                     220,Files.readString(Path.of(args[1])),
                     221,Files.readString(Path.of(args[2]))),P);
-            check(publisher.allReviewedTextCandidatesMatch(),
-                "Publisher SHA-pinned MC68332UM: all 15 headers + meaning proximity on correct folios");
+            check(publisher.allReviewedTextCandidatesMatch() &&
+                HardwareManualPublisherExcerptPins.allPinnedExcerptsMatch(publisher),
+                "Publisher SHA-pinned MC68332UM: 15 exact excerpt digests reproduce frozen official references");
             for(var row:publisher.citations()){
                 check(row.excerptSha256()!=null &&
                     row.excerptSha256().length()==64 &&
+                    HardwareManualPublisherExcerptPins.matches(row) &&
                     row.excerpt().contains(row.reviewed().heading()
                         .toUpperCase().replace(" — "," - ")),
                     "Publisher text contains bounded evidence excerpt for "+row.reviewed().key());
