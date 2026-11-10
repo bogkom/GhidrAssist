@@ -1,6 +1,6 @@
 ## GA-01/02/03/11/18 — 2026-11-10: CPU32 source graph U32 address envelope
 
-Both read-only transitive CALL source engines validate the unsigned
+Both read-only transitive CALL source engines and RESET root/evidence\nvalidation enforce the unsigned
 32-bit identity envelope before accepting function nodes, edges,
 CALL-site instruction PCs, selected callers, explicit roots or typed
 witness chains. The inclusive 0xFFFFFFFF boundary remains representable;
