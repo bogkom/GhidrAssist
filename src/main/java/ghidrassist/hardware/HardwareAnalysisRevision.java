@@ -13,6 +13,24 @@ import java.util.Objects;
  */
 public final class HardwareAnalysisRevision {
     public static final String ALGORITHM="GA12-REV1";
+
+    /**
+     * A matching arbitrary source label is not a verified executable digest.
+     * This is only SHA-256 metadata syntax validation, NOT a recomputation of
+     * source bytes, an author signature or proof of trusted Ghidra provenance.
+     * Unknown or legacy/invalid labels remain usable as revision identifiers
+     * but must never confer a CURRENT_APPROVED_NAME audit classification.
+     */
+    public static boolean isVerifiableExecutableSha256(String source) {
+        if(source==null || source.length()!=64)return false;
+        for(int i=0;i<source.length();i++) {
+            char c=source.charAt(i);
+            if(!(c>='0' && c<='9' ||
+                    c>='a' && c<='f' ||
+                    c>='A' && c<='F'))return false;
+        }
+        return true;
+    }
     private final Object identity;
     private final long modificationNumber;
     private final String language;

@@ -46,6 +46,21 @@ public final class HardwareAnalysisRevisionSelfTest {
         check(bad,"reject unknown language");
         check(HardwareAnalysisRevision.ALGORITHM.equals("GA12-REV1"),
             "explicit schema revision invalidation");
+        check(HardwareAnalysisRevision.isVerifiableExecutableSha256(
+                "a".repeat(64)) &&
+            HardwareAnalysisRevision.isVerifiableExecutableSha256(
+                "AB".repeat(32)) &&
+            HardwareAnalysisRevision.isVerifiableExecutableSha256(
+                "0123456789abcdef".repeat(4)),
+            "full SHA-256 hexadecimal syntax accepts either case");
+        for(String untrusted:new String[]{null,"","UNKNOWN","unknown",
+                "original-sha","a".repeat(63),"a".repeat(65),
+                "g".repeat(64),"a".repeat(63)+" ",
+                "\uFF21".repeat(64),"+".repeat(64)}) {
+            check(!HardwareAnalysisRevision.isVerifiableExecutableSha256(
+                    untrusted),
+                "unknown, malformed and Unicode-lookalike source labels unverified");
+        }
         System.out.println("HardwareAnalysisRevisionSelfTest OK");
     }
 }

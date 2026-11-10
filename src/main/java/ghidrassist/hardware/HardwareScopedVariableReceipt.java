@@ -210,13 +210,16 @@ public final class HardwareScopedVariableReceipt {
                 throw new IllegalArgumentException("Variable receipt option key mismatch");
             State state;
             if(observed.liveName()==null)state=State.VARIABLE_MISSING;
-            else if(!"UNKNOWN".equals(record.importSha256()) &&
-                    !"UNKNOWN".equals(importSha256) &&
-                    !record.importSha256().equalsIgnoreCase(importSha256))
-                state=State.SOURCE_CHANGED;
-            else if("UNKNOWN".equals(record.importSha256()) ||
-                    "UNKNOWN".equals(importSha256))
+            // Syntax is a necessary gate for a current approval claim.
+            // Matching non-hex legacy source labels are never trusted as
+            // a verified binary identity. This does not authenticate bytes.
+            else if(!HardwareAnalysisRevision.isVerifiableExecutableSha256(
+                        record.importSha256()) ||
+                    !HardwareAnalysisRevision.isVerifiableExecutableSha256(
+                        importSha256))
                 state=State.SOURCE_UNVERIFIED;
+            else if(!record.importSha256().equalsIgnoreCase(importSha256))
+                state=State.SOURCE_CHANGED;
             else if(!Objects.equals(record.storage(),observed.liveStorage()))
                 state=State.STORAGE_CHANGED;
             else if(!observed.pointerType() || !observed.userDefined())
