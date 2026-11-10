@@ -75,9 +75,10 @@ public final class HardwareVectorMmMayCorrelation {
                     recognizedTargets>HardwareVectorResetCorrelation.MAX_RECOGNIZED_VECTOR_TARGETS ||
                     exactEntries<0 || interiorPointers<0 ||
                     exactEntries+interiorPointers!=recognizedTargets ||
+                    rows==null ||
                     distinctShownRoots<0 || distinctShownRoots>rows.size() ||
                     rows.size()>MAX_ROWS ||
-                    rows==null || rows.contains(null) ||
+                    rows.stream().anyMatch(java.util.Objects::isNull) ||
                     rows.size()>exactEntries ||
                     exactEntries>0 && rows.isEmpty() ||
                     displayTruncated!=(rows.size()<exactEntries))
