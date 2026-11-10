@@ -58,11 +58,43 @@ public final class HardwareVectorResetCorrelation {
                 "NONE","NONE","NONE","NONE");
         }
         public Row {
+            // The generic CPU32 source inventory remains 32-bit; these are
+            // candidate function identities, not selected-MC68332 addresses.
+            new Target(vectorNumber,pointer,functionEntry,pointer==functionEntry);
             if(relation==null || memoryStoreEffect==null ||
                     vbrEffect==null || storeSourcePath==null ||
                     vbrSourcePath==null || observedUnknownPath==null ||
-                    frontierPath==null)
-                throw new IllegalArgumentException("Missing vector source evidence");
+                    frontierPath==null ||
+                    !validEffect(memoryStoreEffect) || !validEffect(vbrEffect) ||
+                    !validPath(storeSourcePath,functionEntry,"MEMORY_STORE") ||
+                    !validPath(vbrSourcePath,functionEntry,"MOVEC_VBR") ||
+                    !validPath(observedUnknownPath,functionEntry,
+                        "UNKNOWN_FLOW","MISSING_TARGET") ||
+                    !validPath(frontierPath,functionEntry,
+                        "DEPTH_CUTOFF","NODE_CUTOFF") ||
+                    !storeSourcePath.equals("NONE") &&
+                        !memoryStoreEffect.equals("STATIC_CANDIDATE") ||
+                    !vbrSourcePath.equals("NONE") &&
+                        !vbrEffect.equals("STATIC_CANDIDATE") ||
+                    !observedUnknownPath.equals("NONE") && !flowUncertain ||
+                    !frontierPath.equals("NONE") && !flowUncertain ||
+                    relation==Relation.RESET_ROOT_UNKNOWN && !flowUncertain ||
+                    relation==Relation.INTERIOR_FUNCTION_POINTER_NOT_ENTRY &&
+                        (pointer==functionEntry ||
+                         !memoryStoreEffect.equals("UNKNOWN") ||
+                         !vbrEffect.equals("UNKNOWN") ||
+                         !storeSourcePath.equals("NONE") ||
+                         !vbrSourcePath.equals("NONE") ||
+                         !observedUnknownPath.equals("NONE") ||
+                         !frontierPath.equals("NONE") ||
+                         !flowUncertain) ||
+                    relation!=Relation.INTERIOR_FUNCTION_POINTER_NOT_ENTRY &&
+                        pointer!=functionEntry ||
+                    !flowUncertain &&
+                        (memoryStoreEffect.equals("UNKNOWN") ||
+                         vbrEffect.equals("UNKNOWN")))
+                throw new IllegalArgumentException(
+                    "Contradictory or unbounded vector/RESET evidence row");
         }
     }
 
@@ -75,9 +107,66 @@ public final class HardwareVectorResetCorrelation {
         public Summary {
             if(tableAddress<0 || (tableAddress&3)!=0 ||
                     relocatedSource && tableAddress>0xffffffL-1023L ||
-                    !relocatedSource && tableAddress!=0)
-                throw new IllegalArgumentException("Invalid vector source table");
+                    !relocatedSource && tableAddress!=0 || rows==null ||
+                    recognizedTargets<0 ||
+                    recognizedTargets>MAX_RECOGNIZED_VECTOR_TARGETS ||
+                    exactEntries<0 || interiorPointers<0 ||
+                    exactEntries+interiorPointers!=recognizedTargets ||
+                    sharedResetSubset<0 || outsideObservedSubset<0 ||
+                    resetRootRecognized &&
+                        sharedResetSubset+outsideObservedSubset!=exactEntries ||
+                    !resetRootRecognized &&
+                        (sharedResetSubset!=0 || outsideObservedSubset!=0) ||
+                    rows.size()>64 || rows.size()>recognizedTargets ||
+                    recognizedTargets>0 && rows.isEmpty() ||
+                    displayTruncated!=(rows.size()<recognizedTargets) ||
+                    rows.stream().anyMatch(java.util.Objects::isNull))
+                throw new IllegalArgumentException(
+                    "Inconsistent bounded vector/RESET source inventory");
+            int last=1,shownExact=0,shownInterior=0,shownShared=0,
+                shownOutside=0;
+            for(Row row:rows) {
+                if(row.vectorNumber()<=last ||
+                        row.flowUncertain() != true &&
+                            (!resetRootRecognized || resetGraphIncomplete))
+                    throw new IllegalArgumentException(
+                        "Noncanonical vector slots or false RESET certainty");
+                last=row.vectorNumber();
+                switch(row.relation()){
+                    case INTERIOR_FUNCTION_POINTER_NOT_ENTRY -> shownInterior++;
+                    case IN_RESET_STATIC_CALL_SUBSET -> {
+                        if(!resetRootRecognized)throw new IllegalArgumentException(
+                            "Unrecognized RESET cannot have a call-subset row");
+                        shownExact++;shownShared++;
+                    }
+                    case OUTSIDE_OBSERVED_RESET_SUBSET -> {
+                        if(!resetRootRecognized)throw new IllegalArgumentException(
+                            "Unrecognized RESET cannot exclude a vector root");
+                        shownExact++;shownOutside++;
+                    }
+                    case RESET_ROOT_UNKNOWN -> {
+                        if(resetRootRecognized)throw new IllegalArgumentException(
+                            "Recognized RESET cannot have unknown root rows");
+                        shownExact++;
+                    }
+                }
+            }
+            if(shownExact>exactEntries || shownInterior>interiorPointers ||
+                    shownShared>sharedResetSubset ||
+                    shownOutside>outsideObservedSubset)
+                throw new IllegalArgumentException(
+                    "Displayed row evidence exceeds full-vector inventory");
             rows = List.copyOf(rows);
+        }
+        public long displayedStoreCandidates() {
+            return rows.stream().filter(r->r.relation()!=
+                Relation.INTERIOR_FUNCTION_POINTER_NOT_ENTRY &&
+                r.memoryStoreEffect().equals("STATIC_CANDIDATE")).count();
+        }
+        public long displayedVbrCandidates() {
+            return rows.stream().filter(r->r.relation()!=
+                Relation.INTERIOR_FUNCTION_POINTER_NOT_ENTRY &&
+                r.vbrEffect().equals("STATIC_CANDIDATE")).count();
         }
 
         public String markdown() {
@@ -101,7 +190,13 @@ public final class HardwareVectorResetCorrelation {
                .append("; not observed in that bounded subset: ")
                .append(outsideObservedSubset)
                .append("; interior pointers (NOT function entries): ")
-               .append(interiorPointers).append(".\n")
+               .append(interiorPointers)
+               .append("; displayed rows: ").append(rows.size())
+               .append("; omitted rows: ").append(recognizedTargets-rows.size())
+               .append("; DISPLAYED-ONLY STORE candidate vector rows: ")
+               .append(displayedStoreCandidates())
+               .append("; DISPLAYED-ONLY MOVEC/VBR candidate vector rows: ")
+               .append(displayedVbrCandidates()).append(".\n")
                .append("- Transitive memory STORE means any P-code STORE in a ")
                .append("bounded candidate call subtree, not necessarily MMIO. ")
                .append("VBR means a possible static MOVEC site. UNKNOWN / ")
@@ -157,6 +252,24 @@ public final class HardwareVectorResetCorrelation {
 
     private static String hex(long value) {
         return String.format(Locale.ROOT, "0x%08X", value);
+    }
+
+    private static boolean validEffect(String effect) {
+        return effect.equals("STATIC_CANDIDATE") || effect.equals("UNKNOWN") ||
+            effect.equals("NOT_OBSERVED_IN_BOUNDED_GRAPH");
+    }
+    /** Public report records may not bypass the bounded source path renderer. */
+    private static boolean validPath(String value,long root,String... kinds) {
+        if("NONE".equals(value))return true;
+        // Guard the string before splitting it into untrusted path fragments.
+        if(value.length()>160)return false;
+        String[] parts=value.split(" -> ",-1);
+        if(parts.length<2 || parts.length>7 ||
+                !List.of(kinds).contains(parts[0]) ||
+                !parts[1].equals(hex(root)))return false;
+        for(int i=1;i<parts.length;i++)
+            if(!parts[i].matches("0x[0-9A-F]{8,16}"))return false;
+        return true;
     }
 
     private static String witness(HardwareCallEffects.SourceWitness source) {

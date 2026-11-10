@@ -218,3 +218,36 @@ extension compilation and genuine Ghidra 12.1.4 PUBLIC synthetic vector
 integration are required on the exact final PR SHA. These checks are
 static evidence bookkeeping, not VBR selection, executed interrupts,
 reachable hardware effects, latched SIMCR MM or authorization to Apply.
+
+## 2026-11-10 — bounded generic CPU32 vector/RESET evidence row integrity
+
+Generic CPU32 vector/RESET source-image reports now validate their public
+`Row` and `Summary` boundaries, not only their producer's iterator:
+syntactically bounded canonical typed function-entry source paths must be
+rooted at the exact handler entry, with no newline/table-cell injection;
+a labeled observed source cannot accompany a closed negative effect.
+Interior pointers remain UNKNOWN without inheriting source paths. A
+missing RESET root cannot falsely assert confident direct-CALL reachability.
+
+The full 254-slot input inventory, exact/interior split, RESET shared and
+outside counts, ordered distinct vector slots, read-only bounded display
+and report-level source confidence must agree. Null, incorrect, noncanonical
+or implausibly oversized report cells fail closed. The historical
+seven-field `Row` constructor remains available with `NONE` typed paths.
+New **displayed-only** STORE and MOVEC/VBR candidate counters distinguish
+analyzed exact-handler rows from undisplayed vector inventory; neither is
+a total count of source candidates across the complete vector table.
+
+This generic CPU32 source view intentionally does NOT assign MC68332
+SIMCR/MM bit meaning or reinterpret 32-bit pointers as MC68332 24-bit.
+The earlier selected-MC68332 **independent** RESET/MM confidence report
+is retained. Java21 adversarial regression, Java25 full extension build
+and genuine isolated Ghidra 12.1.4 PUBLIC synthetic vector integration
+are required at exact PR SHA. Neither vector pointer, RESET static
+reachability, STORE nor MOVEC is a runtime execution, latched MM,
+active VBR/IRQ, ISR dispatch or physical chip-select mapping.
+
+The displayed-only STORE/MOVEC counters count **vector rows**, not unique
+handler function identities: two vector slots pointing to the same
+handler legitimately contribute two rows, while its bounded source
+analysis remains cached once per revision-local report.

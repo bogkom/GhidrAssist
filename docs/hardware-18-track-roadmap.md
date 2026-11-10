@@ -1,3 +1,24 @@
+## GA-01/02/03/11/18 — 2026-11-10: fail-closed generic vector/RESET source reports
+
+The generic 32-bit CPU32 vector/RESET report now validates bounded
+source-only row identity, ordered vector slots, exact/interior population,
+RESET shared/outside counters, and canonical rooted STORE/MOVEC/unknown/
+frontier function witnesses before publishing Markdown. Null, malformed,
+injected or contradictory user-constructed report cells fail closed.
+Displayed-only STORE and MOVEC counts explicitly do not describe
+undisplayed handlers. Legacy seven-field source constructors remain
+compatible. The selected MC68332-only SIMCR/MM report is separate;
+CPU32 32-bit candidate pointers do not inherit MCU24 hardware mapping.
+
+Java21 deterministic adverse source regression, Java25 full Ghidra
+12.1.4 PUBLIC extension compilation and isolated genuine synthetic
+headless vector CI are exact-SHA integration gates. This does not prove
+ISR firing, active VBR, RESET execution, SIMCR first write or bus mapping,
+and it changes no Apply/Undo, original firmware, production project
+or paused Wyse/Precision/Supervisor tests. See
+[vector/RESET correlation](hardware-vector-reset-correlation.md).
+GA-01/02/03/11/18 remain PARTIAL; GA-14 deferred.
+
 ## GA-01/02/03/11/18 — 2026-11-10: selected-MC68332 vector handler -> SIMCR/MM MAY roots
 
 MC68332 exact-entry image-zero and candidate relocated MOVEC/VBR

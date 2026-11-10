@@ -213,6 +213,11 @@ public final class HardwareVectorResetCorrelationSelfTest {
             sharedHandler.rows().get(0).flowUncertain()==
                 sharedHandler.rows().get(1).flowUncertain(),
             "distinct vector slots sharing one handler preserve identical static effect evidence");
+        check(sharedHandler.displayedStoreCandidates()==2 &&
+                sharedHandler.displayedVbrCandidates()==2 &&
+                sharedHandler.markdown().contains(
+                    "DISPLAYED-ONLY STORE candidate vector rows: 2"),
+            "two slots pointing to the same handler count as two displayed rows, not two distinct roots");
         check(sharedHandler.equals(HardwareVectorResetCorrelation.inspect(
                 true,false,reset.visitedEntries(),
                 List.of(duplicateHandlerSlots.get(1),duplicateHandlerSlots.get(0)),
@@ -324,6 +329,83 @@ public final class HardwareVectorResetCorrelationSelfTest {
             displayCap.rows().size()==1 && displayCap.displayTruncated() &&
             displayCap.rows().get(0).storeSourcePath().contains("0x00000160"),
             "vector row cap preserves complete counts and shown source witnesses");
+        check(report.displayedStoreCandidates()==2 &&
+                report.displayedVbrCandidates()==1 &&
+                report.markdown().contains(
+                    "DISPLAYED-ONLY STORE candidate vector rows: 2") &&
+                report.markdown().contains(
+                    "DISPLAYED-ONLY MOVEC/VBR candidate vector rows: 1") &&
+                report.markdown().contains("omitted rows: 0"),
+            "count only displayed exact handler sources, not full vector inventory");
+        check(limited.markdown().contains("omitted rows: 3") &&
+                limited.displayedStoreCandidates()==1,
+            "capped display never publishes uninspected effect totals");
+        bad(()->new HardwareVectorResetCorrelation.Row(
+                26,0x130L,0x130L,
+                HardwareVectorResetCorrelation.Relation.IN_RESET_STATIC_CALL_SUBSET,
+                "STATIC_CANDIDATE","UNKNOWN",true,
+                "MEMORY_STORE -> 0x00000140","NONE","NONE","NONE"),
+            "typed STORE path cannot be attributed to a different root");
+        bad(()->new HardwareVectorResetCorrelation.Row(
+                26,0x130L,0x130L,
+                HardwareVectorResetCorrelation.Relation.IN_RESET_STATIC_CALL_SUBSET,
+                "STATIC_CANDIDATE","UNKNOWN",true,
+                "MEMORY_STORE -> 0x00000130 | injected","NONE","NONE","NONE"),
+            "typed source paths cannot inject Markdown table cells");
+        bad(()->new HardwareVectorResetCorrelation.Row(
+                26,0x130L,0x130L,
+                HardwareVectorResetCorrelation.Relation.IN_RESET_STATIC_CALL_SUBSET,
+                "NOT_OBSERVED_IN_BOUNDED_GRAPH","UNKNOWN",true,
+                "MEMORY_STORE -> 0x00000130","NONE","NONE","NONE"),
+            "observed source and closed STORE effect are contradictory");
+        bad(()->new HardwareVectorResetCorrelation.Row(
+                33,0x222L,0x220L,
+                HardwareVectorResetCorrelation.Relation.INTERIOR_FUNCTION_POINTER_NOT_ENTRY,
+                "STATIC_CANDIDATE","UNKNOWN",true,
+                "NONE","NONE","NONE","NONE"),
+            "interior pointer cannot borrow full-function STORE evidence");
+        bad(()->new HardwareVectorResetCorrelation.Row(
+                26,0x130L,0x130L,
+                HardwareVectorResetCorrelation.Relation.RESET_ROOT_UNKNOWN,
+                "UNKNOWN","UNKNOWN",false),
+            "unknown RESET root must remain uncertain");
+        bad(()->new HardwareVectorResetCorrelation.Row(
+                26,0x130L,0x130L,
+                HardwareVectorResetCorrelation.Relation.IN_RESET_STATIC_CALL_SUBSET,
+                "STATIC_CANDIDATE","UNKNOWN",true,
+                "MEMORY_STORE -> 0x00000130"+
+                    (" -> 0x00000130").repeat(20),
+                "NONE","NONE","NONE"),
+            "unbounded witness text rejected before splitting");
+        bad(()->new HardwareVectorResetCorrelation.Summary(
+                false,0,true,false,4,3,1,2,1,false,null),
+            "null vector source inventory rejected without NPE");
+        bad(()->new HardwareVectorResetCorrelation.Summary(
+                false,0,true,false,4,3,1,2,1,false,
+                java.util.Arrays.asList(report.rows().get(0),null,
+                    report.rows().get(2),report.rows().get(3))),
+            "null vector row rejected with IllegalArgumentException");
+        bad(()->new HardwareVectorResetCorrelation.Summary(
+                false,0,true,false,4,3,1,2,1,false,
+                List.of(report.rows().get(1),report.rows().get(0),
+                    report.rows().get(2),report.rows().get(3))),
+            "unsorted vector inventory cannot become authoritative");
+        bad(()->new HardwareVectorResetCorrelation.Summary(
+                false,0,true,false,4,3,2,1,1,false,report.rows()),
+            "forged RESET shared/outside totals cannot fit displayed rows");
+        bad(()->new HardwareVectorResetCorrelation.Summary(
+                false,0,true,false,4,4,1,2,0,false,report.rows()),
+            "fake exact/interior inventory partition cannot be published");
+        bad(()->new HardwareVectorResetCorrelation.Summary(
+                false,0,false,false,4,3,1,2,1,false,report.rows()),
+            "unrecognized RESET must have no shared/outside counts");
+        // Legacy seven-field row remains constructible without typed paths.
+        check(new HardwareVectorResetCorrelation.Row(
+                26,0x130L,0x130L,
+                HardwareVectorResetCorrelation.Relation.IN_RESET_STATIC_CALL_SUBSET,
+                "STATIC_CANDIDATE","UNKNOWN",true)
+                .storeSourcePath().equals("NONE"),
+            "old seven-field report constructor is source compatible");
         boolean invalidWitness=false;
         try {new HardwareVectorResetCorrelation.Row(2,0x100L,0x100L,
                 HardwareVectorResetCorrelation.Relation.RESET_ROOT_UNKNOWN,
