@@ -48,7 +48,32 @@ def _decode_checkpoint_json(raw):
         raise ValueError("Non-finite checkpoint JSON constant: " + token)
 
     try:
-        return json.loads(raw.decode("utf-8"), object_pairs_hook=unique_object,
+        decoded = raw.decode("utf-8")
+        # The standard parser's recursion tolerance differs across Python
+        # versions. Bound structural nesting explicitly before allocation,
+        # ignoring bracket characters inside quoted/escaped JSON strings.
+        depth = 0
+        quoted = False
+        escaped = False
+        for char in decoded:
+            if quoted:
+                if escaped:
+                    escaped = False
+                elif char == "\\\\":
+                    escaped = True
+                elif char == '"':
+                    quoted = False
+            elif char == '"':
+                quoted = True
+            elif char in "[{":
+                depth += 1
+                if depth > 64:
+                    raise ValueError("Checkpoint JSON nesting exceeds 64")
+            elif char in "]}":
+                depth -= 1
+                if depth < 0:
+                    raise ValueError("Invalid checkpoint JSON bracket")
+        return json.loads(decoded, object_pairs_hook=unique_object,
                           parse_int=bounded_integer, parse_float=bounded_float,
                           parse_constant=reject_constant)
     except (UnicodeDecodeError, json.JSONDecodeError, RecursionError,
