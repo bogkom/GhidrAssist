@@ -62,12 +62,17 @@ public final class HardwareVerifiedBranchReturn {
                 return Map.of();
             int successorCount=step.successors.size();
             if(step.kind==HardwareDataflow.Kind.SET_POINTER &&
-                    CONSTANTS.contains(step.mnemonic) &&
                     step.register!=null &&
-                    step.register.matches("[AD][0-6]|D7") &&
-                    len==6 && successorCount==1 &&
-                    step.successors.get(0)==cursor){
-                // A canonical immediate full-width register definition.
+                    (("MOVEQ".equals(step.mnemonic) && len==2 &&
+                        step.register.matches("D[0-7]") &&
+                        (step.operand&HardwareDataflow.MASK24)==
+                            (((long)(byte)step.operand)&
+                                HardwareDataflow.MASK24)) ||
+                     (CONSTANTS.contains(step.mnemonic) && len==6 &&
+                        step.register.matches("[AD][0-6]|D7"))) &&
+                    successorCount==1 && step.successors.get(0)==cursor){
+                // Input-independent full Dn/An write; MOVEQ has canonical
+                // signed 8-bit immediate and exact two-byte CPU32 length.
             } else if(step.kind==HardwareDataflow.Kind.OTHER &&
                     "RTS".equals(step.mnemonic) &&
                     len==2 && successorCount==0){

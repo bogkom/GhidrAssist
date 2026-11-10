@@ -518,7 +518,10 @@ public final class GhidraHardwareFlowService {
     private static Map<String,Long> verifiedLeafReturn(
             Program program,Function callee,TaskMonitor monitor)
             throws CancelledException{
-        if(callee==null || callee.getBody().getNumAddresses()<8 ||
+        // MOVEQ #signed8,Dn + RTS is a complete four-byte CPU32
+        // leaf. Do not discard it using the previous MOVE.L-only 8-byte
+        // minimum, while keeping all complete Listing/P-code gates.
+        if(callee==null || callee.getBody().getNumAddresses()<4 ||
                 callee.getBody().getNumAddresses()>
                     HardwareVerifiedBranchReturn.MAX_INSTRUCTIONS*6L)
             return Map.of();

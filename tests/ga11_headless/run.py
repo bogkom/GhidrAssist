@@ -94,7 +94,7 @@ def main():
                         "generic-profile","trambar-source","csbar-mm0-reject",
                         "mmio-read-reference","csbar-csor-conditional",
                         "simcr-mm0-literal","trambar-unknown","csor-alternatives",
-                        "branch-simcr","call-barrier","leaf-return","call-context","joint-source","two-hop","two-hop-indexed","two-hop-indexed-wrap","indirect-adjacent","indirect-bounded","indirect-reset-xref","branch-leaf","branch-cache","cancel-incomplete",
+                        "branch-simcr","call-barrier","leaf-return","moveq-return","call-context","joint-source","two-hop","two-hop-indexed","two-hop-indexed-wrap","indirect-adjacent","indirect-bounded","indirect-reset-xref","branch-leaf","branch-cache","cancel-incomplete",
                         "function-stage-resume","function-rename","scoped-variable","agentic-evidence","receipt-restart",
                         "apply-preserve","provenance-csv","movec-vbr","vbr-relocation"),
                         default="none",help="Run GA-07/12 or GA-02/03 genuine headless source-evidence checks")
@@ -416,6 +416,14 @@ def main():
                         "leaf_real_unproved_call_keeps_alias",
                         "leaf_real_generic_profile_conservative",
                         "leaf_real_program_read_only"),
+                    "moveq-return":(
+                        "moveq_real_cpu32_two_byte_opcode",
+                        "moveq_real_signed_d0_return",
+                        "moveq_real_four_byte_leaf",
+                        "moveq_real_rte_rejected",
+                        "moveq_real_simcr_may_source_only",
+                        "moveq_real_generic_profile_conservative",
+                        "moveq_real_program_read_only"),
                     "cancel-incomplete":(
                         "cancel_real_scan_mid_traversal",
                         "cancel_incomplete_rag_not_published",

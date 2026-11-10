@@ -49,7 +49,7 @@ jobs:
         run: |
           set -euo pipefail
           HASH="$(sha256sum "$EXTENSION" | cut -d' ' -f1)"
-          for mode in leaf-return; do
+          for mode in leaf-return moveq-return; do
             python3 tests/ga11_headless/run.py \
               --ghidra "$GHIDRA_INSTALL_DIR" \
               --java-home "$JAVA_HOME" \
@@ -74,7 +74,7 @@ jobs:
         if: failure()
         shell: bash
         run: |
-          for mode in leaf-return; do
+          for mode in leaf-return moveq-return; do
             for p in "$RUNNER_TEMP"/ga18-$mode/{integration,compile,vectors-full.bin.import}.log; do
               if test -f "$p"; then echo "== $(basename "$p") ($mode) =="; tail -n 60 "$p"; fi
             done
