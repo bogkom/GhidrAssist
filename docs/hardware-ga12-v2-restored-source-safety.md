@@ -47,8 +47,13 @@ valid, and then asserts the active restore has **no source inventory**.
 The Java25 / Ghidra 12.1.4 PUBLIC regression uses ten separate synthetic
 JVMs for cold capture, complete V2 restart, syntactically rehashed false MAY,
 legacy V1, invalid V2, changed source byte, renamed Function, mismatched
-profile and incomplete source/report cases. Exact source fingerprint and
-Ghidra revision are reported in synthetic-only CI JSON.
+profile and incomplete source/report cases. In the forged V2 phase the
+restored aggregate remains cache-eligible but source pagination is denied;
+the test then explicitly clears that checkpoint and performs a **fresh,
+independent real-Ghidra scan**. The fresh source must recover the original
+positive JSR MAY-SIMCR witness instead of inheriting the forged negative
+MAY claim. Exact source fingerprint and Ghidra revision are reported in
+synthetic-only CI JSON.
 
 A fresh Analyze still benefits from independently verified GA-12
 **per-function** register/MMIO/VBR checkpoints and detects stale active

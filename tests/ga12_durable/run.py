@@ -165,6 +165,10 @@ def main():
             if (not forged["reused"] or forged["source_inventory_retained"] or
                     forged["source_pairs"]!=0 or
                     forged["omitted_indirect"]!=0 or
+                    not forged["fresh_source_revalidated"] or
+                    any(proof["fresh_source_revalidated"]
+                        for phase,proof in source_proofs.items()
+                        if phase!="source-forged") or
                     restored["source_inventory_retained"] or
                     restored["source_pairs"]!=0 or
                     restored["omitted_indirect"]!=0):
@@ -216,6 +220,7 @@ def main():
                 "tested_stage":"completed CFG Report",
                 "v2_source_processes":10,
                 "v2_resealed_forged_may_mm_pages_refused":True,
+                "v2_forged_claim_cleared_then_live_source_replayed":True,
                 "v2_cfg_only_restored_source_inventory_denied":True,
                 "saved_review_binding_cross_jvm":True,
                 "saved_review_changed_bytes_denied":True,

@@ -65,6 +65,7 @@ jobs:
               "restart_processes":3,
               "v2_source_processes":10,
               "v2_resealed_forged_may_mm_pages_refused":True,
+              "v2_forged_claim_cleared_then_live_source_replayed":True,
               "v2_cfg_only_restored_source_inventory_denied":True,
               "saved_review_binding_cross_jvm":True,
               "saved_review_changed_bytes_denied":True,

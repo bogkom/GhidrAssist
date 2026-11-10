@@ -503,6 +503,21 @@ public final class Ga12DurableSourceV2RealGhidraMain {
                         "Not evaluated: explicit MC68332 profile required"),
                     "generic CPU32 cannot inherit device-specific V2 sources");
             } else sourceMatches(report.sourceInventory);
+            boolean freshSourceRevalidated=false;
+            if(phase.equals("source-forged")) {
+                // The same Program still has unchanged bytes, but a forged
+                // V2 MAY flag cannot become current evidence. Explicit
+                // checkpoint clear forces an independent real Ghidra scan.
+                HardwareFlowStageCache.clear(program);
+                var cold=HardwareFlowStageCache.loadOrAnalyze(
+                    program,revision,TaskMonitor.DUMMY);
+                require(!cold.reused(),
+                    "explicit clear must refuse forged aggregate reuse");
+                sourceMatches(cold.report().sourceInventory);
+                require(cold.report().sourceInventory.indirect().get(0).mayMm(),
+                    "actual fresh Listing source restores positive MAY, not forged false");
+                freshSourceRevalidated=true;
+            }
             Path checkpoint=HardwareDurableStageStore.checkpointPath(
                 cache,original);
             require(Files.isRegularFile(checkpoint),
@@ -513,6 +528,7 @@ public final class Ga12DurableSourceV2RealGhidraMain {
             String imported=program.getExecutableSHA256();
             String proof="{\"phase\":\""+phase+"\",\"ghidra_real\":true,"+
                 "\"reused\":"+obtained.reused()+
+                ",\"fresh_source_revalidated\":"+freshSourceRevalidated+
                 ",\"source_inventory_retained\":"+(report.sourceInventory!=null)+
                 ",\"source_pairs\":"+(report.sourceInventory==null?0:
                     report.sourceInventory.page(0,32).colocatedPairs())+
