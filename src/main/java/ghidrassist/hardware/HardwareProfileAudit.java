@@ -24,7 +24,19 @@ public final class HardwareProfileAudit {
     public record Summary(String profileId,boolean concreteDevice,int modules,
             int registerCount,int paginated,int missingPage,int fieldCount,
             int fieldPagesMissing,List<Issue> issues) {
-        public Summary { issues=List.copyOf(issues); }
+        public Summary {
+            // Public coverage figures must agree with the total metadata
+            // inventory. Numeric page labels remain unauthenticated claims.
+            if(profileId==null || profileId.isBlank() || modules<0 ||
+                    registerCount<0 || paginated<0 || missingPage<0 ||
+                    (long)paginated+missingPage!=registerCount ||
+                    fieldCount<0 || fieldPagesMissing<0 ||
+                    fieldPagesMissing>fieldCount || issues==null ||
+                    issues.stream().anyMatch(java.util.Objects::isNull))
+                throw new IllegalArgumentException(
+                    "Contradictory profile citation coverage inventory");
+            issues=List.copyOf(issues);
+        }
         public boolean collisionFree() {
             // Invalid/empty identities and misalignment are structural
             // failures too, even when no second register overlaps.
