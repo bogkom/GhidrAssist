@@ -1,5 +1,55 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
+## GA-01/02/03/11/18 — 2026-11-10: MC68332-only RESET source address gate and independent initial SSP evidence
+
+The existing static image-zero CPU32 RESET vector reader keeps its
+legacy 32-bit PC interpretation when **generic CPU32** is selected.
+With an **explicit MC68332** profile, an even decoded RESET PC above
+`0x00FFFFFF` no longer automatically becomes a Ghidra RESET
+function root or a direct-CALL / MMIO / MOVEC / ISR reachability
+inventory. The complete high source value is preserved in the report
+as **UNKNOWN RESET ROOT — SELECTED MC68332 24-BIT SOURCE BOUND**.
+This is deliberately **not** silent `& 0xFFFFFF` address
+normalization: physical alias/remapping and actual execution are
+unknown. Normal 24-bit source-vector roots continue to work.
+
+The initial SSP is now separately classified as an **unsigned
+32-bit source word**: null/erased, odd (a possible alignment
+risk), aligned but memory-unverified, candidate one-past-the-24-bit
+top (`0x01000000`, a potential downward-growing stack edge),
+or outside selected MCU24 context. None of these categories
+proves a mapped stack, a valid firmware image, RESET execution,
+SIMCR/MM state or ISR activity. An anomalous SSP alone does
+**not** discard a source-valid PC candidate. CPU32 generic
+retains its wider addressing model.
+
+Hardware sources: Motorola/Freescale `MC68332TS/D` Technical
+Summary, **Rev. 2**, section 3.4.3, printed **page 27
+(PDF page 27)** identifies `ADDR[23:0]`; section 3.4.11,
+printed **page 29 (PDF page 29)** documents misaligned
+word/long-word transfers. Original:
+https://www.nxp.com/docs/en/data-sheet/MC68332TS.pdf .
+The Motorola/Freescale `MC68332UM` User's Manual (1995/
+Freescale 2004), sections 5.2 and 5.3, printed pp. 5-2
+to 5-6, documents distinct 32-bit SSP/PC and CPU32 memory
+model. Sources support **static constraints only**, not a
+measurement of ECU wiring or runtime memory mapping.
+
+Java21 deterministic regressions include a 32-bit high PC
+distinguishing generic CPU32 from MC68332, erased/odd stack,
+one-past device edge, wider stack context, and ordinary
+MC68332 source. The existing genuine synthetic Ghidra
+12.1.4 PUBLIC Java25 headless test invokes the production
+Analyze path for the normal vector and checks the new
+source-quality line; it temporarily changes only the
+synthetic vector high byte and asserts the actual Program
+source-root gate (then restores the byte). Full extension
+build plus existing hardware source regressions remain
+mandatory. No ECU411 firmware, original user Ghidra
+projects, OAuth or stopped Wyse/Precision/Supervisor
+workers are accessed. GA-01/02/03/11/18 remain PARTIAL;
+GA-14 remains deferred.
+
 ## GA-18 — 2026-11-10: bounded Automation bearer-session and JSON-RPC wire identity
 
 The external `ghidrassist-agent` now reads at most 16 KiB of its
