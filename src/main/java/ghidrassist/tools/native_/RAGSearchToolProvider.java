@@ -17,6 +17,7 @@ import java.util.concurrent.CompletableFuture;
 public final class RAGSearchToolProvider implements ToolProvider {
     private static final String SEARCH = "ga_search_documents";
     private static final String PAGE = "ga_get_document_page";
+    private static final String FIELD = "ga_mc68332_field_citations";
     private volatile Program currentProgram;
 
     @Override public String getProviderName() { return "Documentation RAG"; }
@@ -71,6 +72,24 @@ public final class RAGSearchToolProvider implements ToolProvider {
         pageRequired.add("filename");
         pageRequired.add("page");
         page.add("required", pageRequired);
+        JsonObject citations=new JsonObject();
+        citations.addProperty("type","object");
+        JsonObject citedProps=new JsonObject();
+        citedProps.add("device",stringProperty(
+            "Required MC68332 explicit selection, never inferred from CPU32"));
+        citedProps.add("filename",stringProperty(
+            "Exact indexed MC68332UM PDF source filename"));
+        citedProps.add("register",stringProperty(
+            "SIMCR or SYNCR; reviewed field description scope only"));
+        citedProps.add("field",stringProperty(
+            "Optional single field such as MM, W, X, Y or STEXT"));
+        citedProps.add("scope",scopeProperty());
+        citations.add("properties",citedProps);
+        JsonArray citationRequired=new JsonArray();
+        citationRequired.add("device");
+        citationRequired.add("filename");
+        citationRequired.add("register");
+        citations.add("required",citationRequired);
         return List.of(
             new NativeTool(SEARCH,
                 "Search indexed manuals, honoring the active project's checked RAG libraries by default. "
@@ -79,10 +98,17 @@ public final class RAGSearchToolProvider implements ToolProvider {
             new NativeTool(PAGE,
                 "Read indexed full text of a specified physical PDF page, with pagination and source-library filtering. "
                 + "For table layout always verify the original PDF visually.",
-                page, getProviderName()));
+                page, getProviderName()),
+            new NativeTool(FIELD,
+                "Read reviewed MC68332UM field heading, meaning, source folio "
+                + "and SHA-256 evidence from a single indexed D-5/D-6/D-7 snapshot. "
+                + "Explicit MC68332 required; index-time text NOT PDF authentication.",
+                citations,getProviderName()));
     }
 
-    @Override public boolean handlesTool(String name) { return SEARCH.equals(name) || PAGE.equals(name); }
+    @Override public boolean handlesTool(String name) {
+        return SEARCH.equals(name) || PAGE.equals(name) || FIELD.equals(name);
+    }
     @Override public void setContext(Program program) { currentProgram = program; }
 
     private static int readInt(JsonObject args, String key, int defaultValue, int min, int max) {
@@ -153,6 +179,32 @@ public final class RAGSearchToolProvider implements ToolProvider {
                         .append(" nextOffset=").append(more ? Integer.toString(end) : "null")
                         .append("\nWARNING: Verify CPU bitfields and multi-column tables on original PDF page.");
                     return ToolResult.success(out.toString());
+                }
+
+                if(FIELD.equals(name)) {
+                    if(!args.has("device") || !args.has("filename") ||
+                            !args.has("register"))
+                        return ToolResult.error(
+                            "Explicit device, exact indexed filename and register required");
+                    if(!"MC68332".equals(args.get("device").getAsString()))
+                        return ToolResult.error(
+                            "Explicit device=MC68332 required, not generic CPU32");
+                    String filename=args.get("filename").getAsString().trim();
+                    var pages=RAGEngine.getIndexedPdfPagesEvidence(
+                        filename,ghidrassist.core.RAGManualFieldCitationView.PAGES);
+                    ghidrassist.core.RAGIndexedPdfPageEvidence
+                        .requireOneIndexedDocument(pages);
+                    if(scope.equals("selected") &&
+                            !active.contains(pages.get(219).libraryId()))
+                        return ToolResult.error(
+                            "Document not in selected program's active RAG library");
+                    String text=ghidrassist.core.RAGManualFieldCitationView.render(
+                        args.get("device").getAsString(),
+                        filename,
+                        args.get("register").getAsString(),
+                        args.has("field")?args.get("field").getAsString():null,
+                        pages);
+                    return ToolResult.success(text);
                 }
 
                 if (!args.has("filename") || !args.has("page"))

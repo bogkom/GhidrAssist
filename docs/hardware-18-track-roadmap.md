@@ -1,3 +1,37 @@
+## GA-06/10/16/18 — 2026-11-10: independent publisher field-description excerpts and RAG binding
+
+Beyond the already implemented NXP-hosted MC68332UM (Motorola 1995)
+publisher PDF SHA-256, exact 265 pages, physical folios and independent
+15-bitfield diagram-mask comparison, a new **independent source-content
+cross-check** now binds all 15 reviewed SIMCR/SYNCR fields to their
+**full printed heading and nearby explanatory paragraph fragment** on
+the physically correct description folio D-5/219, D-6/220 or D-7/221.
+The drawing/mask page is tracked separately from the prose page; short
+MM/W/X/Y tokens alone can never pass. Fifteen reviewed original publisher
+excerpt SHA-256 fingerprints are frozen in source and checked afresh in
+the official PDF CI after downloading and verifying actual immutable
+publisher bytes. No PDF content is uploaded to the repo or CI artifacts.
+
+An explicitly invoked `ga_mc68332_field_citations` native tool obtains
+all required indexed PDF pages in ONE Lucene snapshot, enforcing identical
+source SHA/path/library and per-page text consistency before rendering
+a bounded, read-only field citation. Users specify the concrete device
+MC68332; generic CPU32/filename alone never selects registers. Every
+citation distinguishes the index-time SHA, extracted passage SHA and
+frozen publisher reference, including whether individual excerpts match
+the independently reviewed source. These are **indexed-text comparisons**
+and not cryptographic proof of current local PDF, the manual edition,
+execution, active SIMCR MM latch, VBR/ISR or bus mapping. The existing
+pre-open local file hash check is independent and unchanged.
+
+Deterministic Java21 adversarial tests cover wrong description page,
+heading, excerpt text, mask, distant phrase, unrecognized field, invalid
+profile, stale page, cross-folio source SHA/path/library mixing, edition
+pin mismatch and unbounded source input. Full Ghidra 12.1.4 PUBLIC Java25
+extension build and isolated synthetic GUI/headless regressions are gated
+before integration. See [bitfield source evidence](hardware-bitfield-evidence.md).
+GA-06/10/16/18 remain PARTIAL; GA-14 deferred.
+
 ## GA-06/10/16/18 — 2026-11-10: indexed PDF digest and current-file RAG provenance
 
 Existing GA-10/16 CI already pins publisher-hosted MC68332UM (Motorola 1995)

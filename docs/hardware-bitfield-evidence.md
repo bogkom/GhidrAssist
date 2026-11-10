@@ -267,3 +267,48 @@ mapping/MM, initialized watchdog, active chip select, physical
 memory layout, or authorization for Ghidra Apply. Generic CPU32
 never inherits these MC68332-specific registers; no original
 ECU411 firmware or user Ghidra project is accessed.
+
+## 2026-11-10 — GA-06/10/16 exact paragraph meaning and pinned excerpt hashes
+
+The existing public publisher PDF CI already verified the immutable SHA-256
+of the 265-page MC68332UM Motorola 1995 edition, selected the physical
+pages 219/D-5, 220/D-6 and 221/D-7, matched 15 bitfield diagram masks
+and reviewed the SIM register-address Table D-2. The new independent
+`HardwareManualFieldExcerptEvidence` demands substantially more than a
+name token: each of the **15 SIMCR/SYNCR fields** must occur in its
+expected descriptive section as a full **field heading plus a nearby,
+independently reviewed phrase describing its meaning** on the exact
+printed/physical folio, with the *separate* diagram PDF folio and source
+page claim consistent with the MC68332 profile. For example, SIMCR/MM
+is drawn on PDF 219 but described on PDF 220; SYNCR/STEXT is drawn on PDF
+220 but described on PDF 221. W/X/Y short tokens require their full
+descriptive headings, not generic letters in unrelated prose.
+
+The official CI recalculates SHA-256 of the normalized, bounded extracted
+paragraph fragments **only after authenticating the exact NXP-hosted PDF**.
+`HardwareManualPublisherExcerptPins` holds 15 frozen reference excerpt
+hashes from that independent official CI. Every new CI run must match
+all 15, not merely find a familiar heading or auto-accept new publisher
+bytes. Synthetic Java21 tests reject swapped or missing PDF folios,
+wrong text, detached phrases, wrong profile masks, different indexed SHA,
+extra/omitted fields and generic CPU32.
+
+A new read-only `ga_mc68332_field_citations` RAG tool requires explicit
+`device=MC68332`, exact indexed `filename`, `register=SIMCR|SYNCR`,
+optional `field`, and the user's selected RAG library by default.
+`RAGEngine.getIndexedPdfPagesEvidence` retrieves pages 219/220/221 in
+**one** Lucene snapshot and rejects cross-folio path/SHA/library conflicts.
+The tool compares the indexed heading/phrase and computed fragment hash
+with the reviewed published reference and reports its printed/physical
+folio, diagram PDF folio and both fragment hashes. Even a hash match is
+labeled `INDEXED_TEXT_ONLY_NOT_CURRENT_PDF_AUTHENTICATION`: indexed
+text might be stale or forged, and does not by itself establish local
+PDF bytes, manual edition, MCU applicability or executed MM/VBR/ISR.
+Current-file opening remains subject to the existing SHA recheck.
+
+No original ECU411 firmware, production Ghidra projects, user RAG corpus,
+OAuth, Wyse/Precision tests or historical Supervisora queue are touched.
+Java21 source/view CI, pinned publisher PDF CI and complete Ghidra 12.1.4
+PUBLIC Java25 build / synthetic real-Ghidra regression are required.
+GA-06/10/16/18 remain PARTIAL; GA-14 deferred.
+

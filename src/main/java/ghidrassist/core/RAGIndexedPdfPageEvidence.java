@@ -55,6 +55,36 @@ public final class RAGIndexedPdfPageEvidence {
                 "STALE_INDEXED_PDF_SOURCE: rerun document search");
     }
 
+    /**
+     * The reviewed source spans physical PDF pages 219/220/221. Binding
+     * each folio to one same indexed digest, path and library prevents a
+     * cross-folio mix after concurrent index replacement. This is still
+     * index-time metadata, NOT authentication of arbitrary page text.
+     */
+    public static void requireOneIndexedDocument(
+            java.util.Map<Integer,Page> pages) {
+        if(pages==null || pages.isEmpty() || pages.size()>16)
+            throw new IllegalArgumentException("Unbounded indexed PDF source group");
+        Page previous=null;
+        for(var item:pages.entrySet()) {
+            Page current=item.getValue();
+            if(item.getKey()==null || current==null ||
+                    item.getKey()!=current.physicalPage() ||
+                    current.indexedSha256()==null ||
+                    !current.indexedSha256().matches("[0-9a-f]{64}") ||
+                    current.sourcePath()==null || current.sourcePath().isBlank() ||
+                    current.libraryId()==null || current.libraryId().isBlank())
+                throw new IllegalArgumentException("Missing indexed source identity");
+            if(previous!=null && (
+                    !Objects.equals(previous.indexedSha256(),current.indexedSha256()) ||
+                    !Objects.equals(previous.sourcePath(),current.sourcePath()) ||
+                    !Objects.equals(previous.libraryId(),current.libraryId())))
+                throw new IllegalArgumentException(
+                    "Cross-folio PDF index digest/path/library conflict");
+            previous=current;
+        }
+    }
+
     /** Fail closed on any inconsistent document/page identity. */
     public static Page join(int requestedPage,List<Chunk> chunks) {
         if(requestedPage<1 || requestedPage>100000 || chunks==null ||

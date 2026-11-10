@@ -1,0 +1,49 @@
+name: GA-06/10/16 bounded MC68332 field excerpt citation checks
+on:
+  pull_request:
+    paths:
+      - 'src/main/java/ghidrassist/hardware/HardwareManualFieldExcerptEvidence.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareManualPublisherExcerptPins.java'
+      - 'src/main/java/ghidrassist/core/RAGIndexedPdfPageEvidence.java'
+      - 'src/main/java/ghidrassist/core/RAGManualFieldCitationView.java'
+      - 'src/test/java/ghidrassist/core/RAGManualFieldCitationViewSelfTest.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareManualFieldExcerptEvidenceSelfTest.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareBitfieldLayoutWitness.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareBitfieldSourceLedger.java'
+      - '.github/workflows/ga061016-field-excerpt-citations.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  synthetic-java21:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Verify source page and descriptive excerpt citation boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/ga061016-excerpt"
+          javac --release 21 -d "$RUNNER_TEMP/ga061016-excerpt" \
+            src/main/java/ghidrassist/hardware/HardwareProfiles.java \
+            src/main/java/ghidrassist/hardware/ManualPdfPageClaim.java \
+            src/main/java/ghidrassist/hardware/HardwareBitfieldSourceLedger.java \
+            src/main/java/ghidrassist/hardware/HardwareBitfieldLayoutWitness.java \
+            src/main/java/ghidrassist/hardware/HardwareManualFieldExcerptEvidence.java \
+            src/main/java/ghidrassist/hardware/HardwareManualPublisherExcerptPins.java \
+            src/main/java/ghidrassist/core/RAGIndexedPdfPageEvidence.java \
+            src/main/java/ghidrassist/core/SearchResult.java \
+            src/main/java/ghidrassist/core/RAGSourceProvenance.java \
+            src/main/java/ghidrassist/core/RAGManualFieldCitationView.java \
+            src/test/java/ghidrassist/core/RAGManualFieldCitationViewSelfTest.java \
+            src/test/java/ghidrassist/hardware/HardwareManualFieldExcerptEvidenceSelfTest.java
+          java -cp "$RUNNER_TEMP/ga061016-excerpt" \
+            ghidrassist.hardware.HardwareManualFieldExcerptEvidenceSelfTest
+          java -cp "$RUNNER_TEMP/ga061016-excerpt" \
+            ghidrassist.core.RAGManualFieldCitationViewSelfTest
+          echo '15 SOURCE-CLAIM CANDIDATES TESTED, NO LOCAL PDF OR FIRMWARE UPLOADED'
