@@ -93,7 +93,7 @@ public final class HardwareDurableFunctionStages {
             return step.operand&HardwareDataflow.MASK24;
         if(step.kind!=HardwareDataflow.Kind.STORE_INDIRECT)
             return null;
-        Long base=pointers.get(step.register);
+        Long base=step.register==null?null:pointers.get(step.register);
         if(base==null)return null;
         long offset=0;
         if(step.indexRegister!=null){
@@ -109,10 +109,16 @@ public final class HardwareDurableFunctionStages {
     private static Integer sourceWord(HardwareDataflow.Step step,
             Map<String,Long> pointers) {
         if(step.writeBits!=16)return null;
-        Long known=step.literalWord==null?
-            (step.sourceRegister==null?null:
-                pointers.get(step.sourceRegister)):
-            step.literalWord.longValue();
+        // Do NOT use a Long/long conditional here: Java would
+        // silently unbox the absent register value and throw NPE.
+        // An unknown D/A source is legitimate source uncertainty.
+        Long known;
+        if(step.literalWord!=null)
+            known=step.literalWord.longValue();
+        else if(step.sourceRegister!=null)
+            known=pointers.get(step.sourceRegister);
+        else
+            known=null;
         return known==null?null:(int)(known&0xffff);
     }
 
@@ -137,7 +143,8 @@ public final class HardwareDurableFunctionStages {
                     step.operand&HardwareDataflow.MASK24))
             return false;
         if(step.kind==HardwareDataflow.Kind.VBR_FROM_REGISTER &&
-                !Objects.equals(snapshot.vbr,pointers.get(step.register)))
+                !Objects.equals(snapshot.vbr,step.register==null?
+                    null:pointers.get(step.register)))
             return false;
         if(!tracked.containsAll(snapshot.knownPeripheralWords.keySet()))
             return false;
