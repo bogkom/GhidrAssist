@@ -9,6 +9,7 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * GA-06/10/16: independent 10-field SIM protection/periodic timer
@@ -98,8 +99,11 @@ public final class HardwareSimProtectionTimerWitness {
                 throw new IllegalArgumentException("Invalid citation row");
             if(state==State.MATCHED_TEXT_CANDIDATE) {
                 if(excerpt==null || excerptSha256==null ||
-                        excerpt.isBlank() || !excerptSha256.matches("[0-9a-f]{64}"))
-                    throw new IllegalArgumentException("Positive citation without bounded digest");
+                        excerpt.isBlank() || excerpt.length()>MAX_PAGE_CHARS ||
+                        !excerptSha256.matches("[0-9a-f]{64}") ||
+                        !sha256(excerpt).equals(excerptSha256))
+                    throw new IllegalArgumentException(
+                        "Positive citation requires matching bounded excerpt digest");
             }else if(excerpt!=null || excerptSha256!=null)
                 throw new IllegalArgumentException("Unverified row cannot retain excerpt");
         }
@@ -108,9 +112,34 @@ public final class HardwareSimProtectionTimerWitness {
             String expectedPublisherSha256,List<Row> rows,int matched,
             int unexpectedClaims) {
         public Report {
-            if(device==null || expectedEdition==null || expectedPublisherSha256==null ||
-                    rows==null || matched<0 || unexpectedClaims<0)
+            if(device==null || expectedEdition==null ||
+                    expectedPublisherSha256==null || rows==null ||
+                    rows.size()>REVIEWED.size() ||
+                    rows.stream().anyMatch(Objects::isNull) ||
+                    matched<0 || unexpectedClaims<0 || unexpectedClaims>256)
                 throw new IllegalArgumentException("Invalid source report");
+            if("MC68332".equals(device)) {
+                if(!EXPECTED_EDITION.equals(expectedEdition) ||
+                        !EXPECTED_PUBLISHER_SHA256.equals(expectedPublisherSha256) ||
+                        rows.size()!=REVIEWED.size())
+                    throw new IllegalArgumentException(
+                        "Missing reviewed MC68332 protection/timer fields");
+                int positives=0;
+                for(int i=0;i<REVIEWED.size();i++) {
+                    Row row=rows.get(i);
+                    if(!REVIEWED.get(i).equals(row.reviewed()))
+                        throw new IllegalArgumentException(
+                            "Foreign or reordered publisher field source");
+                    if(row.state()==State.MATCHED_TEXT_CANDIDATE)positives++;
+                }
+                if(positives!=matched)
+                    throw new IllegalArgumentException(
+                        "Claimed protection/timer count contradicts source rows");
+            }else if(!"UNKNOWN".equals(expectedEdition) ||
+                    !"UNKNOWN".equals(expectedPublisherSha256) ||
+                    !rows.isEmpty() || matched!=0 || unexpectedClaims!=0)
+                throw new IllegalArgumentException(
+                    "Generic CPU32 cannot publish MC68332 protection/timer evidence");
             rows=List.copyOf(rows);
         }
         public boolean allTenCandidatesMatch() {

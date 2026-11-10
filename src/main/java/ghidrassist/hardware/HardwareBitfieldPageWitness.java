@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.TreeMap;
 import java.util.regex.Pattern;
 
@@ -28,10 +29,24 @@ public final class HardwareBitfieldPageWitness {
                       int firstPage,int lastPage,State state,
                       List<Integer> matchedPhysicalPages) {
         public Row {
-            if(register==null || field==null || mask==0 || state==null ||
-                    firstPage<1 || lastPage<firstPage ||
-                    matchedPhysicalPages==null)
+            if(register==null || register.isBlank() || field==null ||
+                    field.isBlank() || mask<=0 || (mask&0xffff0000)!=0 ||
+                    state==null || firstPage<1 || lastPage<firstPage ||
+                    lastPage>100000 || matchedPhysicalPages==null ||
+                    matchedPhysicalPages.size()>MAX_PAGES ||
+                    matchedPhysicalPages.stream().anyMatch(Objects::isNull) ||
+                    (state==State.NAME_ON_CLAIMED_PAGE) !=
+                        !matchedPhysicalPages.isEmpty() ||
+                    state==State.NAME_ON_CLAIMED_PAGE && field.length()<4 ||
+                    state==State.SHORT_NAME_AMBIGUOUS && field.length()>=4)
                 throw new IllegalArgumentException("Invalid physical page witness");
+            int previous=firstPage-1;
+            for(int page:matchedPhysicalPages) {
+                if(page<=previous || page>lastPage)
+                    throw new IllegalArgumentException(
+                        "Unordered or out-of-range physical PDF witness");
+                previous=page;
+            }
             matchedPhysicalPages=List.copyOf(matchedPhysicalPages);
         }
     }
@@ -40,6 +55,51 @@ public final class HardwareBitfieldPageWitness {
                          int sourceEntries,int matched,int missing,
                          int ambiguous,List<Row> rows) {
         public Result {
+            if(profile==null || manualUrl==null || editionClaim==null ||
+                    publisherPdfSha256==null || rows==null ||
+                    rows.size()>256 || rows.stream().anyMatch(Objects::isNull) ||
+                    sourceEntries!=rows.size() || matched<0 || missing<0 ||
+                    ambiguous<0 || matched+missing+ambiguous!=sourceEntries)
+                throw new IllegalArgumentException("Inconsistent physical PDF source report");
+            if("MC68332".equals(profile)) {
+                // Only the built-in, explicitly selected 15-field device
+                // source ledger may acquire the publisher's expected pin.
+                // The pin is a claim, NOT authentication of supplied text.
+                if(!HardwareProfiles.MC68332_MANUAL.equals(manualUrl) ||
+                        !HardwareBitfieldSourceLedger.MC68332_EDITION_CLAIM
+                            .equals(editionClaim) ||
+                        !HardwareBitfieldSourceLedger.MC68332_PUBLIC_PDF_SHA256
+                            .equals(publisherPdfSha256))
+                    throw new IllegalArgumentException("Foreign MC68332 source metadata");
+                var reviewed=HardwareBitfieldSourceLedger.inspect(
+                    HardwareProfiles.mc68332()).entries();
+                if(rows.size()!=reviewed.size())
+                    throw new IllegalArgumentException("Missing reviewed PDF fields");
+                for(int i=0;i<rows.size();i++) {
+                    Row row=rows.get(i);
+                    var source=reviewed.get(i);
+                    if(!row.register().equals(source.register()) ||
+                            !row.field().equals(source.field()) ||
+                            Integer.toUnsignedLong(row.mask())!=source.mask() ||
+                            row.firstPage()!=source.firstPage() ||
+                            row.lastPage()!=source.lastPage())
+                        throw new IllegalArgumentException(
+                            "Reordered, altered or foreign PDF field source");
+                }
+            }else if(!rows.isEmpty() || sourceEntries!=0 ||
+                    !manualUrl.equals("UNKNOWN") ||
+                    !editionClaim.equals("UNKNOWN") ||
+                    !publisherPdfSha256.equals("UNKNOWN"))
+                throw new IllegalArgumentException(
+                    "Generic CPU32 cannot publish MC68332 field evidence");
+            int m=0,a=0;
+            for(Row row:rows) {
+                if(row.state()==State.NAME_ON_CLAIMED_PAGE)m++;
+                else if(row.state()==State.SHORT_NAME_AMBIGUOUS)a++;
+            }
+            if(m!=matched || a!=ambiguous)
+                throw new IllegalArgumentException(
+                    "Forged PDF field token or ambiguity count");
             rows=List.copyOf(rows);
         }
         public String markdown() {

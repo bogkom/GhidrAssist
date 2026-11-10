@@ -2,6 +2,8 @@ package ghidrassist.hardware;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 
@@ -22,6 +24,15 @@ public final class HardwareBitfieldPageWitnessSelfTest {
             HardwareBitfieldPageWitness.Result result,String field) {
         return result.rows().stream().filter(r->r.field().equals(field))
             .findFirst().orElseThrow();
+    }
+    private static HardwareBitfieldPageWitness.Result republish(
+            HardwareBitfieldPageWitness.Result reference,
+            List<HardwareBitfieldPageWitness.Row> rows,
+            int matched,int missing,int ambiguous) {
+        return new HardwareBitfieldPageWitness.Result(
+            reference.profile(),reference.manualUrl(),
+            reference.editionClaim(),reference.publisherPdfSha256(),
+            reference.sourceEntries(),matched,missing,ambiguous,rows);
     }
     public static void main(String[] args)throws Exception {
         var device=HardwareProfiles.mc68332();
@@ -103,6 +114,73 @@ public final class HardwareBitfieldPageWitnessSelfTest {
             immutable=true;
         }
         check(immutable,"Page witness rows immutable");
+
+        // A public Row/Result is an untrusted source presentation boundary;
+        // a caller cannot fabricate the selected publisher pin, 15 reviewed
+        // identities, exact counters or a matching physical-folio list.
+        check(republish(audit,audit.rows(),audit.matched(),audit.missing(),
+                audit.ambiguous()).equals(audit),
+            "Canonical physical page report reopens without dropped witnesses");
+        var shen=find(audit,"SHEN");
+        denied(()->new HardwareBitfieldPageWitness.Row(
+            "SIMCR","SHEN",shen.mask(),219,219,
+            HardwareBitfieldPageWitness.State.NAME_ON_CLAIMED_PAGE,List.of()),
+            "Positive name token without a matching folio fails closed");
+        denied(()->new HardwareBitfieldPageWitness.Row(
+            "SIMCR","SHEN",shen.mask(),219,219,
+            HardwareBitfieldPageWitness.State.PAGE_TEXT_MISSING,List.of(219)),
+            "Missing physical page cannot carry positive source pages");
+        denied(()->new HardwareBitfieldPageWitness.Row(
+            "SIMCR","SHEN",shen.mask(),219,219,
+            HardwareBitfieldPageWitness.State.NAME_ON_CLAIMED_PAGE,List.of(220)),
+            "Claimed source folio outside exact range denied");
+        denied(()->new HardwareBitfieldPageWitness.Row(
+            "SIMCR","SHEN",shen.mask(),219,220,
+            HardwareBitfieldPageWitness.State.NAME_ON_CLAIMED_PAGE,List.of(220,219)),
+            "Unordered physical page witnesses cannot certify a field");
+        denied(()->new HardwareBitfieldPageWitness.Row(
+            "SIMCR","SHEN",shen.mask(),219,220,
+            HardwareBitfieldPageWitness.State.NAME_ON_CLAIMED_PAGE,List.of(219,219)),
+            "Duplicate physical page witnesses cannot certify a field");
+        denied(()->new HardwareBitfieldPageWitness.Row(
+            "SIMCR","SHEN",shen.mask(),219,219,
+            HardwareBitfieldPageWitness.State.SHORT_NAME_AMBIGUOUS,List.of()),
+            "Long discriminative field cannot be relabeled ambiguous");
+        denied(()->republish(audit,audit.rows(),
+                audit.matched()+1,audit.missing(),audit.ambiguous()),
+            "Matched count must equal actual source rows");
+        denied(()->republish(audit,audit.rows().subList(0,14),
+                audit.matched(),audit.missing(),audit.ambiguous()),
+            "A missing publisher field row cannot be presented as complete");
+        var reversed=new ArrayList<>(audit.rows());
+        java.util.Collections.reverse(reversed);
+        denied(()->republish(audit,reversed,
+                audit.matched(),audit.missing(),audit.ambiguous()),
+            "Reordered reviewed field rows rejected");
+        var altered=new ArrayList<>(audit.rows());
+        altered.set(0,new HardwareBitfieldPageWitness.Row(
+            altered.get(0).register(),altered.get(0).field(),
+            altered.get(0).mask()^0x100,altered.get(0).firstPage(),
+            altered.get(0).lastPage(),altered.get(0).state(),
+            altered.get(0).matchedPhysicalPages()));
+        denied(()->republish(audit,altered,
+                audit.matched(),audit.missing(),audit.ambiguous()),
+            "Forged bit-mask field source cannot inherit publisher identity");
+        denied(()->new HardwareBitfieldPageWitness.Result(
+            audit.profile(),audit.manualUrl(),audit.editionClaim(),
+            "0".repeat(64),audit.sourceEntries(),audit.matched(),
+            audit.missing(),audit.ambiguous(),audit.rows()),
+            "Publisher digest claim must be the fixed reviewed pin");
+        var generic=HardwareBitfieldPageWitness.inspect(
+            HardwareProfiles.cpu32Family(),text);
+        denied(()->new HardwareBitfieldPageWitness.Result(
+            generic.profile(),HardwareProfiles.MC68332_MANUAL,
+            generic.editionClaim(),generic.publisherPdfSha256(),
+            0,0,0,0,List.of()),
+            "Generic CPU32 report cannot borrow the MC68332 manual URL");
+        denied(()->republish(audit,null,
+                audit.matched(),audit.missing(),audit.ambiguous()),
+            "Null rows must fail closed with explicit input error");
 
         if(args.length!=0 && args.length!=3)
             throw new IllegalArgumentException(
