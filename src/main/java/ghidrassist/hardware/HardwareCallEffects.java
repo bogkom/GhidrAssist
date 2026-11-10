@@ -1,5 +1,6 @@
 package ghidrassist.hardware;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -46,11 +47,95 @@ public final class HardwareCallEffects {
                 "; NOT an execution/reset-path proof";
         }
     }
+    /**
+     * A typed source-only route through *recognized direct* function calls.
+     * MISSING_TARGET is an observed absent function definition; depth/node
+     * limits denote NOT-INSPECTED routes. No route proves execution.
+     */
+    public enum WitnessKind {
+        MEMORY_STORE, MOVEC_VBR, UNKNOWN_FLOW, MISSING_TARGET,
+        DEPTH_CUTOFF, NODE_CUTOFF
+    }
+    public record SourceWitness(WitnessKind kind,List<Long> chain) {
+        public SourceWitness {
+            if(kind==null || chain==null || chain.isEmpty() ||
+                    chain.size()>MAX_SOURCE_FUNCTIONS+1)
+                throw new IllegalArgumentException("Invalid static source witness");
+            for(Long entry:chain)
+                if(entry==null || entry<0)
+                    throw new IllegalArgumentException("Invalid witness address");
+            chain=List.copyOf(chain);
+        }
+    }
+    /** Flags remain the original conservative bounded-graph Summary. */
+    public record Detailed(long root,Summary summary,SourceWitness storeWitness,
+            SourceWitness vbrWitness,SourceWitness observedUnknownWitness,
+            SourceWitness frontierWitness) {
+        public Detailed {
+            if(root<0 || summary==null ||
+                    !valid(root,storeWitness,WitnessKind.MEMORY_STORE) ||
+                    !valid(root,vbrWitness,WitnessKind.MOVEC_VBR) ||
+                    !valid(root,observedUnknownWitness,WitnessKind.UNKNOWN_FLOW,
+                        WitnessKind.MISSING_TARGET) ||
+                    !valid(root,frontierWitness,WitnessKind.DEPTH_CUTOFF,
+                        WitnessKind.NODE_CUTOFF) ||
+                    storeWitness!=null && !summary.possibleMemoryStore() ||
+                    vbrWitness!=null && !summary.possibleVbrWrite() ||
+                    observedUnknownWitness!=null && !summary.unresolved() ||
+                    frontierWitness!=null &&
+                        (!summary.truncated() || !summary.unresolved()))
+                throw new IllegalArgumentException(
+                    "Contradictory transitive CALL source witnesses");
+        }
+        private static boolean valid(long root,SourceWitness witness,
+                WitnessKind... allowed) {
+            if(witness==null)return true;
+            if(witness.chain().get(0)!=root)return false;
+            for(WitnessKind kind:allowed)if(witness.kind()==kind)return true;
+            return false;
+        }
+    }
     private static final class Acc {
         boolean memory,vbr,unknown,cycle,cap;
         int visits;
     }
     private record Layer(long entry,int depth) {}
+    private static List<Long> path(Map<Long,Long> parents,long entry) {
+        ArrayDeque<Long> reversed=new ArrayDeque<>();
+        Long at=entry;
+        while(at!=null) {
+            if(reversed.size()>MAX_SOURCE_FUNCTIONS)
+                throw new IllegalStateException("Unbounded CALL witness chain");
+            reversed.addFirst(at);
+            at=parents.get(at);
+        }
+        return List.copyOf(reversed);
+    }
+    private static SourceWitness at(WitnessKind kind,Map<Long,Long> parents,
+            long entry) {
+        return new SourceWitness(kind,path(parents,entry));
+    }
+    private static SourceWitness edge(WitnessKind kind,Map<Long,Long> parents,
+            long from,long to) {
+        List<Long> chain=new ArrayList<>(path(parents,from));
+        chain.add(to);
+        return new SourceWitness(kind,chain);
+    }
+    private static SourceWitness best(SourceWitness current,
+            SourceWitness candidate) {
+        if(current==null)return candidate;
+        int size=Integer.compare(current.chain().size(),candidate.chain().size());
+        if(size<0)return current;
+        if(size>0)return candidate;
+        for(int i=0;i<current.chain().size();i++){
+            int compare=Long.compare(current.chain().get(i),
+                candidate.chain().get(i));
+            if(compare<0)return current;
+            if(compare>0)return candidate;
+        }
+        return current.kind().ordinal()<=candidate.kind().ordinal()?
+            current:candidate;
+    }
 
     /**
      * Explore by SHORTEST observed direct-call distance. A depth-first
@@ -60,6 +145,11 @@ public final class HardwareCallEffects {
      * avoids that source-evidence loss. It remains bounded and static only.
      */
     public static Summary summarize(long root,Collection<FunctionNode> nodes,
+            int maxDepth,int maxFunctions) {
+        return inspect(root,nodes,maxDepth,maxFunctions).summary();
+    }
+    /** Same finite BFS and cycle scan as summarize(), with typed source paths. */
+    public static Detailed inspect(long root,Collection<FunctionNode> nodes,
             int maxDepth,int maxFunctions) {
         if(root<0 || nodes==null || nodes.size()>MAX_SOURCE_FUNCTIONS ||
                 maxDepth<0 || maxDepth>MAX_SOURCE_FUNCTIONS ||
@@ -75,46 +165,73 @@ public final class HardwareCallEffects {
                 throw new IllegalArgumentException("Unbounded source-call edges");
         }
         Acc out=new Acc();
-        java.util.ArrayDeque<Layer> queue=new java.util.ArrayDeque<>();
+        ArrayDeque<Layer> queue=new ArrayDeque<>();
         Set<Long> discovered=new HashSet<>();
         Set<Long> inspected=new HashSet<>();
+        Map<Long,Long> parents=new HashMap<>();
+        SourceWitness store=null,vbr=null,observedUnknown=null,frontier=null;
         queue.addLast(new Layer(root,0));
         discovered.add(root);
+        parents.put(root,null);
         while(!queue.isEmpty()) {
             if(out.visits>=maxFunctions) {
                 out.cap=true;out.unknown=true;
+                Layer skipped=queue.peekFirst();
+                if(skipped!=null)
+                    frontier=best(frontier,at(WitnessKind.NODE_CUTOFF,
+                        parents,skipped.entry()));
                 break;
             }
             Layer current=queue.removeFirst();
             FunctionNode node=graph.get(current.entry());
             if(node==null) {
                 out.unknown=true;
+                observedUnknown=best(observedUnknown,
+                    at(WitnessKind.MISSING_TARGET,parents,current.entry()));
                 continue;
             }
             inspected.add(current.entry());
             out.visits++;
+            if(node.memoryStore())
+                store=best(store,at(WitnessKind.MEMORY_STORE,
+                    parents,current.entry()));
+            if(node.vbrWrite())
+                vbr=best(vbr,at(WitnessKind.MOVEC_VBR,
+                    parents,current.entry()));
+            if(node.unresolvedFlow())
+                observedUnknown=best(observedUnknown,
+                    at(WitnessKind.UNKNOWN_FLOW,parents,current.entry()));
             out.memory|=node.memoryStore();
             out.vbr|=node.vbrWrite();
             out.unknown|=node.unresolvedFlow();
             for(long callee:node.directCallees()) {
                 if(!graph.containsKey(callee)) {
                     out.unknown=true;
+                    observedUnknown=best(observedUnknown,
+                        edge(WitnessKind.MISSING_TARGET,parents,
+                            current.entry(),callee));
                     continue;
                 }
                 if(current.depth()>=maxDepth) {
                     if(!discovered.contains(callee)) {
                         out.cap=true;out.unknown=true;
+                        frontier=best(frontier,
+                            edge(WitnessKind.DEPTH_CUTOFF,parents,
+                                current.entry(),callee));
                     }
                     continue;
                 }
                 if(!discovered.contains(callee)) {
-                    // Bound the QUEUED frontier, not just completed visits.
-                    // Omitted callees could contain MMIO/VBR source sites:
-                    // truncation must retain explicit uncertainty.
+                    // Budget is charged to distinct scheduled targets, NOT
+                    // the incidental order or number of Ghidra references.
                     if(discovered.size()>=maxFunctions) {
                         out.cap=true;out.unknown=true;
+                        frontier=best(frontier,
+                            edge(WitnessKind.NODE_CUTOFF,parents,
+                                current.entry(),callee));
                     } else {
                         discovered.add(callee);
+                        parents.put(callee,current.entry());
                         queue.addLast(new Layer(callee,current.depth()+1));
                     }
                 }
@@ -122,6 +239,8 @@ public final class HardwareCallEffects {
         }
         if(!queue.isEmpty()) {
             out.cap=true;out.unknown=true;
+            if(frontier==null)
+                frontier=at(WitnessKind.NODE_CUTOFF,parents,queue.peekFirst().entry());
         }
 
         // A deterministic bounded graph can contain loops even when the BFS
@@ -151,7 +270,8 @@ public final class HardwareCallEffects {
         if(removed<inspected.size()) {
             out.cycle=true;out.unknown=true;
         }
-        return new Summary(out.memory,out.vbr,out.unknown,
+        Summary summary=new Summary(out.memory,out.vbr,out.unknown,
             out.cycle,out.cap,out.visits);
+        return new Detailed(root,summary,store,vbr,observedUnknown,frontier);
     }
 }
