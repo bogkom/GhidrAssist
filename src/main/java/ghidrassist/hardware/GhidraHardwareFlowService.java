@@ -636,7 +636,7 @@ public final class GhidraHardwareFlowService {
             boolean recognized,boolean incomplete) {}
     private static ResetCandidates resetStaticCandidates(Program program,
             List<HardwareCallEffects.FunctionNode> graph,
-            List<Long> evidencedFunctions) {
+            List<Long> evidencedFunctions,boolean mc68332Selected) {
         StringBuilder md=new StringBuilder();
         md.append("## Candidate RESET vector and bounded static-call paths\n\n");
         String language=program.getLanguageID().toString().toUpperCase(Locale.ROOT);
@@ -668,9 +668,24 @@ public final class GhidraHardwareFlowService {
           .append("; PC: ")
           .append(String.format(Locale.ROOT,"0x%08X",vector.resetPc()))
           .append("; plausible: ").append(vector.valid())
-          .append("; ").append(vector.reason()).append("\n");
-        if(!vector.valid()){
-            md.append("- No direct-call path inferred from invalid vector.\n\n");
+          .append("; ").append(vector.reason()).append("\n")
+          .append("- Initial SSP source quality: ")
+          .append(HardwareResetFlow.inspectInitialStack(
+              vector.initialSp(),mc68332Selected))
+          .append("; static 32-bit word only, NOT proof of mapped RAM, ")
+          .append("a usable stack, executed RESET or an active CPU mode. ")
+          .append("This stack assessment does not certify or reject the PC.\n");
+        if(!HardwareResetFlow.sourceResetPcEligible(vector,mc68332Selected)){
+            if(!vector.valid())
+                md.append("- No direct-call path inferred from invalid PC vector.\n\n");
+            else
+                md.append("- **UNKNOWN RESET ROOT — SELECTED MC68332 24-BIT ")
+                  .append("SOURCE BOUND:** RESET PC contains upper address bits. ")
+                  .append("No Ghidra function/RESET CALL graph is inferred ")
+                  .append("from a 32-bit CPU32 source pointer by silently ")
+                  .append("truncating it to a 24-bit physical alias. ")
+                  .append("Generic CPU32 projects remain 32-bit; real bus ")
+                  .append("remapping/actual RESET execution are UNKNOWN.\n\n");
             return new ResetCandidates(md.toString(),java.util.Set.of(),false,true);
         }
         Address reset;
@@ -1494,7 +1509,7 @@ public final class GhidraHardwareFlowService {
             "## Interprocedural SIMCR/MM candidates by CALL instruction\n\n"+
             "Generic CPU32: manual MC68332 profile selection required.\n\n";
 
-        ResetCandidates reset=resetStaticCandidates(program,staticCalls,evidencedFunctions);
+        ResetCandidates reset=resetStaticCandidates(program,staticCalls,evidencedFunctions,mc68332Selected);
         HardwareJointSourcePublication.requireCurrent(
             publicationRevision,liveRevision,liveStages);
         // Correlate only sources already collected in this SAME bounded
