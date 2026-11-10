@@ -3,6 +3,7 @@ package ghidrassist.hardware;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -35,6 +36,14 @@ public final class HardwareBitfieldLayoutWitnessSelfTest {
             HardwareBitfieldLayoutWitness.Report report,String name) {
         return report.rows().stream().filter(r->r.diagram().field().equals(name))
             .findFirst().orElseThrow();
+    }
+    private static HardwareBitfieldLayoutWitness.Report republish(
+            HardwareBitfieldLayoutWitness.Report baseline,
+            List<HardwareBitfieldLayoutWitness.Row> rows,
+            int matches,int mismatches,int missing) {
+        return new HardwareBitfieldLayoutWitness.Report(
+            baseline.device(),baseline.expectedPublisherPdfSha256(),
+            rows,matches,mismatches,missing,baseline.unexpectedProfileFields());
     }
     public static void main(String[] args)throws Exception {
         var text=Map.of(219,diagram219(),220,diagram220());
@@ -137,6 +146,67 @@ public final class HardwareBitfieldLayoutWitnessSelfTest {
         try{report.rows().clear();}
         catch(UnsupportedOperationException expected){immutable=true;}
         check(immutable,"Source-only report immutable");
+
+        check(republish(report,report.rows(),report.matches(),
+                report.mismatches(),report.missingOrUnverifiable()).equals(report),
+            "Canonical publisher diagram comparison round-trips");
+        rejected(()->new HardwareBitfieldLayoutWitness.DiagramField(
+            "SIMCR","INVALID",-1,0,219,"D-5"),
+            "Negative reviewed diagram bit position cannot manufacture mask");
+        rejected(()->new HardwareBitfieldLayoutWitness.DiagramField(
+            "SIMCR","INVALID",15,16,219,"D-5"),
+            "Diagram bit outside 16-bit register rejected");
+        var mm=row(report,"MM");
+        rejected(()->new HardwareBitfieldLayoutWitness.Row(
+            mm.diagram(),mm.diagram().mask()^0x0080L,
+            mm.claimedDescriptionPages(),
+            HardwareBitfieldLayoutWitness.State.CLAIM_MATCHES_REVIEWED_DIAGRAM),
+            "Changed mask cannot retain positive diagram agreement");
+        rejected(()->new HardwareBitfieldLayoutWitness.Row(
+            mm.diagram(),mm.diagram().mask(),
+            mm.claimedDescriptionPages(),
+            HardwareBitfieldLayoutWitness.State.MASK_DIFFERS_FROM_DIAGRAM),
+            "Correct mask cannot be presented as a mismatch");
+        rejected(()->new HardwareBitfieldLayoutWitness.Row(
+            mm.diagram(),null,mm.claimedDescriptionPages(),
+            HardwareBitfieldLayoutWitness.State.CLAIM_MATCHES_REVIEWED_DIAGRAM),
+            "Absent mask cannot claim matched publisher diagram");
+        rejected(()->new HardwareBitfieldLayoutWitness.Row(
+            mm.diagram(),null,mm.claimedDescriptionPages(),
+            HardwareBitfieldLayoutWitness.State.FIELD_CLAIM_MISSING),
+            "Missing profile claim cannot inherit physical page range");
+        var alteredRow=new ArrayList<>(report.rows());
+        alteredRow.set(0,new HardwareBitfieldLayoutWitness.Row(
+            mm.diagram(),mm.profileMask(),mm.claimedDescriptionPages(),mm.state()));
+        rejected(()->republish(report,alteredRow,report.matches(),
+                report.mismatches(),report.missingOrUnverifiable()),
+            "Different reviewed field order cannot certify full 15-row diagram");
+        var reversed=new ArrayList<>(report.rows());
+        Collections.reverse(reversed);
+        rejected(()->republish(report,reversed,report.matches(),
+                report.mismatches(),report.missingOrUnverifiable()),
+            "Reordered diagram rows denied");
+        rejected(()->republish(report,report.rows().subList(0,14),
+                report.matches(),report.mismatches(),
+                report.missingOrUnverifiable()),
+            "Missing reviewed diagram cannot claim full match");
+        rejected(()->republish(report,report.rows(),report.matches()-1,
+                report.mismatches()+1,report.missingOrUnverifiable()),
+            "Forged positive and mismatch counters rejected");
+        rejected(()->new HardwareBitfieldLayoutWitness.Report(
+            report.device(),"0".repeat(64),report.rows(),report.matches(),
+            report.mismatches(),report.missingOrUnverifiable(),
+            report.unexpectedProfileFields()),
+            "Forged publisher digest cannot inherit reviewed diagram results");
+        var generic=HardwareBitfieldLayoutWitness.inspect(
+            HardwareProfiles.cpu32Family(),text);
+        rejected(()->new HardwareBitfieldLayoutWitness.Report(
+            generic.device(),HardwareBitfieldSourceLedger.MC68332_PUBLIC_PDF_SHA256,
+            List.of(),0,0,0,0),
+            "Generic CPU32 scope cannot borrow MC68332 PDF identity");
+        rejected(()->republish(report,null,report.matches(),
+                report.mismatches(),report.missingOrUnverifiable()),
+            "Null report rows produce explicit invalid-input refusal");
 
         if(args.length!=0 && args.length!=2)
             throw new IllegalArgumentException(
