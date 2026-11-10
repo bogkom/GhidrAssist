@@ -171,3 +171,9 @@ physical address decoding. No CALL execution, RESET ordering, active
 interrupt/VBR, latched SIMCR MM or physical bus mapping is inferred.
 Deterministic Java21 negative and boundary tests and full Java25 Ghidra
 12.1.4 PUBLIC synthetic GitHub Actions are exact-head merge gates.
+
+## 2026-11-10 — generic RESET and transitive CALL public evidence invariants
+
+In addition to CPU32 input-address bounds, read-only generic transitive CALL effect summaries now require observed STORE, MOVEC/VBR and UNKNOWN_FLOW source prefixes to fit inspected function counts, while missing definitions and depth/node frontiers exclude their last uninspected target. Cycle claims require at least one visited node and conservative unknown classification; bounded search cannot claim closed control flow.
+
+The RESET static candidate report validates that every rendered hardware-source function and every function in its source-only chain was in the reported visited set; chain depth, endpoint and numeric formatting must agree, and no function is published twice as separate evidence. These checks reject contradictory public report construction, not actual Ghidra Program modification, dynamic feasibility, hardware initialization, or the physical MCU bus. Original firmware remains untouched.
