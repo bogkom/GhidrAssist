@@ -9,6 +9,7 @@ on:
       - 'src/test/java/ghidrassist/hardware/HardwareDurableFunctionStagesSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/HardwareCheckpointValueWitnessSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/HardwareRegisterJoinCheckpointSelfTest.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareMmioVbrJoinCheckpointSelfTest.java'
       - '.github/workflows/hardware-durable-function-stages.yml'
   workflow_dispatch:
 permissions:
@@ -38,10 +39,13 @@ jobs:
             src/main/java/ghidrassist/hardware/HardwareDurableFunctionStages.java \
             src/test/java/ghidrassist/hardware/HardwareDurableFunctionStagesSelfTest.java \
             src/test/java/ghidrassist/hardware/HardwareCheckpointValueWitnessSelfTest.java \
-            src/test/java/ghidrassist/hardware/HardwareRegisterJoinCheckpointSelfTest.java
+            src/test/java/ghidrassist/hardware/HardwareRegisterJoinCheckpointSelfTest.java \
+            src/test/java/ghidrassist/hardware/HardwareMmioVbrJoinCheckpointSelfTest.java
           java -cp "$RUNNER_TEMP/ga12-func" \
             ghidrassist.hardware.HardwareDurableFunctionStagesSelfTest
           java -cp "$RUNNER_TEMP/ga12-func" \
             ghidrassist.hardware.HardwareCheckpointValueWitnessSelfTest
           java -cp "$RUNNER_TEMP/ga12-func" \
             ghidrassist.hardware.HardwareRegisterJoinCheckpointSelfTest
+          java -cp "$RUNNER_TEMP/ga12-func" \
+            ghidrassist.hardware.HardwareMmioVbrJoinCheckpointSelfTest
