@@ -34,8 +34,33 @@ public final class HardwareVectorMmMayCorrelation {
                     functionEntry!=pointer || resetRelation==null ||
                     mmLowByte==null || mmSource==null || aliasSource==null ||
                     observedUnknownSource==null || frontierSource==null ||
-                    examined<0)
+                    examined<0 || examined>MAX_ROOT_NODES ||
+                    !List.of("STATIC_MAY_MM_LOW_BYTE", "UNKNOWN",
+                        "NOT_OBSERVED_IN_BOUNDED_SOURCE").contains(mmLowByte))
                 throw new IllegalArgumentException("Invalid vector MM source row");
+            boolean may=mmLowByte.equals("STATIC_MAY_MM_LOW_BYTE");
+            boolean uncertain=unknownAlias || unknownControl || cycle || limited;
+            if(resetRelation==HardwareVectorResetCorrelation.Relation.RESET_ROOT_UNKNOWN
+                    && !resetRelationUncertain ||
+                    may==mmSource.equals("NONE") ||
+                    unknownAlias==aliasSource.equals("NONE") ||
+                    limited==frontierSource.equals("NONE") ||
+                    cycle && !unknownControl ||
+                    limited && !unknownControl ||
+                    !unknownControl && !observedUnknownSource.equals("NONE") ||
+                    mmLowByte.equals("UNKNOWN")!=(!may && uncertain) ||
+                    !validWitness(mmSource,functionEntry,"MM_SOURCE") ||
+                    !validWitness(aliasSource,functionEntry,"STORE_ALIAS") ||
+                    !validWitness(observedUnknownSource,functionEntry,
+                        "UNKNOWN_FLOW","MISSING_TARGET") ||
+                    !validWitness(frontierSource,functionEntry,
+                        "DEPTH_CUTOFF","NODE_CUTOFF","BATCH_CUTOFF"))
+                throw new IllegalArgumentException(
+                    "Contradictory or unbounded vector MM evidence");
+        }
+        /** Uncertainty in the handler's MM source tree, not its RESET relation. */
+        public boolean mmEvidenceUncertain() {
+            return unknownAlias || unknownControl || cycle || limited;
         }
     }
     public record Report(boolean relocated,long tableBase,
@@ -52,9 +77,44 @@ public final class HardwareVectorMmMayCorrelation {
                     exactEntries+interiorPointers!=recognizedTargets ||
                     distinctShownRoots<0 || distinctShownRoots>rows.size() ||
                     rows.size()>MAX_ROWS ||
+                    rows==null || rows.contains(null) ||
+                    rows.size()>exactEntries ||
+                    exactEntries>0 && rows.isEmpty() ||
                     displayTruncated!=(rows.size()<exactEntries))
                 throw new IllegalArgumentException("Inconsistent vector MM report");
+            Set<Long> uniqueRoots=new HashSet<>();
+            int previousSlot=1;
+            for(Row row:rows) {
+                if(row.vectorNumber()<=previousSlot ||
+                        resetRecognized &&
+                        row.resetRelation()==
+                            HardwareVectorResetCorrelation.Relation.RESET_ROOT_UNKNOWN ||
+                        !resetRecognized &&
+                        row.resetRelation()!=
+                            HardwareVectorResetCorrelation.Relation.RESET_ROOT_UNKNOWN ||
+                        row.resetRelationUncertain()!=
+                            (!resetRecognized || resetIncomplete))
+                    throw new IllegalArgumentException(
+                        "Contradictory vector MM report row");
+                previousSlot=row.vectorNumber();
+                uniqueRoots.add(row.functionEntry());
+            }
+            if(uniqueRoots.size()!=distinctShownRoots)
+                throw new IllegalArgumentException(
+                    "Incorrect distinct inspected handler count");
             rows=List.copyOf(rows);
+        }
+        public long displayedMay() {
+            return rows.stream().filter(r->
+                r.mmLowByte().equals("STATIC_MAY_MM_LOW_BYTE")).count();
+        }
+        public long displayedUnknown() {
+            return rows.stream().filter(r->
+                r.mmLowByte().equals("UNKNOWN")).count();
+        }
+        public long displayedNoObservation() {
+            return rows.stream().filter(r->
+                r.mmLowByte().equals("NOT_OBSERVED_IN_BOUNDED_SOURCE")).count();
         }
         public String markdown() {
             StringBuilder out=new StringBuilder(
@@ -73,6 +133,10 @@ public final class HardwareVectorMmMayCorrelation {
                 .append(distinctShownRoots)
                 .append("; displayed exact rows: ").append(rows.size())
                 .append("; undisplayed exact rows: ").append(exactEntries-rows.size())
+                .append("; DISPLAYED-ONLY MM classifications (not whole table): MAY=")
+                .append(displayedMay()).append(", UNKNOWN=")
+                .append(displayedUnknown()).append(", NOT_OBSERVED=")
+                .append(displayedNoObservation())
                 .append("; RESET root recognized: ").append(resetRecognized)
                 .append("; RESET direct-CALL graph incomplete: ")
                 .append(resetIncomplete).append(".\n")
@@ -85,7 +149,10 @@ public final class HardwareVectorMmMayCorrelation {
                 .append("rooted at the exact vector handler, not decoded ")
                 .append("instruction traces or executed calls. NONE is ")
                 .append("not proof of no MM effect. RESET relationship ")
-                .append("is separately bounded, not execution order.\n");
+                .append("is separately bounded, not execution order. ")
+                .append("RESET relation uncertainty describes ONLY RESET ")
+                .append("root/graph completeness; handler MM source uncertainty ")
+                .append("is a different evidence horizon.\n");
             if(displayTruncated)
                 out.append("- **INCOMPLETE VECTOR DISPLAY:** omitted exact handlers ")
                     .append("were not analyzed for MM source effects.\n");
@@ -93,17 +160,19 @@ public final class HardwareVectorMmMayCorrelation {
                 return out.append("- No displayed exact handler source. ")
                     .append("This does not prove absent MMIO or interrupts.\n\n").toString();
             out.append("\n| Vector | Source-image pointer | RESET relation | ")
-                .append("RESET uncertain | SIMCR/MM MAY | Alias/width unknown | ")
+                .append("RESET uncertain | SIMCR/MM MAY | MM source uncertain | ")
+                .append("Alias/width unknown | ")
                 .append("Unknown control | Cycle | Limited | Inspected functions | ")
                 .append("MM source function chain | Alias function chain | ")
                 .append("Observed unknown/missing chain | Uninspected frontier chain |\n")
-                .append("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n");
+                .append("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n");
             for(Row row:rows)
                 out.append("| ").append(row.vectorNumber())
                     .append(" | ").append(hex(row.pointer()))
                     .append(" | ").append(row.resetRelation())
                     .append(" | ").append(row.resetRelationUncertain())
                     .append(" | ").append(row.mmLowByte())
+                    .append(" | ").append(row.mmEvidenceUncertain())
                     .append(" | ").append(row.unknownAlias())
                     .append(" | ").append(row.unknownControl())
                     .append(" | ").append(row.cycle())
@@ -119,6 +188,17 @@ public final class HardwareVectorMmMayCorrelation {
     }
     private static String hex(long id) {
         return String.format(Locale.ROOT,"0x%08X",id);
+    }
+    /** Fail closed on injected text, unbounded or cross-root source paths. */
+    private static boolean validWitness(String value,long root,String... kinds) {
+        if("NONE".equals(value))return true;
+        String[] parts=value.split(" -> ",-1);
+        if(parts.length<2 || parts.length>MAX_ROOT_DEPTH+3 ||
+                !List.of(kinds).contains(parts[0]) ||
+                !parts[1].equals(hex(root)))return false;
+        for(int i=1;i<parts.length;i++)
+            if(!parts[i].matches("0x[0-9A-F]{8,16}"))return false;
+        return true;
     }
     private static String witness(
             HardwareInterproceduralMmEffects.SourceWitness path) {
@@ -197,8 +277,7 @@ public final class HardwareVectorMmMayCorrelation {
                     HardwareVectorResetCorrelation.Relation.IN_RESET_STATIC_CALL_SUBSET:
                     HardwareVectorResetCorrelation.Relation.OUTSIDE_OBSERVED_RESET_SUBSET;
             rows.add(new Row(target.vectorNumber(),target.pointer(),root,
-                relation,!resetRecognized || resetIncomplete ||
-                    s.unknownControl() || s.unknownAlias() || s.cycle() || s.limited(),
+                relation,!resetRecognized || resetIncomplete,
                 mmClass(s),s.unknownAlias(),s.unknownControl(),s.cycle(),s.limited(),
                 s.visited(),witness(s.mmWitness()),witness(s.aliasWitness()),
                 observed(s),witness(s.frontierWitness())));

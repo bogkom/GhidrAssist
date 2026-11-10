@@ -99,6 +99,9 @@ public class GA18VerifyVectorResetCorrelation extends GhidraScript {
             check(selectedText.contains(vectorMmTitle) &&
                     selectedText.contains("MM0/MM1 are conditional alternatives") &&
                     selectedText.contains("No vector pointer is added as a CALL edge") &&
+                    selectedText.contains("MM source uncertain") &&
+                    selectedText.contains("RESET relation uncertainty describes ONLY RESET") &&
+                    selectedText.contains("DISPLAYED-ONLY MM classifications") &&
                     selectedText.contains("| 26 | 0x00000130 |") &&
                     selectedText.contains("| 32 | 0x00000220 |") &&
                     selectedText.contains("interior pointers (not analyzed as complete handlers): 1"),

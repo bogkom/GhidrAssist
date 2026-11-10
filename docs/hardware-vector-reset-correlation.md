@@ -190,3 +190,31 @@ targets, missing bodies, alias/unknown/cycles, depth/row caps, 24-bit
 MCU boundaries and input reordering. Genuine Ghidra 12.1.4 PUBLIC
 headless synthetic integration checks selected/generic image-zero and
 relocated reports on exact CI SHA. GA-01/02/03/11/18 remain PARTIAL.
+
+## 2026-11-10 — independent RESET/MM uncertainty and bounded report authenticity
+
+The selected-device vector-handler source report previously set its
+`RESET uncertain` row flag when the *handler's* SIMCR/MM source subtree
+had an unknown alias, unresolved CALL or cycle, even if the independent
+RESET root and direct-CALL graph were complete. It now derives that flag
+**only** from RESET recognition and RESET graph completeness. A separate
+`MM source uncertain` column reports local aliases, unresolved flow,
+cycles and depth/node/batch cutoffs; an MM MAY can coexist with this
+uncertainty without changing the RESET relationship. An incomplete RESET
+graph likewise cannot invent a local MM source.
+
+The report also gives **displayed-only** MAY/UNKNOWN/NOT_OBSERVED
+classification counts. These are explicitly not totals over all 254
+possible vector slots; undisplayed exact handlers remain unanalyzed.
+Public source row/report constructors now reject contradictory classes,
+misrooted or malformed typed paths, inconsistent RESET confidence,
+duplicate/out-of-order row slots and falsified distinct-root counts.
+Canonical bounded witness text cannot inject Markdown table cells.
+The core root solver, source graph, display/inspection budget, 24-bit
+selected-MC68332 target gate, and prior public entry points are unchanged.
+
+Java21 negative and independent-confidence regression, Java25 full
+extension compilation and genuine Ghidra 12.1.4 PUBLIC synthetic vector
+integration are required on the exact final PR SHA. These checks are
+static evidence bookkeeping, not VBR selection, executed interrupts,
+reachable hardware effects, latched SIMCR MM or authorization to Apply.

@@ -68,6 +68,17 @@ public final class HardwareVectorMmMayCorrelationSelfTest {
             row.cycle() && row.unknownControl() && row.unknownAlias() &&
             !row.limited(),
             "exact handler root preserves typed MM, alias, inspected unknown and cycle");
+        ok(!row.resetRelationUncertain() && row.mmEvidenceUncertain() &&
+            report.rows().get(2).mmEvidenceUncertain() &&
+            !report.rows().get(3).mmEvidenceUncertain(),
+            "MM alias/unknown/cycle never corrupts a complete RESET relation");
+        ok(report.displayedMay()==2 && report.displayedUnknown()==1 &&
+            report.displayedNoObservation()==1 &&
+            report.markdown().contains(
+                "DISPLAYED-ONLY MM classifications (not whole table): MAY=2, UNKNOWN=1, NOT_OBSERVED=1") &&
+            report.markdown().contains("MM source uncertain") &&
+            report.markdown().contains("RESET relation uncertainty describes ONLY RESET"),
+            "displayed-only MM aggregates and independent confidence columns");
         ok(report.rows().get(1).vectorNumber()==3 &&
             report.rows().get(1).mmSource().equals(row.mmSource()),
             "two vector slots share one canonical source-only function root");
@@ -120,6 +131,14 @@ public final class HardwareVectorMmMayCorrelationSelfTest {
             relocated.markdown().contains("relocated MOVEC-to-VBR source-image") &&
             relocated.markdown().contains("neither source is proof of an active VBR"),
             "candidate relocated VBR table cannot promote to runtime ISR or MM latch");
+        var resetIncomplete=HardwareVectorMmMayCorrelation.inspect(
+            false,0,true,true,Set.of(0x130L),
+            List.of(vector(3,0x300L,0x300L,true)),graph,2);
+        ok(resetIncomplete.rows().get(0).resetRelationUncertain() &&
+            !resetIncomplete.rows().get(0).mmEvidenceUncertain() &&
+            resetIncomplete.rows().get(0).mmLowByte().equals(
+                "NOT_OBSERVED_IN_BOUNDED_SOURCE"),
+            "unknown RESET completeness must not fabricate an MM source");
         var interiorOnly=HardwareVectorMmMayCorrelation.inspect(
             false,0,true,false,Set.of(0x130L),
             List.of(vector(2,0x132L,0x130L,false)),graph,2);
@@ -185,6 +204,48 @@ public final class HardwareVectorMmMayCorrelationSelfTest {
         bad(()->HardwareVectorMmMayCorrelation.inspect(false,0,
             true,false,Set.of(),oversized,graph,2),
             "source inventory max recognized slots enforced before sorting");
+        bad(()->new HardwareVectorMmMayCorrelation.Row(
+            2,0x130L,0x130L,
+            HardwareVectorResetCorrelation.Relation.IN_RESET_STATIC_CALL_SUBSET,
+            false,"NOT_OBSERVED_IN_BOUNDED_SOURCE",true,true,true,false,1,
+            "NONE","NONE","NONE","NONE"),
+            "a closed MM classification cannot contradict unknown source flags");
+        bad(()->new HardwareVectorMmMayCorrelation.Row(
+            2,0x130L,0x130L,
+            HardwareVectorResetCorrelation.Relation.IN_RESET_STATIC_CALL_SUBSET,
+            false,"STATIC_MAY_MM_LOW_BYTE",false,false,false,false,1,
+            "MM_SOURCE -> 0x00000140","NONE","NONE","NONE"),
+            "forged MM witness rooted at another handler must be refused");
+        bad(()->new HardwareVectorMmMayCorrelation.Row(
+            2,0x130L,0x130L,
+            HardwareVectorResetCorrelation.Relation.IN_RESET_STATIC_CALL_SUBSET,
+            false,"STATIC_MAY_MM_LOW_BYTE",false,false,false,false,1,
+            "MM_SOURCE -> 0x00000130 | forged","NONE","NONE","NONE"),
+            "Markdown injection cannot enter public vector source rows");
+        bad(()->new HardwareVectorMmMayCorrelation.Row(
+            2,0x130L,0x130L,
+            HardwareVectorResetCorrelation.Relation.RESET_ROOT_UNKNOWN,
+            false,"STATIC_MAY_MM_LOW_BYTE",false,false,false,false,1,
+            "MM_SOURCE -> 0x00000130","NONE","NONE","NONE"),
+            "unknown RESET root must be marked uncertain");
+        bad(()->new HardwareVectorMmMayCorrelation.Report(
+            false,0,true,false,6,5,1,2,true,report.rows()),
+            "incorrect distinct handler-root count cannot be published");
+        bad(()->new HardwareVectorMmMayCorrelation.Report(
+            false,0,true,false,6,5,1,3,true,
+            List.of(report.rows().get(1),report.rows().get(0),
+                report.rows().get(2),report.rows().get(3))),
+            "noncanonical vector order cannot enter a public report");
+        bad(()->new HardwareVectorMmMayCorrelation.Report(
+            false,0,true,false,6,5,1,3,true,
+            List.of(new HardwareVectorMmMayCorrelation.Row(
+                2,0x130L,0x130L,
+                HardwareVectorResetCorrelation.Relation.IN_RESET_STATIC_CALL_SUBSET,
+                true,"STATIC_MAY_MM_LOW_BYTE",true,true,true,false,4,
+                "MM_SOURCE -> 0x00000130 -> 0x00000140",
+                "STORE_ALIAS -> 0x00000130 -> 0x00000150",
+                "UNKNOWN_FLOW -> 0x00000130 -> 0x00000160","NONE"))),
+            "RESET certainty cannot depend on a handler's MM uncertainty");
         boolean immReport=false;
         try {full.rows().clear();}catch(UnsupportedOperationException expected){
             immReport=true;
