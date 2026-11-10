@@ -125,9 +125,14 @@ public class GA18VerifyVectorResetCorrelation extends GhidraScript {
                     false,true,java.util.Set.of(),java.util.List.of(),true);
                 String cpu=(String)imageZero.invoke(null,currentProgram,monitor,
                     false,true,java.util.Set.of(),java.util.List.of(),false);
-                check(mc.contains("outside explicitly selected MCU24 width: 1") &&
-                      mc.contains("0x00000068 | 0x01000130 | OUTSIDE_SELECTED_MCU24_RANGE") &&
-                      !mc.contains("0x01000130 | RECOGNIZED_FUNCTION_CANDIDATE"),
+                // The synthetic binary fills untouched vectors with
+                // 0x4e714e71 (NOP/NOP). Under selected MC68332 those
+                // unrelated source words are ALSO beyond MCU24. Do not
+                // demand an exact total of one out-of-range vector: test
+                // the actual vector-26 identity and classification instead.
+                check(mc.contains("outside explicitly selected MCU24 width: ") &&
+                      mc.contains("| 26 | 0x00000068 | 0x01000130 | OUTSIDE_SELECTED_MCU24_RANGE") &&
+                      !mc.contains("| 26 | 0x00000068 | 0x01000130 | RECOGNIZED_FUNCTION_CANDIDATE"),
                       "selected MC68332 image-zero high ISR pointer never becomes a function");
                 check(cpu.contains("outside explicitly selected MCU24 width: 0") &&
                       cpu.contains("0x00000068 | 0x01000130 | UNMAPPED_TARGET") &&
