@@ -321,8 +321,19 @@ class LocalAgenticCheckpoint(unittest.TestCase):
                 separators=(",",":"),ensure_ascii=False).encode()
             data["payload_sha256"]=hashlib.sha256(canonical).hexdigest()
             target.write_text(json.dumps(data))
-            self.assertIsNone(cli.read_agentic_checkpoint_page(target,0,1)
-                ["rows"][0]["evidence"])
+            with self.assertRaisesRegex(ValueError, "False-complete"):
+                cli.read_agentic_checkpoint_page(target,0,1)
+            # Legacy incomplete evidence remains inspectable as historical
+            # data, but cannot acquire a complete source-checkpoint claim.
+            data["payload"]["complete"]=False
+            canonical=json.dumps(data["payload"],sort_keys=True,
+                separators=(",",":"),ensure_ascii=False).encode()
+            data["payload_sha256"]=hashlib.sha256(canonical).hexdigest()
+            target.write_text(json.dumps(data))
+            historical=cli.read_agentic_checkpoint_page(target,0,1)
+            self.assertIsNone(historical["rows"][0]["evidence"])
+            self.assertFalse(historical["source_complete"])
+            data["payload"]["complete"]=True
             data["payload"]["state"]="CANCELLED"
             canonical=json.dumps(data["payload"],sort_keys=True,
                 separators=(",",":"),ensure_ascii=False).encode()
@@ -330,6 +341,61 @@ class LocalAgenticCheckpoint(unittest.TestCase):
             target.write_text(json.dumps(data))
             with self.assertRaises(ValueError):
                 cli.read_agentic_checkpoint_page(target,0,1)
+
+    def test_rehashed_attribution_gaps_never_certify_complete_checkpoint(self):
+        # Metadata-only SUCCESS and a recomputed digest are not proof of
+        # evidence provenance. Fact-only/blank-tool rows are still safe to
+        # inspect when explicitly downgraded to an incomplete archive.
+        with tempfile.TemporaryDirectory() as work:
+            root=Path(work)
+            source=root/"good.json"
+            with patch.object(cli,"rpc",lambda _s,_m,args:page(
+                    args["offset"],args["limit"])):
+                cli.capture_agentic_checkpoint({},source,2)
+            for field,missing in (
+                    ("fact",None),("fact","   "),
+                    ("evidence",None),("evidence",""),
+                    ("evidence","   "),("toolUsed",None),
+                    ("toolUsed","")):
+                with self.subTest(field=field,missing=missing):
+                    data=json.loads(source.read_text())
+                    data["payload"]["rows"][0][field]=missing
+                    encoded=json.dumps(data["payload"],sort_keys=True,
+                        separators=(",",":"),ensure_ascii=False).encode()
+                    data["payload_sha256"]=hashlib.sha256(encoded).hexdigest()
+                    result=root/(field+"-missing.json")
+                    result.write_text(json.dumps(data))
+                    with self.assertRaisesRegex(ValueError,"False-complete"):
+                        cli.verify_agentic_checkpoint(result)
+                    with self.assertRaises(ValueError):
+                        cli.check_agentic_resume_preflight({},result)
+                    data["payload"]["complete"]=False
+                    encoded=json.dumps(data["payload"],sort_keys=True,
+                        separators=(",",":"),ensure_ascii=False).encode()
+                    data["payload_sha256"]=hashlib.sha256(encoded).hexdigest()
+                    result.write_text(json.dumps(data))
+                    self.assertFalse(
+                        cli.verify_agentic_checkpoint(result)["complete"])
+                    self.assertFalse(
+                        cli.read_agentic_checkpoint_page(result,0,10)
+                        ["source_complete"])
+
+    def test_checkpoint_capture_downgrades_uncited_successful_live_findings(self):
+        with tempfile.TemporaryDirectory() as work:
+            for field,empty in (("fact",""),("evidence",None),
+                                ("toolUsed","   ")):
+                def unattributed(_session,_method,args):
+                    result=page(args["offset"],args["limit"])
+                    for row in result["agentic"]["findings"]["rows"]:
+                        if row["timestamp"]==1:
+                            row[field]=empty
+                    return result
+                with self.subTest(field=field),patch.object(cli,"rpc",unattributed):
+                    target=Path(work)/(field+".json")
+                    saved=cli.capture_agentic_checkpoint({},target,2)
+                    self.assertFalse(saved["complete"])
+                    self.assertFalse(
+                        cli.verify_agentic_checkpoint(target)["complete"])
 
     def test_cache_revision_change_refuses_partial_checkpoint(self):
         def rpc(_session,_method,args):
