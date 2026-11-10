@@ -79,3 +79,19 @@ observation and tool origin**, not just a successful model outcome.
 A fresh cache generation after explicit clear may recover completeness.
 Neither a source citation nor a tool name verifies MCU identity, firmware
 execution, active ISR/VBR or latched SIMCR/MM; all evidence remains static.
+
+## 2026-11-10 — exact selected search-hit index identity
+
+A selected PDF RAG search hit now requires both the selected hit and the
+reconstructed page to carry a canonical 64-digit lowercase SHA-256
+**index-time** digest, a nonblank bounded source path and a nonblank
+bounded library ID, with no hidden formatting or control characters.
+Matching nulls, matching short placeholder hashes, blank paths, and
+absent/overlong library identifiers are NOT a stable provenance identity
+and refuse document-open selection. Cross-folio source groups share the
+same validation. Legacy missing-index rows can remain explicitly UNKNOWN
+when viewed read-only; they cannot become authenticated source selections.
+The user must rerun search/reindex to regain a valid identity. Indexed
+metadata equality still does not verify current local PDF bytes or the
+publisher's manual. Java21 adversarial tests and full Java25/Ghidra
+12.1.4 PUBLIC synthetic CI remain mandatory before merging.
