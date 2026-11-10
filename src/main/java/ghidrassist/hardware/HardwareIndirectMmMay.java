@@ -40,7 +40,11 @@ public final class HardwareIndirectMmMay {
     }
     public record Report(int totalWitnesses,int omittedWitnesses,List<Row> rows) {
         public Report {
-            if(rows==null || rows.size()>MAX_ROWS || rows.contains(null) ||
+            // List.of/immutable Java lists may throw NullPointerException
+            // from contains(null); preserve the fail-closed API contract as
+            // an explicit IllegalArgumentException for malformed rows.
+            if(rows==null || rows.size()>MAX_ROWS ||
+                    rows.stream().anyMatch(java.util.Objects::isNull) ||
                     totalWitnesses<0 ||
                     totalWitnesses>HardwareIndirectCallEvidence.MAX_SITES ||
                     omittedWitnesses<0 ||
