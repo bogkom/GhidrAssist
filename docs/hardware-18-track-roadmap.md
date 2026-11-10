@@ -1,3 +1,16 @@
+## GA-06/15/16/18 — 2026-11-10: strict indexed PDF selected-result identity
+
+The RAG PDF selected search result and reconstructed physical page must
+both carry a full canonical index-time SHA-256, valid bounded path, and
+bounded library identity without concealed control/format characters.
+Equal-but-missing legacy metadata or a matching short placeholder digest
+cannot allow a stale indexed source to be opened as a trustworthy match.
+Cross-folio publisher citation groups use the same guard. This does not
+substitute for independent current-file PDF-byte verification or manually
+verified MC68332 edition/folio provenance. Java21 RAG regressions, Java25
+full Ghidra 12.1.4 PUBLIC build and isolated synthetic CI are exact-SHA
+gates; GA-06/15/16/18 remain PARTIAL, GA-14 deferred.
+
 ## GA-06/10/15/16/18 — 2026-11-10: RAG source and Agentic completeness accounting
 
 Reviewed MC68332UM field-excerpt public reports now bind every positive
