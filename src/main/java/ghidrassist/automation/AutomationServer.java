@@ -188,10 +188,10 @@ public final class AutomationServer implements AutoCloseable {
                     int limit=AutomationRpcPagination.pageInt(args,"limit",32,1,64);
                     Long expectedRevision=AutomationRpcPagination.optionalRevision(
                         args,"expected_revision");
-                    if(offset>0 && expectedRevision==null)
-                        throw new IllegalArgumentException(
-                            "Subsequent Listing page requires Program revision");
                     String start=args.has("address") ? args.get("address").getAsString() : "";
+                    if(offset>0 && (expectedRevision==null || start.isBlank()))
+                        throw new IllegalArgumentException(
+                            "Subsequent Listing page requires explicit start address and Program revision");
                     result.add("listing_range",AutomationListing.range(
                         program,location,start,offset,limit,expectedRevision));
                 } else if ("listing.goto".equals(method)) {
