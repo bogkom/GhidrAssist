@@ -60,3 +60,22 @@ workloads are resumed.
 
 GA-06/10/16 remain PARTIAL: this upgrade proves no actual manual content
 semantics or MM/VBR/ISR execution.
+
+## 2026-11-10 — RAG field excerpt digest and Agentic retention integrity
+
+The public 15-row MC68332UM report now requires each positive excerpt's
+stored SHA-256 to match the exact bounded excerpt bytes. Its canonical
+reviewed-field order, count of matched/omitted rows and manufacturer
+edition/URL/index-pin claims must match its published source inventory.
+A duplicated, foreign or reordered field cannot stand in for a missing
+excerpt; a mismatched source digest cannot be promoted to matched text.
+This does NOT make an index digest a verified current local/publisher PDF.
+
+The separate GA-15 findings cache retains hypotheses with missing source
+text/tool identity, but conservatively sets `complete=false` when any
+accepted finding had no attributable evidence, regardless of its relevance
+or subsequent eviction. Source-attributed records require **nonblank
+observation and tool origin**, not just a successful model outcome.
+A fresh cache generation after explicit clear may recover completeness.
+Neither a source citation nor a tool name verifies MCU identity, firmware
+execution, active ISR/VBR or latched SIMCR/MM; all evidence remains static.
