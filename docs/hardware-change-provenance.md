@@ -174,3 +174,16 @@ receipt with `EXPORT_INCOMPLETE` and `INCOMPLETE_EXPORT_NEVER_AUTO_APPLY`;
 Rows with multiple truncated fields count once. This changes only the
 local read-only export, not Ghidra selections, Apply, Undo, persisted
 checkpoint identity or claims about who authored a SourceType symbol.
+
+## 2026-11-10 — source-bound persisted rename receipt audit state
+
+GA-13 no longer trusts a directly constructed `CURRENT_APPROVED_NAME` flag
+in public rename audit snapshots. Each row must agree with the stored
+receipt, current observed function name, Ghidra SourceType, and the
+syntactically valid full import SHA-256; an unknown source is recorded as
+`SOURCE_UNVERIFIED`. Duplicated, omitted/null and unordered direct snapshot
+rows fail closed. Exporting a current-approval CSV requires a current,
+exact same-Program and explicitly selected MC68332 revision fence both
+before and after serialization. A saved receipt identifies one extension
+operation, not the authenticated human/AI editor, active hardware, or a
+durable history of Undo after Ghidra removes its receipt.
