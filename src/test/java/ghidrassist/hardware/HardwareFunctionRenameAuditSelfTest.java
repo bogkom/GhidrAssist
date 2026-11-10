@@ -187,6 +187,53 @@ public final class HardwareFunctionRenameAuditSelfTest {
         for(int i=0;i<=HardwareFunctionRenameAudit.MAX_ROWS;i++)oversized.add(original);
         rejects(()->HardwareFunctionRenameAudit.inspect(oversized,0,"UNKNOWN"),
             "audit size limit fails closed without truncating entries");
+        var exact=original;
+        var decoded=HardwareFunctionRenameReceipt.decode(exact.serialized());
+        var legitimateRow=new HardwareFunctionRenameAudit.Row(
+            decoded,exact.currentName(),"USER_DEFINED",
+            HardwareFunctionRenameAudit.State.CURRENT_APPROVED_NAME);
+        var single=new HardwareFunctionRenameAudit.Snapshot(
+            List.of(legitimateRow),43L,"a".repeat(64));
+        check(single.count(HardwareFunctionRenameAudit.State.CURRENT_APPROVED_NAME)==1,
+            "single consistent saved receipt can be inspected read-only");
+        rejects(()->new HardwareFunctionRenameAudit.Snapshot(
+            List.of(new HardwareFunctionRenameAudit.Row(decoded,
+                "external_modified","USER_DEFINED",
+                HardwareFunctionRenameAudit.State.CURRENT_APPROVED_NAME)),
+            43L,"a".repeat(64)),
+            "public audit cannot invent approval after external symbol rename");
+        rejects(()->new HardwareFunctionRenameAudit.Snapshot(
+            List.of(new HardwareFunctionRenameAudit.Row(decoded,
+                exact.currentName(),"ANALYSIS",
+                HardwareFunctionRenameAudit.State.CURRENT_APPROVED_NAME)),
+            43L,"a".repeat(64)),
+            "public audit cannot hide changed SourceType");
+        rejects(()->new HardwareFunctionRenameAudit.Snapshot(
+            List.of(legitimateRow),43L,"b".repeat(64)),
+            "public audit cannot inherit approved name from another import SHA");
+        rejects(()->new HardwareFunctionRenameAudit.Snapshot(
+            List.of(legitimateRow),43L,"UNKNOWN"),
+            "unverified import source is never a public CURRENT approval");
+        rejects(()->new HardwareFunctionRenameAudit.Snapshot(
+            List.of(legitimateRow,legitimateRow),43L,"a".repeat(64)),
+            "duplicate persisted receipt keys must never be displayed twice");
+        var firstRow=audit.rows().get(0);
+        var secondRow=audit.rows().get(1);
+        rejects(()->new HardwareFunctionRenameAudit.Snapshot(
+            List.of(secondRow,firstRow),43L,"a".repeat(64)),
+            "public receipt snapshot requires deterministic function entry ordering");
+        rejects(()->new HardwareFunctionRenameAudit.Snapshot(
+            java.util.Arrays.asList(legitimateRow,null),43L,"a".repeat(64)),
+            "missing public receipt row must not silently disappear");
+        var cpu32=HardwareAnalysisRevision.capture(sameProgram,43L,
+            "68000:BE:32:CPU32","a".repeat(64),false);
+        rejects(()->single.csvRevisionBound(cpu32,()->cpu32),
+            "generic CPU32 profile cannot certify concrete MC68332 rename audit");
+        var unverifiedRow=HardwareFunctionRenameAudit.inspect(
+            List.of(withImportSha(older,"UNKNOWN")),43,"UNKNOWN");
+        check(unverifiedRow.count(
+                HardwareFunctionRenameAudit.State.SOURCE_UNVERIFIED)==1,
+            "older unknown receipts remain viewable with unverified state");
         System.out.println("HardwareFunctionRenameAuditSelfTest PASS assertions="+assertions);
     }
 }
