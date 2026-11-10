@@ -127,6 +127,12 @@ class OfflineJsonAmbiguity(unittest.TestCase):
                                 ValueError, "Non-finite|Oversized"):
                             self.verifier(kind)(modified)
 
+    def test_quoted_brackets_and_escaped_quotes_are_not_structure(self):
+        content = {"text": "[" * 300 + "}" * 300,
+                   "escape": 'text \\"quoted\\" with [brackets]'}
+        raw = json.dumps(content).encode("utf-8")
+        self.assertEqual(agent._decode_checkpoint_json(raw), content)
+
     def test_malformed_utf8_and_recursive_json_fail_as_value_error(self):
         for raw in (b'{"x": "\xff"}', b"[" * 1100 + b"]" * 1100):
             with self.subTest(length=len(raw)):
