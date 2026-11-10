@@ -93,6 +93,38 @@ public final class ManualPrintedPageSelfTest {
         var normal=ManualPrintedPage.fromText("USER'S MANUAL D-4\n");
         ok(normal.label().equals("D-4"),
             "ordinary folio candidate preserved under text budget");
+        // Revision stamps are NOT chapter/page folios: the old numeric
+        // pattern read "11-10" from ISO "2026-11-10" as a plausible page.
+        // Never use a date to fabricate a publisher page correlation.
+        for(String dateHeader:new String[]{
+                "MC68332 USER'S MANUAL Rev. 2026-11-10",
+                "MC68332 USER'S MANUAL Rev. 15-10-2026",
+                "MC68332 USER'S MANUAL REV. 15-10",
+                "MC68332 USER'S MANUAL DATE: 15-10",
+                "MC68332 USER'S MANUAL UPDATED 15-10",
+                "MC68332 USER'S MANUAL VERSION 15-10",
+                "MC68332 USER'S MANUAL 2026/11/10"}) {
+            var result=ManualPrintedPage.fromText(dateHeader);
+            ok(result.label().equals("UNKNOWN") &&
+                    result.confidence().equals("UNVERIFIED"),
+                "revision or date text cannot be a printed page: "+dateHeader);
+        }
+        for(String header:new String[]{
+                "USER'S MANUAL Rev. 2026-11-10 D-5",
+                "USER'S MANUAL Rev. 15-10-2026 D-5",
+                "USER'S MANUAL Rev. 15-10 D-5",
+                "USER'S MANUAL 2026-11-10 D-5"}) {
+            var result=ManualPrintedPage.fromText(header);
+            ok(result.label().equals("D-5") &&
+                    result.confidence().equals("PDF_TEXT_HEADER_CANDIDATE"),
+                "real appendix folio survives a nearby revision timestamp");
+        }
+        ok(ManualPrintedPage.fromText(
+                "MC68332 USER'S MANUAL PAGE 15-10").label().equals("15-10"),
+            "explicit numeric folio after PAGE remains a candidate");
+        ok(ManualPrintedPage.fromText(
+                "MC68332 USER'S MANUAL 5-20").label().equals("5-20"),
+            "ordinary chapter folio remains unchanged");
         System.out.println("ManualPrintedPageSelfTest OK");
     }
 }
