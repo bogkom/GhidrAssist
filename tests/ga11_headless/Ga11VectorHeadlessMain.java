@@ -2742,7 +2742,8 @@ public final class Ga11VectorHeadlessMain {
                         .Observation(orig.functionEntry(),orig.currentName(),
                             orig.kind(),orig.ordinal(),orig.storage()+"_other",
                             orig.pointerType(),orig.userDefined(),
-                            orig.autoParameter());
+                            orig.autoParameter(),orig.dataTypeIdentity(),
+                            orig.firstUseOffset());
                     var invalid=new ghidrassist.hardware.HardwareScopedVariableReview
                         .Proposal(fake,second.proposedName(),second.decision());
                     boolean refused=false;
