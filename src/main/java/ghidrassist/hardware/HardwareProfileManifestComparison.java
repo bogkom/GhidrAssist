@@ -1,6 +1,8 @@
 package ghidrassist.hardware;
 
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -57,6 +59,25 @@ public final class HardwareProfileManifestComparison {
                     omittedFindings!=Math.max(0L,noted-MAX_DISPLAY_FINDINGS))
                 throw new IllegalArgumentException(
                     "Claimed profile source discrepancy count contradicts retained findings");
+            Map<String,Integer> expected=Map.of(
+                "RIGHT_ONLY",rightOnly,"LEFT_ONLY",leftOnly,
+                "DEFINITION_DIFFERENCE",changedDefinitions,
+                "SOURCE_PAGE_LABEL_DIFFERENCE",changedPageLabels,
+                "CROSS_NAME_ADDRESS_OVERLAP",overlappingDifferentNames);
+            Map<String,Integer> actual=new HashMap<>();
+            var distinct=new HashSet<String>();
+            for(Finding finding:findings) {
+                String identity=finding.kind()+"\u0000"+finding.record();
+                int amount=actual.merge(finding.kind(),1,Integer::sum);
+                if(!distinct.add(identity) || amount>expected.get(finding.kind()))
+                    throw new IllegalArgumentException(
+                        "Duplicate or inconsistent source discrepancy finding");
+            }
+            if(omittedFindings==0)
+                for(var item:expected.entrySet())
+                    if(actual.getOrDefault(item.getKey(),0)!=item.getValue())
+                        throw new IllegalArgumentException(
+                            "Incomplete source discrepancy detail without omission marker");
             findings=List.copyOf(findings);
         }
         public String render() {
