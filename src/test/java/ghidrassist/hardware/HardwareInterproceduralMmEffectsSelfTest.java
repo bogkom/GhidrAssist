@@ -269,7 +269,7 @@ public final class HardwareInterproceduralMmEffectsSelfTest {
         catch(IllegalArgumentException expected){fail=true;}
         ok(fail,"reject duplicate functions");
         var validRoot=evidence.rows().get(0).summary();
-        boolean invalid=false;
+        invalid=false;
         try {
             new HardwareInterproceduralMmEffects.Row(
                 call(0x100,0x118,0x400L),validRoot);
