@@ -6,6 +6,12 @@ reviewed SIMCR/SYNCR bitfield diagrams and MCU-specific SIM register tables.
 This package closes the separate **runtime RAG provenance gap** rather than
 duplicating official-PDF tests.
 
+Both ordinary text and PDF imports now require identical **pre- and
+post-extraction SHA-256 and file length**, before atomic Lucene replacement;
+even the unchanged-file skip performs a second consistency check. An
+interrupted extraction or modified input is a failed import rather than
+a new digest with stale text.
+
 Search results now propagate each Lucene source document's **index-time**
 SHA-256, physical PDF page and file path. Full-page retrieval joins chunks
 only when their page, digest, path, document type, source library and distinct

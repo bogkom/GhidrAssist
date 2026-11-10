@@ -20,6 +20,11 @@ without a pre-open comparison against the indexed file's SHA-256.
 - The page tool reads the page text, digest and source library from **one
   Lucene snapshot**; the active-library filter now checks the returned
   page's own library, not a separate mutable metadata read.
+- Import now double-hashes each local PDF/text file: once before
+  extraction/embeddings and once immediately before Lucene update. A changed
+  file, different length or noncanonical digest aborts the import BEFORE
+  replacing the previous index version; the unchanged-file shortcut
+  also checks source stability. These are snapshot checks, not an OS lock.
 - Both native RAG tool outputs carry `INDEXED_SHA256`, the clearly marked
   `PDF_PIN` classification and
   `INDEX_TIME_ONLY_CURRENT_FILE_UNVERIFIED`. The immutable public

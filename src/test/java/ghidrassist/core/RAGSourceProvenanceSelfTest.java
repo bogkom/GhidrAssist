@@ -42,6 +42,17 @@ public final class RAGSourceProvenanceSelfTest {
         ok(RAGSourceProvenance.inspect("text",pin).pin()==
             RAGSourceProvenance.Pin.NOT_PDF,
             "PDF pin cannot grant document scope to source code");
+        RAGSourceProvenance.requireStableIndexBytes("a".repeat(64),42,
+            "a".repeat(64),42);checks++;
+        blocked(()->RAGSourceProvenance.requireStableIndexBytes(
+            "a".repeat(64),42,"b".repeat(64),42),
+            "Byte mutation during import refuses earlier SHA source");
+        blocked(()->RAGSourceProvenance.requireStableIndexBytes(
+            "a".repeat(64),42,"a".repeat(64),43),
+            "Changed file size during import refuses publication");
+        blocked(()->RAGSourceProvenance.requireStableIndexBytes(
+            "UNKNOWN",42,"a".repeat(64),42),
+            "Missing before-image index digest cannot be accepted");
         Path directory=Files.createTempDirectory("ga-rag-source-");
         Path pdf=directory.resolve("manual.pdf");
         Path link=directory.resolve("manual-link.pdf");

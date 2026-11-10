@@ -50,6 +50,21 @@ public final class RAGSourceProvenance {
     }
 
     /**
+     * Confirm the exact same bytes were present before and after indexing
+     * or an unchanged-file shortcut. Both digests must be real canonical
+     * SHA-256 values. A changing source refuses import BEFORE Lucene's
+     * atomic update. This is still not an OS-level file lock.
+     */
+    public static void requireStableIndexBytes(String beforeHash,long beforeSize,
+            String afterHash,long afterSize)throws IOException {
+        if(!validSha(beforeHash) || !validSha(afterHash) ||
+                beforeSize<0 || afterSize<0 ||
+                beforeSize!=afterSize || !beforeHash.equals(afterHash))
+            throw new IOException(
+                "Document changed while indexing; reimport unchanged source");
+    }
+
+    /**
      * Guard opening a file at an indexed PDF page. A filename, PDF header,
      * old Lucene digest, or publisher URL by itself cannot establish that
      * the file currently at that path has unchanged bytes. Reject absent/

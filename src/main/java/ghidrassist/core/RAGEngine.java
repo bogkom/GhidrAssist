@@ -160,6 +160,10 @@ public class RAGEngine {
             if (!pdf && !isTextDocument(lower))
                 throw new IOException("Unsupported document extension: " + name);
             String path = file.getCanonicalPath();
+            // Index-time SHA must describe the SAME bytes as the parsed
+            // PDF/text chunks. Importing a changed source between hashing
+            // and extraction must preserve the previous intact index.
+            long originalSize=file.length();
             String digest = sha256(file);
             Document old = findDocumentMetadata(name);
             if (old != null) {
@@ -172,6 +176,8 @@ public class RAGEngine {
                         + ". Rename one of the files to use both documents.");
                 if (digest.equals(old.get("sha256")) &&
                     libraryId.equals(libraryOf(old))) {
+                    RAGSourceProvenance.requireStableIndexBytes(
+                        digest,originalSize,sha256(file),file.length());
                     notices.add(name + ": unchanged; skipped indexing.");
                     continue;
                 }
@@ -206,7 +212,12 @@ public class RAGEngine {
                 }
             }
             if (chunks.isEmpty()) throw new IOException("Empty document: " + name);
-            // Atomic replacement: a failed PDF extraction must never delete the old version.
+            RAGSourceProvenance.requireStableIndexBytes(
+                digest,originalSize,sha256(file),file.length());
+            // Atomic replacement: a failed PDF extraction or a modified
+            // source must never delete/replace the old indexed document.
+            // This double-hash is a bounded-time snapshot consistency
+            // check, NOT an atomic filesystem content lock.
             indexLock.lock();
             try {
                 indexWriter.updateDocuments(new Term("filename", name), chunks);

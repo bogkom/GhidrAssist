@@ -45,6 +45,8 @@ public final class RAGIndexedPdfPageEvidence {
                 chunks.isEmpty() || chunks.size()>MAX_CHUNKS)
             throw new IllegalArgumentException("Invalid indexed PDF page selection");
         List<Chunk> ordered=new ArrayList<>(chunks);
+        if(ordered.contains(null))
+            throw new IllegalArgumentException("Missing PDF source chunk");
         ordered.sort(Comparator.comparingInt(Chunk::chunkId));
         Chunk reference=ordered.get(0);
         Set<Integer> unique=new HashSet<>();

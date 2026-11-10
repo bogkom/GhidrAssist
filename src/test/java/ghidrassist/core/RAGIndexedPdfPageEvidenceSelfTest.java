@@ -68,6 +68,9 @@ public final class RAGIndexedPdfPageEvidenceSelfTest {
             chunk(219,0,"legacy PDF text",null,"/manual.pdf",null,"pdf")));
         ok(legacy.indexedSha256()==null && legacy.libraryId()==null,
             "Legacy missing SHA/library fields remain explicitly unknown");
+        refuse(()->RAGIndexedPdfPageEvidence.join(
+            219,java.util.Arrays.asList(first,null)),
+            "Missing indexed chunk cannot trigger unchecked comparator null");
         refuse(()->new RAGIndexedPdfPageEvidence.Chunk(
             219,-1,"bad",null,null,"pdf",null),
             "Negative chunk identity rejected");
