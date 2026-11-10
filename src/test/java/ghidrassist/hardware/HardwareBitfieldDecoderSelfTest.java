@@ -198,6 +198,64 @@ public final class HardwareBitfieldDecoderSelfTest {
               HardwareBitfieldDecoder.decode(mc,"SWSR",0x55,8).status()
                 ==HardwareBitfieldDecoder.Status.NO_SOURCED_FIELDS,
             "partial PICR, unknown PITR, and SWSR service sequence never decoded as fields");
+        // Public records are also consumed by evidence renderers: do
+        // not accept fabricated sourced fields independent of decode().
+        {
+            var decoder=HardwareBitfieldDecoder.class;
+            var badEvidence=new java.util.ArrayList<Runnable>();
+            badEvidence.add(()->new HardwareBitfieldDecoder.FieldEvidence(
+                "FAKE",0,0,"D-6 (PDF page 220)",false));
+            badEvidence.add(()->new HardwareBitfieldDecoder.FieldEvidence(
+                "FAKE",0x40,2,"D-6 (PDF page 220)",false));
+            badEvidence.add(()->new HardwareBitfieldDecoder.FieldEvidence(
+                "FAKE",0x40,1,"PDF page UNKNOWN",false));
+            badEvidence.add(()->new HardwareBitfieldDecoder.FieldEvidence(
+                "FAKE",0x40,1,"PDF page 220; PDF page 221",false));
+            badEvidence.add(()->new HardwareBitfieldDecoder.FieldEvidence(
+                "FAKE",0x40,1,"PDF pages 220-219",false));
+            badEvidence.add(()->new HardwareBitfieldDecoder.FieldEvidence(
+                "BAD\\nNAME",0x40,1,"D-6 (PDF page 220)",false));
+            var forgedMm=new HardwareBitfieldDecoder.FieldEvidence(
+                "MM",0x40,1,"D-6 (PDF page 220)",true);
+            var forgedSupv=new HardwareBitfieldDecoder.FieldEvidence(
+                "SUPV",0x80,1,"D-6 (PDF page 220)",false);
+            badEvidence.add(()->new HardwareBitfieldDecoder.Result(
+                HardwareBitfieldDecoder.Status.DECODED,"MC68332","SIMCR",
+                null,16,java.util.List.of(forgedMm),0xffbf));
+            badEvidence.add(()->new HardwareBitfieldDecoder.Result(
+                HardwareBitfieldDecoder.Status.DECODED,"MC68332","SIMCR",
+                0x40ca,8,java.util.List.of(forgedMm),0xbf));
+            badEvidence.add(()->new HardwareBitfieldDecoder.Result(
+                HardwareBitfieldDecoder.Status.DECODED,"MC68332","SIMCR",
+                0x40ca,16,java.util.List.of(forgedMm),0));
+            badEvidence.add(()->new HardwareBitfieldDecoder.Result(
+                HardwareBitfieldDecoder.Status.DECODED,"MC68332","SIMCR",
+                0x40ca,16,java.util.List.of(forgedSupv),0xff7f));
+            badEvidence.add(()->new HardwareBitfieldDecoder.Result(
+                HardwareBitfieldDecoder.Status.DECODED,"MC68332","SIMCR",
+                0x40ca,16,java.util.List.of(forgedMm,forgedMm),0xffbf));
+            badEvidence.add(()->new HardwareBitfieldDecoder.Result(
+                HardwareBitfieldDecoder.Status.NO_SOURCED_FIELDS,
+                "MC68332","SWSR",0x55,8,
+                java.util.List.of(forgedMm),0));
+            badEvidence.add(()->new HardwareBitfieldDecoder.Result(
+                HardwareBitfieldDecoder.Status.DECODED,"MC68332","SIMCR",
+                0x40ca,16,null,0xffbf));
+            for(Runnable forged:badEvidence){
+                boolean denied=false;
+                try{forged.run();}
+                catch(IllegalArgumentException expected){denied=true;}
+                check(denied,
+                    "forged bitfield value, mask, PDF page or interpreted remainder rejected");
+            }
+            var validEvidence=new HardwareBitfieldDecoder.Result(
+                HardwareBitfieldDecoder.Status.DECODED,"MC68332","SIMCR",
+                0x40ca,16,java.util.List.of(forgedMm),0xffbf);
+            check(validEvidence.fields().size()==1 &&
+                validEvidence.unspecifiedMask()==0xffbf &&
+                validEvidence.summary().contains("UNINTERPRETED"),
+                "partial documented mask retains all unspecified bits and claim-only provenance");
+        }
         System.out.println("HardwareBitfieldDecoderSelfTest OK");
     }
 }
