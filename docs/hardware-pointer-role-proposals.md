@@ -116,3 +116,14 @@ site inventory to 120,000 entries prior to grouping. This is an evidence
 consistency guard, not an invented stable decompiler HighVariable or
 permission to Apply a pointer/argument rename. No runtime execution or
 active MC68332 memory mapping is inferred.
+
+## 2026-11-10 — real Ghidra scoped pointer variables versus A-register hints
+
+Function-DB pointer parameters and locals already have an isolated, explicit
+Review/Apply/Undo mechanism with native transactional receipts. This is
+**not** a conversion from an A0..A7 role observation into a decompiler
+HighVariable. Its receipt audit and post-write Ghidra transaction checks now
+reject a surviving CURRENT approval on a live variable that lost pointer
+type, USER_DEFINED source, or acquired auto/forced-indirect ABI semantics.
+Revision and storage equality remain mandatory. A-register role hints
+continue to be read-only, PATH_UNCERTAIN or REVIEW_ONLY, never Apply input.

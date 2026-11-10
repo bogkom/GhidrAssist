@@ -157,6 +157,69 @@ public final class HardwareScopedVariableReceiptSelfTest {
             immutable=true;
         }
         ok(immutable,"Audit rows immutable");
+        // Public snapshot state is an observed fact, not a caller's claim.
+        // This also protects CSV/Review consumers constructing records
+        // directly rather than invoking the live Ghidra audit adapter.
+        var parameterRow=audit.rows().get(0);
+        ok(parameterRow.pointerType() && parameterRow.userDefined() &&
+            !parameterRow.autoParameter() &&
+            parameterRow.state()==
+                HardwareScopedVariableReceipt.State.CURRENT_APPROVED_NAME,
+            "audited row retains all typed Ghidra approval preconditions");
+        rejects(()->new HardwareScopedVariableReceipt.Snapshot(List.of(
+            new HardwareScopedVariableReceipt.Row(
+                original,original.afterName(),original.storage(),
+                false,true,false,
+                HardwareScopedVariableReceipt.State.CURRENT_APPROVED_NAME)),
+            5,"a".repeat(64)),
+            "non-pointer local/parameter cannot forge approved source state");
+        rejects(()->new HardwareScopedVariableReceipt.Snapshot(List.of(
+            new HardwareScopedVariableReceipt.Row(
+                original,original.afterName(),original.storage(),
+                true,false,false,
+                HardwareScopedVariableReceipt.State.CURRENT_APPROVED_NAME)),
+            5,"a".repeat(64)),
+            "missing USER_DEFINED SourceType cannot forge approved state");
+        rejects(()->new HardwareScopedVariableReceipt.Snapshot(List.of(
+            new HardwareScopedVariableReceipt.Row(
+                original,original.afterName(),original.storage(),
+                true,true,true,
+                HardwareScopedVariableReceipt.State.CURRENT_APPROVED_NAME)),
+            5,"a".repeat(64)),
+            "ABI auto/forced parameter cannot inherit a manual name approval");
+        rejects(()->new HardwareScopedVariableReceipt.Snapshot(List.of(
+            new HardwareScopedVariableReceipt.Row(
+                original,"manual_changed_name",original.storage(),
+                true,true,false,
+                HardwareScopedVariableReceipt.State.CURRENT_APPROVED_NAME)),
+            5,"a".repeat(64)),
+            "renamed Ghidra symbol cannot preserve CURRENT approval label");
+        rejects(()->new HardwareScopedVariableReceipt.Snapshot(List.of(
+            parameterRow),5,"b".repeat(64)),
+            "another source firmware cannot inherit CURRENT approval");
+        rejects(()->new HardwareScopedVariableReceipt.Snapshot(List.of(
+            parameterRow),5,"UNKNOWN"),
+            "unverified legacy source digest cannot create a verified approval");
+        rejects(()->new HardwareScopedVariableReceipt.Snapshot(List.of(
+            parameterRow,parameterRow),5,"a".repeat(64)),
+            "duplicated Options row cannot be presented as two approved variables");
+        rejects(()->new HardwareScopedVariableReceipt.Snapshot(List.of(
+            audit.rows().get(1),parameterRow),5,"a".repeat(64)),
+            "public variable audit must have deterministic function entry ordering");
+        rejects(()->new HardwareScopedVariableReceipt.Snapshot(
+            java.util.Arrays.asList(parameterRow,null),5,"a".repeat(64)),
+            "null source observation may not silently vanish");
+        var changedAuto=HardwareScopedVariableReceipt.inspect(List.of(
+            new HardwareScopedVariableReceipt.Observation(
+                original.optionKey(),serialized,original.afterName(),
+                original.storage(),true,true,true)),5,"a".repeat(64));
+        ok(changedAuto.count(
+                HardwareScopedVariableReceipt.State.TYPE_OR_SOURCE_CHANGED)==1,
+            "post-approval ABI auto/forced parameter becomes unverified");
+        var survey=HardwareAnalysisRevision.capture(revisionOwner,5,
+            "68000:BE:32:CPU32","a".repeat(64),false);
+        rejects(()->audit.csvRevisionBound(survey,()->survey),
+            "generic CPU32 revision cannot certify an MC68332 pointer approval report");
         System.out.println("GA08/13 POINTER TRANSACTION RECEIPT PASS checks="+checks);
     }
 }

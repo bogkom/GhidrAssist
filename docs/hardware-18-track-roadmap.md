@@ -1,3 +1,23 @@
+## GA-08/12/13/18 — 2026-11-10: typed scoped-pointer receipt and redo audit
+
+The **existing** real Ghidra Function-DB pointer parameter/local Review→Apply→Undo
+implementation (`HardwareScopedVariableService`) remains the only supported
+mutation path. Its public GA-13 receipt audit now independently recomputes
+each CURRENT_APPROVED_NAME state using exact saved option-key/function
+identity, storage, import-source SHA-256 syntax, observed pointer data type,
+USER_DEFINED SourceType and absence of ABI auto/forced parameter semantics.
+Mixed, duplicate, reordered and direct caller-forged state inventories fail
+closed; a generic CPU32 revision cannot certify MC68332 CSV. The native Apply
+transaction re-resolves the pointer variable after setName and rolls back
+the *entire* batch if the name, storage, type, SourceType or ABI status differs.
+Receipt schema remains GA13-POINTER-VARIABLE-1 and native Undo/Redo preserves
+its transactional association. Real isolated synthetic Ghidra exercises
+Approve/Apply→Undo→Redo, plus deterministic Java21 negative source-policy
+checks and complete Java25/Ghidra 12.1.4 PUBLIC CI. This does not infer
+HighVariable identity from A-register activity, authenticate a person or
+executable bytes, or authorize unattended pointer naming. GA-08/12/13/18
+PARTIAL; GA-14 deferred.
+
 ## GA-08/12/13/18 — 2026-11-10: public persisted rename receipt state revalidation
 
 Read-only saved function-rename audit snapshots now recompute every public
