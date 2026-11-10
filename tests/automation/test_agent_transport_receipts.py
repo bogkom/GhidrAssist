@@ -122,6 +122,8 @@ class SessionAndWire(unittest.TestCase):
             for raw in (
                 b'{"schema":3,"port":1,"port":37243,"pid":1234}',
                 b'{"schema":3,"port":1,"pid":NaN}',
+                b'{"schema":3,"port":1,"pid":1e99999}',
+                b'{"schema":3,"port":1,"pid":' + b"9" * 65 + b"}",
                 b'[]',
                 b'{"ok":true}' + b" " * launcher.LOCAL_RECEIPT_MAX_BYTES,
             ):
