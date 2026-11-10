@@ -157,6 +157,47 @@ public final class HardwareScopedVariableReviewSelfTest {
         ok(HardwareScopedVariableReview.recheck(list.get(0),param,null)==
             HardwareScopedVariableReview.Decision.INVALID,
             "null current variable namespace blocks Apply");
+        // A physical Ghidra Function variable has more identity than
+        // pointer/not-pointer and its assigned storage. The pointed-to type
+        // and first-use offset must match the original Review snapshot.
+        // Older 8-field observations remain readable hypotheses but may
+        // not be used as typed native Apply source tokens.
+        ok(!param.hasLiveTypeIdentity() && !local.hasLiveTypeIdentity(),
+            "legacy source-only identity is never a verified live typed Ghidra variable");
+        var fullyTyped=new HardwareScopedVariableReview.Observation(
+            0x5a0L,"local_4",HardwareScopedVariableReview.Kind.LOCAL,
+            0,"stack:fffffff8:4",true,false,false,
+            "/typedef/MC68332_SIMCR_ptr#length=4",6);
+        var verified=HardwareScopedVariableReview.propose(List.of(fullyTyped)).get(0);
+        ok(fullyTyped.hasLiveTypeIdentity() &&
+            verified.decision()==HardwareScopedVariableReview.Decision.READY &&
+            HardwareScopedVariableReview.recheck(
+                verified,fullyTyped,List.of())==
+                HardwareScopedVariableReview.Decision.READY,
+            "observed pointer type and first-use scope retain Review eligibility");
+        var changedType=new HardwareScopedVariableReview.Observation(
+            0x5a0L,"local_4",HardwareScopedVariableReview.Kind.LOCAL,
+            0,"stack:fffffff8:4",true,false,false,
+            "/typedef/MC68332_OTHER_ptr#length=4",6);
+        var changedUse=new HardwareScopedVariableReview.Observation(
+            0x5a0L,"local_4",HardwareScopedVariableReview.Kind.LOCAL,
+            0,"stack:fffffff8:4",true,false,false,
+            "/typedef/MC68332_SIMCR_ptr#length=4",10);
+        ok(HardwareScopedVariableReview.recheck(
+                verified,changedType,List.of())==
+                HardwareScopedVariableReview.Decision.STALE_OR_CHANGED &&
+            HardwareScopedVariableReview.recheck(
+                verified,changedUse,List.of())==
+                HardwareScopedVariableReview.Decision.STALE_OR_CHANGED,
+            "stale pointer target type or first-use offset invalidates native variable approval");
+        rejects(()->new HardwareScopedVariableReview.Observation(
+            0x5a0L,"local_4",HardwareScopedVariableReview.Kind.LOCAL,
+            0,"stack:fffffff8:4",true,false,false,"",6),
+            "empty live type fingerprint refused");
+        rejects(()->new HardwareScopedVariableReview.Observation(
+            0x5a0L,"local_4",HardwareScopedVariableReview.Kind.LOCAL,
+            0,"stack:fffffff8:4",true,false,false,"x".repeat(1025),6),
+            "unbounded live type fingerprint refused");
         System.out.println("GA05 GA08 SCOPED VARIABLE POLICY PASS assertions="+n);
     }
 }
