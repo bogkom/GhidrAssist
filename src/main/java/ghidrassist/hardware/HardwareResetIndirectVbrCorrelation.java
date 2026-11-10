@@ -193,6 +193,14 @@ public final class HardwareResetIndirectVbrCorrelation {
         for(Vbr movec:movecs)
             if(!vbrPcs.add(movec.pc()))
                 throw new IllegalArgumentException("Duplicate MOVEC PC");
+        // A single decoded instruction address cannot simultaneously be
+        // JSR (An) and MOVEC-to-VBR. A forged or mixed-revision inventory
+        // must never manufacture same-PC hardware co-location proof,
+        // even when both source lists are individually duplicate-free.
+        for(Long callPc:indirectPcs)
+            if(vbrPcs.contains(callPc))
+                throw new IllegalArgumentException(
+                    "Indirect JSR and MOVEC claim the same instruction PC");
         List<Pair> rows=new ArrayList<>();
         int count=0;
         for(Indirect jsr:jsrs)

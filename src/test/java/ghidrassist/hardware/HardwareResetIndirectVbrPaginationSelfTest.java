@@ -106,6 +106,15 @@ public final class HardwareResetIndirectVbrPaginationSelfTest {
         rejects(()->HardwareResetIndirectVbrCorrelation.page(
             calls,movecs,visited,true,false,0,0,2049,32),
             "Offset outside theoretical bounded inventory rejected");
+        // The two separately decoded instruction inventories must be
+        // disjoint even on later pages that do not display the false pair.
+        var colliding=new HardwareResetIndirectVbrCorrelation.Vbr(
+            0x100L,calls.get(0).pc(),0x800L,false);
+        var poisonedVbr=new ArrayList<>(movecs);
+        poisonedVbr.set(0,colliding);
+        rejects(()->HardwareResetIndirectVbrCorrelation.page(
+            calls,poisonedVbr,visited,true,false,11,13,1024,32),
+            "Non-first-page read rejects JSR/MOVEC same-PC mixed source inventory");
         rejects(()->HardwareResetIndirectVbrCorrelation.page(
             calls,movecs,visited,true,false,-1,0,0,32),
             "Negative omission rejected");

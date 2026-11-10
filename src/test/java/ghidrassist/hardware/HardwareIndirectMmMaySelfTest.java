@@ -49,6 +49,11 @@ public final class HardwareIndirectMmMaySelfTest {
             positive.contains("No direct CALL/RESET/ISR edge") &&
             positive.contains("MM0 and MM1 are conditional alternatives"),
             "source MM metadata must not create hardware/RESET/Apply proof");
+        check(positive.contains("MM source chain") &&
+            positive.contains("MM_SOURCE -> 0x00000700") &&
+            yes.rows().get(0).source().mmWitness().chain()
+                .equals(List.of(0x700L)),
+            "positive computed JSR now discloses a target-rooted source chain");
         var resetNodes=List.of(
             new HardwareCallEffects.FunctionNode(0x600,false,false,true,List.of()),
             new HardwareCallEffects.FunctionNode(0x700,true,false,false,List.of()));
@@ -64,25 +69,29 @@ public final class HardwareIndirectMmMaySelfTest {
         var alias=HardwareIndirectMmMay.analyze(
             List.of(w(0x610,0x616,0x730)),graph,16);
         check(alias.rows().get(0).source().unknownAlias() &&
-            alias.markdown().contains("| UNKNOWN | true |"),
-            "unknown address/STORE width is UNKNOWN, not MM absence");
+            alias.markdown().contains("| UNKNOWN | true |") &&
+            alias.markdown().contains("STORE_ALIAS -> 0x00000730"),
+            "unknown address/STORE width is UNKNOWN with typed alias path");
         var control=HardwareIndirectMmMay.analyze(
             List.of(w(0x610,0x616,0x740)),graph,16);
         check(control.rows().get(0).source().unknownControl() &&
-            control.markdown().contains("| UNKNOWN | false | true |"),
-            "unknown CALL/flow propagates into MM uncertainty");
+            control.markdown().contains("| UNKNOWN | false | true |") &&
+            control.markdown().contains("UNKNOWN_FLOW -> 0x00000740"),
+            "unknown CALL/flow is published with observed source target");
         var missing=HardwareIndirectMmMay.analyze(
             List.of(w(0x610,0x616,0x7f0)),graph,16);
         check(missing.rows().get(0).source().unknownControl() &&
             missing.rows().get(0).source().visited()==0 &&
-            missing.markdown().contains("UNKNOWN"),
-            "unrecognized function target stays UNKNOWN");
+            missing.markdown().contains("MISSING_TARGET -> 0x000007F0"),
+            "unrecognized target is explicit checked-missing function, not no-MM");
         var cycle=HardwareIndirectMmMay.analyze(
             List.of(w(0x610,0x616,0x750)),graph,16);
         check(cycle.rows().get(0).source().cycle() &&
             cycle.rows().get(0).source().mayMm() &&
-            cycle.rows().get(0).source().unknownControl(),
-            "cyclic source may contain MM but is never complete");
+            cycle.rows().get(0).source().unknownControl() &&
+            cycle.rows().get(0).source().unknownWitness()==null &&
+            cycle.markdown().contains("A cycle-only uncertainty has no"),
+            "cyclic source may contain MM but never invents a missing callee chain");
         var chain=new ArrayList<HardwareInterproceduralMmEffects.FunctionNode>();
         for(int i=0;i<7;i++)
             chain.add(node(0x900+i*2,i==6,false,false,
@@ -91,8 +100,44 @@ public final class HardwareIndirectMmMaySelfTest {
             List.of(w(0x610,0x616,0x900)),chain,16);
         check(!capped.rows().get(0).source().mayMm() &&
             capped.rows().get(0).source().limited() &&
-            capped.markdown().contains("| UNKNOWN |"),
-            "depth cap cannot become definitive negative MM evidence");
+            capped.markdown().contains("| UNKNOWN |") &&
+            capped.markdown().contains("DEPTH_CUTOFF -> 0x00000900"),
+            "depth cap remains an explicitly uninspected frontier");
+        // One computed JSR reaches an inspected unknown STORE alias and
+        // unknown control-flow function, while a different longer route
+        // is cut off before a real positive SIMCR source can be examined.
+        // Report BOTH the observed UNKNOWN and the skipped frontier.
+        var dual=List.of(
+            node(0x900,false,false,false,0xA00L,0x902L),
+            node(0x902,false,false,false,0x904L),
+            node(0x904,false,false,false,0x906L),
+            node(0x906,false,false,false,0x908L),
+            node(0x908,false,false,false,0x90AL),
+            node(0x90A,true,false,false),
+            node(0xA00,false,true,true));
+        var dualReport=HardwareIndirectMmMay.analyze(
+            List.of(w(0x610,0x616,0x900)),dual,16);
+        var dualRow=dualReport.rows().get(0);
+        var dualSource=dualRow.source();
+        String dualText=dualReport.markdown();
+        check(!dualSource.mayMm() && dualSource.unknownAlias() &&
+            dualSource.unknownControl() && dualSource.limited() &&
+            dualSource.aliasWitness().chain().equals(List.of(0x900L,0xA00L)) &&
+            dualSource.unknownWitness().chain().equals(List.of(0x900L,0xA00L)) &&
+            dualSource.frontierWitness().chain().equals(
+                List.of(0x900L,0x902L,0x904L,0x906L,0x908L,0x90AL)),
+            "Observed alias and control evidence coexist with uninspected potential MM");
+        check(dualText.contains("STORE_ALIAS -> 0x00000900 -> 0x00000A00") &&
+            dualText.contains("UNKNOWN_FLOW -> 0x00000900 -> 0x00000A00") &&
+            dualText.contains("DEPTH_CUTOFF -> 0x00000900 -> 0x00000902") &&
+            dualText.contains("NONE is not proof") &&
+            dualText.contains("NOT the calling JSR PC"),
+            "All typed indirect source witnesses are visible without executed CALL claims");
+        var reverseDual=new ArrayList<>(dual);
+        Collections.reverse(reverseDual);
+        check(dualReport.equals(HardwareIndirectMmMay.analyze(
+            List.of(w(0x610,0x616,0x900)),reverseDual,16)),
+            "Source chain selection remains deterministic across function order");
         var ws=new ArrayList<HardwareIndirectCallEvidence.Site>();
         for(int i=0;i<17;i++)
             ws.add(w(0x100+i*16,0x106+i*16,0x700));
@@ -143,6 +188,24 @@ public final class HardwareIndirectMmMaySelfTest {
             "negative examined-node count rejected");
         reject(()->new HardwareIndirectMmMay.Report(0,0,yes.rows()),
             "inconsistent omission/count rejected");
+        reject(()->new HardwareIndirectMmMay.Report(2,0,
+                List.of(yes.rows().get(0),yes.rows().get(0))),
+            "Manually constructed report cannot repeat a computed JSR PC");
+        var foreignChain=new HardwareInterproceduralMmEffects.SourceWitness(
+            HardwareInterproceduralMmEffects.WitnessKind.MM_SOURCE,
+            List.of(0x730L));
+        var foreignSummary=new HardwareInterproceduralMmEffects.Summary(
+            true,false,false,false,false,1,foreignChain,null,null);
+        reject(()->new HardwareIndirectMmMay.Row(site,foreignSummary),
+            "Computed JSR target must equal source chain root");
+        var foreignFrontier=new HardwareInterproceduralMmEffects.SourceWitness(
+            HardwareInterproceduralMmEffects.WitnessKind.DEPTH_CUTOFF,
+            List.of(0x730L,0x740L));
+        var mixedSummary=new HardwareInterproceduralMmEffects.Summary(
+            false,false,true,false,true,1,null,null,
+            foreignFrontier,foreignFrontier);
+        reject(()->new HardwareIndirectMmMay.Row(site,mixedSummary),
+            "Uninspected frontier cannot borrow another computed CALL target");
         boolean immutable=false;
         try {many.rows().clear();}
         catch(UnsupportedOperationException expected){immutable=true;}
