@@ -10,6 +10,7 @@ on:
       - 'src/main/java/ghidrassist/automation/AutomationServer.java'
       - 'src/test/java/ghidrassist/agent/react/AgenticEvidenceRegistrySelfTest.java'
       - 'tests/automation/test_agentic_evidence_checkpoint.py'
+      - 'tests/automation/test_agent_transport_receipts.py'
       - 'tools/tests/test_checkpoint_json_strict.py'
       - 'tools/ghidrassist-agent'
       - 'src/main/java/ghidrassist/agent/react/AgenticReviewDraft.java'
@@ -54,4 +55,5 @@ jobs:
           set -euo pipefail
           python3 -m py_compile tools/ghidrassist-agent
           python3 -m unittest discover -s tests/automation -p 'test_agentic_evidence_checkpoint.py' -v
+          python3 -m unittest discover -s tests/automation -p 'test_agent_transport_receipts.py' -v
           python3 -m unittest discover -s tools/tests -p 'test_checkpoint_json_strict.py' -v
