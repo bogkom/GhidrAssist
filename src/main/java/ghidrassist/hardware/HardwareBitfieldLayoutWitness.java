@@ -32,10 +32,13 @@ public final class HardwareBitfieldLayoutWitness {
     public record DiagramField(String register,String field,int mostSignificantBit,
             int leastSignificantBit,int physicalDiagramPage,String printedDiagramPage) {
         public DiagramField {
-            if(register==null || field==null || printedDiagramPage==null ||
-                    mostSignificantBit>15 || leastSignificantBit<0 ||
+            if(register==null || register.isBlank() || field==null ||
+                    field.isBlank() || printedDiagramPage==null ||
+                    printedDiagramPage.isBlank() ||
+                    mostSignificantBit<0 || mostSignificantBit>15 ||
+                    leastSignificantBit<0 || leastSignificantBit>15 ||
                     mostSignificantBit<leastSignificantBit ||
-                    physicalDiagramPage<1)
+                    physicalDiagramPage<1 || physicalDiagramPage>100000)
                 throw new IllegalArgumentException("Invalid reviewed bit positions");
         }
         public long mask() {
@@ -68,7 +71,22 @@ public final class HardwareBitfieldLayoutWitness {
     public record Row(DiagramField diagram,Long profileMask,
             String claimedDescriptionPages,State state) {
         public Row {
-            if(diagram==null || claimedDescriptionPages==null || state==null)
+            if(diagram==null || claimedDescriptionPages==null ||
+                    claimedDescriptionPages.isBlank() ||
+                    claimedDescriptionPages.length()>32 ||
+                    !claimedDescriptionPages.matches(
+                        "UNKNOWN|[0-9]{1,6}(?:-[0-9]{1,6})?") ||
+                    state==null ||
+                    (state==State.FIELD_CLAIM_MISSING) !=
+                        (profileMask==null) ||
+                    state==State.CLAIM_MATCHES_REVIEWED_DIAGRAM &&
+                        !Objects.equals(profileMask,diagram.mask()) ||
+                    state==State.MASK_DIFFERS_FROM_DIAGRAM &&
+                        (profileMask==null || profileMask==diagram.mask()) ||
+                    state==State.FIELD_CLAIM_MISSING &&
+                        !"UNKNOWN".equals(claimedDescriptionPages) ||
+                    profileMask!=null && (profileMask<=0 ||
+                        profileMask>0xffff))
                 throw new IllegalArgumentException("Invalid bit layout comparison");
         }
     }
@@ -77,9 +95,36 @@ public final class HardwareBitfieldLayoutWitness {
             int unexpectedProfileFields) {
         public Report {
             if(device==null || expectedPublisherPdfSha256==null ||
-                    rows==null || matches<0 || mismatches<0 ||
-                    missingOrUnverifiable<0 || unexpectedProfileFields<0)
+                    rows==null || rows.size()>REVIEWED.size() ||
+                    rows.stream().anyMatch(Objects::isNull) ||
+                    matches<0 || mismatches<0 || missingOrUnverifiable<0 ||
+                    unexpectedProfileFields<0 || unexpectedProfileFields>256 ||
+                    matches+mismatches+missingOrUnverifiable!=rows.size())
                 throw new IllegalArgumentException("Invalid bit diagram report");
+            if("MC68332".equals(device)) {
+                if(!PUBLISHER_SHA256.equals(expectedPublisherPdfSha256) ||
+                        rows.size()!=REVIEWED.size())
+                    throw new IllegalArgumentException(
+                        "Missing reviewed MC68332 diagram source");
+                int positives=0, negatives=0;
+                for(int i=0;i<REVIEWED.size();i++) {
+                    Row row=rows.get(i);
+                    if(!REVIEWED.get(i).equals(row.diagram()))
+                        throw new IllegalArgumentException(
+                            "Reordered or forged reviewed bit diagram");
+                    if(row.state()==State.CLAIM_MATCHES_REVIEWED_DIAGRAM)
+                        positives++;
+                    else if(row.state()==State.MASK_DIFFERS_FROM_DIAGRAM)
+                        negatives++;
+                }
+                if(positives!=matches || negatives!=mismatches)
+                    throw new IllegalArgumentException(
+                        "Bit diagram state counters contradict reviewed rows");
+            }else if(!"UNKNOWN".equals(expectedPublisherPdfSha256) ||
+                    !rows.isEmpty() || matches!=0 || mismatches!=0 ||
+                    missingOrUnverifiable!=0 || unexpectedProfileFields!=0)
+                throw new IllegalArgumentException(
+                    "Unselected MCU cannot publish MC68332 bit diagrams");
             rows=List.copyOf(rows);
         }
         public boolean allReviewedMasksMatch() {
