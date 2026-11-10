@@ -17,6 +17,7 @@ import java.util.concurrent.CompletableFuture;
 public final class RAGSearchToolProvider implements ToolProvider {
     private static final String SEARCH = "ga_search_documents";
     private static final String PAGE = "ga_get_document_page";
+    private static final String FIELD = "ga_mc68332_field_citations";
     private volatile Program currentProgram;
 
     @Override public String getProviderName() { return "Documentation RAG"; }
@@ -71,6 +72,24 @@ public final class RAGSearchToolProvider implements ToolProvider {
         pageRequired.add("filename");
         pageRequired.add("page");
         page.add("required", pageRequired);
+        JsonObject citations=new JsonObject();
+        citations.addProperty("type","object");
+        JsonObject citedProps=new JsonObject();
+        citedProps.add("device",stringProperty(
+            "Required MC68332 explicit selection, never inferred from CPU32"));
+        citedProps.add("filename",stringProperty(
+            "Exact indexed MC68332UM PDF source filename"));
+        citedProps.add("register",stringProperty(
+            "SIMCR or SYNCR; reviewed field description scope only"));
+        citedProps.add("field",stringProperty(
+            "Optional single field such as MM, W, X, Y or STEXT"));
+        citedProps.add("scope",scopeProperty());
+        citations.add("properties",citedProps);
+        JsonArray citationRequired=new JsonArray();
+        citationRequired.add("device");
+        citationRequired.add("filename");
+        citationRequired.add("register");
+        citations.add("required",citationRequired);
         return List.of(
             new NativeTool(SEARCH,
                 "Search indexed manuals, honoring the active project's checked RAG libraries by default. "
@@ -79,10 +98,17 @@ public final class RAGSearchToolProvider implements ToolProvider {
             new NativeTool(PAGE,
                 "Read indexed full text of a specified physical PDF page, with pagination and source-library filtering. "
                 + "For table layout always verify the original PDF visually.",
-                page, getProviderName()));
+                page, getProviderName()),
+            new NativeTool(FIELD,
+                "Read reviewed MC68332UM field heading, meaning, source folio "
+                + "and SHA-256 evidence from a single indexed D-5/D-6/D-7 snapshot. "
+                + "Explicit MC68332 required; index-time text NOT PDF authentication.",
+                citations,getProviderName()));
     }
 
-    @Override public boolean handlesTool(String name) { return SEARCH.equals(name) || PAGE.equals(name); }
+    @Override public boolean handlesTool(String name) {
+        return SEARCH.equals(name) || PAGE.equals(name) || FIELD.equals(name);
+    }
     @Override public void setContext(Program program) { currentProgram = program; }
 
     private static int readInt(JsonObject args, String key, int defaultValue, int min, int max) {
@@ -153,6 +179,90 @@ public final class RAGSearchToolProvider implements ToolProvider {
                         .append(" nextOffset=").append(more ? Integer.toString(end) : "null")
                         .append("\nWARNING: Verify CPU bitfields and multi-column tables on original PDF page.");
                     return ToolResult.success(out.toString());
+                }
+
+                if(FIELD.equals(name)) {
+                    // An exact checksum at import and a familiar manual name
+                    // do NOT select hardware. Explicit concrete MCU required.
+                    if(!args.has("device") ||
+                            !"MC68332".equals(args.get("device").getAsString()))
+                        return ToolResult.error(
+                            "Explicit device=MC68332 required for source citations");
+                    if(!args.has("filename") || !args.has("register"))
+                        return ToolResult.error(
+                            "Indexed filename and SIMCR/SYNCR register required");
+                    String filename=args.get("filename").getAsString().trim();
+                    if(filename.isBlank())
+                        return ToolResult.error("Blank indexed source filename");
+                    String register=args.get("register").getAsString().trim()
+                        .toUpperCase(java.util.Locale.ROOT);
+                    if(!register.equals("SIMCR") && !register.equals("SYNCR"))
+                        return ToolResult.error("Only reviewed SIMCR/SYNCR supported");
+                    String field=args.has("field")?
+                        args.get("field").getAsString().trim()
+                            .toUpperCase(java.util.Locale.ROOT):null;
+                    var sourcePages=RAGEngine.getIndexedPdfPagesEvidence(
+                        filename,List.of(219,220,221));
+                    ghidrassist.core.RAGIndexedPdfPageEvidence
+                        .requireOneIndexedDocument(sourcePages);
+                    var first=sourcePages.get(219);
+                    if(scope.equals("selected") &&
+                            !active.contains(first.libraryId()))
+                        return ToolResult.error(
+                            "Source not in selected project's active RAG library");
+                    var provenance=ghidrassist.core.RAGSourceProvenance.inspect(
+                        "pdf",first.indexedSha256());
+                    if(provenance.pin()!=ghidrassist.core.RAGSourceProvenance.Pin
+                            .OFFICIAL_MC68332UM_SHA256_AT_INDEX)
+                        return ToolResult.error(
+                            "INDEXED_SHA256_NOT_PUBLISHER_PINNED: refuse positive field citation");
+                    var pages=new java.util.TreeMap<Integer,String>();
+                    for(var item:sourcePages.entrySet())
+                        pages.put(item.getKey(),item.getValue().text());
+                    var review=ghidrassist.hardware.HardwareManualFieldExcerptEvidence
+                        .inspect(ghidrassist.hardware.HardwareProfiles.mc68332(),
+                            pages,first.indexedSha256());
+                    StringBuilder result=new StringBuilder(
+                        "DEVICE: MC68332 EXPLICIT; SOURCE: "+filename+
+                        " REGISTER: "+register+
+                        " EDITION_CLAIM: "+review.editionClaim()+
+                        " INDEXED_SHA256: "+first.indexedSha256()+
+                        "\nPHYSICAL_PDF_PAGES: 219,220,221"+
+                        " PRINTED_FOLIOS: D-5,D-6,D-7"+
+                        "\nSOURCE_STATUS: INDEXED_TEXT_CANDIDATE_NOT_AUTHENTICATED"+
+                        "\nALL_15_REVIEWED_TEXT_CANDIDATES: "+
+                        review.allReviewedTextCandidatesMatch()+
+                        "\nCAUTION: indexed text/SHA are NOT independent proof "+
+                        "of current PDF bytes, actual manual edition, MCU "+
+                        "identity, execution, MM latch or Review/Apply. "+
+                        "Publisher PDF bytes are verified only in separate CI.\n");
+                    int shown=0;
+                    for(var row:review.citations()) {
+                        var ref=row.reviewed();
+                        if(!ref.register().equals(register) ||
+                                field!=null && !ref.field().equals(field))
+                            continue;
+                        shown++;
+                        result.append("FIELD: ").append(ref.field())
+                            .append(" MASK: 0x")
+                            .append(Long.toHexString(ref.mask())
+                                .toUpperCase(java.util.Locale.ROOT))
+                            .append(" DIAGRAM_PDF: ").append(ref.diagramPage())
+                            .append(" PRINTED_FOLIO: ").append(ref.printedFolio())
+                            .append(" DESCRIPTION_PDF: ")
+                            .append(ref.descriptionPage())
+                            .append(" STATE: ").append(row.state())
+                            .append(" EXCERPT_SHA256: ")
+                            .append(row.excerptSha256()==null?"UNKNOWN":
+                                row.excerptSha256()).append("\n");
+                        if(row.excerpt()!=null)
+                            result.append("MATCHED_INDEXED_EXCERPT: ")
+                                .append(row.excerpt()).append("\n");
+                    }
+                    if(shown==0)
+                        return ToolResult.error(
+                            "Unknown or unreviewed field for selected register");
+                    return ToolResult.success(result.toString());
                 }
 
                 if (!args.has("filename") || !args.has("page"))
