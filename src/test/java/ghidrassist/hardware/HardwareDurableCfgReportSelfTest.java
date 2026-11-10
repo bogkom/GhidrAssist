@@ -231,6 +231,53 @@ public final class HardwareDurableCfgReportSelfTest {
             eligibleForCompleteSourceInventory(
                 decode(encode(confidentlyObserved)).orElseThrow()),
             "Fully retained bounded source inputs survive strictly typed V2");
+        // SHA-256 of a disk blob is not authorship or a fresh source
+        // re-extraction. Even a structurally complete V2 SOURCE inventory
+        // must be stripped before a restored CFG is published to GUI/API.
+        var fromDisk=restoredForReadOnlyDisplay(
+            decode(encode(confidentlyObserved)).orElseThrow());
+        ok(eligibleForCompletedRestore(fromDisk) &&
+            !eligibleForCompleteSourceInventory(fromDisk) &&
+            fromDisk.sourceInventory()==null &&
+            fromDisk.markdown().contains("SOURCE INVENTORY UNVERIFIED") &&
+            fromDisk.markdown().contains(confidentlyObserved.markdown()) &&
+            fromDisk.resetFunctions().equals(confidentlyObserved.resetFunctions()) &&
+            confidentlyObserved.sourceInventory()!=null,
+            "Exact typed V2 source must not revive as a live source-page cursor");
+        var incompleteSources=restoredForReadOnlyDisplay(decoded);
+        ok(incompleteSources.sourceInventory()==null &&
+            incompleteSources.resetIncomplete()==decoded.resetIncomplete() &&
+            incompleteSources.cfgReviewComplete() &&
+            !eligibleForCompleteSourceInventory(incompleteSources),
+            "Omitted and uncertain JSR/MOVEC paths stay unpublished on restore");
+        var legacy=restoredForReadOnlyDisplay(old);
+        ok(legacy.sourceInventory()==null &&
+            legacy.markdown().contains("SOURCE INVENTORY UNVERIFIED") &&
+            legacy.cfgReviewComplete(),
+            "Legacy V1 also carries explicit cache provenance warning");
+        boolean incompleteRestore=false;
+        try{restoredForReadOnlyDisplay(stopped);}
+        catch(IllegalArgumentException expected){incompleteRestore=true;}
+        ok(incompleteRestore,
+            "Interrupted CFG cannot be sanitized into a publishable completed report");
+        boolean unrooted=false;
+        try {
+            new Snapshot("only structure","",2,0,0,0,2,false,
+                false,false,true,0,0,List.of(),List.of(),List.of(),
+                new HardwareResetIndirectVbrCorrelation.SourceInventory(
+                    List.of(),List.of(),Set.of(),false,false,0,0));
+        }catch(IllegalArgumentException expected){unrooted=true;}
+        ok(unrooted,
+            "V2 cannot claim a complete RESET set without a recognized root");
+        unrooted=false;
+        try {
+            new Snapshot("only structure","",2,0,0,0,2,false,
+                true,false,true,0,0,List.of(),List.of(),List.of(),
+                new HardwareResetIndirectVbrCorrelation.SourceInventory(
+                    List.of(),List.of(),Set.of(),true,false,0,0));
+        }catch(IllegalArgumentException expected){unrooted=true;}
+        ok(unrooted,
+            "V2 cannot claim a recognized RESET root with no source functions");
         var interrupted=new Snapshot(
             confidentlyObserved.markdown(),confidentlyObserved.csv(),
             confidentlyObserved.functions(),confidentlyObserved.indirect(),

@@ -57,7 +57,13 @@ public final class HardwareFlowStageCache {
             r.sourceInventory);
     }
     private static GhidraHardwareFlowService.Report report(
-            HardwareDurableCfgReport.Snapshot s){
+            HardwareDurableCfgReport.Snapshot saved){
+        // Disk integrity and exact input fingerprints do not verify that
+        // stored JSR/MOVEC/RESET source claims were replayed from Ghidra.
+        // This is intentionally a CFG-only restart: live source pages
+        // are regenerated only by fresh Analyze after explicit clear.
+        HardwareDurableCfgReport.Snapshot s=
+            HardwareDurableCfgReport.restoredForReadOnlyDisplay(saved);
         List<HardwareCfgWriteAudit.Site> sites=new ArrayList<>();
         for(HardwareDurableCfgReport.Site site:s.sites())
             sites.add(new HardwareCfgWriteAudit.Site(
@@ -77,7 +83,7 @@ public final class HardwareFlowStageCache {
             s.visited(),s.limited(),roles,new HashSet<>(s.resetFunctions()),
             s.resetRecognized(),s.resetIncomplete(),s.csv(),sites,
             s.cfgReviewComplete(),s.cfgOmitted(),s.pointersOmitted(),
-            s.sourceInventory());
+            null);
     }
 
     private static boolean sameRevision(Program program,
