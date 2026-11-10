@@ -404,3 +404,41 @@ is constructed directly, not merely when decode() produced the record.
 This does not independently authenticate a local manual, claim executed
 writes or establish active MC68332 register state. Java21 deterministic
 adversarial tests and full Java25/Ghidra 12.1.4 PUBLIC CI are required.
+
+## 2026-11-10 — GA-06/10/16: read-only publisher-source report integrity
+
+Three **existing** source-only report types now fail closed when independently
+constructed public rows contradict their claimed publisher evidence:
+
+- `HardwareBitfieldPageWitness`: canonical 15-entry MC68332 SIMCR/SYNCR
+  field identity/order, masks, physical source-page ranges, short-name
+  ambiguity, sorted distinct in-range matched pages and exact
+  `matched/missing/ambiguous` counters. A generic CPU32 report cannot
+  inherit the selected MC68332 publisher URL/edition/SHA pin.
+- `HardwareBitfieldLayoutWitness`: canonical 15 independently reviewed
+  SIMCR/SYNCR diagram bit positions and mask/state consistency, exact
+  `matches/mismatches/missing` counts, bounded row and unreviewed-field
+  inventory, and a separate claimed description folio rather than
+  conflating it with the diagram folio.
+- `HardwareSimProtectionTimerWitness`: canonical 10 reviewed
+  SYPCR/PICR/PITR masks, source folios and source-field ordering; exact
+  matched-count checking and an actual SHA-256 digest of each **bounded**
+  positive excerpt. The prior public row guard accepted any syntactically
+  valid digest string without checking its relationship to the excerpt.
+  The expected publisher SHA/edition cannot be forged in a current
+  MC68332 report; historical source-only uncertainty remains explicit.
+
+These are Java record-consistency and snapshot guards. They **do not**
+authenticate the origin of caller-supplied strings. A copied/made-up
+PDF page that happens to match the expected text is still not proven to
+be the publisher PDF. The separate GitHub Actions official
+`MC68332UM.pdf` job must download and check the **whole document**
+(265 PDF pages, fixed SHA-256
+`02c2cb99738dd45a785798bba3e7dcc34bb0d54fb5fba42900e6ecb8356bf28a`)
+before extracting physical pages 219–221 and 224–225. The fixed
+publisher excerpt pins remain independently checked. Exact-head Java 21
+adversarial tests, pinned PDF job and complete Java 25/Ghidra 12.1.4
+PUBLIC extension CI gate integration. No register renames, inferred
+SIMCR/MM activation, PIT interrupt firing, physical MMIO map, original
+ECU411 firmware modification or unattended Apply is introduced.
+GA-06/10/16 remain PARTIAL.
