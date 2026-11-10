@@ -2924,7 +2924,8 @@ public final class Ga11VectorHeadlessMain {
                         .Proposal(new ghidrassist.hardware.HardwareScopedVariableReview
                             .Observation(lastObs.functionEntry(),lastObs.currentName(),
                                 lastObs.kind(),lastObs.ordinal(),
-                                lastObs.storage()+"-stale",true,false,false),
+                                lastObs.storage()+"-stale",true,false,false,
+                                lastObs.dataTypeIdentity(),lastObs.firstUseOffset()),
                             lastMulti.proposedName(),lastMulti.decision());
                     var partialBatch=new java.util.ArrayList<>(
                         multiCandidates.subList(0,3));
