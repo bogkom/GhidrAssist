@@ -162,6 +162,60 @@ public final class HardwareManualFieldExcerptEvidenceSelfTest {
             "Unbounded extracted PDF text denied");
         reject(()->HardwareManualFieldExcerptEvidence.inspect(null,
             synthetic(),P),"Explicit selected hardware required");
+        // Public RAG citation records are also consumed outside the
+        // pure inspector. Reject forged SHA, row totals and reordered
+        // or duplicate field identities at the report boundary itself.
+        var sourceMm=find(positive,"SIMCR/MM");
+        reject(()->new HardwareManualFieldExcerptEvidence.Citation(
+            sourceMm.reviewed(),
+            HardwareManualFieldExcerptEvidence.State.MATCHED_TEXT_CANDIDATE,
+            sourceMm.excerpt()+" edited",sourceMm.excerptSha256()),
+            "matching-looking indexed text with stale SHA cannot publish a citation");
+        reject(()->new HardwareManualFieldExcerptEvidence.Citation(
+            sourceMm.reviewed(),
+            HardwareManualFieldExcerptEvidence.State.MATCHED_TEXT_CANDIDATE,
+            sourceMm.excerpt(),"0".repeat(64)),
+            "caller-provided but incorrect digest cannot authenticate excerpt");
+        reject(()->new HardwareManualFieldExcerptEvidence.Report(
+            positive.device(),positive.editionClaim(),positive.pdfUrl(),
+            positive.expectedPublisherSha256(),positive.suppliedIndexedSha256(),
+            positive.citations(),15,1,0),
+            "forged positive citation totals fail closed");
+        reject(()->new HardwareManualFieldExcerptEvidence.Report(
+            positive.device(),positive.editionClaim(),positive.pdfUrl(),
+            positive.expectedPublisherSha256(),positive.suppliedIndexedSha256(),
+            positive.citations(),14,1,0),
+            "a missing claimed match cannot hide among fifteen matched citations");
+        var swappedCitations=new ArrayList<>(positive.citations());
+        java.util.Collections.swap(swappedCitations,0,1);
+        reject(()->new HardwareManualFieldExcerptEvidence.Report(
+            positive.device(),positive.editionClaim(),positive.pdfUrl(),
+            positive.expectedPublisherSha256(),positive.suppliedIndexedSha256(),
+            swappedCitations,15,0,0),
+            "out-of-order reviewed field list cannot masquerade as full source review");
+        var duplicateCitations=new ArrayList<>(positive.citations());
+        duplicateCitations.set(1,duplicateCitations.get(0));
+        reject(()->new HardwareManualFieldExcerptEvidence.Report(
+            positive.device(),positive.editionClaim(),positive.pdfUrl(),
+            positive.expectedPublisherSha256(),positive.suppliedIndexedSha256(),
+            duplicateCitations,15,0,0),
+            "duplicate field cannot replace a missing reviewed citation");
+        reject(()->new HardwareManualFieldExcerptEvidence.Report(
+            "CPU32","UNKNOWN","UNKNOWN",P,"UNKNOWN",
+            positive.citations(),15,0,0),
+            "generic ISA cannot carry indexed MC68332 publisher citations");
+        var degraded=new ArrayList<>(positive.citations());
+        degraded.set(0,new HardwareManualFieldExcerptEvidence.Citation(
+            degraded.get(0).reviewed(),
+            HardwareManualFieldExcerptEvidence.State.PAGE_TEXT_MISSING,
+            null,null));
+        var downgradedReport=new HardwareManualFieldExcerptEvidence.Report(
+            positive.device(),positive.editionClaim(),positive.pdfUrl(),
+            positive.expectedPublisherSha256(),positive.suppliedIndexedSha256(),
+            degraded,14,1,0);
+        check(!downgradedReport.allReviewedTextCandidatesMatch() &&
+            downgradedReport.omitted()==1,
+            "negative row must prevent full source completeness even with index digest");
         boolean immutable=false;
         try{positive.citations().clear();}
         catch(UnsupportedOperationException expected){immutable=true;}

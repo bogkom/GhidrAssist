@@ -100,6 +100,49 @@ public final class AgenticEvidenceRegistrySelfTest {
             !omittedLinePage.complete(),
             "omitted long tool lines invalidate complete Agentic checkpoint");
 
+        // GA-15: a successful model exit does not make fact-only or
+        // tool-less findings independently sourced. A later high-relevance
+        // finding, even after pruning, cannot repair a missing observation.
+        var uncited=new FindingsCache(2);
+        uncited.addFinding("uncited hypothesis",null,"listing",5);
+        uncited.addFinding("well-sourced observation","page=220 sha=known","rag",9);
+        registry.begin(programA,17L,"a".repeat(64),uncited);
+        registry.finish(programA,uncited,"SUCCESS");
+        var uncitedPage=registry.page(programA,17L,"a".repeat(64),
+            0,10,null,null);
+        yes(uncitedPage.state().equals("SUCCESS") &&
+            uncitedPage.findings().retainedCount()==2 &&
+            !uncitedPage.findings().sourceIncomplete() &&
+            !uncitedPage.complete() && !uncitedPage.findings().complete(),
+            "fact without evidence cannot become a complete Agentic checkpoint");
+        var noTool=new FindingsCache();
+        noTool.addFinding("excerpt without tool","PDF page 220",null,8);
+        registry.begin(programA,17L,"a".repeat(64),noTool);
+        registry.finish(programA,noTool,"SUCCESS");
+        yes(!registry.page(programA,17L,"a".repeat(64),
+            0,10,null,null).complete(),
+            "missing tool origin is not independent source attribution");
+        var restored=new FindingsCache();
+        restored.addFinding("first uncited",null,"rag",1);
+        restored.clear();
+        restored.addFinding("new documented excerpt",
+            "MC68332 PDF page 220 INDEX_TIME_ONLY","rag",8);
+        registry.begin(programA,17L,"a".repeat(64),restored);
+        registry.finish(programA,restored,"SUCCESS");
+        yes(registry.page(programA,17L,"a".repeat(64),
+            0,10,null,null).complete(),
+            "cleared cache generation may regain completeness with sourced findings");
+        var evictedSource=new FindingsCache(1);
+        evictedSource.addFinding("uncited low rank",null,"rag",1);
+        evictedSource.addFinding("cited high rank",
+            "PDF page 219 index hash is claim only","rag",10);
+        registry.begin(programA,17L,"a".repeat(64),evictedSource);
+        registry.finish(programA,evictedSource,"SUCCESS");
+        var afterEviction=registry.page(programA,17L,"a".repeat(64),
+            0,10,null,null);
+        yes(afterEviction.findings().evictedCount()==1 &&
+            !afterEviction.complete(),
+            "pruning cannot erase a historical uncited source gap");
         // A missing SHA or no actual findings must not make a durable
         // checkpoint claim complete merely because the task ended.
         var noSource=new FindingsCache();

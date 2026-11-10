@@ -90,8 +90,11 @@ public final class HardwareManualFieldExcerptEvidence {
                 throw new IllegalArgumentException("Missing citation source");
             if(state==State.MATCHED_TEXT_CANDIDATE) {
                 if(excerpt==null || excerptSha256==null ||
-                        excerpt.isBlank() || !excerptSha256.matches("[0-9a-f]{64}"))
-                    throw new IllegalArgumentException("Positive source requires excerpt digest");
+                        excerpt.isBlank() || excerpt.length()>MAX_PAGE_CHARS ||
+                        !excerptSha256.matches("[0-9a-f]{64}") ||
+                        !sha256(excerpt).equals(excerptSha256))
+                    throw new IllegalArgumentException(
+                        "Positive source requires matching bounded excerpt SHA-256");
             }else if(excerpt!=null || excerptSha256!=null)
                 throw new IllegalArgumentException("Failed citation cannot retain positive evidence");
         }
@@ -102,15 +105,44 @@ public final class HardwareManualFieldExcerptEvidence {
         public Report {
             if(device==null || editionClaim==null || pdfUrl==null ||
                     expectedPublisherSha256==null || suppliedIndexedSha256==null ||
-                    citations==null || matches<0 || omitted<0 || unexpected<0)
+                    citations==null || citations.size()>REVIEWED.size() ||
+                    matches<0 || omitted<0 || unexpected<0 || unexpected>256 ||
+                    citations.stream().anyMatch(java.util.Objects::isNull))
                 throw new IllegalArgumentException("Unbounded citation report");
+            if("MC68332".equals(device)) {
+                if(!EDITION.equals(editionClaim) ||
+                        !HardwareProfiles.MC68332_MANUAL.equals(pdfUrl) ||
+                        !PIN.equals(expectedPublisherSha256) ||
+                        citations.size()!=REVIEWED.size() ||
+                        matches+omitted!=REVIEWED.size())
+                    throw new IllegalArgumentException(
+                        "Missing reviewed MC68332 field sources");
+                int counted=0;
+                for(int i=0;i<citations.size();i++) {
+                    Citation row=citations.get(i);
+                    if(!REVIEWED.get(i).equals(row.reviewed()))
+                        throw new IllegalArgumentException(
+                            "Reordered or foreign publisher field citation");
+                    if(row.state()==State.MATCHED_TEXT_CANDIDATE)
+                        counted++;
+                }
+                if(counted!=matches)
+                    throw new IllegalArgumentException(
+                        "Claimed matched excerpt count contradicts source rows");
+            }else if(!citations.isEmpty() || matches!=0 ||
+                    omitted!=0 || unexpected!=0) {
+                throw new IllegalArgumentException(
+                    "Unselected MCU cannot publish reviewed MC68332 excerpts");
+            }
             citations=List.copyOf(citations);
         }
         public boolean allReviewedTextCandidatesMatch() {
             return "MC68332".equals(device) &&
                 expectedPublisherSha256.equals(suppliedIndexedSha256) &&
                 citations.size()==15 && matches==15 &&
-                omitted==0 && unexpected==0;
+                omitted==0 && unexpected==0 &&
+                citations.stream().allMatch(c->
+                    c.state()==State.MATCHED_TEXT_CANDIDATE);
         }
         public String markdown(){
             StringBuilder b=new StringBuilder(
