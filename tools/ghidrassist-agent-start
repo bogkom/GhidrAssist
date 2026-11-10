@@ -15,6 +15,39 @@ from urllib.request import Request, urlopen
 
 
 
+
+LOCAL_RECEIPT_MAX_BYTES = 16384
+BOOTSTRAP_RPC_MAX_BYTES = 1048576
+
+
+def _parse_unambiguous_json(raw):
+    """A bounded receipt or local server reply must have one interpretation."""
+    def unique_object(pairs):
+        values = {}
+        for name, value in pairs:
+            if name in values:
+                raise ValueError("Duplicate Automation JSON key: " + name)
+            values[name] = value
+        return values
+
+    def reject_constant(name):
+        raise ValueError("Non-finite Automation JSON number: " + name)
+
+    value = json.loads(raw.decode("utf-8"), object_pairs_hook=unique_object,
+                       parse_constant=reject_constant)
+    if not isinstance(value, dict):
+        raise ValueError("Automation receipt/response must be a JSON object")
+    return value
+
+
+def _read_local_receipt(path):
+    with Path(path).open("rb") as stream:
+        raw = stream.read(LOCAL_RECEIPT_MAX_BYTES + 1)
+    if not raw or len(raw) > LOCAL_RECEIPT_MAX_BYTES:
+        raise ValueError("Missing or oversized local Automation receipt")
+    return _parse_unambiguous_json(raw)
+
+
 def verify_patched_project_opener(env):
     """Fail closed before spawning GUI if the installed extension can recurse."""
     options=shlex.split(env.get("JAVA_TOOL_OPTIONS",""))
@@ -103,9 +136,9 @@ def main():
     os.chmod(session_file.parent, 0o700)
     if session_file.exists():
         try:
-            old = json.loads(session_file.read_text(encoding="utf-8"))
+            old = _read_local_receipt(session_file)
             pid = old.get("pid")
-            if not isinstance(pid, int) or pid <= 0 or old.get("schema") != 3:
+            if type(pid) is not int or pid <= 0 or type(old.get("schema")) is not int or old["schema"] != 3:
                 parser.error("Existing session is malformed; inspect before removal")
             try:
                 os.kill(pid, 0)
@@ -123,7 +156,7 @@ def main():
     ready = session_file.with_suffix(".ready")
     if ready.exists():
         try:
-            receipt = json.loads(ready.read_text(encoding="utf-8"))
+            receipt = _read_local_receipt(ready)
             pid = receipt.get("pid")
             if receipt.get("schema") != 3 or type(pid) is not int or pid <= 0 or (
                     type(receipt.get("port")) is not int or
@@ -189,8 +222,11 @@ def main():
     # The server receipt, not bootstrapper liveness, establishes readiness.
     for attempt in range(600):
         if ready.exists():
-            record = json.loads(ready.read_text())
-            if record.get("schema") != 3:
+            record = _read_local_receipt(ready)
+            if (type(record.get("schema")) is not int or record["schema"] != 3
+                    or type(record.get("port")) is not int or
+                    not 0 < record["port"] < 65536 or
+                    type(record.get("pid")) is not int or record["pid"] <= 0):
                 raise RuntimeError("Invalid GhidrAssist ready receipt")
             if args.program:
                 request = Request("http://127.0.0.1:%d/rpc" % record["port"],
@@ -199,7 +235,10 @@ def main():
                              "Content-Type":"application/json"}, method="POST")
                 try:
                     with urlopen(request, timeout=2) as reply:
-                        observed = json.loads(reply.read())
+                        response = reply.read(BOOTSTRAP_RPC_MAX_BYTES + 1)
+                        if not response or len(response) > BOOTSTRAP_RPC_MAX_BYTES:
+                            raise ValueError("Invalid bounded bootstrap RPC response")
+                        observed = _parse_unambiguous_json(response)
                 except (OSError, ValueError):
                     time.sleep(0.1)
                     continue
