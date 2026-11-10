@@ -54,7 +54,16 @@ public final class HardwareVectorMmMayCorrelation {
                     !validWitness(observedUnknownSource,functionEntry,
                         "UNKNOWN_FLOW","MISSING_TARGET") ||
                     !validWitness(frontierSource,functionEntry,
-                        "DEPTH_CUTOFF","NODE_CUTOFF","BATCH_CUTOFF"))
+                        "DEPTH_CUTOFF","NODE_CUTOFF","BATCH_CUTOFF") ||
+                    // A modeled source or inspected UNKNOWN_FLOW must
+                    // have at least as many visited functions as the
+                    // function-only chain needed to reach it. Missing
+                    // functions and skipped frontiers are not visited.
+                    !visitBound(mmSource,examined,false) ||
+                    !visitBound(aliasSource,examined,false) ||
+                    !visitBound(observedUnknownSource,examined,true) ||
+                    !visitBound(frontierSource,examined,true) ||
+                    cycle && examined==0)
                 throw new IllegalArgumentException(
                     "Contradictory or unbounded vector MM evidence");
         }
@@ -192,6 +201,24 @@ public final class HardwareVectorMmMayCorrelation {
             return out.append("\n").toString();
         }
     }
+    /**
+     * Every chain prefix is an observed function entry except the final
+     * MISSING_TARGET or uninspected frontier. The root-only missing
+     * function and a batch cutoff before inspecting the root require
+     * zero visited entries; actual STORE, alias or unknown flow cannot.
+     */
+    private static boolean visitBound(String path,int examined,
+            boolean allowMissingFinal) {
+        if("NONE".equals(path))return true;
+        String[] parts=path.split(" -> ",-1);
+        boolean uninspected=allowMissingFinal &&
+            (parts[0].equals("MISSING_TARGET") ||
+             parts[0].equals("DEPTH_CUTOFF") ||
+             parts[0].equals("NODE_CUTOFF") ||
+             parts[0].equals("BATCH_CUTOFF"));
+        return examined>=parts.length-1-(uninspected?1:0);
+    }
+
     private static boolean sameHandlerEvidence(Row a,Row b) {
         return a.pointer()==b.pointer() &&
             a.resetRelation()==b.resetRelation() &&
