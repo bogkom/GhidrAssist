@@ -227,6 +227,33 @@ public final class HardwareCallEffectsSelfTest {
             longEvidence.storeWitness().chain().get(0)==0L &&
             longEvidence.storeWitness().chain().get(1499)==1499L,
             "long source paths remain source-bounded and nonrecursive");
+        // A 5k-node source graph with STORE/unknown evidence in every
+        // function used to rebuild growing O(depth) paths at each node.
+        // Shortest-root evidence must remain constant-size and complete.
+        var everyNode=new java.util.ArrayList<HardwareCallEffects.FunctionNode>();
+        for(int i=0;i<5000;i++)
+            everyNode.add(n(i,true,i%2==0,true,
+                i==4999?new Long[0]:new Long[]{(long)i+1}));
+        var repeatedEvidence=HardwareCallEffects.inspect(
+            0,everyNode,5000,5000);
+        ok(repeatedEvidence.summary().visited()==5000 &&
+            !repeatedEvidence.summary().truncated() &&
+            !repeatedEvidence.summary().recursive() &&
+            repeatedEvidence.storeWitness().chain().equals(List.of(0L)) &&
+            repeatedEvidence.vbrWitness().chain().equals(List.of(0L)) &&
+            repeatedEvidence.observedUnknownWitness().chain().equals(List.of(0L)),
+            "repeated deep sources retain shortest path without quadratic reconstruction");
+        // A missing child at depth two can be encountered before an
+        // actually inspected unknown-flow sibling at depth one. Canonical
+        // witnesses must compare path LENGTH, not discovery timing.
+        var orderTrap=HardwareCallEffects.inspect(0,List.of(
+            n(0,false,false,false,1L,2L),
+            n(1,false,false,false,8L),
+            n(2,false,false,true)),3,10);
+        ok(orderTrap.observedUnknownWitness().kind()==
+                HardwareCallEffects.WitnessKind.UNKNOWN_FLOW &&
+            orderTrap.observedUnknownWitness().chain().equals(List.of(0L,2L)),
+            "shallower observed UNKNOWN supersedes an earlier missing grandchild");
         var dualGraph=List.of(
             n(0,false,false,false,1L,3L),
             n(1,false,false,false,2L),
