@@ -222,6 +222,58 @@ public final class HardwareVectorMmMayCorrelationSelfTest {
         bad(()->new HardwareVectorMmMayCorrelation.Row(
             2,0x130L,0x130L,
             HardwareVectorResetCorrelation.Relation.IN_RESET_STATIC_CALL_SUBSET,
+            false,"STATIC_MAY_MM_LOW_BYTE",false,false,false,false,0,
+            "MM_SOURCE -> 0x00000130","NONE","NONE","NONE"),
+            "MM witness cannot exist with zero inspected functions");
+        bad(()->new HardwareVectorMmMayCorrelation.Row(
+            2,0x130L,0x130L,
+            HardwareVectorResetCorrelation.Relation.IN_RESET_STATIC_CALL_SUBSET,
+            false,"STATIC_MAY_MM_LOW_BYTE",false,false,false,false,1,
+            "MM_SOURCE -> 0x00000130 -> 0x00000140",
+            "NONE","NONE","NONE"),
+            "two inspected source-function entries cannot fit one visit");
+        bad(()->new HardwareVectorMmMayCorrelation.Row(
+            2,0x130L,0x130L,
+            HardwareVectorResetCorrelation.Relation.IN_RESET_STATIC_CALL_SUBSET,
+            false,"UNKNOWN",true,false,false,false,0,
+            "NONE","STORE_ALIAS -> 0x00000130","NONE","NONE"),
+            "an observed STORE alias requires at least one visit");
+        bad(()->new HardwareVectorMmMayCorrelation.Row(
+            2,0x130L,0x130L,
+            HardwareVectorResetCorrelation.Relation.IN_RESET_STATIC_CALL_SUBSET,
+            false,"UNKNOWN",false,true,false,false,0,
+            "NONE","NONE","UNKNOWN_FLOW -> 0x00000130","NONE"),
+            "observed unknown control cannot occur without inspection");
+        bad(()->new HardwareVectorMmMayCorrelation.Row(
+            2,0x130L,0x130L,
+            HardwareVectorResetCorrelation.Relation.IN_RESET_STATIC_CALL_SUBSET,
+            false,"UNKNOWN",false,true,true,false,0,
+            "NONE","NONE","NONE","NONE"),
+            "a cycle cannot be observed without inspected functions");
+        ok(new HardwareVectorMmMayCorrelation.Row(
+            2,0x130L,0x130L,
+            HardwareVectorResetCorrelation.Relation.IN_RESET_STATIC_CALL_SUBSET,
+            false,"UNKNOWN",false,true,false,false,0,
+            "NONE","NONE","MISSING_TARGET -> 0x00000130","NONE")
+            .examined()==0,
+            "root missing from the function graph is an observed zero-visit unknown");
+        ok(new HardwareVectorMmMayCorrelation.Row(
+            2,0x130L,0x130L,
+            HardwareVectorResetCorrelation.Relation.IN_RESET_STATIC_CALL_SUBSET,
+            false,"UNKNOWN",false,true,false,true,0,
+            "NONE","NONE","NONE","BATCH_CUTOFF -> 0x00000130")
+            .examined()==0,
+            "batch budget exhausted before root is a valid zero-visit frontier");
+        bad(()->new HardwareVectorMmMayCorrelation.Row(
+            2,0x130L,0x130L,
+            HardwareVectorResetCorrelation.Relation.IN_RESET_STATIC_CALL_SUBSET,
+            false,"UNKNOWN",false,true,false,true,1,
+            "NONE","NONE","NONE",
+            "DEPTH_CUTOFF -> 0x00000130 -> 0x00000140 -> 0x00000150"),
+            "uninspected depth frontier needs its observed prefix");
+        bad(()->new HardwareVectorMmMayCorrelation.Row(
+            2,0x130L,0x130L,
+            HardwareVectorResetCorrelation.Relation.IN_RESET_STATIC_CALL_SUBSET,
             false,"STATIC_MAY_MM_LOW_BYTE",false,false,false,false,1,
             "MM_SOURCE -> 0x00000130 -> 0x0000000100000000",
             "NONE","NONE","NONE"),
