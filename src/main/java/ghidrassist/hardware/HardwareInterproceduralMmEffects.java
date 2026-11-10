@@ -10,7 +10,14 @@ public final class HardwareInterproceduralMmEffects {
         public FunctionNode {
             if(entry<0 || calls==null || calls.stream().anyMatch(x->x==null || x<0))
                 throw new IllegalArgumentException("Invalid function node");
-            calls=List.copyOf(calls);
+            // A FunctionNode contains target identities, not CALL-PC
+            // ordering. The shared finite BFS budget must never depend
+            // on the incidental Ghidra Listing/reference discovery order.
+            // Retain duplicates (they cannot consume extra scheduled nodes)
+            // but visit source targets in one canonical numeric order.
+            List<Long> canonical=new ArrayList<>(calls);
+            canonical.sort(Long::compare);
+            calls=List.copyOf(canonical);
         }
     }
     public record CallSite(long function,long pc,Long target) {
@@ -188,8 +195,11 @@ public final class HardwareInterproceduralMmEffects {
         // An unrelated earlier CALL must not consume the entire shared budget
         // (or report rowCap) before the user-selected analysis reaches its
         // target. Still give every other CALL its own fail-closed summary.
-        // Source graph/call sort order is deterministic regardless of input
-        // collection ordering. Cache never persists or spans revisions.
+        // Caller/PC rows AND each function's direct target adjacency
+        // are canonical. A capped graph may still be UNKNOWN/LIMITED, but
+        // which source nodes receive the finite budget is deterministic
+        // regardless of how Ghidra reported source reference order.
+        // Cache never persists or spans revisions.
         Map<Long,Summary> summaries=new HashMap<>();
         BatchBudget budget=new BatchBudget();
         List<Row> rows=new ArrayList<>();

@@ -39,6 +39,53 @@ public final class HardwareInterproceduralMmEffectsSelfTest {
         ok(evidence.markdown().contains("NOT execution") &&
             evidence.markdown().contains("latched MM"),
             "no runtime/latched-MM inference");
+        // A capped batch must not privilege whichever Ghidra reference
+        // happened to be enumerated first. One branch includes a possible
+        // SIMCR/MM STORE; the other is a closed source leaf. Both input
+        // orders produce the SAME bounded MAY result and uncertainty.
+        var lowFirst=node(0x130,false,false,false,0x160L,0x400L);
+        var highFirst=node(0x130,false,false,false,0x400L,0x160L);
+        var orderGraph=List.of(lowFirst,
+            node(0x160,true,false,false),
+            node(0x400,false,false,false));
+        var reverseGraph=List.of(highFirst,
+            node(0x400,false,false,false),
+            node(0x160,true,false,false));
+        ok(lowFirst.calls().equals(highFirst.calls()) &&
+            lowFirst.calls().equals(List.of(0x160L,0x400L)),
+            "One stable numeric CALL target inventory regardless of source enumeration");
+        var sourceCall=List.of(call(0x100,0x108,0x130L));
+        var boundedA=run(orderGraph,sourceCall,3,2,5);
+        var boundedB=run(reverseGraph,sourceCall,3,2,5);
+        ok(boundedA.equals(boundedB) &&
+            boundedA.rows().get(0).summary().visited()==2 &&
+            boundedA.rows().get(0).summary().mayMm() &&
+            boundedA.rows().get(0).summary().limited() &&
+            boundedA.rows().get(0).summary().unknownControl(),
+            "Limited BFS preserves deterministic positive MAY and explicit unknown horizon");
+        ok(run(orderGraph,sourceCall,3,3,5).equals(
+                run(reverseGraph,sourceCall,3,3,5)) &&
+            !run(orderGraph,sourceCall,3,3,5)
+                .rows().get(0).summary().limited(),
+            "Closed full-budget interprocedural evidence remains order independent");
+        var duplicateSourceGraph=List.of(new HardwareInterproceduralMmEffects.FunctionNode(
+            0x130L,false,false,false,List.of(0x400L,0x160L,0x160L)),
+            node(0x160,true,false,false),
+            node(0x400,false,false,false));
+        ok(run(duplicateSourceGraph,sourceCall,3,2,5).rows().get(0).summary()
+                .equals(boundedA.rows().get(0).summary()),
+            "Repeated CALL target does not consume additional distinct-node budget");
+        // An omitted MM leaf remains UNKNOWN, not a negative closed proof:
+        // sorted address priority is only reproducibility, not execution.
+        var highMm=run(List.of(
+            node(0x130,false,false,false,0x400L,0x160L),
+            node(0x160,false,false,false),
+            node(0x400,true,false,false)),sourceCall,3,2,5);
+        ok(!highMm.rows().get(0).summary().mayMm() &&
+            highMm.rows().get(0).summary().limited() &&
+            highMm.rows().get(0).summary().uncertainOrMm(),
+            "Skipped later MM candidate retains UNKNOWN/LIMITED, not absence of MM");
+
         var missing=run(List.of(node(0x100,false,false,false)),
             List.of(calls.get(0)),4,20,20);
         ok(missing.rows().get(0).summary().unknownControl(),
