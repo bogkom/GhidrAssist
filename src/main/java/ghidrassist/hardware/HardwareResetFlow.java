@@ -243,7 +243,16 @@ public final class HardwareResetFlow {
                 else {truncated=true;unresolved=true;}
             }
             if(current.depth()>=maxDepth){
-                if(!node.directCallees().isEmpty()){truncated=true;unresolved=true;}
+                // The already-scheduled destination is part of the
+                // bounded observed source graph. A cycle/backedge or a
+                // convergent CALL to that function is NOT an uninspected
+                // depth frontier. Missing decoded direct targets are
+                // observed UNKNOWN, not speculative unvisited functions.
+                for(long id:node.directCallees()) {
+                    if(scheduled.contains(id))continue;
+                    unresolved=true;
+                    if(graph.containsKey(id))truncated=true;
+                }
                 continue;
             }
             for(long id:node.directCallees()){
