@@ -68,34 +68,34 @@ public final class RAGManualFieldCitationViewSelfTest {
         denied(()->RAGManualFieldCitationView.render(
             "MC68332","MC68332UM.pdf","SIMCR","FAKE",group),
             "Unknown bitfield cannot inherit a nearby real excerpt");
-        var changed=new HashMap<>(group);
-        changed.put(221,new RAGIndexedPdfPageEvidence.Page(221,
+        var changedDigest=new HashMap<>(group);
+        changedDigest.put(221,new RAGIndexedPdfPageEvidence.Page(221,
             page(221),"0".repeat(64),"/isolated/manual.pdf","isolated",1));
         denied(()->RAGManualFieldCitationView.render(
-            "MC68332","MC68332UM.pdf","SIMCR","MM",changed),
+            "MC68332","MC68332UM.pdf","SIMCR","MM",changedDigest),
             "Mixing physically separate indexed PDF hashes denied");
-        changed=new HashMap<>(group);
-        changed.remove(221);
+        var missingFolio=new HashMap<>(group);
+        missingFolio.remove(221);
         denied(()->RAGManualFieldCitationView.render(
-            "MC68332","MC68332UM.pdf","SIMCR","MM",changed),
+            "MC68332","MC68332UM.pdf","SIMCR","MM",missingFolio),
             "Missing D-7 page refuses full independent source group");
-        changed=new HashMap<>(group);
-        changed.put(220,new RAGIndexedPdfPageEvidence.Page(
+        var changedPin=new HashMap<>(group);
+        changedPin.put(220,new RAGIndexedPdfPageEvidence.Page(
             220,page(220),"a".repeat(64),"/isolated/manual.pdf",
             "isolated",1));
         denied(()->RAGManualFieldCitationView.render(
-            "MC68332","MC68332UM.pdf","SIMCR","MM",changed),
+            "MC68332","MC68332UM.pdf","SIMCR","MM",changedPin),
             "A rehashed arbitrary PDF source cannot claim pinned edition evidence");
         denied(()->RAGManualFieldCitationView.render(
             "MC68332","fake\nEDITION VERIFIED","SIMCR","MM",group),
             "Untrusted filename cannot inject provenance line into result");
-        changed=new HashMap<>(group);
-        changed.put(220,new RAGIndexedPdfPageEvidence.Page(
+        var forgedHeading=new HashMap<>(group);
+        forgedHeading.put(220,new RAGIndexedPdfPageEvidence.Page(
             220,page(220).replace(
                 "MM - Module Mapping","MM - fabricated document"),
             PIN,"/isolated/manual.pdf","isolated",1));
         String missing=RAGManualFieldCitationView.render(
-            "MC68332","MC68332UM.pdf","SIMCR","MM",changed);
+            "MC68332","MC68332UM.pdf","SIMCR","MM",forgedHeading);
         ok(missing.contains("FULL_15_TEXT_CANDIDATES: false") &&
             missing.contains("STATE: FIELD_HEADING_MISSING") &&
             !missing.contains("BOUNDED_INDEXED_EXCERPT: MM"),

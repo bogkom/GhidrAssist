@@ -186,6 +186,9 @@ public final class RAGSearchToolProvider implements ToolProvider {
                             !args.has("register"))
                         return ToolResult.error(
                             "Explicit device, exact indexed filename and register required");
+                    if(!"MC68332".equals(args.get("device").getAsString()))
+                        return ToolResult.error(
+                            "Explicit device=MC68332 required, not generic CPU32");
                     String filename=args.get("filename").getAsString().trim();
                     var pages=RAGEngine.getIndexedPdfPagesEvidence(
                         filename,ghidrassist.core.RAGManualFieldCitationView.PAGES);
