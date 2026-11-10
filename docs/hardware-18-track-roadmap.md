@@ -10,6 +10,7 @@ substitute for independent current-file PDF-byte verification or manually
 verified MC68332 edition/folio provenance. Java21 RAG regressions, Java25
 full Ghidra 12.1.4 PUBLIC build and isolated synthetic CI are exact-SHA
 gates; GA-06/15/16/18 remain PARTIAL, GA-14 deferred.
+The GA-18 full extension build workflow now includes `src/main/java/ghidrassist/core/RAG*.java` and `src/test/java/ghidrassist/core/RAG*.java` in both push/PR filters; these RAG source changes previously triggered only narrower source tests and thus missed the mandatory full Ghidra compile. This is a CI coverage correction, not a host-runner/Supervisor restart.\n\n
 
 ## GA-06/10/15/16/18 — 2026-11-10: RAG source and Agentic completeness accounting
 
