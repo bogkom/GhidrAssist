@@ -106,7 +106,7 @@ public final class HardwareResetIndirectVbrCorrelation {
             boolean resetGraphIncomplete,List<Pair> rows,
             int pageOffset,int pageLimit,int nextOffset,boolean hasMore) {
         public Result {
-            if(rows==null || rows.contains(null) ||
+            if(rows==null || rows.stream().anyMatch(Objects::isNull) ||
                     indirectSources<0 || indirectSources>MAX_INDIRECT_SOURCES ||
                     vbrSources<0 || vbrSources>MAX_VBR_SOURCES ||
                     colocatedPairs<0 ||
