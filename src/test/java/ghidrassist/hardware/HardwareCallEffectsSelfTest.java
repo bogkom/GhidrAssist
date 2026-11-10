@@ -84,6 +84,29 @@ public final class HardwareCallEffectsSelfTest {
             n(2,false,false,false,1L)),3,20);
         ok(cycleShort.recursive() && cycleShort.unresolved(),
             "BFS merge must still detect real source-call cycles");
+        // Cross-check the generic STORE/VBR solver's depth behavior
+        // against the RESET and SIMCR source traversals: backedges to
+        // already examined functions are cycles, not truncated frontiers.
+        var selfAtZero=HardwareCallEffects.inspect(0,List.of(
+            n(0,true,true,false,0L)),0,1);
+        ok(selfAtZero.summary().recursive() && selfAtZero.summary().unresolved() &&
+            !selfAtZero.summary().truncated() &&
+            selfAtZero.storeWitness().chain().equals(List.of(0L)) &&
+            selfAtZero.vbrWitness().chain().equals(List.of(0L)) &&
+            selfAtZero.frontierWitness()==null,
+            "generic STORE/VBR self cycle at zero depth is observed, not uninspected");
+        var joinAtDepth=HardwareCallEffects.inspect(0,List.of(
+            n(0,false,false,false,2L,4L),
+            n(2,false,false,false,4L),
+            n(4,true,true,false)),1,3);
+        ok(joinAtDepth.summary().visited()==3 &&
+            joinAtDepth.summary().possibleMemoryStore() &&
+            joinAtDepth.summary().possibleVbrWrite() &&
+            !joinAtDepth.summary().recursive() &&
+            !joinAtDepth.summary().truncated() &&
+            !joinAtDepth.summary().unresolved() &&
+            joinAtDepth.frontierWitness()==null,
+            "convergent already-examined function at boundary is a closed subset");
         // Very deep static graph should remain bounded by user limits,
         // not by the JVM call stack.
         java.util.List<HardwareCallEffects.FunctionNode> longChain=
