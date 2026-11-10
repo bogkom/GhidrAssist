@@ -441,6 +441,20 @@ public final class HardwareTwoHopRegisterFlowSelfTest {
         ok(scan(List.of(left),List.of(duplicateBcc),
             List.of(leaf),48).rejectedBridge()==1,
             "Two duplicate Bcc targets do not constitute two possible paths");
+        var branchMisreadAsRegister=new HardwareTwoHopRegisterFlow.Bridge(
+            0x640,List.of(step(0x640,CLOBBER_POINTER,"D1",null,
+                    0,"BNE",0x642L),
+                jsr(0x642,0x648),ret(0x648)),0x642,0x700L,true);
+        ok(scan(List.of(left),List.of(branchMisreadAsRegister),
+            List.of(leaf),48).rejectedBridge()==1,
+            "A Bcc cannot be reclassified as a linear D-register clobber");
+        var returnMisreadAsRegister=new HardwareTwoHopRegisterFlow.Bridge(
+            0x640,List.of(step(0x640,CLOBBER_POINTER,"D1",null,
+                    0,"RTS",0x642L),
+                jsr(0x642,0x648),ret(0x648)),0x642,0x700L,true);
+        ok(scan(List.of(left),List.of(returnMisreadAsRegister),
+            List.of(leaf),48).rejectedBridge()==1,
+            "An RTS instruction cannot fabricate fallthrough by clobber kind");
         var fakeCall=new HardwareTwoHopRegisterFlow.Bridge(0x640,
             List.of(step(0x640,COPY_POINTER,"A1","A0",0,
                     "MOVEA.L",0x642L),
