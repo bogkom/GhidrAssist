@@ -221,16 +221,15 @@ public final class HardwareProfileManifestPreviewSelfTest {
         refusesPreview(()->new HardwareProfileManifestPreview.Preview(
             source,modules,forgedOwner,fields,result.ambiguousPages()),
             "Public register must remain inside its canonical named module");
-        var forgedField=new ArrayList<>(fields);
-        forgedField.add(new HardwareProfileManifestPreview.Field(
+        var overlappingFields=new ArrayList<>(fields);
+        overlappingFields.add(new HardwareProfileManifestPreview.Field(
             "SIMCR","MM_ALIAS",0x0040,"UNKNOWN"));
         refusesPreview(()->new HardwareProfileManifestPreview.Preview(
-            source,modules,registers,forgedField,result.ambiguousPages()+1),
+            source,modules,registers,overlappingFields,result.ambiguousPages()+1),
             "Overlapping bit masks cannot be introduced via public field list");
-        forgedField=new ArrayList<>(fields);
-        forgedField.add(new HardwareProfileManifestPreview.Field(
+        var overWidth=new ArrayList<>(fields);
+        overWidth.add(new HardwareProfileManifestPreview.Field(
             "SIMCR","OUTSIDE",0x10000,"UNKNOWN"));
-        final var overWidth=forgedField;
         refusesPreview(()->new HardwareProfileManifestPreview.Preview(
             source,modules,registers,overWidth,result.ambiguousPages()+1),
             "Public bitfield mask must fit declared register width");
