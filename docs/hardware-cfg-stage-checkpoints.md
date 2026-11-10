@@ -162,3 +162,14 @@ pass on the exact PR SHA.
 Source-only evidence remains MAY/UNKNOWN: it does not prove execution,
 RESET timing, active SIMCR MM/IRQ or authorization for Apply/Undo. No private
 ECU411 firmware or local Wyse/Precision/Supervisor tests are involved.
+
+## 2026-11-10 — weak source identities cannot resume complete fixed points
+
+The bounded process-local GA-12 function-stage cache refuses to store or
+reuse complete CFG fixed points when the import-source identity is null,
+blank or the explicit `UNKNOWN` sentinel. Its scope rejects oversized
+language/import labels and invisible control/format characters, preventing
+ambiguous checkpoint identities. An invalid query is a cache miss and does
+not evict a valid existing stage. These checks do **not** independently
+verify a digest nor replace the on-disk complete Program-input SHA-256
+binding, revision checks, cancellation epoch or isolated synthetic tests.
