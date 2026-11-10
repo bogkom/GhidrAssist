@@ -107,7 +107,11 @@ public final class HardwareScopedVariableService {
                     live!=null && live.getDataType() instanceof Pointer,
                     live!=null && live.getSource()==SourceType.USER_DEFINED,
                     live instanceof Parameter p &&
-                        (p.isAutoParameter() || p.isForcedIndirect())));
+                        (p.isAutoParameter() || p.isForcedIndirect()),
+                    live==null || live.getDataType()==null?null:
+                        live.getDataType().getPathName()+"#length="+
+                            live.getDataType().getLength(),
+                    live==null?Integer.MIN_VALUE:live.getFirstUseOffset()));
             }
         }
         if(program.getModificationNumber()!=before)
@@ -218,7 +222,8 @@ public final class HardwareScopedVariableService {
                     o.currentName(),p.proposedName(),
                     reviewed.modificationNumber(),
                     reviewed.sourceSha256()==null?"UNKNOWN":
-                        reviewed.sourceSha256());
+                        reviewed.sourceSha256(),
+                    o.dataTypeIdentity(),o.firstUseOffset());
                 String key=entry.optionKey();
                 if(receipts.getString(key,null)!=null)
                     throw new IllegalStateException(
