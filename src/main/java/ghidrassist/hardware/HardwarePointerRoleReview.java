@@ -9,6 +9,8 @@ import java.util.*;
  */
 public final class HardwarePointerRoleReview {
     private HardwarePointerRoleReview() {}
+    /** Bounded synthetic/Listing site evidence before allocating grouping tables. */
+    public static final int MAX_SOURCE_SITES=120_000;
     public enum Status { FAMILY_UNCERTAIN, PATH_UNCERTAIN, SCOPE_CONFLICT, WEAK_EVIDENCE, REVIEW_ONLY }
     public record Site(long function, String functionName, long pc, String pointer,
                        String module, int mm, String target, boolean uncertain) {}
@@ -43,12 +45,15 @@ public final class HardwarePointerRoleReview {
     }
     public static List<Proposal> propose(boolean concrete,Collection<Site> input,
                                          boolean truncated) {
-        if(input==null)throw new IllegalArgumentException("Null pointer evidence");
+        if(input==null || input.size()>MAX_SOURCE_SITES)
+            throw new IllegalArgumentException("Null or unbounded pointer evidence");
         Map<String,Group> grouped=new TreeMap<>();
         // A0..A7 are physical registers, NOT stable local variables.
         // Reusing one address register for different module/MM scopes in
         // a function invalidates an otherwise attractive single-role hint.
         Map<String,Set<String>> pointerScopes=new HashMap<>();
+        Map<String,Set<String>> pcWitnesses=new HashMap<>();
+        Map<Long,Set<String>> functionNames=new HashMap<>();
         for(Site s:input){
             if(s==null || s.function()<0 || s.pc()<0 ||
                     s.functionName()==null || s.target()==null ||
@@ -62,7 +67,24 @@ public final class HardwarePointerRoleReview {
                 s.function(),s.pointer());
             pointerScopes.computeIfAbsent(pointerKey,k->new HashSet<>())
                 .add(s.module()+"/MM"+s.mm());
+            // A duplicate PC is harmless only for the exact same observed
+            // register write. Conflicting target/pointer/module witnesses
+            // or function names suggest mixed revisions or ambiguous input.
+            String pcKey=String.format(Locale.ROOT,"%016X/%016X",
+                s.function(),s.pc());
+            pcWitnesses.computeIfAbsent(pcKey,k->new HashSet<>()).add(
+                s.pointer()+"/"+s.module()+"/"+s.mm()+"/"+s.target());
+            functionNames.computeIfAbsent(s.function(),k->new HashSet<>())
+                .add(s.functionName());
         }
+        Set<Long> sourceConflictFunctions=new HashSet<>();
+        for(var names:functionNames.entrySet())
+            if(names.getValue().size()>1)
+                sourceConflictFunctions.add(names.getKey());
+        Set<String> ambiguousPcs=new HashSet<>();
+        for(var witness:pcWitnesses.entrySet())
+            if(witness.getValue().size()>1)
+                ambiguousPcs.add(witness.getKey());
         List<Proposal> result=new ArrayList<>();
         for(Group g:grouped.values()) {
             if(g.pcs.size()<2)continue;
@@ -70,8 +92,14 @@ public final class HardwarePointerRoleReview {
             String pointerKey=String.format(Locale.ROOT,"%016X/%s",
                 s.function(),s.pointer());
             boolean conflictingScopes=pointerScopes.get(pointerKey).size()>1;
+            boolean ambiguous=sourceConflictFunctions.contains(s.function());
+            for(long pc:g.pcs)
+                if(ambiguousPcs.contains(String.format(Locale.ROOT,
+                        "%016X/%016X",s.function(),pc))) {
+                    ambiguous=true;break;
+                }
             Status status=!concrete?Status.FAMILY_UNCERTAIN:
-                truncated||g.uncertain?Status.PATH_UNCERTAIN:
+                truncated||g.uncertain||ambiguous?Status.PATH_UNCERTAIN:
                 conflictingScopes?Status.SCOPE_CONFLICT:
                 g.targets.size()<2?Status.WEAK_EVIDENCE:Status.REVIEW_ONLY;
             String hint=status==Status.REVIEW_ONLY ?
