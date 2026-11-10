@@ -71,6 +71,14 @@ public final class HardwareSimProtectionTimerWitnessSelfTest {
         }
         return out;
     }
+    private static HardwareSimProtectionTimerWitness.Report republish(
+            HardwareSimProtectionTimerWitness.Report reference,
+            List<HardwareSimProtectionTimerWitness.Row> rows,int matched) {
+        return new HardwareSimProtectionTimerWitness.Report(
+            reference.device(),reference.expectedEdition(),
+            reference.expectedPublisherSha256(),rows,matched,
+            reference.unexpectedClaims());
+    }
     public static void main(String[] args)throws Exception {
         var profile=HardwareProfiles.mc68332();
         var good=HardwareSimProtectionTimerWitness.inspect(profile,fakePdf());
@@ -173,6 +181,58 @@ public final class HardwareSimProtectionTimerWitnessSelfTest {
             immutable=true;
         }
         ok(immutable,"Evidence rows are immutable");
+
+        ok(republish(good,good.rows(),good.matched()).equals(good),
+            "Canonical 10 reviewed protection/timer citations round-trip");
+        var watchdog=row(good,"SYPCR/SWE");
+        refuses(()->new HardwareSimProtectionTimerWitness.Row(
+            watchdog.reviewed(),HardwareSimProtectionTimerWitness.State
+                .MATCHED_TEXT_CANDIDATE,
+            watchdog.excerpt()+" DIFFERENT",watchdog.excerptSha256()),
+            "Stored SHA-256 must hash the same exact bounded excerpt bytes");
+        refuses(()->new HardwareSimProtectionTimerWitness.Row(
+            watchdog.reviewed(),HardwareSimProtectionTimerWitness.State
+                .MATCHED_TEXT_CANDIDATE,watchdog.excerpt(),"0".repeat(64)),
+            "Invented excerpt SHA cannot certify a positive field citation");
+        refuses(()->new HardwareSimProtectionTimerWitness.Row(
+            watchdog.reviewed(),HardwareSimProtectionTimerWitness.State
+                .PAGE_TEXT_MISSING,watchdog.excerpt(),watchdog.excerptSha256()),
+            "Negative source status cannot retain a positive excerpt");
+        refuses(()->republish(good,good.rows(),good.matched()-1),
+            "Report matched count must agree with ten actual excerpt states");
+        refuses(()->republish(good,good.rows().subList(0,9),9),
+            "Report cannot omit a reviewed SYPCR/PICR/PITR row");
+        var alteredOrder=new ArrayList<>(good.rows());
+        java.util.Collections.reverse(alteredOrder);
+        refuses(()->republish(good,alteredOrder,good.matched()),
+            "Reordered reviewed citations cannot inherit publisher field identity");
+        var alteredReference=new ArrayList<>(good.rows());
+        var originalRef=watchdog.reviewed();
+        var tamperedRef=new HardwareSimProtectionTimerWitness.Reviewed(
+            originalRef.register(),originalRef.field(),0x40L,
+            originalRef.offset(),originalRef.widthBits(),
+            originalRef.physicalPage(),originalRef.printedFolio(),
+            originalRef.heading(),originalRef.meaning(),originalRef.writeOnce());
+        alteredReference.set(0,new HardwareSimProtectionTimerWitness.Row(
+            tamperedRef,watchdog.state(),watchdog.excerpt(),watchdog.excerptSha256()));
+        refuses(()->republish(good,alteredReference,good.matched()),
+            "Forged reviewed SYPCR watchdog mask denied even with a valid text hash");
+        refuses(()->new HardwareSimProtectionTimerWitness.Report(
+            good.device(),good.expectedEdition(),"0".repeat(64),
+            good.rows(),good.matched(),0),
+            "Foreign claimed publisher PDF SHA cannot acquire reviewed field status");
+        refuses(()->new HardwareSimProtectionTimerWitness.Report(
+            good.device(),"UNKNOWN",good.expectedPublisherSha256(),
+            good.rows(),good.matched(),0),
+            "Different manual edition cannot be relabeled MC68332 reviewed source");
+        var generic=HardwareSimProtectionTimerWitness.inspect(
+            HardwareProfiles.cpu32Family(),fakePdf());
+        refuses(()->new HardwareSimProtectionTimerWitness.Report(
+            generic.device(),HardwareSimProtectionTimerWitness.EXPECTED_EDITION,
+            "UNKNOWN",List.of(),0,0),
+            "Generic CPU32 cannot inherit SYPCR/PICR/PITR publisher metadata");
+        refuses(()->republish(good,null,good.matched()),
+            "Null source inventory denied with explicit invalid-input error");
         if(args.length!=0 && args.length!=2)
             throw new IllegalArgumentException("Expected pinned physical pages 224/225");
         if(args.length==2) {
