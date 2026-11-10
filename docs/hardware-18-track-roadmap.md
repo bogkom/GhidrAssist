@@ -1,3 +1,19 @@
+## GA-06/10/15/16/18 — 2026-11-10: RAG source and Agentic completeness accounting
+
+Reviewed MC68332UM field-excerpt public reports now bind every positive
+candidate's SHA-256 to its actual bounded text, require the exact canonical
+15-field list and count matching/omitted rows instead of trusting caller
+supplied completeness counters. A generic CPU32 report may not inherit
+MC68332 publisher field citations. Separately, the Agentic retained-findings
+cache cannot certify a finished investigation as *complete* if any accepted
+finding lacked its own evidence text or tool origin, even when that finding
+was later pruned from the ranked cache. Clear begins a new evidence generation.
+These are deterministic **source-claim consistency** gates; digest equality
+is not independent PDF file authentication, and a sourced finding is not
+proof of firmware execution. Java21 source tests, full Java25/Ghidra 12.1.4
+PUBLIC build and isolated genuine synthetic CI are exact-SHA merge gates.
+GA-06/10/15/16/18 remain PARTIAL; GA-14 deferred.
+
 ## GA-06/17/18 — 2026-11-10: bounded fail-closed source-profile structural audit
 
 The standalone GA-06 profile metadata audit now rejects oversized raw
