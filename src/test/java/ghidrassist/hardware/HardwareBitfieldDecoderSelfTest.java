@@ -201,7 +201,6 @@ public final class HardwareBitfieldDecoderSelfTest {
         // Public records are also consumed by evidence renderers: do
         // not accept fabricated sourced fields independent of decode().
         {
-            var decoder=HardwareBitfieldDecoder.class;
             var badEvidence=new java.util.ArrayList<Runnable>();
             badEvidence.add(()->new HardwareBitfieldDecoder.FieldEvidence(
                 "FAKE",0,0,"D-6 (PDF page 220)",false));
@@ -218,7 +217,7 @@ public final class HardwareBitfieldDecoderSelfTest {
             var forgedMm=new HardwareBitfieldDecoder.FieldEvidence(
                 "MM",0x40,1,"D-6 (PDF page 220)",true);
             var forgedSupv=new HardwareBitfieldDecoder.FieldEvidence(
-                "SUPV",0x80,1,"D-6 (PDF page 220)",false);
+                "SUPV",0x80,0,"D-6 (PDF page 220)",false);
             badEvidence.add(()->new HardwareBitfieldDecoder.Result(
                 HardwareBitfieldDecoder.Status.DECODED,"MC68332","SIMCR",
                 null,16,java.util.List.of(forgedMm),0xffbf));
