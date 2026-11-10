@@ -46,7 +46,7 @@ public final class HardwareBitfieldDecoder {
             long unspecifiedMask) {
         public Result {
             if(status==null || profile==null || register==null || fields==null ||
-                    fields.contains(null))
+                    fields.stream().anyMatch(java.util.Objects::isNull))
                 throw new IllegalArgumentException("Incomplete bitfield result");
             if(status==Status.DECODED) {
                 if((widthBits!=8 && widthBits!=16 && widthBits!=32) ||
