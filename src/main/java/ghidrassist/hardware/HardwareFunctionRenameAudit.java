@@ -46,12 +46,41 @@ public final class HardwareFunctionRenameAudit {
         public String origin() { return receipt.operationOrigin(); }
     }
 
+    /** Recompute a saved operation state from the exact current symbol
+     * and import-source observations. A caller-supplied State is never
+     * evidence of approval by itself. */
+    private static State classify(HardwareFunctionRenameReceipt.Entry receipt,
+            String name,String type,String programSourceSha256) {
+        if(name==null)return State.FUNCTION_MISSING;
+        if(!HardwareAnalysisRevision.isVerifiableExecutableSha256(
+                    receipt.sourceSha256()) ||
+                !HardwareAnalysisRevision.isVerifiableExecutableSha256(
+                    programSourceSha256))
+            return State.SOURCE_UNVERIFIED;
+        if(!receipt.sourceSha256().equalsIgnoreCase(programSourceSha256))
+            return State.SOURCE_CHANGED;
+        if(!name.equals(receipt.afterName()))
+            return State.NAME_CHANGED_AFTER_APPROVAL;
+        if(!"USER_DEFINED".equals(type))
+            return State.SOURCE_TYPE_CHANGED;
+        return State.CURRENT_APPROVED_NAME;
+    }
+
     public record Snapshot(List<Row> rows,long programRevision,
                            String programSourceSha256) {
         public Snapshot {
             if(rows==null || rows.size()>MAX_ROWS || programRevision<0 ||
                     programSourceSha256==null || programSourceSha256.length()>128)
                 throw new IllegalArgumentException("Invalid audit snapshot");
+            long prior=-1;
+            for(Row row:rows) {
+                if(row==null || row.receipt().entry()<=prior ||
+                        row.state()!=classify(row.receipt(),row.currentName(),
+                            row.sourceType(),programSourceSha256))
+                    throw new IllegalArgumentException(
+                        "Forged, unordered or contradictory rename audit state");
+                prior=row.receipt().entry();
+            }
             rows=List.copyOf(rows);
         }
         /** CSV is an evidence export, never instructions for Apply. */
@@ -94,6 +123,7 @@ public final class HardwareFunctionRenameAudit {
         public String csvRevisionBound(HardwareAnalysisRevision captured,
                 Supplier<HardwareAnalysisRevision> current) {
             if(captured==null || current==null ||
+                    !captured.mc68332Selected() ||
                     captured.modificationNumber()!=programRevision ||
                     !java.util.Objects.equals(captured.sourceSha256(),
                         programSourceSha256))
@@ -135,23 +165,7 @@ public final class HardwareFunctionRenameAudit {
                 throw new IllegalArgumentException("Receipt key/entry mismatch");
             String name=observation.currentName();
             String type=observation.sourceType()==null?"UNKNOWN":observation.sourceType();
-            State state;
-            if(name==null)state=State.FUNCTION_MISSING;
-            // Legacy/current arbitrary matching labels (including lowercase
-            // "unknown" and 64 non-hex characters) are NOT proof of an
-            // executable SHA-256. Keep old receipts readable but unverified.
-            else if(!HardwareAnalysisRevision.isVerifiableExecutableSha256(
-                        receipt.sourceSha256()) ||
-                    !HardwareAnalysisRevision.isVerifiableExecutableSha256(
-                        programSourceSha256))
-                state=State.SOURCE_UNVERIFIED;
-            else if(!receipt.sourceSha256().equalsIgnoreCase(programSourceSha256))
-                state=State.SOURCE_CHANGED;
-            else if(!name.equals(receipt.afterName()))
-                state=State.NAME_CHANGED_AFTER_APPROVAL;
-            else if(!"USER_DEFINED".equals(type))
-                state=State.SOURCE_TYPE_CHANGED;
-            else state=State.CURRENT_APPROVED_NAME;
+            State state=classify(receipt,name,type,programSourceSha256);
             rows.add(new Row(receipt,name,type,state));
         }
         rows.sort(Comparator.comparingLong(row->row.receipt().entry()));
