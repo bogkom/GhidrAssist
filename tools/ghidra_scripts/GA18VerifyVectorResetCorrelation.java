@@ -86,12 +86,24 @@ public class GA18VerifyVectorResetCorrelation extends GhidraScript {
             // selection; selecting MC68332 enables only the new read-only
             // source co-location section, never runtime claims or Apply.
             String joinTitle="## RESET / indirect MMIO / VBR source co-location";
+            String vectorMmTitle=
+                "## MC68332 vector-handler SIMCR/MM low-byte MAY sources";
+            check(!text.contains(vectorMmTitle),
+                "generic CPU32 must not inherit selected MC68332 vector/MM sources");
             if(!text.contains(joinTitle) ||
                     !text.contains("Not evaluated: explicit MC68332 profile required"))
                 throw new IllegalStateException(
                     "GA18 RESET-MM-VBR FAIL: generic CPU32 device gate");
             Object selectedReport=analyze.invoke(instance,currentProgram,monitor,true);
             String selectedText=(String)markdown.get(selectedReport);
+            check(selectedText.contains(vectorMmTitle) &&
+                    selectedText.contains("MM0/MM1 are conditional alternatives") &&
+                    selectedText.contains("No vector pointer is added as a CALL edge") &&
+                    selectedText.contains("| 26 | 0x00000130 |") &&
+                    selectedText.contains("| 32 | 0x00000220 |") &&
+                    selectedText.contains("interior pointers (not analyzed as complete handlers): 1"),
+                "real synthetic selected MC68332 vector roots disclose bounded "+
+                "source MM evidence without invented ISR/CALL edges");
             if(!selectedText.contains(joinTitle) ||
                     !selectedText.contains("STATIC SAME-FUNCTION SOURCE CO-LOCATION ONLY") ||
                     !selectedText.contains("NOT proof of absent indirect MMIO or VBR") ||
