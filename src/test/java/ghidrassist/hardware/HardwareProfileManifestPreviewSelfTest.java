@@ -1,9 +1,17 @@
 package ghidrassist.hardware;
 
+import java.util.ArrayList;
+import java.util.List;
+
 public final class HardwareProfileManifestPreviewSelfTest {
     private HardwareProfileManifestPreviewSelfTest(){}
     private static void check(boolean condition,String reason){
         if(!condition)throw new AssertionError(reason);
+    }
+    private static void refusesPreview(Runnable task,String reason){
+        boolean refused=false;
+        try{task.run();}catch(IllegalArgumentException expected){refused=true;}
+        check(refused,reason);
     }
     private static final String SAMPLE="""
         GHIDRASSIST_PROFILE\t1
@@ -143,6 +151,101 @@ public final class HardwareProfileManifestPreviewSelfTest {
         bad(SAMPLE.replace("D-6 PDF page 220",
                 "PDF page 220; PDF page 220"),
             "reject a second page claim outside the manifest label grammar");
+        // Public Preview/records can be supplied without going through
+        // parse(), including to the read-only two-manifest comparator.
+        // They must still satisfy the exact same trusted STRUCTURAL gates.
+        var same=new HardwareProfileManifestPreview.Preview(
+            result.source(),result.modules(),result.registers(),
+            result.fields(),result.ambiguousPages());
+        check(same.equals(result) &&
+            HardwareProfileManifestComparison.compare(result,same)
+                .changedDefinitions()==0,
+            "Valid parsed inventory round-trips the public Preview boundary");
+        boolean refused=false;
+        try{new HardwareProfileManifestPreview.Source(
+            "MC68332","MC68332UM","https://bad@nxp.com/manual.pdf",
+            "UNKNOWN","UNKNOWN");}
+        catch(IllegalArgumentException expected){refused=true;}
+        check(refused,"Public Source cannot bypass the HTTPS userinfo gate");
+        refused=false;
+        try{new HardwareProfileManifestPreview.Module(
+            "SIM",0x0ff0,0x80,"PDF page 215");}
+        catch(IllegalArgumentException expected){refused=true;}
+        check(refused,"Public module aperture must remain inside 4 KiB");
+        refused=false;
+        try{new HardwareProfileManifestPreview.Register(
+            "SIM","BAD",0x0a01,16,"PDF page 215");}
+        catch(IllegalArgumentException expected){refused=true;}
+        check(refused,"Public register cannot skip natural word alignment");
+        refused=false;
+        try{new HardwareProfileManifestPreview.Field(
+            "SIMCR","BAD",0x100000000L,"PDF page 220");}
+        catch(IllegalArgumentException expected){refused=true;}
+        check(refused,"Public 64-bit field mask cannot bypass 32-bit source limit");
+        var source=result.source();
+        var modules=result.modules();
+        var registers=result.registers();
+        var fields=result.fields();
+        refusesPreview(()->new HardwareProfileManifestPreview.Preview(
+            source,modules,registers,fields,result.ambiguousPages()-1),
+            "Forged missing-page count rejected even with correct source rows");
+        var duplicateModules=new ArrayList<>(modules);
+        duplicateModules.add(new HardwareProfileManifestPreview.Module(
+            "sim",0x0400,0x80,"UNKNOWN"));
+        refusesPreview(()->new HardwareProfileManifestPreview.Preview(
+            source,duplicateModules,registers,fields,
+            result.ambiguousPages()+1),
+            "Case-colliding public module identities rejected");
+        var overlappingModules=new ArrayList<>(modules);
+        overlappingModules.add(new HardwareProfileManifestPreview.Module(
+            "OTHER",0x0a40,0x20,"UNKNOWN"));
+        refusesPreview(()->new HardwareProfileManifestPreview.Preview(
+            source,overlappingModules,registers,fields,
+            result.ambiguousPages()+1),
+            "Public module apertures must not overlap");
+        var missingModule=new ArrayList<>(modules);
+        missingModule.remove(0);
+        refusesPreview(()->new HardwareProfileManifestPreview.Preview(
+            source,missingModule,registers,fields,result.ambiguousPages()-1),
+            "Public register cannot borrow a missing module owner");
+        var overlappingRegisters=new ArrayList<>(registers);
+        overlappingRegisters.add(new HardwareProfileManifestPreview.Register(
+            "SIM","ALIAS",0x0a00,16,"UNKNOWN"));
+        refusesPreview(()->new HardwareProfileManifestPreview.Preview(
+            source,modules,overlappingRegisters,fields,
+            result.ambiguousPages()+1),
+            "Public source register collision cannot bypass parser");
+        var forgedOwner=new ArrayList<>(registers);
+        forgedOwner.set(0,new HardwareProfileManifestPreview.Register(
+            "QSM","SIMCR",0x0a00,16,"D-6 PDF page 220"));
+        refusesPreview(()->new HardwareProfileManifestPreview.Preview(
+            source,modules,forgedOwner,fields,result.ambiguousPages()),
+            "Public register must remain inside its canonical named module");
+        var overlappingFields=new ArrayList<>(fields);
+        overlappingFields.add(new HardwareProfileManifestPreview.Field(
+            "SIMCR","MM_ALIAS",0x0040,"UNKNOWN"));
+        refusesPreview(()->new HardwareProfileManifestPreview.Preview(
+            source,modules,registers,overlappingFields,result.ambiguousPages()+1),
+            "Overlapping bit masks cannot be introduced via public field list");
+        var overWidth=new ArrayList<>(fields);
+        overWidth.add(new HardwareProfileManifestPreview.Field(
+            "SIMCR","OUTSIDE",0x10000,"UNKNOWN"));
+        refusesPreview(()->new HardwareProfileManifestPreview.Preview(
+            source,modules,registers,overWidth,result.ambiguousPages()+1),
+            "Public bitfield mask must fit declared register width");
+        var missingRegister=new ArrayList<>(registers);
+        missingRegister.remove(0);
+        refusesPreview(()->new HardwareProfileManifestPreview.Preview(
+            source,modules,missingRegister,fields,result.ambiguousPages()-1),
+            "Public field must retain its actual register identity");
+        var nullModule=new ArrayList<>(modules);
+        nullModule.set(0,null);
+        refusesPreview(()->new HardwareProfileManifestPreview.Preview(
+            source,nullModule,registers,fields,result.ambiguousPages()),
+            "Null source module fails as invalid input, not NullPointerException");
+        refusesPreview(()->new HardwareProfileManifestPreview.Preview(
+            source,modules,registers,fields,99999),
+            "Unbounded public page-gap count cannot be forged");
         System.out.println("HardwareProfileManifestPreviewSelfTest OK");
     }
 }

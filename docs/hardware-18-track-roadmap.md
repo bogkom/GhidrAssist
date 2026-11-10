@@ -1,3 +1,19 @@
+## GA-06/18 — 2026-11-10: untrusted external profile Preview/Comparison constructor safety
+
+The tab-delimited external MCU manifest parser is read-only and the
+selected MC68332 device still requires explicit selection. Its public
+Source/Module/Register/Field/Preview records now independently enforce the
+same structured document, 4 KiB module aperture, aligned register ownership,
+non-overlapping names/ranges/masks, row bounds and exact ambiguous-page
+counts as parsing, so a direct Java record cannot falsely claim it passed
+structural verification. The read-only cross-manifest Report bounds
+source-difference evidence, detects duplicate/kind-mismatched findings and
+reconciles retained plus omitted rows. It does **not** prove PDF bytes,
+claimed SHA, physical bus map, real MCU identity or silicon differences.
+Java21 adversarial source-only checks, Java25 full Ghidra 12.1.4 PUBLIC
+build and synthetic CI on exact SHA required. GA-06/18 PARTIAL; GA-14
+deferred. No importer, automatic Apply, host/Supervisor/firmware actions.
+
 ## GA-06/10/16/18 — 2026-11-10: exact publisher field-source report coherence
 
 Read-only MC68332 source reports for (1) 15 SIMCR/SYNCR physical-page

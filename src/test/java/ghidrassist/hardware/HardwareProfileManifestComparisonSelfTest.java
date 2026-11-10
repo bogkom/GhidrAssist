@@ -1,5 +1,8 @@
 package ghidrassist.hardware;
 
+import java.util.ArrayList;
+import java.util.List;
+
 public final class HardwareProfileManifestComparisonSelfTest {
     private HardwareProfileManifestComparisonSelfTest() {}
     private static void ok(boolean value,String reason) {
@@ -21,6 +24,15 @@ public final class HardwareProfileManifestComparisonSelfTest {
         try{action.run();}
         catch(IllegalArgumentException expected){bad=true;}
         ok(bad,reason);
+    }
+    private static HardwareProfileManifestComparison.Report recounted(
+            HardwareProfileManifestComparison.Report r,int changed,
+            int omitted,List<HardwareProfileManifestComparison.Finding> findings) {
+        return new HardwareProfileManifestComparison.Report(
+            r.device(),r.leftManual(),r.rightManual(),
+            r.matchingClaimedPdfDigest(),r.equalDefinitions(),
+            changed,r.changedPageLabels(),r.leftOnly(),r.rightOnly(),
+            r.overlappingDifferentNames(),omitted,findings);
     }
     public static void main(String[] args){
         var a=HardwareProfileManifestPreview.parse(SAMPLE);
@@ -97,6 +109,46 @@ public final class HardwareProfileManifestComparisonSelfTest {
         try{capped.findings().clear();}
         catch(UnsupportedOperationException expected){immutable=true;}
         ok(immutable,"immutable comparison data");
+        // Comparison's public Report cannot bypass parser consistency
+        // by fabricating omitted rows, forged per-kind totals or repeated
+        // findings. A hash claim is not independent manual authentication.
+        ok(recounted(diff,diff.changedDefinitions(),0,diff.findings())
+                .equals(diff),
+            "Canonical complete comparison source report round-trips");
+        rejected(()->recounted(diff,diff.changedDefinitions()+1,
+                0,diff.findings()),
+            "Comparison cannot inflate definition differences without details");
+        rejected(()->recounted(diff,diff.changedDefinitions(),
+                1,diff.findings()),
+            "Comparison cannot claim omissions below 100 total findings");
+        rejected(()->recounted(diff,diff.changedDefinitions(),
+                0,diff.findings().subList(0,diff.findings().size()-1)),
+            "Undeclared missing comparison finding refused");
+        rejected(()->new HardwareProfileManifestComparison.Finding(
+            "MADE_UP","REGISTER:X","forged device claim"),
+            "Unsupported public finding kind cannot masquerade as report source");
+        rejected(()->new HardwareProfileManifestComparison.Finding(
+            "LEFT_ONLY","REGISTER:X","source\nMARKDOWN INJECTION"),
+            "Control characters cannot inject false comparison report rows");
+        rejected(()->new HardwareProfileManifestComparison.Report(
+            diff.device(),"x".repeat(257),diff.rightManual(),
+            false,diff.equalDefinitions(),diff.changedDefinitions(),
+            diff.changedPageLabels(),diff.leftOnly(),diff.rightOnly(),
+            diff.overlappingDifferentNames(),0,diff.findings()),
+            "Unbounded public comparison manual metadata denied");
+        var duplicateFinding=new ArrayList<>(capped.findings());
+        duplicateFinding.set(1,duplicateFinding.get(0));
+        rejected(()->recounted(capped,capped.changedDefinitions(),
+                capped.omittedFindings(),duplicateFinding),
+            "Repeated omitted-summary source finding cannot appear twice");
+        var withNull=new ArrayList<>(capped.findings());
+        withNull.set(0,null);
+        rejected(()->recounted(capped,capped.changedDefinitions(),
+                capped.omittedFindings(),withNull),
+            "Null comparison row fails closed with explicit invalid input");
+        rejected(()->recounted(capped,capped.changedDefinitions(),
+                capped.omittedFindings()+1,capped.findings()),
+            "Omitted source discrepancy count must equal discarded rows");
         System.out.println("HardwareProfileManifestComparisonSelfTest OK");
     }
 }

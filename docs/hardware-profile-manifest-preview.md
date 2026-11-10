@@ -61,3 +61,39 @@ preview. Unexpected carriage returns **inside** TSV records are rejected;
 standard CRLF line endings remain supported. This prevents misleading host
 labels in UI reports and silent record splicing, not validation of a PDF
 edition, checksum or page contents. No profile is imported into Ghidra.
+
+## 2026-11-10 — fail-closed public Preview/Comparison source boundary (GA-06)
+
+`HardwareProfileManifestPreview.parse` already checked the untrusted
+tab-delimited manifest, but its public `Source`, `Module`, `Register`,
+`Field` and `Preview` Java records could be constructed directly
+without parsing. The read-only two-profile comparator previously accepted
+that forged `Preview` as a validated external inventory. A new *shared*
+public-record structural gate now checks:
+
+- document identifier, exact printable HTTPS URL without userinfo, bounded
+  edition and claimed digest (still NOT authenticated);
+- bounded 4 KiB module apertures, non-overlapping case-insensitive
+  module and register namespaces, natural 8/16/32-bit register alignment,
+  exact canonical module owner and collision-free register extents;
+- case-insensitive field identity, mask width and overlap per register,
+  explicit existing owner and bounded source label;
+- total 1024-row budget, no null rows and a **recomputed** count of missing
+  or ambiguous PDF page claims. Direct constructor callers can no longer
+  invent a smaller uncertainty count or "VALIDATED STRUCTURE" from
+  contradictory records.
+
+`HardwareProfileManifestComparison.Report` now independently checks
+bounded metadata, all five discrepancy-count categories, exact
+retained+omitted findings accounting and duplicate/contradictory findings.
+A report still contains **claims** about two supplied manifest inventories,
+not verified hardware differences, PDF bytes or a trusted silicon profile.
+
+Java 21 tests exercise the parser **and direct public construction**,
+reordered/duplicate modules, overlapping registers, register/field ownership,
+mask width and missing source pages, plus forged comparison totals, duplicate
+details and output injection. Full Ghidra 12.1.4 PUBLIC / Java 25 extension
+build and applicable isolated CI remain exact-SHA gates. These changes
+are read-only: **no external profile is imported**, no active MCU inferred,
+and no symbols/blocks/firmware/OAuth/production Ghidra project are modified.
+GA-06 remains PARTIAL.
