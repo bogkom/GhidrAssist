@@ -156,7 +156,15 @@ public final class HardwareTwoHopRegisterFlow {
      */
     private static boolean sourceSuccessors(HardwareDataflow.Step step) {
         int size=step.successors.size();
-        if("RTS".equals(step.mnemonic))return size==0 &&
+        // Opcode/kind disagreement must never reinterpret a branch as
+        // a linear register clobber or hide a CPU32 return.
+        if(step.kind!=HardwareDataflow.Kind.OTHER &&
+                step.kind!=HardwareDataflow.Kind.CALL_BARRIER &&
+                ("RTS".equals(step.mnemonic) ||
+                 BRANCH.matcher(step.mnemonic).matches()))
+            return false;
+        if("RTS".equals(step.mnemonic))return
+            step.kind==HardwareDataflow.Kind.OTHER && size==0 &&
             (step.sideEffectRegisters.isEmpty() ||
                 step.sideEffectRegisters.equals(Set.of("A7")));
         if(step.kind==HardwareDataflow.Kind.CALL_BARRIER)
