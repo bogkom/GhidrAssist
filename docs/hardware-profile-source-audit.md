@@ -22,3 +22,19 @@ disposable project must confirm that the new source metadata audit
 is non-mutating, does not crowd out the initialization evidence and
 is not shown as evidence of an actual connected MCU. No local tests
 are claimed by GitHub Actions.
+
+## 2026-11-10 — fail-closed structural source audit
+
+The independent GA-06 profile audit now rejects unbounded (>4096) raw
+register specifications before its pairwise overlap scan. Empty or
+malformed register/module identities and misaligned 16-/32-bit addresses
+are explicit issues even when the record does not overlap another address.
+The public coverage summary requires claimed paginated + missing-page
+register counts to equal the total catalog, and missing field citations
+cannot exceed total fields. Any structural issue, including INVALID and
+MISALIGNED_REGISTER, makes collision-free metadata FALSE; source-page
+coverage remains a separate, unverified PDF metadata claim, not a
+hardware-map proof. Read-only synthetic Java21 regressions and the
+full Java25/Ghidra 12.1.4 PUBLIC build guard the change. The existing
+selected MC68332 profile remains explicitly chosen, not auto-detected;
+no user project or Review/Apply action is altered.
