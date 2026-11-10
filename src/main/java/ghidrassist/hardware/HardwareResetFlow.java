@@ -199,7 +199,8 @@ public final class HardwareResetFlow {
      */
     public static Summary trace(long root,Collection<HardwareCallEffects.FunctionNode> nodes,
             Collection<Long> evidenceFunctions,int maxDepth,int maxNodes,int maxEvidence) {
-        if(root<0 || nodes==null || evidenceFunctions==null ||
+        if(root<0 || root>HardwareCallEffects.MAX_CPU32_ADDRESS ||
+                nodes==null || evidenceFunctions==null ||
                 maxDepth<0 || maxDepth>MAX_DEPTH ||
                 maxNodes<1 || maxNodes>MAX_NODES ||
                 maxEvidence<1 || maxEvidence>MAX_EVIDENCE ||
@@ -216,7 +217,7 @@ public final class HardwareResetFlow {
                 throw new IllegalArgumentException("Unbounded direct-call edges");
         }
         for(Long id:evidenceFunctions)
-            if(id==null || id<0)
+            if(id==null || id<0 || id>HardwareCallEffects.MAX_CPU32_ADDRESS)
                 throw new IllegalArgumentException("Invalid evidence function");
         if(!graph.containsKey(root))
             return new Summary(false,0,true,false,false,List.of(),Set.of());

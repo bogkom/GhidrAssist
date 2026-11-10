@@ -292,6 +292,24 @@ public final class HardwareResetFlowSelfTest {
             java.util.Arrays.asList((Long)null),1,3,1);}
         catch(IllegalArgumentException expected){badLimit=true;}
         ok(badLimit,"reject null source evidence function");
+        long cpu32Overflow=0x1_0000_0000L;
+        java.util.List<Runnable> invalidResetSources=java.util.List.of(
+            ()->HardwareResetFlow.trace(cpu32Overflow,
+                List.of(fn(0,false,false,false)),List.of(),1,2,2),
+            ()->HardwareResetFlow.trace(0,
+                List.of(fn(0,false,false,false)),List.of(cpu32Overflow),1,2,2));
+        for(Runnable probe:invalidResetSources) {
+            boolean refused=false;
+            try {probe.run();}
+            catch(IllegalArgumentException expected){refused=true;}
+            ok(refused,"RESET cannot publish source identities beyond unsigned CPU32");
+        }
+        var u32Reset=HardwareResetFlow.trace(0xffffffffL,
+            List.of(fn(0xffffffffL,true,false,false)),
+            List.of(0xffffffffL),0,1,1);
+        ok(u32Reset.rootRecognized() && u32Reset.visitedFunctions()==1 &&
+            u32Reset.evidence().size()==1,
+            "full unsigned U32 RESET identity stays valid without MC68332 remapping");
         System.out.println("HardwareResetFlowSelfTest OK");
     }
 }

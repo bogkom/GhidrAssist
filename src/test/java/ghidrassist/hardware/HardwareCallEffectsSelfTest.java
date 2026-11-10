@@ -318,6 +318,29 @@ public final class HardwareCallEffectsSelfTest {
                 null,null,null);
         }catch(IllegalArgumentException expected){wrongKind=true;}
         ok(wrongKind,"contradictory source category cannot masquerade as STORE");
+        // CPU32 source identities come from 32-bit Program addresses,
+        // not arbitrary unsigned values stored in a Java long. Reject
+        // forged CALL edges before constructing a partial source report.
+        long wideAddressProbe=0x1_0000_0000L;
+        java.util.List<Runnable> wideAddressProbeInputs=java.util.List.of(
+            ()->n(wideAddressProbe,false,false,false),
+            ()->n(0,false,false,false,wideAddressProbe),
+            ()->HardwareCallEffects.inspect(wideAddressProbe,List.of(n(0,false,false,false)),1,2),
+            ()->new HardwareCallEffects.SourceWitness(
+                HardwareCallEffects.WitnessKind.MEMORY_STORE,List.of(0L,wideAddressProbe)),
+            ()->new HardwareCallEffects.Detailed(wideAddressProbe,evidenced.summary(),
+                null,null,null,null));
+        for(Runnable probe:wideAddressProbeInputs) {
+            boolean rejected=false;
+            try {probe.run();}
+            catch(IllegalArgumentException expected){rejected=true;}
+            ok(rejected,"oversized CPU32 source identity rejected before publication");
+        }
+        var boundary=HardwareCallEffects.inspect(0xffffffffL,
+            List.of(n(0xffffffffL,true,false,false)),0,1);
+        ok(boundary.summary().possibleMemoryStore() &&
+            boundary.storeWitness().chain().equals(List.of(0xffffffffL)),
+            "unsigned 32-bit CPU32 upper boundary remains a valid source identity");
         System.out.println("HardwareCallEffectsSelfTest OK");
     }
 }

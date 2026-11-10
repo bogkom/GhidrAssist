@@ -17,15 +17,18 @@ import java.util.Set;
 public final class HardwareCallEffects {
     private HardwareCallEffects() {}
     public static final int MAX_SOURCE_FUNCTIONS=50_000;
+    /** CPU32 Program address identities are unsigned 32-bit, not Java longs. */
+    public static final long MAX_CPU32_ADDRESS=0xffffffffL;
+    private static boolean address(long id){return id>=0 && id<=MAX_CPU32_ADDRESS;}
     public static final int MAX_SOURCE_EDGES=200_000;
     public static final int MAX_REQUESTED_FUNCTIONS=50_000;
 
     public record FunctionNode(long entry,boolean memoryStore,boolean vbrWrite,
             boolean unresolvedFlow,List<Long> directCallees) {
         public FunctionNode {
-            if(entry<0 || directCallees==null ||
+            if(!address(entry) || directCallees==null ||
                     directCallees.stream().anyMatch(callee ->
-                        callee==null || callee<0))
+                        callee==null || !address(callee)))
                 throw new IllegalArgumentException("Invalid call graph node");
             // CALL targets are identities, not execution or source-PC
             // order. Canonical adjacency keeps both finite BFS search
@@ -62,7 +65,7 @@ public final class HardwareCallEffects {
                     chain.size()>MAX_SOURCE_FUNCTIONS+1)
                 throw new IllegalArgumentException("Invalid static source witness");
             for(Long entry:chain)
-                if(entry==null || entry<0)
+                if(entry==null || !address(entry))
                     throw new IllegalArgumentException("Invalid witness address");
             chain=List.copyOf(chain);
         }
@@ -72,7 +75,7 @@ public final class HardwareCallEffects {
             SourceWitness vbrWitness,SourceWitness observedUnknownWitness,
             SourceWitness frontierWitness) {
         public Detailed {
-            if(root<0 || summary==null ||
+            if(!address(root) || summary==null ||
                     !valid(root,storeWitness,WitnessKind.MEMORY_STORE) ||
                     !valid(root,vbrWitness,WitnessKind.MOVEC_VBR) ||
                     !valid(root,observedUnknownWitness,WitnessKind.UNKNOWN_FLOW,
@@ -160,7 +163,7 @@ public final class HardwareCallEffects {
     /** Same finite BFS and cycle scan as summarize(), with typed source paths. */
     public static Detailed inspect(long root,Collection<FunctionNode> nodes,
             int maxDepth,int maxFunctions) {
-        if(root<0 || nodes==null || nodes.size()>MAX_SOURCE_FUNCTIONS ||
+        if(!address(root) || nodes==null || nodes.size()>MAX_SOURCE_FUNCTIONS ||
                 maxDepth<0 || maxDepth>MAX_SOURCE_FUNCTIONS ||
                 maxFunctions<1 || maxFunctions>MAX_REQUESTED_FUNCTIONS)
             throw new IllegalArgumentException("Bad bounded call graph limits");
