@@ -25,12 +25,60 @@ public final class HardwareBitfieldDecoder {
     }
 
     public record FieldEvidence(String name, int mask, int value,
-            String sourcePage, boolean writeOnceAfterReset) {}
+            String sourcePage, boolean writeOnceAfterReset) {
+        public FieldEvidence {
+            // A public record must not turn a forged zero mask into a
+            // "decoded" field (trailingZeros(0) is 32 in Java), or
+            // silently promote an ambiguous PDF page to sourced evidence.
+            if(name==null || !name.matches("[A-Za-z][A-Za-z0-9_]{0,63}") ||
+                    mask==0 || value<0 ||
+                    (Integer.toUnsignedLong(value) &
+                        ~Integer.toUnsignedLong(
+                            mask >>> Integer.numberOfTrailingZeros(mask)))!=0 ||
+                    !hasConcretePdfPageClaim(sourcePage))
+                throw new IllegalArgumentException(
+                    "Invalid or unsourced bitfield evidence");
+        }
+    }
 
     public record Result(Status status, String profile, String register,
             Integer observedWord, int widthBits, List<FieldEvidence> fields,
             long unspecifiedMask) {
         public Result {
+            if(status==null || profile==null || register==null || fields==null ||
+                    fields.contains(null))
+                throw new IllegalArgumentException("Incomplete bitfield result");
+            if(status==Status.DECODED) {
+                if((widthBits!=8 && widthBits!=16 && widthBits!=32) ||
+                        profile.isBlank() || register.isBlank() ||
+                        observedWord==null || fields.isEmpty())
+                    throw new IllegalArgumentException(
+                        "Decoded fields require a complete register word");
+                long whole=(1L<<widthBits)-1;
+                long observed=Integer.toUnsignedLong(observedWord);
+                if((observed & ~whole)!=0)
+                    throw new IllegalArgumentException(
+                        "Decoded word is outside the claimed register width");
+                long documented=0;
+                java.util.Set<String> names=new java.util.HashSet<>();
+                for(FieldEvidence field:fields) {
+                    long mask=Integer.toUnsignedLong(field.mask());
+                    if((mask & ~whole)!=0 || (mask & documented)!=0 ||
+                            !names.add(field.name().toUpperCase(Locale.ROOT)) ||
+                            field.value()!=
+                                ((observedWord & field.mask()) >>>
+                                    Integer.numberOfTrailingZeros(field.mask())))
+                        throw new IllegalArgumentException(
+                            "Contradictory bitfield mask/value/source inventory");
+                    documented|=mask;
+                }
+                if(unspecifiedMask!=(whole & ~documented))
+                    throw new IllegalArgumentException(
+                        "Undocumented bits were silently claimed or dropped");
+            }else if(!fields.isEmpty() || unspecifiedMask!=0) {
+                throw new IllegalArgumentException(
+                    "Undecoded result cannot publish interpreted fields");
+            }
             fields = List.copyOf(fields);
         }
 
