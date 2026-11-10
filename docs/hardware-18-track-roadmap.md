@@ -1,3 +1,23 @@
+## GA-01/02/03/11/12/18 — 2026-11-10: typed RESET/indirect-JSR/MOVEC report coherence
+
+The read-only selected-MC68332 same-function indirect JSR / SIMCR-MM
+MAY / MOVEC-to-VBR publication now fail-closes its **public Pair and Result
+constructors**, not only the source inventory builder. All displayed
+function, JSR PC, computed target and MOVEC PC identifiers must be even,
+bounded MCU24 source coordinates, and a JSR cannot share its decoded PC
+with MOVEC. Public Result pages require exact inventory-product counts,
+complete bounded offset/limit windows, exact cursor/has-more and omission
+accounting, canonical nonduplicate source order, consistent same-PC
+target/MM and MOVEC/base witnesses, disjoint JSR/MOVEC instruction sets,
+and one RESET relation/incompleteness claim per function. Canonical pages
+created by the actual static source solver are unchanged. Source-only
+adversarial Java21 regressions, full Java25 Ghidra 12.1.4 PUBLIC build
+and genuine isolated synthetic headless CI are required at exact commit.
+This prevents forged/contradictory **public report claims**, but is not
+source authentication, RESET instruction execution, latched SIMCR MM,
+an active VBR/ISR or physical bus mapping. GA-01/02/03/11/12/18 PARTIAL;
+GA-14 deferred.
+
 ## GA-08/12/13/18 — 2026-11-10: durable pointer datatype and first-use receipt v2
 
 The previously live-checked Function-DB pointer DataType path/length and
