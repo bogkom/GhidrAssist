@@ -7,6 +7,8 @@ on:
       - 'src/main/java/ghidrassist/hardware/HardwareBitfieldSourceLedger.java'
       - 'src/main/java/ghidrassist/hardware/HardwareBitfieldPageWitness.java'
       - 'src/main/java/ghidrassist/hardware/HardwareBitfieldLayoutWitness.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareManualFieldExcerptEvidence.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareManualFieldExcerptEvidenceSelfTest.java'
       - 'src/main/java/ghidrassist/hardware/HardwareSimD2RegisterWitness.java'
       - 'src/test/java/ghidrassist/hardware/HardwareSimD2RegisterWitnessSelfTest.java'
       - 'src/main/java/ghidrassist/hardware/HardwareSimChipSelectTableWitness.java'
@@ -80,12 +82,14 @@ jobs:
             src/main/java/ghidrassist/hardware/HardwareBitfieldSourceLedger.java \
             src/main/java/ghidrassist/hardware/HardwareBitfieldPageWitness.java \
             src/main/java/ghidrassist/hardware/HardwareBitfieldLayoutWitness.java \
+            src/main/java/ghidrassist/hardware/HardwareManualFieldExcerptEvidence.java \
             src/main/java/ghidrassist/hardware/HardwareProfileAudit.java \
             src/main/java/ghidrassist/hardware/HardwareSimD2RegisterWitness.java \
             src/test/java/ghidrassist/hardware/HardwareSimD2RegisterWitnessSelfTest.java \
             src/main/java/ghidrassist/hardware/HardwareSimChipSelectTableWitness.java \
             src/test/java/ghidrassist/hardware/HardwareSimChipSelectTableWitnessSelfTest.java \
             src/test/java/ghidrassist/hardware/HardwareBitfieldLayoutWitnessSelfTest.java \
+            src/test/java/ghidrassist/hardware/HardwareManualFieldExcerptEvidenceSelfTest.java \
             src/test/java/ghidrassist/hardware/HardwareBitfieldPageWitnessSelfTest.java
           java -cp "$RUNNER_TEMP/mc68332-field-witness" \
             ghidrassist.hardware.HardwareBitfieldPageWitnessSelfTest \
@@ -114,3 +118,14 @@ jobs:
             ghidrassist.hardware.HardwareSimD2RegisterWitnessSelfTest \
             "$RUNNER_TEMP/page-218.txt" "$RUNNER_TEMP/page-219.txt"
           echo 'SIM D-2 REGISTER ROW/ACCESS/BYTE WIDTH PASS; no MM/CS execution inferred'
+
+          # Independent source-content check: pinned original publisher
+          # bytes and 265-page PDF were verified above before this point.
+          # Unlike a bare field token, every one of the 15 profile fields
+          # must have a reviewed heading and nearby meaning on the exact
+          # description folio; the separate diagram still fixes bit masks.
+          java -cp "$RUNNER_TEMP/mc68332-field-witness" \
+            ghidrassist.hardware.HardwareManualFieldExcerptEvidenceSelfTest \
+            "$RUNNER_TEMP/page-219.txt" "$RUNNER_TEMP/page-220.txt" \
+            "$RUNNER_TEMP/page-221.txt"
+          echo 'PINNED PUBLISHER PAGE+EDITION+EXCERPT 15-FIELD SOURCE PASS; source only'
