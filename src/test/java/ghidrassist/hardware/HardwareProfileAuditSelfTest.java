@@ -76,6 +76,68 @@ public final class HardwareProfileAuditSelfTest {
         try{HardwareProfileAudit.overlaps(null);}
         catch(IllegalArgumentException expected){fail=true;}
         ok(fail,"missing catalog must be error, not empty validation");
+        // Pure source audit must never label a malformed isolated
+        // register as collision-free just because no second address overlaps.
+        var singleInvalid=HardwareProfileAudit.overlaps(List.of(
+            reg("SIM","",0xa00,16)));
+        ok(singleInvalid.stream().anyMatch(x->
+                x.category().equals("INVALID_IDENTIFIER")),
+            "empty register names are structurally invalid");
+        var blankModule=HardwareProfileAudit.overlaps(List.of(
+            reg("","REG_A",0xa00,16)));
+        ok(blankModule.stream().anyMatch(x->
+                x.category().equals("INVALID_IDENTIFIER")),
+            "blank MCU module id is not trusted profile metadata");
+        var oddWord=HardwareProfileAudit.overlaps(List.of(
+            reg("SIM","ODD_WORD",0xa01,16)));
+        var oddLong=HardwareProfileAudit.overlaps(List.of(
+            reg("SIM","ODD_LONG",0xa02,32)));
+        ok(oddWord.stream().anyMatch(x->
+                x.category().equals("MISALIGNED_REGISTER")) &&
+           oddLong.stream().anyMatch(x->
+                x.category().equals("MISALIGNED_REGISTER")),
+            "word and long registers must be naturally aligned");
+        var cleanByte=HardwareProfileAudit.overlaps(List.of(
+            reg("SIM","BYTE_A",0xa01,8)));
+        ok(cleanByte.isEmpty(),
+            "8-bit register at odd address is valid");
+        var badShapeReport=new HardwareProfileAudit.Summary(
+            "SYNTHETIC",true,1,1,1,0,0,0,singleInvalid);
+        ok(!badShapeReport.collisionFree(),
+            "INVALID issue alone prevents collision-free claim");
+        var badAlignReport=new HardwareProfileAudit.Summary(
+            "SYNTHETIC",true,1,1,0,1,0,0,oddWord);
+        ok(!badAlignReport.collisionFree() &&
+           badAlignReport.markdown().contains("collision-free metadata: false"),
+            "alignment failures must be visible in markdown");
+        var malformedTotals=new java.util.ArrayList<Runnable>();
+        malformedTotals.add(()->new HardwareProfileAudit.Summary(
+            "SYNTHETIC",true,1,1,1,1,0,0,List.of()));
+        malformedTotals.add(()->new HardwareProfileAudit.Summary(
+            "SYNTHETIC",true,1,1,1,0,1,2,List.of()));
+        malformedTotals.add(()->new HardwareProfileAudit.Summary(
+            "SYNTHETIC",true,1,-1,0,0,0,0,List.of()));
+        malformedTotals.add(()->new HardwareProfileAudit.Summary(
+            "SYNTHETIC",true,1,1,0,1,0,0,
+            java.util.Arrays.asList((HardwareProfileAudit.Issue)null)));
+        for(Runnable forged:malformedTotals) {
+            boolean refused=false;
+            try {forged.run();}
+            catch(IllegalArgumentException expected){refused=true;}
+            ok(refused,
+                "forged profile coverage totals or malformed issue inventory fail closed");
+        }
+        boolean oversizedAuditRejected=false;
+        try {
+            HardwareProfileAudit.overlaps(
+                java.util.Collections.nCopies(
+                    HardwareProfileAudit.MAX_AUDIT_REGISTERS+1,
+                    reg("SIM","REG_A",0xa00,16)));
+        }catch(IllegalArgumentException expected){
+            oversizedAuditRejected=true;
+        }
+        ok(oversizedAuditRejected,
+            "unbounded external pairwise register audit input is rejected");
         System.out.println("HardwareProfileAuditSelfTest OK");
     }
 }

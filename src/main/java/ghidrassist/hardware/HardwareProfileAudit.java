@@ -14,6 +14,8 @@ import java.util.Set;
  */
 public final class HardwareProfileAudit {
     private HardwareProfileAudit() {}
+    /** Bound an externally supplied audit before its pairwise overlap scan. */
+    public static final int MAX_AUDIT_REGISTERS=4096;
 
     public record RegisterSpec(String module,String name,int offset,int widthBits,
             String sourceUrl,String sourcePage) {}
@@ -22,10 +24,25 @@ public final class HardwareProfileAudit {
     public record Summary(String profileId,boolean concreteDevice,int modules,
             int registerCount,int paginated,int missingPage,int fieldCount,
             int fieldPagesMissing,List<Issue> issues) {
-        public Summary { issues=List.copyOf(issues); }
+        public Summary {
+            // Public coverage figures must agree with the total metadata
+            // inventory. Numeric page labels remain unauthenticated claims.
+            if(profileId==null || profileId.isBlank() || modules<0 ||
+                    registerCount<0 || paginated<0 || missingPage<0 ||
+                    (long)paginated+missingPage!=registerCount ||
+                    fieldCount<0 || fieldPagesMissing<0 ||
+                    fieldPagesMissing>fieldCount || issues==null ||
+                    issues.stream().anyMatch(java.util.Objects::isNull))
+                throw new IllegalArgumentException(
+                    "Contradictory profile citation coverage inventory");
+            issues=List.copyOf(issues);
+        }
         public boolean collisionFree() {
-            return issues.stream().noneMatch(x->x.category().contains("COLLISION") ||
-                x.category().contains("OUTSIDE") || x.category().contains("WIDTH"));
+            // Invalid/empty identities and misalignment are structural
+            // failures too, even when no second register overlaps.
+            // The issues inventory only contains structural findings;
+            // missing/unverified PDF citations are counted separately.
+            return issues.isEmpty();
         }
         public String markdown() {
             return "## Profile source-coverage audit (metadata only)\n\n" +
@@ -53,7 +70,8 @@ public final class HardwareProfileAudit {
 
     /** Pure collision validator supports synthetic vendor-import test vectors. */
     public static List<Issue> overlaps(List<RegisterSpec> specs) {
-        if(specs==null)throw new IllegalArgumentException("Null register catalog");
+        if(specs==null || specs.size()>MAX_AUDIT_REGISTERS)
+            throw new IllegalArgumentException("Invalid bounded register catalog");
         List<Issue> issues=new ArrayList<>();
         Set<String> names=new HashSet<>();
         for(int i=0;i<specs.size();i++) {
@@ -62,6 +80,14 @@ public final class HardwareProfileAudit {
                 issues.add(new Issue("UNKNOWN","INVALID","Missing register/module metadata"));
                 continue;
             }
+            if(!a.name().matches("[A-Za-z][A-Za-z0-9_]{0,63}") ||
+                    !a.module().matches("[A-Za-z][A-Za-z0-9_]{0,63}"))
+                issues.add(new Issue(a.name(),"INVALID_IDENTIFIER",
+                    "Register or module identity is empty/malformed"));
+            if((a.widthBits()==16 || a.widthBits()==32) &&
+                    a.offset()>=0 && a.offset()%(a.widthBits()/8)!=0)
+                issues.add(new Issue(a.name(),"MISALIGNED_REGISTER",
+                    "Register word/long address is not naturally aligned"));
             if(!names.add(a.name().toUpperCase(Locale.ROOT)))
                 issues.add(new Issue(a.name(),"NAME_COLLISION","Duplicate register name"));
             if(a.widthBits()!=8 && a.widthBits()!=16 && a.widthBits()!=32)
