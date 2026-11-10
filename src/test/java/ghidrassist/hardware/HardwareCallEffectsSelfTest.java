@@ -341,6 +341,52 @@ public final class HardwareCallEffectsSelfTest {
         ok(boundary.summary().possibleMemoryStore() &&
             boundary.storeWitness().chain().equals(List.of(0xffffffffL)),
             "unsigned 32-bit CPU32 upper boundary remains a valid source identity");
+        var forgedKinds=new java.util.ArrayList<Runnable>();
+        forgedKinds.add(()->new HardwareCallEffects.Summary(
+            true,false,false,false,false,0));
+        forgedKinds.add(()->new HardwareCallEffects.Summary(
+            false,false,false,true,false,2));
+        forgedKinds.add(()->new HardwareCallEffects.Summary(
+            false,false,false,false,true,2));
+        forgedKinds.add(()->new HardwareCallEffects.Detailed(
+            0L,new HardwareCallEffects.Summary(true,false,false,false,false,1),
+            new HardwareCallEffects.SourceWitness(
+                HardwareCallEffects.WitnessKind.MEMORY_STORE,List.of(0L,1L)),
+            null,null,null));
+        forgedKinds.add(()->new HardwareCallEffects.Detailed(
+            0L,new HardwareCallEffects.Summary(false,true,false,false,false,1),
+            null,new HardwareCallEffects.SourceWitness(
+                HardwareCallEffects.WitnessKind.MOVEC_VBR,List.of(0L,1L)),
+            null,null));
+        forgedKinds.add(()->new HardwareCallEffects.Detailed(
+            0L,new HardwareCallEffects.Summary(false,false,true,false,false,1),
+            null,null,new HardwareCallEffects.SourceWitness(
+                HardwareCallEffects.WitnessKind.UNKNOWN_FLOW,List.of(0L,1L)),
+            null));
+        forgedKinds.add(()->new HardwareCallEffects.Detailed(
+            0L,new HardwareCallEffects.Summary(false,false,true,false,true,1),
+            null,null,null,new HardwareCallEffects.SourceWitness(
+                HardwareCallEffects.WitnessKind.DEPTH_CUTOFF,
+                List.of(0L,1L,2L))));
+        for(Runnable badSource:forgedKinds){
+            boolean denied=false;
+            try{badSource.run();}
+            catch(IllegalArgumentException expected){denied=true;}
+            ok(denied,
+                "CALL effect source paths/flags cannot exceed the observed function budget");
+        }
+        var missingRoot=HardwareCallEffects.inspect(0L,List.of(),0,1);
+        ok(missingRoot.summary().visited()==0 &&
+            missingRoot.observedUnknownWitness().kind()==
+                HardwareCallEffects.WitnessKind.MISSING_TARGET &&
+            missingRoot.observedUnknownWitness().chain().equals(List.of(0L)),
+            "missing RESET/CALL function root remains an honest zero-visit unknown");
+        var limitedRoot=HardwareCallEffects.inspect(0L,
+            List.of(n(0L,false,false,false,1L)),0,1);
+        ok(limitedRoot.frontierWitness().kind()==
+                HardwareCallEffects.WitnessKind.DEPTH_CUTOFF &&
+            limitedRoot.frontierWitness().chain().equals(List.of(0L,1L)),
+            "root-only visit can explain one explicitly uninspected frontier target");
         System.out.println("HardwareCallEffectsSelfTest OK");
     }
 }
