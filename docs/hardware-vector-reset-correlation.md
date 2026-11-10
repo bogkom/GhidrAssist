@@ -272,3 +272,23 @@ out-of-model witness tokens. Full Java25/Ghidra 12.1.4 PUBLIC build and
 isolated genuine headless synthetic gates must pass at the PR HEAD before
 merge. No runtime RESET, ISR, VBR, latched MM, MMIO execution, physical bus
 map, Ghidra database write or Review/Apply authority is established.
+
+## 2026-11-10 — MC68332 handler witness visits must cover observed sources
+
+MC68332 vector-handler SIMCR/MM source rows now independently validate
+that the published number of examined function nodes can account for each
+typed source chain. Every visited path entry must fit the count; a
+MM_SOURCE, STORE_ALIAS, or inspected UNKNOWN_FLOW at the root
+requires at least one visit. MISSING_TARGET, DEPTH_CUTOFF,
+NODE_CUTOFF, and BATCH_CUTOFF end at an uninspected function, so their
+last entry is correctly excluded. A missing root and an exhausted batch
+before the root may legitimately report zero visits. An observed cycle
+cannot exist without any visited function.
+
+This consistency gate rejects contradictory public source reports;
+it does not prove witness authenticity against actual Ghidra bytes,
+executable ISR dispatch, active VBR, SIMCR write acceptance or a latched
+MM value. Java21 regressions include forged zero-visit source paths,
+under-counted multi-hop paths, valid zero-visit missing/batch examples
+and skipped-frontier bounds. Full Java25 extension build and real isolated
+synthetic Ghidra CI remain integration requirements at exact SHA.
