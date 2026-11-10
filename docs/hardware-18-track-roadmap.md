@@ -1,5 +1,53 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
+## GA-02/03/12/18 — 2026-11-10: deterministic bounded CALL source traversal and CFG-bound durable evidence
+
+The read-only `HardwareInterproceduralMmEffects` solver now canonicalizes
+each function's direct-CALL target adjacency by unsigned nonnegative
+function entry before allocating its finite shared exploration budget.
+Target duplicates remain representable but cannot consume extra unique
+scheduled nodes. Previously the subset selected under an exhausted
+node/edge budget could depend on incidental Ghidra reference enumeration:
+a visible static SIMCR/MM MAY candidate might appear or disappear even
+when the graph and maximum budget were identical. Canonical ordering makes
+the bounded source inventory reproducible across insertion orders; its
+sorted address priority does **not** assert caller invocation order,
+branch feasibility, runtime SIMCR writes or active MM. Source nodes omitted
+by the depth, function or batch limits are still `UNKNOWN/LIMITED`,
+never negative hardware evidence.
+
+GA-12 opt-in per-function durable fixed points and intermediate worklists
+now undergo **independent semantic source-binding validation** after the
+existing exact full-Program / Ghidra Listing / installed extension JAR
+input fingerprint, deterministic Step hash, and disk envelope SHA-256
+checks. This validates a bounded CFG rooted at the exact function entry
+and the set of **statically source-reachable** instruction PCs.
+Every decoded complete fixed point must match the number of reachable
+source nodes, each STORE/VBR instruction's exact PC/kind/width/register,
+the full set of reachable effect sites, pointer-state PCs, and the
+24-bit modeled register/MMIO/VBR range. Each intermediate worklist node
+and pending PC must also be a source-reachable CFG node, including when a
+synthetic disconnected Step is present in the same function inventory.
+Both `load` and `save` fail closed, so locally rehashed but semantically
+contradictory records cannot masquerade as valid cross-JVM source evidence
+or replace a valid disk slot. No `ObjectInputStream`, AI runtime model,
+global database transaction, review token or new mutation API is added.
+
+Java 21 deterministic regression covers reversed and duplicate CALL
+target adjacency under a tight budget, positive/omitted MAY evidence,
+cold versus resumed verified post-CALL register-to-MMIO paths,
+correctly keyed durable restores and forged VBR-for-STORE, wrong width,
+off-graph PC, disconnected graph node, impossible 24-bit register/MMIO,
+and internally inconsistent reached-node counts. It also recomputes the
+outer **valid** SHA-256 for deliberately inconsistent binary snapshots:
+checksums prove integrity, **not** authorship or causal truth. Existing
+GitHub Actions Java 25 full extension build and isolated synthetic Ghidra
+12.1.4 PUBLIC headless tests remain the native integration gates.
+Any native CFG changes occur only on generated synthetic data in CI;
+no ECU411 firmware, original Ghidra projects, user profile, OAuth or
+stopped Wyse/Precision/Supervisor process is involved. GA-02/03/12/18
+remain PARTIAL and GA-14 remains deferred.
+
 ## GA-01/02/03/11/18 — 2026-11-10: MC68332-only RESET source address gate and independent initial SSP evidence
 
 The existing static image-zero CPU32 RESET vector reader keeps its
