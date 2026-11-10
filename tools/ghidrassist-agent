@@ -2,6 +2,7 @@
 """GhidrAssist local Automation API v3 client; standard library only."""
 import argparse
 import hashlib
+import math
 import tempfile
 import json
 import os
@@ -10,6 +11,49 @@ from pathlib import Path
 import sys
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError
+
+
+
+def _decode_checkpoint_json(raw):
+    """Decode one already size-bounded offline receipt without ambiguous JSON.
+
+    Python's default JSON parser silently keeps the *last* duplicate object
+    key and permits NaN/Infinity. Either can produce a SHA-valid but ambiguous
+    evidence receipt after an attacker rehashes its parsed payload. Reject
+    duplicates at every depth, escaped-key aliases, non-finite numbers and
+    implausibly long numeric tokens. This validates syntax, NOT authorship.
+    """
+    def unique_object(pairs):
+        result = {}
+        for key, value in pairs:
+            if key in result:
+                raise ValueError("Duplicate checkpoint JSON key: " + key)
+            result[key] = value
+        return result
+
+    def bounded_integer(token):
+        if len(token.lstrip("-")) > 64:
+            raise ValueError("Oversized checkpoint JSON integer")
+        return int(token)
+
+    def bounded_float(token):
+        if len(token) > 128:
+            raise ValueError("Oversized checkpoint JSON float")
+        number = float(token)
+        if not math.isfinite(number):
+            raise ValueError("Non-finite checkpoint JSON number")
+        return number
+
+    def reject_constant(token):
+        raise ValueError("Non-finite checkpoint JSON constant: " + token)
+
+    try:
+        return json.loads(raw.decode("utf-8"), object_pairs_hook=unique_object,
+                          parse_int=bounded_integer, parse_float=bounded_float,
+                          parse_constant=reject_constant)
+    except (UnicodeDecodeError, json.JSONDecodeError, RecursionError,
+            OverflowError) as error:
+        raise ValueError("Malformed offline checkpoint JSON") from error
 
 
 def load_session(path):
@@ -159,7 +203,7 @@ def verify_source_pairs_checkpoint(source):
         raw=handle.read(1024*1024+1)
     if len(raw)>1024*1024:
         raise ValueError("Oversized source checkpoint")
-    envelope=json.loads(raw.decode("utf-8"))
+    envelope=_decode_checkpoint_json(raw)
     if not isinstance(envelope,dict) or not isinstance(envelope.get("payload"),dict):
         raise ValueError("Invalid source checkpoint envelope")
     p=envelope["payload"]
@@ -346,7 +390,7 @@ def verify_report_checkpoint(source):
         raw = handle.read(REPORT_MAX_BYTES + 1)
     if not raw or len(raw)>REPORT_MAX_BYTES:
         raise ValueError("Missing or oversized report checkpoint")
-    envelope = json.loads(raw.decode("utf-8"))
+    envelope = _decode_checkpoint_json(raw)
     if not isinstance(envelope,dict) or set(envelope)!={"payload","payload_sha256"}:
         raise ValueError("Invalid report envelope")
     payload = envelope["payload"]
@@ -528,7 +572,7 @@ def verify_report_set_checkpoint(source):
         raw=stream.read(REPORT_SET_MAX_BYTES+1)
     if not raw or len(raw)>REPORT_SET_MAX_BYTES:
         raise ValueError("Missing or oversized report-set checkpoint")
-    obj=json.loads(raw.decode("utf-8"))
+    obj=_decode_checkpoint_json(raw)
     if not isinstance(obj,dict) or set(obj)!={"payload","payload_sha256"}:
         raise ValueError("Invalid report-set envelope")
     data=obj["payload"]
@@ -670,7 +714,7 @@ def load_verified_agentic_payload(source):
     if len(raw)>8*1024*1024:
         raise ValueError("Oversized local Agentic checkpoint")
     # One captured buffer prevents mixing different file generations.
-    report=json.loads(raw.decode("utf-8"))
+    report=_decode_checkpoint_json(raw)
     if not isinstance(report,dict):
         raise ValueError("Invalid Agentic evidence checkpoint envelope")
     payload=report["payload"]
