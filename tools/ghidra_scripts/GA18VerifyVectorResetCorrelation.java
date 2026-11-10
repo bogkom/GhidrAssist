@@ -79,8 +79,8 @@ public class GA18VerifyVectorResetCorrelation extends GhidraScript {
                 "image-zero vector 32 exact disconnected candidate");
             check(sub.contains("| 33 | 0x00000222 | 0x00000220 | INTERIOR_FUNCTION_POINTER_NOT_ENTRY"),
                 "image-zero vector 33 interior candidate");
-            check(sub.contains("DISPLAYED-ONLY STORE candidate roots") &&
-                sub.contains("DISPLAYED-ONLY MOVEC/VBR candidate roots"),
+            check(sub.contains("DISPLAYED-ONLY STORE candidate vector rows") &&
+                sub.contains("DISPLAYED-ONLY MOVEC/VBR candidate vector rows"),
                 "genuine Ghidra vector source has bounded displayed-only generic effects");
             check(sub.contains("STATIC ONLY") && sub.contains("runtime VBR"),
                 "static evidence cannot claim active ISR or VBR");

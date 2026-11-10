@@ -246,3 +246,8 @@ and genuine isolated Ghidra 12.1.4 PUBLIC synthetic vector integration
 are required at exact PR SHA. Neither vector pointer, RESET static
 reachability, STORE nor MOVEC is a runtime execution, latched MM,
 active VBR/IRQ, ISR dispatch or physical chip-select mapping.
+
+The displayed-only STORE/MOVEC counters count **vector rows**, not unique
+handler function identities: two vector slots pointing to the same
+handler legitimately contribute two rows, while its bounded source
+analysis remains cached once per revision-local report.

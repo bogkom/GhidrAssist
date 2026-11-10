@@ -213,6 +213,11 @@ public final class HardwareVectorResetCorrelationSelfTest {
             sharedHandler.rows().get(0).flowUncertain()==
                 sharedHandler.rows().get(1).flowUncertain(),
             "distinct vector slots sharing one handler preserve identical static effect evidence");
+        check(sharedHandler.displayedStoreCandidates()==2 &&
+                sharedHandler.displayedVbrCandidates()==2 &&
+                sharedHandler.markdown().contains(
+                    "DISPLAYED-ONLY STORE candidate vector rows: 2"),
+            "two slots pointing to the same handler count as two displayed rows, not two distinct roots");
         check(sharedHandler.equals(HardwareVectorResetCorrelation.inspect(
                 true,false,reset.visitedEntries(),
                 List.of(duplicateHandlerSlots.get(1),duplicateHandlerSlots.get(0)),
@@ -327,9 +332,9 @@ public final class HardwareVectorResetCorrelationSelfTest {
         check(report.displayedStoreCandidates()==2 &&
                 report.displayedVbrCandidates()==1 &&
                 report.markdown().contains(
-                    "DISPLAYED-ONLY STORE candidate roots: 2") &&
+                    "DISPLAYED-ONLY STORE candidate vector rows: 2") &&
                 report.markdown().contains(
-                    "DISPLAYED-ONLY MOVEC/VBR candidate roots: 1") &&
+                    "DISPLAYED-ONLY MOVEC/VBR candidate vector rows: 1") &&
                 report.markdown().contains("omitted rows: 0"),
             "count only displayed exact handler sources, not full vector inventory");
         check(limited.markdown().contains("omitted rows: 3") &&
