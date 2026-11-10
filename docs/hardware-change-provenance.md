@@ -187,3 +187,20 @@ exact same-Program and explicitly selected MC68332 revision fence both
 before and after serialization. A saved receipt identifies one extension
 operation, not the authenticated human/AI editor, active hardware, or a
 durable history of Undo after Ghidra removes its receipt.
+
+## 2026-11-10 — scoped-variable GA-13 receipt audit source assertions
+
+The existing function-local pointer parameter and local variable approval
+records share a single native Program transaction with the corresponding
+USER_DEFINED symbol name edits. The read-only public audit now verifies its
+CURRENT_APPROVED_NAME label against the receipt's exact function/kind/
+ordinal/storage, a syntactically valid full firmware import SHA-256, the
+live pointer data type, USER_DEFINED source and a non-auto/non-forced ABI
+parameter. A replaced argument, changed datatype, alternate import,
+changed name or a caller-supplied contradictory audit State is not presented
+as approved-current. A direct public snapshot must have complete, unique
+and deterministically ordered rows. The CSV revision fence requires the
+same in-memory Program, modification and selected MC68332 profile; a
+Ghidra Undo removing a receipt is not an append-only operator history.
+The implementation never identifies an authenticated editor or allows
+automatic Apply from static A-register role hints.
