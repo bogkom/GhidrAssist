@@ -2779,10 +2779,48 @@ public final class Ga11VectorHeadlessMain {
                     check(initialReceipts.rows().stream().allMatch(r->
                             r.pointerType() && r.userDefined() &&
                             !r.autoParameter() &&
+                            r.receipt().hasTypedIdentity() &&
+                            r.receipt().dataTypeIdentity().equals(r.liveTypeIdentity()) &&
+                            r.receipt().firstUseOffset()==r.liveFirstUseOffset() &&
                             r.state()==ghidrassist.hardware.HardwareScopedVariableReceipt
                                 .State.CURRENT_APPROVED_NAME),
                         "Real Ghidra pointer receipt auditor must rederive each" +
                             " approved label from exact persisted typed variable state");
+                    // Re-read the v2 serialized Option at each exact Function
+                    // variable key. A current name without the original type
+                    // and first-use provenance is not a valid cross-JVM audit.
+                    var persistedPointerOptions=full.getOptions(
+                        ghidrassist.hardware.HardwareScopedVariableReceipt.OPTIONS_CATEGORY);
+                    for(var receiptRow:initialReceipts.rows()) {
+                        var entry=receiptRow.receipt();
+                        var storedReceipt=persistedPointerOptions.getString(
+                            entry.optionKey(),null);
+                        check(storedReceipt!=null && storedReceipt.startsWith(
+                                ghidrassist.hardware.HardwareScopedVariableReceipt.VERSION+"\\t"
+                                    .replace("\\t","\t")) &&
+                                ghidrassist.hardware.HardwareScopedVariableReceipt
+                                    .decode(storedReceipt).equals(entry),
+                            "Real Ghidra stored v2 typed receipt must reopen canonically");
+                        var forgedType=new ghidrassist.hardware.HardwareScopedVariableReceipt
+                            .Observation(entry.optionKey(),storedReceipt,entry.afterName(),
+                                entry.storage(),true,true,false,
+                                entry.dataTypeIdentity()+"_different",entry.firstUseOffset());
+                        var forgedScope=new ghidrassist.hardware.HardwareScopedVariableReceipt
+                            .Observation(entry.optionKey(),storedReceipt,entry.afterName(),
+                                entry.storage(),true,true,false,
+                                entry.dataTypeIdentity(),entry.firstUseOffset()+1);
+                        check(ghidrassist.hardware.HardwareScopedVariableReceipt.inspect(
+                                List.of(forgedType),full.getModificationNumber(),
+                                    full.getExecutableSHA256()).count(
+                                        ghidrassist.hardware.HardwareScopedVariableReceipt
+                                            .State.TYPE_IDENTITY_CHANGED)==1 &&
+                              ghidrassist.hardware.HardwareScopedVariableReceipt.inspect(
+                                List.of(forgedScope),full.getModificationNumber(),
+                                    full.getExecutableSHA256()).count(
+                                        ghidrassist.hardware.HardwareScopedVariableReceipt
+                                            .State.TYPE_IDENTITY_CHANGED)==1,
+                            "Persisted v2 typed receipt cannot certify changed type or first use");
+                    }
                     String initialReceiptCsv=ghidrassist.hardware
                         .HardwareScopedVariableService.auditCsv(full);
                     check(initialReceiptCsv.lines().count()==3 &&
@@ -2998,6 +3036,7 @@ public final class Ga11VectorHeadlessMain {
                     }catch(IllegalStateException expected){staleMultiRefused=true;}
                     check(staleMultiRefused,
                         "Pre-Undo reviewed source revision must not permit replay");
+                    result.addProperty("scoped_v2_type_use_receipts",true);
                     result.addProperty("scoped_variable_approval_receipts",true);
                     result.addProperty("scoped_variable_receipt_undo_redo",true);
                     result.addProperty("scoped_variable_receipt_revision_stale",true);
