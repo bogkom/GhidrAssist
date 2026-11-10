@@ -2738,6 +2738,13 @@ public final class Ga11VectorHeadlessMain {
                                     cleanRevision.modificationNumber() &&
                                 r.receipt().origin().contains("actor UNKNOWN")),
                         "Actual Ghidra pointer batch must persist two function-local approvals");
+                    check(initialReceipts.rows().stream().allMatch(r->
+                            r.pointerType() && r.userDefined() &&
+                            !r.autoParameter() &&
+                            r.state()==ghidrassist.hardware.HardwareScopedVariableReceipt
+                                .State.CURRENT_APPROVED_NAME),
+                        "Real Ghidra pointer receipt auditor must rederive each" +
+                            " approved label from exact persisted typed variable state");
                     String initialReceiptCsv=ghidrassist.hardware
                         .HardwareScopedVariableService.auditCsv(full);
                     check(initialReceiptCsv.lines().count()==3 &&
@@ -2785,6 +2792,14 @@ public final class Ga11VectorHeadlessMain {
                                 ghidrassist.hardware.HardwareScopedVariableReview
                                     .Decision.USER_NAMED),
                         "Native Redo must restore both explicitly approved names");
+                    check(ghidrassist.hardware.HardwareScopedVariableService
+                            .audit(full).rows().stream().allMatch(r->
+                                r.pointerType() && r.userDefined() &&
+                                !r.autoParameter() &&
+                                r.state()==ghidrassist.hardware.HardwareScopedVariableReceipt
+                                    .State.CURRENT_APPROVED_NAME),
+                        "Native Redo restores typed name approval proof, not a" +
+                            " caller-forged CURRENT state");
                     boolean stale=false;
                     try {
                         ghidrassist.hardware.HardwareScopedVariableService.apply(
