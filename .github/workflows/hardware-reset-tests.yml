@@ -6,12 +6,14 @@ on:
       - 'src/main/java/ghidrassist/hardware/HardwareResetFlow.java'
       - 'src/main/java/ghidrassist/hardware/HardwareCallEffects.java'
       - 'src/test/java/ghidrassist/hardware/HardwareResetFlowSelfTest.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareCallEffectsSelfTest.java'
       - '.github/workflows/hardware-reset-tests.yml'
   pull_request:
     paths:
       - 'src/main/java/ghidrassist/hardware/HardwareResetFlow.java'
       - 'src/main/java/ghidrassist/hardware/HardwareCallEffects.java'
       - 'src/test/java/ghidrassist/hardware/HardwareResetFlowSelfTest.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareCallEffectsSelfTest.java'
       - '.github/workflows/hardware-reset-tests.yml'
   workflow_dispatch:
 
@@ -35,10 +37,13 @@ jobs:
           javac --release 21 -d "$RUNNER_TEMP/reset-tests" \
             src/main/java/ghidrassist/hardware/HardwareCallEffects.java \
             src/main/java/ghidrassist/hardware/HardwareResetFlow.java \
-            src/test/java/ghidrassist/hardware/HardwareResetFlowSelfTest.java
+            src/test/java/ghidrassist/hardware/HardwareResetFlowSelfTest.java \
+            src/test/java/ghidrassist/hardware/HardwareCallEffectsSelfTest.java
       - name: Run deterministic regression
         shell: bash
         run: |
           set -euo pipefail
           java -cp "$RUNNER_TEMP/reset-tests" \
             ghidrassist.hardware.HardwareResetFlowSelfTest
+          java -cp "$RUNNER_TEMP/reset-tests" \
+            ghidrassist.hardware.HardwareCallEffectsSelfTest
