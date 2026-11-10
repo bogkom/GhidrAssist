@@ -1,3 +1,16 @@
+## GA-01/02/03/11/18 — 2026-11-10: CPU32 source graph U32 address envelope
+
+Both read-only transitive CALL source engines validate the unsigned
+32-bit identity envelope before accepting function nodes, edges,
+CALL-site instruction PCs, selected callers, explicit roots or typed
+witness chains. The inclusive 0xFFFFFFFF boundary remains representable;
+0x100000000 is rejected rather than printed as a plausible CPU32 source.
+Device-specific MC68332 24-bit address interpretation remains independent.
+Java21 adversarial boundary regression, full Java25/Ghidra 12.1.4 PUBLIC
+build and isolated real synthetic Ghidra CI are required at exact SHA.
+Static source membership is not execution, latched MM, active VBR/ISR or
+physical mapping. GA-01/02/03/11/18 remain PARTIAL; GA-14 deferred.
+
 ## GA-02/03/15/18 — 2026-11-10: CALL-site SIMCR/MM source report integrity
 
 The public transitive MM CALL-site source report now rejects fabricated
