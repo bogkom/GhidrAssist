@@ -1,5 +1,32 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
+## GA-12/13/15/18 — 2026-11-10: unambiguous offline checkpoint JSON parsing
+
+The previously merged offline provenance readers for four historical
+checkpoint forms — bounded hardware source-pair inventory, single
+hardware report, coherent three-format report set, and retained Agentic
+evidence — now share a strict JSON decoder. At **every nesting level**
+it rejects duplicated object keys (including a Unicode-escaped alias),
+non-standard NaN/Infinity constants, floating exponents that overflow
+to non-finite values, oversized integer/float tokens and malformed or
+over-recursive input. Previously, Python's last-key-wins default could
+accept a receipt containing contradictory serialized authority,
+Program identity or completeness claims, **even with the exact
+original SHA-256 unchanged** when the benign duplicate key was last.
+This fix protects local historical evidence interpretation; it is not
+a signature or source-authentication system.
+
+Python3 adversarial tests capture actual CLI-written synthetic
+checkpoints in all four formats, verify their unchanged compatibility,
+then inject serialized duplicate authority/Program/completeness keys,
+escaped aliases, rehashed NaN/Infinity and oversized ignored row
+numbers. Both the GA-12 source/publication and GA-12/15 Agentic CI
+lanes run the new tests, alongside the normal Java25 full extension
+build and real Ghidra 12.1.4 PUBLIC synthetic CodeBrowser test triggered
+by the CLI change. No production firmware, original user Program,
+OAuth or stopped Wyse/Precision/Supervisor worker is involved.
+GA-12/13/15/18 remain PARTIAL, GA-14 remains deferred.
+
 ## GA-08/12/15/18 — 2026-11-10: coherent three-report snapshots and Apply/Undo stale-token retirement
 
 `analysis.report.manifest` is a new explicitly read-only,
