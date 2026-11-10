@@ -162,10 +162,10 @@ public final class RAGIndexedPdfPageEvidenceSelfTest {
                 "","pdf",219,false,"a".repeat(64),"hardware")),
             "matching blank paths cannot authenticate selected document");
         var spoofedPath=new RAGIndexedPdfPageEvidence.Page(
-            219,"source text","a".repeat(64),"/manual\\nFAKE.pdf","hardware",1);
+            219,"source text","a".repeat(64),"/manual\nFAKE.pdf","hardware",1);
         refuse(()->RAGIndexedPdfPageEvidence.requireSameSource(
             spoofedPath,new SearchResult("manual.pdf","excerpt",0.7,1,
-                "/manual\\nFAKE.pdf","pdf",219,false,
+                "/manual\nFAKE.pdf","pdf",219,false,
                 "a".repeat(64),"hardware")),
             "control characters cannot spoof provenance in PDF path");
         refuse(()->RAGIndexedPdfPageEvidence.requireOneIndexedDocument(
