@@ -1586,7 +1586,7 @@ public final class GhidraHardwareFlowService {
                 program,HardwareProfiles.mc68332(),monitor,
                 vbrSourceSites,vbrSourceSitesOmitted,
                 reset.recognized(),reset.incomplete(),reset.visited(),
-                staticCalls):
+                staticCalls,mmEffectNodes):
             "## Relocated VBR source-table candidates (GA-11)\n\n"+
             "Not evaluated: MC68332 profile not explicitly selected. "+
             "Generic CPU32 does not imply a device-specific vector table.\n\n";
@@ -1625,7 +1625,7 @@ public final class GhidraHardwareFlowService {
            .append(reset.markdown())
            .append(GhidraInterruptVectorService.analyze(program,monitor,
                reset.recognized(),reset.incomplete(),reset.visited(),staticCalls,
-               mc68332Selected))
+               mc68332Selected,mmEffectNodes))
            .append(relocatedVbr)
            .append(detail).append(effects).append(interproceduralMm)
            .append(indirectCallEvidence)
