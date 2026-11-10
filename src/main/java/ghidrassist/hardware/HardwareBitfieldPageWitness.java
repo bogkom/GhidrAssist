@@ -37,7 +37,8 @@ public final class HardwareBitfieldPageWitness {
                     matchedPhysicalPages.stream().anyMatch(Objects::isNull) ||
                     (state==State.NAME_ON_CLAIMED_PAGE) !=
                         !matchedPhysicalPages.isEmpty() ||
-                    state==State.NAME_ON_CLAIMED_PAGE && field.length()<4)
+                    state==State.NAME_ON_CLAIMED_PAGE && field.length()<4 ||
+                    state==State.SHORT_NAME_AMBIGUOUS && field.length()>=4)
                 throw new IllegalArgumentException("Invalid physical page witness");
             int previous=firstPage-1;
             for(int page:matchedPhysicalPages) {
