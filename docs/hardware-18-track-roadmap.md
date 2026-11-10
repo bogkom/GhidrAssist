@@ -1,3 +1,27 @@
+## GA-01/02/03/11/18 — 2026-11-10: shortest typed vector-handler STORE and MOVEC CALL witnesses
+
+The bounded read-only `HardwareCallEffects` BFS now retains **typed
+shortest function-entry source chains** for generic P-code `MEMORY_STORE`
+and CPU32 `MOVEC_VBR`, separately from actually observed
+`UNKNOWN_FLOW`/`MISSING_TARGET` and a not-yet-visited
+`DEPTH_CUTOFF`/`NODE_CUTOFF`. The original summary flags and public
+`summarize` API are preserved. Vector/RESET correlation presents these
+paths per exact-entry ISR candidate, with unchanged numeric counts,
+an explicit unknown flag and per-report memoization. Interior vector
+pointers never borrow complete-function evidence; display caps only
+limit detailed per-handler source analysis, not input counts.
+
+A **recognized source function** is not an executed handler; observed
+direct-CALL graph reachability is not runtime feasibility. Missing
+function definitions, unresolved indirect calls, recursion and bounded
+depth/node frontiers remain uncertain. No latched SIMCR MM, active VBR,
+actual interrupt, physical CS map or Ghidra write permission follows.
+No durable source evidence is reused across Ghidra revisions.
+Deterministic Java21 and full Java25 Ghidra 12.1.4 PUBLIC isolated
+synthetic headless CI are exact-SHA merge gates. See
+[vector/RESET source correlation](hardware-vector-reset-correlation.md).
+GA-01/02/03/11/18 remain PARTIAL; GA-14 deferred.
+
 ## GA-12/15/18 — 2026-11-10: explicit Listing page anchor across UI navigation
 
 Automation API v3 `listing.range` may use the active CodeBrowser cursor
