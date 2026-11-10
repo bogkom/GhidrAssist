@@ -1,3 +1,19 @@
+## GA-02/03/18 — 2026-11-10: canonical signed MOVEQ post-return source constants
+
+Previously, verified input-independent CPU32 CALL return registers only
+accepted 6-byte MOVE.L/MOVEA.L immediate definitions. The strict
+straight-line `RTS` and path-complete acyclic conditional-branch leaf
+solvers now additionally accept 2-byte `MOVEQ #signed8,Dn` (D0–D7),
+with exact 8-to-32-bit sign extension and no A-register shortcut. The
+real Ghidra decoder admits valid four-byte `MOVEQ;RTS` functions while
+rejecting wrong instruction lengths, RTE, non-canonical immediate data,
+unmodeled register effects, nested calls and branch disagreement.
+Java21 source tests and genuine isolated Ghidra 12.1.4 PUBLIC/Java25
+headless `leaf-return` + `moveq-return` modes test source-only
+candidate word `0xFF80` without claiming executed CALLs, MM latch,
+physical mapping or Review/Apply. All GA-02/03/18 remain PARTIAL;
+GA-14 deferred.
+
 ## GA-02/03/18 — 2026-11-10: source-only two-hop conditional-branch CFG coherence
 
 The selected MC68332 outer CALL → intermediate single JSR/BSR → direct
