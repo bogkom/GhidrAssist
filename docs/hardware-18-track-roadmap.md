@@ -1,3 +1,26 @@
+## GA-08/13/18 — 2026-11-10: fail-closed executable digest in rename receipt audits
+
+Both GA-08 pointer-variable and GA-13 function-rename **read-only**
+Program Options audits now require two syntactically valid 64-hex
+executable SHA-256 identifiers before classifying a saved approved
+name as `CURRENT_APPROVED_NAME`. Identical malformed text, legacy
+`UNKNOWN` (including lowercase) or nonhex 64-character values
+remain readable as records but result in `SOURCE_UNVERIFIED`;
+different valid digests remain `SOURCE_CHANGED` and different-case
+valid hex values may match. This corrects a false-confidence
+classification; SHA metadata alone is NOT independent proof of file
+bytes, author identity, unchanged analysis, Review/Apply authorization
+or MCU hardware execution. Existing versioned schemas and native
+Undo/Redo transactions are unchanged.
+
+Regression spans the shared revision digest check, saved-function
+read-only audit and scoped-variable receipt audit, including forged
+same-text identities and positive valid matching hex. Java21
+deterministic tests, Java25 Ghidra 12.1.4 PUBLIC full extension build
+and genuine isolated synthetic Ghidra CI are mandatory before merge.
+See [change provenance](hardware-change-provenance.md).
+GA-08/13/18 remain PARTIAL; GA-14 deferred.
+
 ## GA-02/03/18 — 2026-11-10: separate observed-UNKNOWN and bounded frontier paths
 
 CALL-site transitive SIMCR/MM reporting now distinguishes the shortest

@@ -137,13 +137,16 @@ public final class HardwareFunctionRenameAudit {
             String type=observation.sourceType()==null?"UNKNOWN":observation.sourceType();
             State state;
             if(name==null)state=State.FUNCTION_MISSING;
-            else if(!"UNKNOWN".equals(receipt.sourceSha256()) &&
-                    !"UNKNOWN".equals(programSourceSha256) &&
-                    !receipt.sourceSha256().equalsIgnoreCase(programSourceSha256))
-                state=State.SOURCE_CHANGED;
-            else if("UNKNOWN".equals(receipt.sourceSha256()) ||
-                    "UNKNOWN".equals(programSourceSha256))
+            // Legacy/current arbitrary matching labels (including lowercase
+            // "unknown" and 64 non-hex characters) are NOT proof of an
+            // executable SHA-256. Keep old receipts readable but unverified.
+            else if(!HardwareAnalysisRevision.isVerifiableExecutableSha256(
+                        receipt.sourceSha256()) ||
+                    !HardwareAnalysisRevision.isVerifiableExecutableSha256(
+                        programSourceSha256))
                 state=State.SOURCE_UNVERIFIED;
+            else if(!receipt.sourceSha256().equalsIgnoreCase(programSourceSha256))
+                state=State.SOURCE_CHANGED;
             else if(!name.equals(receipt.afterName()))
                 state=State.NAME_CHANGED_AFTER_APPROVAL;
             else if(!"USER_DEFINED".equals(type))

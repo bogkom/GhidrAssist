@@ -29,6 +29,16 @@ public final class HardwareFunctionRenameAuditSelfTest {
             HardwareFunctionRenameReceipt.optionKey(entry),
             HardwareFunctionRenameReceipt.encode(receipt),current,source);
     }
+    private static HardwareFunctionRenameAudit.Observation withImportSha(
+            HardwareFunctionRenameAudit.Observation observation,String sha) {
+        var before=HardwareFunctionRenameReceipt.decode(observation.serialized());
+        var changed=new HardwareFunctionRenameReceipt.Entry(
+            before.entry(),before.reviewedModification(),sha,before.beforeName(),
+            before.afterName(),before.role(),before.registers(),before.writeSites());
+        return new HardwareFunctionRenameAudit.Observation(
+            observation.optionKey(),HardwareFunctionRenameReceipt.encode(changed),
+            observation.currentName(),observation.sourceType());
+    }
     public static void main(String[] args){
         var original=row(0x640,
             "HW_MC68332_CONFIGURE_CHIP_SELECTS_CANDIDATE_00000640",
@@ -118,6 +128,23 @@ public final class HardwareFunctionRenameAuditSelfTest {
             List.of(older),48,"UNKNOWN").count(
             HardwareFunctionRenameAudit.State.SOURCE_UNVERIFIED)==1,
             "unknown import SHA cannot be presented as a verified identity");
+        for(String untrusted:List.of("unknown","not-a-sha","z".repeat(64),
+                "a".repeat(63)+"G")) {
+            check(HardwareFunctionRenameAudit.inspect(
+                    List.of(withImportSha(older,untrusted)),48,untrusted).count(
+                    HardwareFunctionRenameAudit.State.SOURCE_UNVERIFIED)==1,
+                "matching untrusted source label must not be CURRENT-approved");
+        }
+        check(HardwareFunctionRenameAudit.inspect(
+                List.of(withImportSha(older,"A".repeat(64))),
+                48,"a".repeat(64)).count(
+                HardwareFunctionRenameAudit.State.CURRENT_APPROVED_NAME)==1,
+            "case-insensitive valid SHA bytes retain current-approved status");
+        check(HardwareFunctionRenameAudit.inspect(
+                List.of(withImportSha(older,"a".repeat(64))),
+                48,"not-a-sha").count(
+                HardwareFunctionRenameAudit.State.SOURCE_UNVERIFIED)==1,
+            "invalid current source metadata fails closed even with valid saved digest");
         check(HardwareFunctionRenameAudit.inspect(List.of(),50,"UNKNOWN").rows().isEmpty(),
             "Undo removes receipt; absent record is not invented history");
         var unsafe=row(0x5a0,"=HYPERLINK(\"https://evil.invalid\")",

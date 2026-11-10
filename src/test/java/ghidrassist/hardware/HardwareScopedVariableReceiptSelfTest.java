@@ -88,6 +88,37 @@ public final class HardwareScopedVariableReceiptSelfTest {
         var unknownSha=HardwareScopedVariableReceipt.inspect(rows,5,"UNKNOWN");
         ok(unknownSha.count(HardwareScopedVariableReceipt.State.SOURCE_UNVERIFIED)==2,
             "Unknown source provenance is not considered verified");
+        for(String untrusted:List.of("unknown","unverified","x".repeat(64))) {
+            var badDigest=new HardwareScopedVariableReceipt.Entry(
+                original.function(),original.kind(),original.ordinal(),
+                original.storage(),original.beforeName(),original.afterName(),
+                original.reviewedModification(),untrusted);
+            var sameUnknown=HardwareScopedVariableReceipt.inspect(List.of(
+                new HardwareScopedVariableReceipt.Observation(
+                    original.optionKey(),
+                    HardwareScopedVariableReceipt.encode(badDigest),
+                    original.afterName(),original.storage(),true,true)),
+                5,untrusted);
+            ok(sameUnknown.count(
+                    HardwareScopedVariableReceipt.State.SOURCE_UNVERIFIED)==1,
+                "matching malformed source text cannot certify a variable approval");
+        }
+        ok(HardwareScopedVariableReceipt.inspect(rows,5,
+                "invalid-current-source").count(
+                HardwareScopedVariableReceipt.State.SOURCE_UNVERIFIED)==2,
+            "valid stored SHA and invalid current source cannot match verified");
+        var uppercase=new HardwareScopedVariableReceipt.Entry(
+            original.function(),original.kind(),original.ordinal(),
+            original.storage(),original.beforeName(),original.afterName(),
+            original.reviewedModification(),"A".repeat(64));
+        ok(HardwareScopedVariableReceipt.inspect(List.of(
+                new HardwareScopedVariableReceipt.Observation(
+                    original.optionKey(),
+                    HardwareScopedVariableReceipt.encode(uppercase),
+                    original.afterName(),original.storage(),true,true)),
+                5,"a".repeat(64)).count(
+                HardwareScopedVariableReceipt.State.CURRENT_APPROVED_NAME)==1,
+            "valid upper/lower hexadecimal SHA forms compare as equivalent");
         var absent=HardwareScopedVariableReceipt.inspect(List.of(
             new HardwareScopedVariableReceipt.Observation(
                 original.optionKey(),serialized,null,null,false,false)),5,

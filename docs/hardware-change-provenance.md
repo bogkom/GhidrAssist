@@ -133,3 +133,34 @@ GA-13 remains **PARTIAL**: a separately authorized, trustworthy
 and appropriately protected event journal would be necessary to
 retain explicitly rejected proposals, Undo/Redo operations after
 reversal and user/AI identities. That is not fabricated here.
+
+
+## 2026-11-10 — source SHA-256 syntax before an APPROVED-CURRENT audit claim
+
+GA-08 pointer-variable and GA-13 function-rename receipts are versioned
+Program-local operation records. Their historical schemas deliberately
+allow the original import checksum to be `UNKNOWN` or other bounded
+legacy text. Previously, comparing two identical malformed nonempty
+strings (for example lowercase `unknown`, `not-a-sha` or 64 non-hex
+characters) could produce `CURRENT_APPROVED_NAME`, even though those
+strings were never executable SHA-256 values.
+
+The **read-only audit classification** now requires **exactly 64 ASCII
+hexadecimal digits** for both the stored and current executable SHA-256
+metadata before a row can be `CURRENT_APPROVED_NAME`. Valid hex digits
+are compared case-insensitively. Any missing, malformed, legacy or
+unverifiable identity becomes `SOURCE_UNVERIFIED`, even if the two
+strings are equal. Two different syntactically valid digests still
+produce `SOURCE_CHANGED`. Missing symbols/variables, changed storage,
+changed name/type and all revision-bound CSV fences remain conservative.
+
+No receipt is silently rewritten, rejected merely because it is old,
+or upgraded to authenticated identity. SHA syntax is **necessary but
+never sufficient** to authenticate binary bytes or an editor: Ghidra
+source metadata can be missing/spoofed and the Options checksum is
+not a signature. No new privileges, Apply action, Undo journal,
+firmware access or user-profile state. Java21 negative regressions
+cover lowercase UNKNOWN, false matching short/64-character values,
+Unicode lookalikes, malformed live metadata and valid mixed-case
+SHA equivalents. Full Ghidra 12.1.4 PUBLIC Java25 build and isolated
+synthetic headless CI remain required before merge.
