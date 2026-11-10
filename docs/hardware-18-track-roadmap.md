@@ -1,3 +1,16 @@
+## GA-02/03/11/18 — 2026-11-10: bounded MC68332 source witness visit coherence
+
+Selected-MC68332 vector-handler SIMCR/MM source reporting now rejects
+publicly constructed MAY/alias/inspected-unknown/cycle witnesses whose
+function-chain prefixes cannot fit the claimed number of visited source
+functions. Missing roots and pre-inspection batch cutoffs remain valid
+zero-visit UNKNOWN results; explicitly skipped depth/node/batch targets
+are never counted as visited. Deterministic Java21 adversarial tests,
+Java25 full Ghidra 12.1.4 PUBLIC extension build and genuine synthetic
+headless CI are exact-SHA merge gates. Static MAY is not executed MMIO,
+latched SIMCR MM, an active VBR/ISR or proof of physical bus behavior.
+GA-02/03/11/18 remain PARTIAL; GA-14 deferred.
+
 ## GA-01/02/03/11/18 — 2026-11-10: shared vector-handler provenance integrity
 
 Both generic CPU32 STORE/MOVEC and selected-MC68332 SIMCR/MM source
