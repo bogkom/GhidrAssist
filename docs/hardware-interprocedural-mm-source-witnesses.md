@@ -103,3 +103,37 @@ The GA-01/11 co-location join also rejects overlapping decoded JSR and
 MOVEC site PCs across the two otherwise individually valid source lists.
 Independent Java21 tests and complete Java25 Ghidra 12.1.4 PUBLIC
 synthetic headless tests remain the exact-SHA merge gates.
+
+
+## 2026-11-10 — do not fabricate uninspected CALL depth frontiers
+
+A `MAX_DEPTH` boundary in a canonical bounded BFS is an **uninspected
+function horizon only if the direct CALL target has not been scheduled**.
+The previous transitive SIMCR/MM analyzer flagged *every* call in a
+function at the depth limit as `limited=true` and published a
+`DEPTH_CUTOFF` witness, including edges back to the source function and
+edges to targets already queued for inspection through another shorter
+branch. This could mislabel a fully examined cycle or diamond as a truncated
+source inventory.
+
+`HardwareInterproceduralMmEffects` now checks canonical scheduled
+identity before deciding whether an edge crosses the depth horizon.
+Complete self-CALL and two-node cycles remain `cycle=true` and
+`unknownControl=true`, **without** invented skipped functions or a
+`limited` cap; convergent edges to already scheduled targets remain
+bounded and complete. A genuinely new child beyond `maxDepth` still
+produces a typed `DEPTH_CUTOFF` path, `limited=true` and
+`unknownControl=true`. The same distinction is used by
+`HardwareResetFlow` for the RESET-rooted source subset. A decoded CALL
+target missing from the input graph is an observed UNKNOWN and no longer
+requires a *spurious* RESET depth-cap claim merely because its edge occurs
+at the depth boundary.
+
+The generic `HardwareCallEffects` STORE/VBR solver already made this
+distinction; regression now checks the same boundary semantics across the
+generic, RESET and SIMCR-specific static traversals. No new CPU32
+computed-call target, executed CALL/RESET, feasible CFG branch, latched MM,
+active VBR/ISR, physical mapping or permission to Apply is inferred.
+Analysis remains revision-local, bounded and read-only. Java21 regressions
+plus full Ghidra 12.1.4 PUBLIC/Java25 synthetic integration must pass on
+the final SHA. GA-01/02/03/11/18 remain PARTIAL.

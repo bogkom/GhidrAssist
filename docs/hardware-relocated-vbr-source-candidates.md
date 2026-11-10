@@ -96,3 +96,23 @@ MOVEC and table bytes, including MC68332 scope. It is **source-location
 evidence only**, never proof that the MCU executed MOVEC or selected the
 table. GitHub Actions PASS must be attached to this PR's exact commit SHA.
 Stopped Wyse/Precision/Codex Supervisor tests remain stopped.
+
+
+## 2026-11-10 — validated selected-MCU RESET source inventory before VBR ranking
+
+The relocated `MOVEC` source-table planner uses `resetVisited` only
+as a **ranking heuristic**, not proof of VBR selection or ISR execution.
+Previously its source set was neither size-bounded nor validated even
+though it can grant a MOVEC candidate a higher scan priority. It now
+rejects null, negative, odd, and beyond-24-bit RESET function-entry
+identities, and more than 50,000 RESET entries, **before** ranking
+any tables. Invalid inputs are not tolerated even when the RESET root
+is unrecognized. This gate applies only after the caller has explicitly
+selected the MC68332 device profile; it does not cast a generic CPU32
+32-bit function address into a speculative 24-bit physical bus alias.
+
+Deterministic Java21 cases include normal and invalid RESET source sets,
+UNKNOWN RESET root, wide/odd/null IDs, and oversized inventories.
+No active VBR, ISA execution, actual interrupt, SIMCR/MM latch, physical
+CS mapping, or program mutation follows from the source ranking.
+GA-11/18 remain PARTIAL.

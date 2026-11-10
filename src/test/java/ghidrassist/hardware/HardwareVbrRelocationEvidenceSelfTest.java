@@ -133,6 +133,36 @@ public final class HardwareVbrRelocationEvidenceSelfTest {
                 0x100L,0x200L+i*2L,0x800L,false,false));
         reject(()->HardwareVbrRelocationEvidence.plan(
             tooMany,true,false,Set.of(),3,32),"source input cap");
+        // A source-inventory set is untrusted evidence. Without these
+        // gates an invalid RESET identity could be silently carried into
+        // the eligible MOVEC-to-VBR ranking and source relation labels.
+        var badNull=new java.util.HashSet<Long>();
+        badNull.add(null);
+        reject(()->HardwareVbrRelocationEvidence.plan(
+            sites,true,false,badNull,3,32),
+            "null RESET entry must be rejected before VBR ranking");
+        reject(()->HardwareVbrRelocationEvidence.plan(
+            sites,true,false,Set.of(-2L),3,32),
+            "negative RESET source entry cannot prove call relation");
+        reject(()->HardwareVbrRelocationEvidence.plan(
+            sites,true,false,Set.of(0x131L),3,32),
+            "odd RESET function entry cannot grant candidate priority");
+        reject(()->HardwareVbrRelocationEvidence.plan(
+            sites,true,false,Set.of(0x1000000L),3,32),
+            "wide CPU32 source may not alias MC68332 24-bit RESET relation");
+        reject(()->HardwareVbrRelocationEvidence.plan(
+            sites,false,true,Set.of(0x1000000L),3,32),
+            "invalid source set remains invalid even when RESET root unknown");
+        var oversizedReset=new java.util.HashSet<Long>();
+        for(int i=0;i<=HardwareVbrRelocationEvidence.MAX_RESET_SOURCE_ENTRIES;i++)
+            oversizedReset.add(2L*i);
+        reject(()->HardwareVbrRelocationEvidence.plan(
+            sites,true,false,oversizedReset,3,32),
+            "RESET inventory size gate runs before source-table ranking");
+        ok(HardwareVbrRelocationEvidence.plan(
+            sites,true,true,Set.of(0x130L,0x132L),3,32)
+                .tableBases().equals(List.of(0x800L,0xC00L)),
+            "well-formed selected-MC68332 RESET entries preserve candidate order");
         boolean immutable=false;
         try{plan.tableBases().clear();}
         catch(UnsupportedOperationException expected){immutable=true;}

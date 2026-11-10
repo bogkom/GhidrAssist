@@ -268,12 +268,19 @@ public final class HardwareInterproceduralMmEffects {
                     chain(parent,w.pc()));
             mm|=n.mm();alias|=n.unknownAlias();unknown|=n.unknownControl();
             for(long callee:n.calls()){
+                // A depth boundary does not make an already scheduled
+                // function uninspected. In particular, backedges in a
+                // complete cyclic subgraph must be attributed to CYCLE,
+                // not a fabricated depth frontier whose endpoint was
+                // already examined (or is queued for examination).
+                if(scheduled.contains(callee))
+                    continue;
                 if(w.depth()>=maxDepth){
                     limit=true;unknown=true;
                     if(frontierUnknown==null)
                         frontierUnknown=new SourceWitness(WitnessKind.DEPTH_CUTOFF,
                             frontier(parent,w.pc(),callee));
-                }else if(!scheduled.contains(callee)){
+                }else {
                     // A frontier is NOT a decoded MMIO source: retain the
                     // missing observation, not a fabricated false result.
                     if(scheduled.size()>=maxCount || budget.remaining==0){

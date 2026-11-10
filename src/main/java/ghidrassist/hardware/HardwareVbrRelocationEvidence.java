@@ -20,6 +20,9 @@ public final class HardwareVbrRelocationEvidence {
     public static final int MAX_SOURCE_SITES=256;
     public static final int MAX_TABLES=3;
     public static final int MAX_REPORTED_SITES=32;
+    // Independent source-inventory bound: this Java21 planner does not
+    // require Ghidra or the unrelated CALL solver at compile time.
+    public static final int MAX_RESET_SOURCE_ENTRIES=50_000;
     public static final long MAX_24BIT=0xffffffL;
     private static final long TABLE_BYTES=1024L; // MC68332UM CPU32 VBR, 256 x 4
 
@@ -132,10 +135,21 @@ public final class HardwareVbrRelocationEvidence {
             boolean resetGraphIncomplete,Set<Long> resetVisited,
             int maxTables,int maxRows) {
         if(sites==null || resetVisited==null ||
-                sites.size()>MAX_SOURCE_SITES || maxTables<1 ||
-                maxTables>MAX_TABLES || maxRows<1 ||
+                sites.size()>MAX_SOURCE_SITES ||
+                resetVisited.size()>MAX_RESET_SOURCE_ENTRIES ||
+                maxTables<1 || maxTables>MAX_TABLES || maxRows<1 ||
                 maxRows>MAX_REPORTED_SITES)
             throw new IllegalArgumentException("Unbounded VBR source candidates");
+        // A malformed/foreign RESET set must not silently grant a MOVEC
+        // candidate privileged scan priority. Validate even when RESET
+        // root recognition is uncertain and the rank would ignore it.
+        // MC68332 is explicitly selected by the Ghidra caller; do not
+        // wrap 32-bit CPU32 identities into speculative 24-bit aliases.
+        for(Long entry:resetVisited)
+            if(entry==null || entry<0 || entry>MAX_24BIT ||
+                    (entry&1L)!=0)
+                throw new IllegalArgumentException(
+                    "Invalid selected-MCU RESET source entry");
         List<Site> ordered=new ArrayList<>(sites);
         if(ordered.contains(null))
             throw new IllegalArgumentException("Null MOVEC site");
