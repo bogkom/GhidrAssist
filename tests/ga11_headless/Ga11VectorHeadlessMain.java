@@ -2694,7 +2694,44 @@ public final class Ga11VectorHeadlessMain {
                                 .Decision.READY),
                         "Real pointer parameter/local preview must be READY: "+
                             candidates.toString());
+                    check(candidates.stream().allMatch(p->
+                            p.original().hasLiveTypeIdentity() &&
+                            p.original().dataTypeIdentity().contains("#length=")),
+                        "Real Ghidra Function-DB pointer observations require precise type/use identity");
                     var reviewed=HardwareAnalysisRevision.capture(
+                        full,full.getModificationNumber(),
+                        full.getLanguageID().toString(),
+                        full.getExecutableSHA256(),true);
+                    // Type-only identity changes are not safely inferred from
+                    // a matching ordinal, storage, name or pointer boolean.
+                    // The entire selected batch must fail before any Apply.
+                    var originalType=candidates.get(1).original();
+                    var forgedType=new ghidrassist.hardware.HardwareScopedVariableReview
+                        .Observation(originalType.functionEntry(),
+                            originalType.currentName(),originalType.kind(),
+                            originalType.ordinal(),originalType.storage(),
+                            originalType.pointerType(),originalType.userDefined(),
+                            originalType.autoParameter(),
+                            originalType.dataTypeIdentity()+"_other",
+                            originalType.firstUseOffset());
+                    var forgedTypeProposal=new ghidrassist.hardware
+                        .HardwareScopedVariableReview.Proposal(
+                            forgedType,candidates.get(1).proposedName(),
+                            candidates.get(1).decision());
+                    boolean staleTypeBlocked=false;
+                    try {
+                        ghidrassist.hardware.HardwareScopedVariableService.apply(
+                            full,List.of(candidates.get(0),forgedTypeProposal),reviewed);
+                    }catch(IllegalStateException expected){staleTypeBlocked=true;}
+                    check(staleTypeBlocked &&
+                        ghidrassist.hardware.HardwareScopedVariableService
+                            .audit(full).rows().isEmpty() &&
+                        ghidrassist.hardware.HardwareScopedVariableService
+                            .preview(fn).stream().allMatch(p->
+                                p.decision()==ghidrassist.hardware
+                                    .HardwareScopedVariableReview.Decision.READY),
+                        "Typed Ghidra pointer source conflict cannot partially Apply or write receipt");
+                    reviewed=HardwareAnalysisRevision.capture(
                         full,full.getModificationNumber(),
                         full.getLanguageID().toString(),
                         full.getExecutableSHA256(),true);
