@@ -68,11 +68,11 @@ public final class HardwareInterproceduralMmEffectsSelfTest {
             !run(orderGraph,sourceCall,3,3,5)
                 .rows().get(0).summary().limited(),
             "Closed full-budget interprocedural evidence remains order independent");
-        var repeated=List.of(new HardwareInterproceduralMmEffects.FunctionNode(
+        var duplicateSourceGraph=List.of(new HardwareInterproceduralMmEffects.FunctionNode(
             0x130L,false,false,false,List.of(0x400L,0x160L,0x160L)),
             node(0x160,true,false,false),
             node(0x400,false,false,false));
-        ok(run(repeated,sourceCall,3,2,5).rows().get(0).summary()
+        ok(run(duplicateSourceGraph,sourceCall,3,2,5).rows().get(0).summary()
                 .equals(boundedA.rows().get(0).summary()),
             "Repeated CALL target does not consume additional distinct-node budget");
         // An omitted MM leaf remains UNKNOWN, not a negative closed proof:
