@@ -1,5 +1,31 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
+## GA-02/03/18 — 2026-11-10: deterministic bounded interprocedural MM source witness paths
+
+The read-only transitive CALL-site SIMCR/MM report now carries independently
+typed **shortest function-only source witness chains** for positive modeled
+SIMCR MM candidates, unknown STORE aliases and unknown control-flow or
+uninspected graph frontiers. Canonical BFS target order makes the witnesses
+stable across Ghidra reference-enumeration order, including converging
+diamonds and finite node/edge/batch limits. Each frontier is explicitly
+typed as missing function, depth cutoff, node cutoff or shared batch cutoff:
+an uninspected callee is **never** presented as an observed STORE.
+An unresolved indirect CALL or a cycle-only uncertainty does not fabricate
+a callee chain; the original UNKNOWN/LIMITED/CYCLE flags remain decisive.
+
+The source chain begins at the *called function*, not a CALL instruction
+site, and cannot establish a feasible/executed RESET path, interprocedural
+register transfer, actual SIMCR MM latch, VBR/ISR activity, or physical bus
+mapping. The witness paths are read-only, in-memory, bounded by the existing
+10,000-node per-source and 16,384-node batch caps and 32-edge traversal
+depth. No Ghidra program/review/undo/durable checkpoint semantics change.
+
+Java21 adversarial regression extends the existing GA-02/03 CALL-effect
+self-test; full Ghidra 12.1.4 PUBLIC Java25 extension compilation and
+actual synthetic Ghidra headless CI remain required. See
+[bounded source witnesses](hardware-interprocedural-mm-source-witnesses.md).
+GA-02/03/18 remain PARTIAL.
+
 ## GA-02/03/11/12/18 — 2026-11-10: independent MMIO/VBR/unknown-site CFG joins for durable evidence
 
 Completed GA-12 per-function disk checkpoints now undergo an additional
