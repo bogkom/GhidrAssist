@@ -1,5 +1,66 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
+## GA-02/03/11/12/18 — 2026-11-10: independent MMIO/VBR/unknown-site CFG joins for durable evidence
+
+Completed GA-12 per-function disk checkpoints now undergo an additional
+**independent, bounded hardware-lattice source replay** on both `save`
+and `load`. Following the already integrated exact Program/JAR/Step
+hashes and independent predecessor **A/D register** join proof, this
+pass derives tracked whole-16-bit MMIO register constants, candidate
+VBR and source-uncertainty state at each reachable CFG node **without
+feeding in any MMIO/VBR values claimed by the disk record**.
+
+For a modeled MMIO STORE, the replay derives direct or indirect 24-bit
+source address and 16-bit literal/known register value from the
+independently verified A/D state. Any byte/word/long store clears
+overlapping full-register constants; an unknown pointer or unknown
+width drops the entire tracked MMIO lattice and records UNKNOWN store
+provenance. Only a known, aligned 16-bit complete store to an explicitly
+tracked target re-establishes the full-word value. `CALL_BARRIER`
+clears MMIO/VBR state and preserves UNKNOWN call provenance, even when
+strictly verified return-register constants are separately available.
+`VBR_CONSTANT` and `VBR_FROM_REGISTER` update only candidate static
+VBR observations.
+
+At a CFG merge or loop back edge, conflicting/missing MMIO words
+and VBR candidates collapse to UNKNOWN, the bounded count of **possible
+SIMCR MM low-byte source writes** is joined as a min/max range, and
+UNKNOWN CALL/STORE flags are merged conservatively with logical OR.
+Every completed typed STORE/MOVEC snapshot's **post-instruction**
+MMIO map and VBR, and **pre-instruction** candidate range and
+unknown-source flags, must agree with these independently reconstructed
+values. This blocks a fabricated partial CSBAR/MMIO constant, selected
+VBR branch or first-SIMCR-site epoch even if an attacker recomputes
+the outer SHA-256 of a key-matching disk envelope.
+
+The replay uses at most the existing fixed-point iteration count and
+3,000-Step/200,000-edge bounded source graph, plus a 262,144-total
+active MMIO-cell cap. Oversized or nonconvergent audits fail closed to
+cold analysis rather than using a dubious completed checkpoint.
+Existing typed source bounds, `Review/Apply/Undo` authorization and
+stale-Program/revision gates are unchanged. Incomplete intra-function
+worklists remain **not publishable** as analysis evidence.
+
+Two Java21 CI workflows now include a deterministic synthetic
+adversarial suite: equal vs conflicting peripheral words on a diamond,
+identical vs conflicting MOVEC/VBR branches, independent leaf CALL
+return registers with MMIO/VBR state invalidation, unknown indirect
+STORE, byte-overlapping 16-bit register, competing SIMCR source-site
+counts, and cyclic VBR back-edge. Hostile checkpoints are saved inside
+**correctly rehashed** exact project/CFG/JAR envelopes: rejected
+`save` must preserve the valid slot, and `load` must refuse the
+resealed lie. Full Ghidra 12.1.4 PUBLIC Java25 extension build and
+real isolated synthetic headless regression are also mandatory.
+
+These are **static candidate source** consistency facts only, not
+proof that calls, writes, VBR or interrupts execute, that SIMCR MM
+latched or that a physical memory map exists. Checksum integrity
+does not authenticate an author; the pass does not independently
+re-derive arbitrary actual MCU bus configuration. No ECU411 original
+firmware, production Ghidra project, user profile/OAuth, or stopped
+Wyse/Precision/Supervisor worker is accessed. GA-02/03/11/12/18
+remain PARTIAL; GA-14 remains deferred.
+
 ## GA-02/03/12/18 — 2026-11-10: independent A/D register-join reconstruction before durable CFG publication
 
 GA-12 completed per-function fixed-point checkpoints now receive a

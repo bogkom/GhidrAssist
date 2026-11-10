@@ -292,6 +292,172 @@ public final class HardwareDurableFunctionStages {
         return proven.equals(result.knownPointersAtEntry);
     }
 
+    /**
+     * Independent read-only projection of the peripheral/VBR/uncertainty
+     * lattice. Register predecessors were already independently audited by
+     * sourceBoundRegisterJoins; only those exact, source-proven A/D maps
+     * may be used to resolve an MMIO address or a MOVEC register source.
+     * Nothing here depends on the claimed peripheral/VBR disk payload.
+     */
+    private static final class HardwareJoinState {
+        final Map<Long,Integer> peripheral=new HashMap<>();
+        Long vbr;
+        int mmMin, mmMax;
+        boolean unknownCall, unknownStore;
+        HardwareJoinState copy(){
+            var out=new HardwareJoinState();
+            out.peripheral.putAll(peripheral);
+            out.vbr=vbr;out.mmMin=mmMin;out.mmMax=mmMax;
+            out.unknownCall=unknownCall;out.unknownStore=unknownStore;
+            return out;
+        }
+        boolean join(HardwareJoinState incoming){
+            var previous=copy();
+            peripheral.entrySet().removeIf(e ->
+                !Objects.equals(incoming.peripheral.get(e.getKey()),
+                    e.getValue()));
+            if(!Objects.equals(vbr,incoming.vbr))vbr=null;
+            mmMin=Math.min(mmMin,incoming.mmMin);
+            mmMax=Math.max(mmMax,incoming.mmMax);
+            unknownCall|=incoming.unknownCall;
+            unknownStore|=incoming.unknownStore;
+            return !peripheral.equals(previous.peripheral) ||
+                !Objects.equals(vbr,previous.vbr) ||
+                mmMin!=previous.mmMin || mmMax!=previous.mmMax ||
+                unknownCall!=previous.unknownCall ||
+                unknownStore!=previous.unknownStore;
+        }
+    }
+
+    private static HardwareJoinState independentHardwareTransfer(
+            HardwareDataflow.Step step,HardwareJoinState before,
+            Map<String,Long> registers,Set<Long> tracked){
+        var after=before.copy();
+        switch(step.kind){
+            case STORE_DIRECT, STORE_INDIRECT -> {
+                Long address=sourceAddress(step,registers);
+                if(HardwareDataflow.mayTouchSimcrMmLowByte(
+                        address,step.writeBits)){
+                    after.mmMin=Math.min(2,before.mmMin+1);
+                    after.mmMax=Math.min(2,before.mmMax+1);
+                }
+                int bytes=switch(step.writeBits){
+                    case 8 -> 1;
+                    case 16 -> 2;
+                    case 32 -> 4;
+                    default -> 0;
+                };
+                if(address==null || bytes==0){
+                    after.peripheral.clear();
+                    after.unknownStore=true;
+                }else{
+                    after.peripheral.keySet().removeIf(target ->
+                        overlaps(address,bytes,target));
+                    if(step.writeBits==16 && (address&1L)==0 &&
+                            tracked.contains(address)){
+                        Integer known=sourceWord(step,registers);
+                        if(known!=null)
+                            after.peripheral.put(address,known);
+                    }
+                }
+            }
+            case VBR_CONSTANT ->
+                after.vbr=step.operand&HardwareDataflow.MASK24;
+            case VBR_FROM_REGISTER ->
+                after.vbr=step.register==null?
+                    null:registers.get(step.register);
+            case CALL_BARRIER -> {
+                // Even a verified leaf return does not prove preserved
+                // peripheral registers or VBR across an external CALL.
+                after.peripheral.clear();
+                after.vbr=null;
+                after.unknownCall=true;
+            }
+            default -> {
+                // A/D SET/COPY/ADJUST/CLOBBER and OTHER do not change
+                // MMIO or VBR. Register side effects are accounted for
+                // by the independent register-only CFG audit.
+            }
+        }
+        return after;
+    }
+
+    /**
+     * GA-02/03/12: independently re-derive the bounded 16-bit MMIO words,
+     * VBR candidate, saturated SIMCR source-site counters and UNKNOWN
+     * CALL/STORE barriers at every STORE/MOVEC source observation.
+     * Branch and cyclic joins drop any conflicting peripheral/VBR value;
+     * they never promote an instruction to proof of execution or MM latch.
+     *
+     * This projects only hardware state, taking A/D register maps solely
+     * from the separately verified source-register pass. No stored
+     * peripheral/VBR snapshot is fed into the replay. Memory is capped
+     * across all reachable CFG states; oversized cases are a cache miss.
+     */
+    private static boolean sourceBoundHardwareJoins(long entry,
+            Map<Long,HardwareDataflow.Step> graph,
+            Set<Long> tracked,HardwareDataflow.Result result){
+        if(graph==null || !graph.containsKey(entry) || tracked==null ||
+                result==null || result.iterations<1 ||
+                result.iterations>30000)
+            return false;
+        Map<Long,HardwareJoinState> at=new HashMap<>();
+        ArrayDeque<Long> queue=new ArrayDeque<>();
+        Set<Long> scheduled=new HashSet<>();
+        at.put(entry,new HardwareJoinState());
+        queue.add(entry);scheduled.add(entry);
+        long totalCells=0;
+        int iterations=0;
+        while(!queue.isEmpty()){
+            // The complete original solver cannot have converged
+            // with fewer transfers than its independent source-only
+            // hardware projection. Respect the original finite budget.
+            if(++iterations>result.iterations)return false;
+            Long pc=queue.removeFirst();scheduled.remove(pc);
+            var step=graph.get(pc);
+            var before=at.get(pc);
+            if(step==null || before==null)return false;
+            var registers=result.knownPointersAtEntry.getOrDefault(
+                pc,Map.of());
+            var after=independentHardwareTransfer(step,before,
+                registers,tracked);
+            for(Long next:step.successors){
+                if(!graph.containsKey(next))continue;
+                var prior=at.get(next);
+                if(prior==null){
+                    at.put(next,after.copy());
+                    totalCells+=after.peripheral.size();
+                    if(totalCells>262144L)return false;
+                    if(scheduled.add(next))queue.addLast(next);
+                }else{
+                    int oldCells=prior.peripheral.size();
+                    if(prior.join(after)){
+                        totalCells+=prior.peripheral.size()-oldCells;
+                        if(scheduled.add(next))queue.addLast(next);
+                    }
+                }
+            }
+        }
+        if(at.size()!=result.reachedNodes)return false;
+        for(var snapshot:result.snapshots){
+            var step=graph.get(snapshot.instruction);
+            var before=at.get(snapshot.instruction);
+            if(step==null || before==null)return false;
+            var after=independentHardwareTransfer(step,before,
+                result.knownPointersAtEntry.getOrDefault(
+                    snapshot.instruction,Map.of()),tracked);
+            if(!Objects.equals(snapshot.vbr,after.vbr) ||
+                    !snapshot.knownPeripheralWords.equals(
+                        after.peripheral) ||
+                    snapshot.priorMmCandidateMin!=before.mmMin ||
+                    snapshot.priorMmCandidateMax!=before.mmMax ||
+                    snapshot.priorUnknownCall!=before.unknownCall ||
+                    snapshot.priorUnknownStore!=before.unknownStore)
+                return false;
+        }
+        return true;
+    }
+
     private static boolean sourceBoundComplete(long entry,
             Collection<HardwareDataflow.Step> steps,
             Collection<Long> targets,HardwareDataflow.Result result) {
@@ -347,7 +513,7 @@ public final class HardwareDurableFunctionStages {
                         !address24(register.getValue()))
                     return false;
         }
-        return true;
+        return sourceBoundHardwareJoins(entry,reachable,tracked,result);
     }
 
     private static boolean address24(Long value) {
