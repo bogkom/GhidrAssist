@@ -170,6 +170,131 @@ public final class HardwareCallEffectsSelfTest {
         try {immutableCallees.directCallees().clear();}
         catch(UnsupportedOperationException expected){immutableSource=true;}
         ok(immutableSource,"validated source callee list remains immutable");
+        // GA-01/11: the same original bounded solver now returns typed
+        // shortest source-function routes without changing its old flags.
+        var evidenced=HardwareCallEffects.inspect(0,graph,5,20);
+        ok(evidenced.summary().equals(effects) &&
+            evidenced.storeWitness().kind()==
+                HardwareCallEffects.WitnessKind.MEMORY_STORE &&
+            evidenced.storeWitness().chain().equals(List.of(0L,1L,3L)) &&
+            evidenced.vbrWitness().kind()==
+                HardwareCallEffects.WitnessKind.MOVEC_VBR &&
+            evidenced.vbrWitness().chain().equals(List.of(0L,1L)) &&
+            evidenced.observedUnknownWitness()==null &&
+            evidenced.frontierWitness()==null,
+            "STORE and MOVEC have explicit shortest function-only chains");
+        var missingSource=HardwareCallEffects.inspect(0,
+            List.of(n(0,false,false,false,5L)),5,10);
+        ok(missingSource.summary().unresolved() &&
+            !missingSource.summary().truncated() &&
+            missingSource.observedUnknownWitness().kind()==
+                HardwareCallEffects.WitnessKind.MISSING_TARGET &&
+            missingSource.observedUnknownWitness().chain()
+                .equals(List.of(0L,5L)) &&
+            missingSource.frontierWitness()==null,
+            "missing decoded callee is OBSERVED unknown, not an uninspected cap");
+        var unknownNode=HardwareCallEffects.inspect(0,
+            List.of(n(0,false,false,false,1L),
+                    n(1,false,false,true)),5,10);
+        ok(unknownNode.observedUnknownWitness().kind()==
+                HardwareCallEffects.WitnessKind.UNKNOWN_FLOW &&
+            unknownNode.observedUnknownWitness().chain().equals(List.of(0L,1L)),
+            "unresolved modeled flow is tied to the actual examined function");
+        var depthEvidence=HardwareCallEffects.inspect(0,
+            List.of(n(0,false,false,false,1L),
+                    n(1,false,false,false,2L),
+                    n(2,true,false,false)),1,10);
+        ok(depthEvidence.summary().truncated() &&
+            !depthEvidence.summary().possibleMemoryStore() &&
+            depthEvidence.observedUnknownWitness()==null &&
+            depthEvidence.frontierWitness().kind()==
+                HardwareCallEffects.WitnessKind.DEPTH_CUTOFF &&
+            depthEvidence.frontierWitness().chain()
+                .equals(List.of(0L,1L,2L)),
+            "late STORE is uninspected, not an observed negative");
+        var nodeEvidence=HardwareCallEffects.inspect(0,
+            List.of(n(0,false,false,false,1L,2L),
+                    n(1,false,false,false),
+                    n(2,true,false,false)),5,2);
+        ok(nodeEvidence.frontierWitness().kind()==
+                HardwareCallEffects.WitnessKind.NODE_CUTOFF &&
+            nodeEvidence.frontierWitness().chain().equals(List.of(0L,2L)) &&
+            !nodeEvidence.summary().possibleMemoryStore(),
+            "queued source limit explicitly retains skipped STORE frontier");
+        var longEvidence=HardwareCallEffects.inspect(0,longChain,1500,1600);
+        ok(longEvidence.summary().equals(deep) &&
+            longEvidence.storeWitness().chain().size()==1500 &&
+            longEvidence.storeWitness().chain().get(0)==0L &&
+            longEvidence.storeWitness().chain().get(1499)==1499L,
+            "long source paths remain source-bounded and nonrecursive");
+        // A 5k-node source graph with STORE/unknown evidence in every
+        // function used to rebuild growing O(depth) paths at each node.
+        // Shortest-root evidence must remain constant-size and complete.
+        var everyNode=new java.util.ArrayList<HardwareCallEffects.FunctionNode>();
+        for(int i=0;i<5000;i++)
+            everyNode.add(n(i,true,i%2==0,true,
+                i==4999?new Long[0]:new Long[]{(long)i+1}));
+        var repeatedEvidence=HardwareCallEffects.inspect(
+            0,everyNode,5000,5000);
+        ok(repeatedEvidence.summary().visited()==5000 &&
+            !repeatedEvidence.summary().truncated() &&
+            !repeatedEvidence.summary().recursive() &&
+            repeatedEvidence.storeWitness().chain().equals(List.of(0L)) &&
+            repeatedEvidence.vbrWitness().chain().equals(List.of(0L)) &&
+            repeatedEvidence.observedUnknownWitness().chain().equals(List.of(0L)),
+            "repeated deep sources retain shortest path without quadratic reconstruction");
+        // A missing child at depth two can be encountered before an
+        // actually inspected unknown-flow sibling at depth one. Canonical
+        // witnesses must compare path LENGTH, not discovery timing.
+        var orderTrap=HardwareCallEffects.inspect(0,List.of(
+            n(0,false,false,false,1L,2L),
+            n(1,false,false,false,8L),
+            n(2,false,false,true)),3,10);
+        ok(orderTrap.observedUnknownWitness().kind()==
+                HardwareCallEffects.WitnessKind.UNKNOWN_FLOW &&
+            orderTrap.observedUnknownWitness().chain().equals(List.of(0L,2L)),
+            "shallower observed UNKNOWN supersedes an earlier missing grandchild");
+        var dualGraph=List.of(
+            n(0,false,false,false,1L,3L),
+            n(1,false,false,false,2L),
+            n(2,false,false,false,4L),
+            n(3,false,false,true),
+            n(4,false,false,false,6L),
+            n(6,true,false,false));
+        var dual=HardwareCallEffects.inspect(0,dualGraph,2,10);
+        ok(dual.summary().unresolved() && dual.summary().truncated() &&
+            dual.observedUnknownWitness().chain().equals(List.of(0L,3L)) &&
+            dual.observedUnknownWitness().kind()==
+                HardwareCallEffects.WitnessKind.UNKNOWN_FLOW &&
+            dual.frontierWitness().chain().equals(List.of(0L,1L,2L,4L)),
+            "actual UNKNOWN is separate from an uninspected later MM frontier");
+        var dualReversed=new java.util.ArrayList<>(dualGraph);
+        java.util.Collections.reverse(dualReversed);
+        ok(dual.equals(HardwareCallEffects.inspect(0,dualReversed,2,10)),
+            "canonical typed paths independent of function inventory ordering");
+        var onlyCycle=HardwareCallEffects.inspect(0,List.of(
+            n(0,false,false,false,1L),
+            n(1,false,false,false,0L)),5,10);
+        ok(onlyCycle.summary().recursive() &&
+            onlyCycle.observedUnknownWitness()==null &&
+            onlyCycle.frontierWitness()==null,
+            "cycle uncertainty does not invent a missing/cutoff source path");
+        boolean wrongRoot=false;
+        try {
+            new HardwareCallEffects.Detailed(0,evidenced.summary(),
+                new HardwareCallEffects.SourceWitness(
+                    HardwareCallEffects.WitnessKind.MEMORY_STORE,List.of(1L)),
+                null,null,null);
+        }catch(IllegalArgumentException expected){wrongRoot=true;}
+        ok(wrongRoot,"foreign-root source proof cannot enter vector correlation");
+        boolean wrongKind=false;
+        try {
+            new HardwareCallEffects.Detailed(0,evidenced.summary(),
+                new HardwareCallEffects.SourceWitness(
+                    HardwareCallEffects.WitnessKind.MOVEC_VBR,List.of(0L)),
+                null,null,null);
+        }catch(IllegalArgumentException expected){wrongKind=true;}
+        ok(wrongKind,"contradictory source category cannot masquerade as STORE");
         System.out.println("HardwareCallEffectsSelfTest OK");
     }
 }
