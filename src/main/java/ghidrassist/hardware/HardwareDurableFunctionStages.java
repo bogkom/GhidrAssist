@@ -47,14 +47,16 @@ public final class HardwareDurableFunctionStages {
         if(!graph.containsKey(entry))return null;
         Map<Long,HardwareDataflow.Step> visited=new HashMap<>();
         ArrayDeque<Long> queue=new ArrayDeque<>();
-        queue.add(entry);
+        Set<Long> scheduled=new HashSet<>();
+        queue.add(entry);scheduled.add(entry);
         while(!queue.isEmpty()) {
             long pc=queue.removeFirst();
             var step=graph.get(pc);
-            if(step==null || visited.putIfAbsent(pc,step)!=null)continue;
+            if(step==null)continue;
+            visited.put(pc,step);
             for(Long next:step.successors)
                 if(next!=null && graph.containsKey(next) &&
-                        !visited.containsKey(next))
+                        scheduled.add(next))
                     queue.addLast(next);
         }
         return visited;
