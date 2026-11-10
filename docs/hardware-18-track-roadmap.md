@@ -1,5 +1,43 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
+## GA-18 — 2026-11-10: bounded Automation bearer-session and JSON-RPC wire identity
+
+The external `ghidrassist-agent` now reads at most 16 KiB of its
+locally selected JSON session receipt, rejects duplicate/Unicode-escaped
+keys, malformed/noncanonical schema and port types (including Boolean,
+floating-point and quoted ports), out-of-range port and malformed
+Bearer token. Launcher-specific receipt metadata remains supported;
+a locally edited receipt does **not** authorize writes, review
+approval or model continuation. The active loopback JSON-RPC client
+also rejects ambiguous duplicate response keys, non-finite JSON
+numbers, non-object replies and responses >1 MiB, including valid
+JSON followed by excessive trailing whitespace. Request JSON rejects
+NaN at serialization instead of sending a nonstandard wire value.
+The HTTP transport remains bound to `127.0.0.1` with existing Bearer
+authentication; no remote endpoint is introduced.
+
+The `ghidrassist-agent-start` launcher independently bounds and
+checks existing session and readiness receipts (16 KiB), refuses
+duplicate-key/NaN ambiguity, validates exact integer pid/port/schema
+before trusting readiness and limits bootstrap RPC replies to 1 MiB.
+The existing no-takeover policy for live processes, isolated
+synthetic-only write consent and review-copy safeguards remain
+unchanged. Strictness applies to local receipts and read-only wire
+result interpretation; it does not create a new global Ghidra
+transaction or prove that the remote process executed hardware code.
+
+Python 3 tests exercise actual client/launcher modules with
+deterministic synthetic receipts and mocked loopback HTTP, covering
+valid minimal and extended sessions, duplicate escaped aliases,
+malformed credentials and ports, overlong replies, nonfinite values,
+and safe normal status. GitHub Actions runs these tests in the GA-18
+launcher and GA-12/15 Agentic paths, plus complete Java25 Ghidra
+12.1.4 PUBLIC extension and isolated actual synthetic CodeBrowser/
+JSON-RPC regression triggered by changing the CLI. No original ECU411
+firmware, user Ghidra projects, OAuth secrets or stopped
+Wyse/Precision/Supervisor processes are accessed. GA-18 remains
+PARTIAL; GA-14 remains deferred.
+
 ## GA-12/13/15/18 — 2026-11-10: unambiguous offline checkpoint JSON parsing
 
 The previously merged offline provenance readers for four historical
