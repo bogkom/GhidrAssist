@@ -157,9 +157,9 @@ synthetic CI remain required.
 
 ## 2026-11-10 — complete CPU32 U32 source-identity input gate
 
-The generic read-only CPU32 call-effect graph and SIMCR/MM source solver
+The generic read-only CPU32 call-effect graph, RESET trace, and SIMCR/MM source solver
 now reject source function IDs, direct CALL destinations, caller IDs,
-CALL instruction PCs, explicit root requests and typed witness entries
+CALL instruction PCs, RESET source-evidence IDs, explicit root requests and typed witness entries
 outside unsigned 32-bit address range **before** BFS or report rendering.
 An address stored as a Java long is not evidence of a wider processor;
 0xFFFFFFFF remains the inclusive 32-bit model boundary. This closes a
