@@ -193,6 +193,10 @@ public final class HardwareResetIndirectVbrCorrelationSelfTest {
             "Unknown RESET root requires incomplete flag");
         reject(()->republish(r,null),
             "Null page rows rejected as explicit invalid input, not NullPointerException");
+        var nullRow=new ArrayList<>(r.rows());
+        nullRow.set(0,null);
+        reject(()->republish(r,nullRow),
+            "Null source row in an otherwise populated page fails closed");
         reject(()->republish(r,r.rows().subList(0,2)),
             "Public page cannot omit rows and claim the old cursor/count");
         reject(()->new HardwareResetIndirectVbrCorrelation.Result(
