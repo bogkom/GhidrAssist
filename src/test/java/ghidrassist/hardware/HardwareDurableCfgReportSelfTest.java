@@ -231,6 +231,53 @@ public final class HardwareDurableCfgReportSelfTest {
             eligibleForCompleteSourceInventory(
                 decode(encode(confidentlyObserved)).orElseThrow()),
             "Fully retained bounded source inputs survive strictly typed V2");
+        // SHA-256 of a disk blob is not authorship or a fresh source
+        // re-extraction. Even a structurally complete V2 SOURCE inventory
+        // must be stripped before a restored CFG is published to GUI/API.
+        var fromDisk=restoredForReadOnlyDisplay(
+            decode(encode(confidentlyObserved)).orElseThrow());
+        ok(eligibleForCompletedRestore(fromDisk) &&
+            !eligibleForCompleteSourceInventory(fromDisk) &&
+            fromDisk.sourceInventory()==null &&
+            fromDisk.markdown().contains("SOURCE INVENTORY UNVERIFIED") &&
+            fromDisk.markdown().contains(confidentlyObserved.markdown()) &&
+            fromDisk.resetFunctions().equals(confidentlyObserved.resetFunctions()) &&
+            confidentlyObserved.sourceInventory()!=null,
+            "Exact typed V2 source must not revive as a live source-page cursor");
+        var incompleteSources=restoredForReadOnlyDisplay(decoded);
+        ok(incompleteSources.sourceInventory()==null &&
+            incompleteSources.resetIncomplete()==decoded.resetIncomplete() &&
+            incompleteSources.cfgReviewComplete() &&
+            !eligibleForCompleteSourceInventory(incompleteSources),
+            "Omitted and uncertain JSR/MOVEC paths stay unpublished on restore");
+        var legacy=restoredForReadOnlyDisplay(old);
+        ok(legacy.sourceInventory()==null &&
+            legacy.markdown().contains("SOURCE INVENTORY UNVERIFIED") &&
+            legacy.cfgReviewComplete(),
+            "Legacy V1 also carries explicit cache provenance warning");
+        boolean incompleteRestore=false;
+        try{restoredForReadOnlyDisplay(stopped);}
+        catch(IllegalArgumentException expected){incompleteRestore=true;}
+        ok(incompleteRestore,
+            "Interrupted CFG cannot be sanitized into a publishable completed report");
+        boolean unrooted=false;
+        try {
+            new Snapshot("only structure","",2,0,0,0,2,false,
+                false,false,true,0,0,List.of(),List.of(),List.of(),
+                new HardwareResetIndirectVbrCorrelation.SourceInventory(
+                    List.of(),List.of(),Set.of(),false,false,0,0));
+        }catch(IllegalArgumentException expected){unrooted=true;}
+        ok(unrooted,
+            "V2 cannot claim a complete RESET set without a recognized root");
+        unrooted=false;
+        try {
+            new Snapshot("only structure","",2,0,0,0,2,false,
+                true,false,true,0,0,List.of(),List.of(),List.of(),
+                new HardwareResetIndirectVbrCorrelation.SourceInventory(
+                    List.of(),List.of(),Set.of(),true,false,0,0));
+        }catch(IllegalArgumentException expected){unrooted=true;}
+        ok(unrooted,
+            "V2 cannot claim a recognized RESET root with no source functions");
         var interrupted=new Snapshot(
             confidentlyObserved.markdown(),confidentlyObserved.csv(),
             confidentlyObserved.functions(),confidentlyObserved.indirect(),
@@ -243,6 +290,56 @@ public final class HardwareDurableCfgReportSelfTest {
         ok(!eligibleForCompletedRestore(interrupted) &&
             !eligibleForCompleteSourceInventory(interrupted),
             "Limited CFG cannot be revived as a complete source report");
+        // A locally resealed, checksum-valid V2 source can lie about a
+        // modeled JSR MAY-MM bit while retaining exact RESET sets, PCs and
+        // count bounds. Only a live Ghidra source replay could endorse it.
+        // The aggregate disk restore must publish NO JSR/VBR source cursor.
+        var originalJsr=confident.indirect().get(0);
+        var forgedSources=new HardwareResetIndirectVbrCorrelation.SourceInventory(
+            List.of(new HardwareResetIndirectVbrCorrelation.Indirect(
+                originalJsr.caller(),originalJsr.pc(),originalJsr.target(),
+                false,originalJsr.uncertain())),
+            confident.vbr(),confident.resetVisited(),
+            confident.resetRecognized(),confident.resetIncomplete(),0,0);
+        var forged=new Snapshot(
+            confidentlyObserved.markdown(),confidentlyObserved.csv(),
+            confidentlyObserved.functions(),confidentlyObserved.indirect(),
+            confidentlyObserved.vbr(),confidentlyObserved.unresolved(),
+            confidentlyObserved.visited(),confidentlyObserved.limited(),
+            confidentlyObserved.resetRecognized(),
+            confidentlyObserved.resetIncomplete(),
+            confidentlyObserved.cfgReviewComplete(),
+            confidentlyObserved.cfgOmitted(),
+            confidentlyObserved.pointersOmitted(),confidentlyObserved.sites(),
+            confidentlyObserved.roles(),confidentlyObserved.resetFunctions(),
+            forgedSources);
+        var root=java.nio.file.Files.createTempDirectory(
+            "ga12-resealed-may-source-");
+        var key=new HardwareDurableStageStore.Key(
+            HardwareDurableStageStore.hash("project"),
+            HardwareDurableStageStore.hash("firmware"),
+            HardwareDurableStageStore.hash("listing"),
+            HardwareDurableStageStore.hash("extension"),"68000:BE:32:CPU32",true);
+        try {
+            var rewritten=encode(forged);
+            HardwareDurableStageStore.save(root,key,rewritten);
+            var reread=HardwareDurableStageStore.load(root,key).orElseThrow();
+            ok(Arrays.equals(rewritten,reread) &&
+                eligibleForCompleteSourceInventory(decode(reread).orElseThrow()) &&
+                !decode(reread).orElseThrow().sourceInventory()
+                    .indirect().get(0).mayMm(),
+                "Forged MAY is structurally complete inside exact rehashed envelope");
+            var safe=restoredForReadOnlyDisplay(decode(reread).orElseThrow());
+            ok(safe.sourceInventory()==null &&
+                eligibleForCompletedRestore(safe) &&
+                !eligibleForCompleteSourceInventory(safe) &&
+                safe.markdown().contains("SOURCE INVENTORY UNVERIFIED"),
+                "Rehashed false MAY cannot become fresh source in restored report");
+        } finally {
+            java.nio.file.Files.deleteIfExists(
+                HardwareDurableStageStore.checkpointPath(root,key));
+            java.nio.file.Files.deleteIfExists(root);
+        }
         System.out.println("HardwareDurableCfgReportSelfTest OK");
     }
 }

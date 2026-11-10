@@ -140,6 +140,53 @@ public final class Ga12DurableSourceV2RealGhidraMain {
     }
 
     /**
+     * A locally forged V2 MAY-MM flag can remain structurally well formed
+     * and be rewrapped under the EXACT full Program input key/digest. A
+     * checksum does not independently re-derive Ghidra source instructions.
+     * The restored CFG must still be reusable, but NO typed source page may
+     * inherit that locally forged claim.
+     */
+    private static void installForgedMayMm(Path cache,
+            HardwareDurableStageStore.Key key)throws Exception {
+        var bytes=HardwareDurableStageStore.load(cache,key).orElseThrow();
+        var original=HardwareDurableCfgReport.decode(bytes).orElseThrow();
+        var source=original.sourceInventory();
+        require(source!=null && !source.indirect().isEmpty(),
+            "source-forged fixture requires observed JSR candidates");
+        var changed=new java.util.ArrayList<>(source.indirect());
+        var first=changed.get(0);
+        require(first.mayMm(),"synthetic original JSR is possible SIMCR MM");
+        changed.set(0,new HardwareResetIndirectVbrCorrelation.Indirect(
+            first.caller(),first.pc(),first.target(),false,
+            first.uncertain()));
+        var invented=new HardwareResetIndirectVbrCorrelation.SourceInventory(
+            changed,source.vbr(),source.resetVisited(),
+            source.resetRecognized(),source.resetIncomplete(),
+            source.omittedIndirect(),source.omittedVbr());
+        var forged=new HardwareDurableCfgReport.Snapshot(
+            original.markdown(),original.csv(),original.functions(),
+            original.indirect(),original.vbr(),original.unresolved(),
+            original.visited(),original.limited(),
+            original.resetRecognized(),original.resetIncomplete(),
+            original.cfgReviewComplete(),original.cfgOmitted(),
+            original.pointersOmitted(),original.sites(),original.roles(),
+            original.resetFunctions(),invented);
+        require(HardwareDurableCfgReport.eligibleForCompletedRestore(forged) &&
+            HardwareDurableCfgReport.decode(
+                HardwareDurableCfgReport.encode(forged))
+                .orElseThrow().sourceInventory().indirect().get(0).mayMm()==false,
+            "exact-key forged MAY flag remains format/structure valid");
+        HardwareDurableStageStore.save(cache,key,
+            HardwareDurableCfgReport.encode(forged));
+        var reread=HardwareDurableCfgReport.decode(
+            HardwareDurableStageStore.load(cache,key).orElseThrow())
+            .orElseThrow();
+        require(!reread.sourceInventory().indirect().get(0).mayMm() &&
+            reread.resetFunctions().equals(original.resetFunctions()),
+            "correctly rehashed false MAY flag saved under matching source key");
+    }
+
+    /**
      * Incomplete CFG metadata cannot be promoted by retaining otherwise
      * valid JSR/MOVEC source rows or an exact-input disk checksum.
      */
@@ -234,7 +281,7 @@ public final class Ga12DurableSourceV2RealGhidraMain {
             phase.equals("source-edit")||phase.equals("source-v1")||
             phase.equals("source-corrupt")||phase.equals("source-profile")||
             phase.equals("source-mismatch")||phase.equals("source-incomplete")||
-            phase.equals("source-name"),
+            phase.equals("source-name")||phase.equals("source-forged"),
             "unexpected isolated V2 phase");
         Path ghidra=Path.of(args[0]).toRealPath();
         Path projectDir=Path.of(args[1]).toRealPath();
@@ -415,13 +462,15 @@ public final class Ga12DurableSourceV2RealGhidraMain {
                 installLegacyV1(cache,original);
             if(phase.equals("source-corrupt"))
                 installMalformedSource(cache,original);
+            if(phase.equals("source-forged"))
+                installForgedMayMm(cache,original);
             var revision=HardwareAnalysisRevision.capture(program,
                 program.getModificationNumber(),program.getLanguageID().toString(),
                 program.getExecutableSHA256(),selected);
             var obtained=HardwareFlowStageCache.loadOrAnalyze(
                 program,revision,TaskMonitor.DUMMY);
             boolean expectedReuse=phase.equals("source-read")||
-                phase.equals("source-v1");
+                phase.equals("source-v1")||phase.equals("source-forged");
             require(obtained.reused()==expectedReuse,
                 "cross-JVM reuse mismatch for "+phase);
             var report=obtained.report();
@@ -441,15 +490,34 @@ public final class Ga12DurableSourceV2RealGhidraMain {
                 "Unknown/omitted synthetic JSR witnesses must remain incomplete");
             require(report.markdown.contains("CFG/P-code"),
                 "real Ghidra CFG report missing");
-            if(phase.equals("source-v1")) {
-                require(report.sourceInventory==null,
-                    "V1 restored CFG must not fabricate JSR/MOVEC source inventory");
+            if(phase.equals("source-v1") ||
+                    phase.equals("source-read") ||
+                    phase.equals("source-forged")) {
+                require(report.sourceInventory==null &&
+                    report.markdown.contains(
+                        "SOURCE INVENTORY UNVERIFIED"),
+                    "No live source inventory from legacy, typed V2 or forged disk");
             } else if(phase.equals("source-profile")) {
                 require(report.sourceInventory==null &&
                     report.markdown.contains(
                         "Not evaluated: explicit MC68332 profile required"),
                     "generic CPU32 cannot inherit device-specific V2 sources");
             } else sourceMatches(report.sourceInventory);
+            boolean freshSourceRevalidated=false;
+            if(phase.equals("source-forged")) {
+                // The same Program still has unchanged bytes, but a forged
+                // V2 MAY flag cannot become current evidence. Explicit
+                // checkpoint clear forces an independent real Ghidra scan.
+                HardwareFlowStageCache.clear(program);
+                var cold=HardwareFlowStageCache.loadOrAnalyze(
+                    program,revision,TaskMonitor.DUMMY);
+                require(!cold.reused(),
+                    "explicit clear must refuse forged aggregate reuse");
+                sourceMatches(cold.report().sourceInventory);
+                require(cold.report().sourceInventory.indirect().get(0).mayMm(),
+                    "actual fresh Listing source restores positive MAY, not forged false");
+                freshSourceRevalidated=true;
+            }
             Path checkpoint=HardwareDurableStageStore.checkpointPath(
                 cache,original);
             require(Files.isRegularFile(checkpoint),
@@ -460,6 +528,7 @@ public final class Ga12DurableSourceV2RealGhidraMain {
             String imported=program.getExecutableSHA256();
             String proof="{\"phase\":\""+phase+"\",\"ghidra_real\":true,"+
                 "\"reused\":"+obtained.reused()+
+                ",\"fresh_source_revalidated\":"+freshSourceRevalidated+
                 ",\"source_inventory_retained\":"+(report.sourceInventory!=null)+
                 ",\"source_pairs\":"+(report.sourceInventory==null?0:
                     report.sourceInventory.page(0,32).colocatedPairs())+

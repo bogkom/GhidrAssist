@@ -118,10 +118,15 @@ def main():
                 str(HERE/"Ga12DurableSourceV2RealGhidraMain.java")],
                 work,env,out/"source-compile.log",timeout=120)
             source_proofs={}
-            for source_phase in ("source-write","source-read","source-corrupt",
-                                 "source-mismatch","source-incomplete",
-                                 "source-v1","source-edit","source-name",
-                                 "source-profile"):
+            # Forge the original exact-key V2 immediately after read.
+            # source-profile intentionally overwrites the same project slot
+            # with a DIFFERENT profile key, so it must run after forgery.
+            # The source-forged phase explicitly clears and cold-recomputes
+            # the true synthetic Listing source before the next phase.
+            for source_phase in ("source-write","source-read","source-forged",
+                                 "source-corrupt","source-mismatch",
+                                 "source-incomplete","source-v1",
+                                 "source-edit","source-name","source-profile"):
                 helper.call([str(java/"bin/java"),
                     "-Djava.system.class.loader=ghidra.GhidraClassLoader",
                     "-Djava.awt.headless=true",
@@ -140,14 +145,15 @@ def main():
                         not evidence["ghidra_real"] or
                         not evidence["checkpoint_exists"] or
                         evidence["reused"] !=
-                        (source_phase in ("source-read","source-v1")) or
+                        (source_phase in ("source-read","source-v1","source-forged")) or
                         evidence["source_inventory_retained"] !=
-                        (source_phase not in ("source-v1","source-profile"))):
+                        (source_phase not in ("source-read","source-v1",
+                                              "source-forged","source-profile"))):
                     raise RuntimeError(
                         "Cross-JVM source inventory/checkpoint did not retain/refuse")
-                if source_phase in ("source-write","source-read",
-                                    "source-corrupt","source-mismatch",
-                                    "source-incomplete","source-edit","source-name"):
+                if source_phase in ("source-write","source-corrupt",
+                                    "source-mismatch","source-incomplete",
+                                    "source-edit","source-name"):
                     if (evidence["source_pairs"]!=2 or
                             evidence["omitted_indirect"]!=1):
                         raise RuntimeError("Missing bounded native V2 source pairs")
@@ -160,8 +166,21 @@ def main():
                                          "source-profile")):
                     raise RuntimeError(
                         "Saved Review input/full fingerprint refusal mismatch")
-            initial=source_proofs["source-write"]
             restored=source_proofs["source-read"]
+            forged=source_proofs["source-forged"]
+            if (not forged["reused"] or forged["source_inventory_retained"] or
+                    forged["source_pairs"]!=0 or
+                    forged["omitted_indirect"]!=0 or
+                    not forged["fresh_source_revalidated"] or
+                    any(proof["fresh_source_revalidated"]
+                        for phase,proof in source_proofs.items()
+                        if phase!="source-forged") or
+                    restored["source_inventory_retained"] or
+                    restored["source_pairs"]!=0 or
+                    restored["omitted_indirect"]!=0):
+                raise RuntimeError(
+                    "Correctly resealed fabricated MAY-MM source leaked after restart")
+            initial=source_proofs["source-write"]
             corrupted=source_proofs["source-corrupt"]
             mismatched=source_proofs["source-mismatch"]
             incomplete=source_proofs["source-incomplete"]
@@ -204,7 +223,10 @@ def main():
                 "edited_recomputed":True,
                 "source_data":"synthetic-only",
                 "tested_stage":"completed CFG Report",
-                "v2_source_processes":9,
+                "v2_source_processes":10,
+                "v2_resealed_forged_may_mm_pages_refused":True,
+                "v2_forged_claim_cleared_then_live_source_replayed":True,
+                "v2_cfg_only_restored_source_inventory_denied":True,
                 "saved_review_binding_cross_jvm":True,
                 "saved_review_changed_bytes_denied":True,
                 "saved_review_renamed_function_denied":True,

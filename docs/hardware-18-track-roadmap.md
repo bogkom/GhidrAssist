@@ -1,5 +1,40 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
+## GA-01/02/03/11/12/18 — 2026-11-10: fail-closed source inventory after disk CFG restart
+
+The GA-12 aggregate CFG report retains exact Program/Listing/JAR input
+fingerprints and a typed V2 JSR/MOVEC/RESET inventory, but the V2 envelope
+checksum does **not** authenticate a source author or independently replay
+instruction identities, indirect MAY-MM provenance, bounded RESET reachability
+or MOVEC/VBR candidates after a JVM restart. A completed report was
+previously restored into `GhidraHardwareFlowService.Report` with the stored
+source inventory still attached, enabling revision-bound GUI/Automation API
+source pagination as though those rows were freshly re-derived.
+
+Now disk `load` calls a strict **CFG-only restoration projection**:
+the completed, fingerprint-matching report and original safety/omission/RESET
+flags remain reusable, but the stored typed source inventory is dropped from
+the **active** report. A prominent notice distinguishes retained historical
+Markdown from independently verified current Listing source. Automation
+`source-pairs` pages remain `SOURCE_INVENTORY_NOT_RETAINED` until an explicit
+checkpoint clear and fresh Analyze. Fresh in-memory source pages still use
+the existing revision+epoch gate. Read-only sourced checkpoints do not grant
+Review/Apply/Undo authority or imply actual MCU execution, latched SIMCR MM,
+active VBR/ISR or a physical map.
+
+The typed disk V2 decoder remains backwards compatible (V1 and V2); added
+RESET-root consistency guards refuse a nonempty reset set without a
+recognized root or a recognized root with no functions, even with recomputed
+outer SHA-256. Java21 adversarial tests check complete, omitted/uncertain,
+historic V1 and malformed rewrapped V2. The real Ghidra 12.1.4 PUBLIC Java25
+multi-JVM synthetic restart regression must also verify that a byte-valid,
+**correctly rehashed but falsified** JSR MAY-MM claim can be reused ONLY as
+an aggregate CFG checkpoint, never as live source-page evidence. A full
+fresh Analyze re-derives sources with the existing independent GA-12
+per-function register/MMIO/VBR source checks. No original ECU411 firmware,
+production project, profiles/OAuth or stopped Wyse/Precision tests are used.
+GA-01/02/03/11/12/18 remain PARTIAL; GA-14 deferred.
+
 ## GA-02/03/18 — 2026-11-10: deterministic bounded interprocedural MM source witness paths
 
 The shared `HardwareCallEffects.FunctionNode` also canonically sorts

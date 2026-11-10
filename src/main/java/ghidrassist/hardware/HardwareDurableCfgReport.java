@@ -48,6 +48,12 @@ public final class HardwareDurableCfgReport {
             // RESET provenance. This gate applies before save AND after V2
             // decode, even when the outer disk checksum is valid.
             if(sourceInventory!=null){
+                // A missing RESET root has no observed function subset.
+                // Never persist it as an apparently complete positive set.
+                if(resetRecognized==resetFunctions.isEmpty() ||
+                        !resetRecognized && !resetIncomplete)
+                    throw new IllegalArgumentException(
+                        "Unrooted or contradictory V2 RESET source set");
                 // The independent CFG and typed source sections carry the
                 // SAME bounded RESET reachability set. A V2 report may have
                 // unknown/omitted JSR witnesses, but it cannot fabricate a
@@ -65,9 +71,51 @@ public final class HardwareDurableCfgReport {
         }
     }
     /**
+     * GA-12: A full-input-keyed disk envelope and valid binary schema do
+     * NOT independently attest JSR/MOVEC/RESET source claims after restart.
+     * Original V2 source rows are retained on disk for format compatibility
+     * and forensic inspection, but MUST NOT become an active source cursor,
+     * Review evidence or proof of source completeness in a restored report.
+     *
+     * Live source pages require a fresh Ghidra Listing/CFG scan against the
+     * current Program. This method deliberately does NOT reinterpret stored
+     * Markdown, derive any CALL path, or promote partial source records.
+     * Only the aggregate completed CFG report remains reusable.
+     */
+    public static Snapshot restoredForReadOnlyDisplay(Snapshot saved) {
+        if(!eligibleForCompletedRestore(saved))
+            throw new IllegalArgumentException("Incomplete GA-12 disk source");
+        final String warning=
+            "## GA-12 RESTORED AGGREGATE — SOURCE INVENTORY UNVERIFIED\n\n"+
+            "This report was restored from a full-input-keyed disk checkpoint. "+
+            "Any JSR/MOVEC/RESET or MMIO source claims shown below are cached "+
+            "text, NOT independently replayed live Ghidra source evidence. "+
+            "The typed source inventory and pagination are unavailable until "+
+            "Analyze is recomputed from the current Listing (clear the "+
+            "completed checkpoint first). Missing or bounded source paths "+
+            "remain UNKNOWN; this does not prove execution, active MM/VBR, "+
+            "ISR dispatch or physical mapping.\n\n";
+        // Preserve the same 1 MiB report bound as the completed-stage
+        // cache. An oversized warning+body is a cold-analysis miss.
+        if(saved.markdown().length()>1_000_000-warning.length())
+            throw new IllegalArgumentException("Restored source report too large");
+        return new Snapshot(warning+saved.markdown(),saved.csv(),
+            saved.functions(),saved.indirect(),saved.vbr(),
+            saved.unresolved(),saved.visited(),saved.limited(),
+            saved.resetRecognized(),saved.resetIncomplete(),
+            saved.cfgReviewComplete(),saved.cfgOmitted(),
+            saved.pointersOmitted(),saved.sites(),saved.roles(),
+            saved.resetFunctions(),null);
+    }
+
+    /**
      * Complete CFG restoration and a complete observed JSR/MOVEC inventory
      * are different claims. Never elevate a historical V1 CFG-only snapshot
      * or a V2 with omitted/uncertain source witnesses to complete sources.
+     * This classifier checks only stored STRUCTURE. It is NOT source
+     * revalidation after restart; the active restored snapshot must be
+     * sanitized by restoredForReadOnlyDisplay() and will then fail this
+     * test until a fresh independent Ghidra scan replaces it.
      * This read-only classifier does not authorize Review/Apply or execution.
      */
     public static boolean eligibleForCompleteSourceInventory(Snapshot snapshot){
