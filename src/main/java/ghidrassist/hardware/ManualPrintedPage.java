@@ -16,12 +16,17 @@ public final class ManualPrintedPage {
     /** Bound untrusted PDFBox-extracted text before uppercasing/splitting. */
     public static final int MAX_PAGE_TEXT_CHARS=1_048_576;
     private static final Pattern PAGE=Pattern.compile(
-        "(?i)(?<![A-Z0-9])([A-D]-[1-9][0-9]{0,2}|[1-9][0-9]?-([1-9][0-9]{0,2}))(?![A-Z0-9])");
+        "(?i)(?<![A-Z0-9/-])([A-D]-[1-9][0-9]{0,2}|[1-9][0-9]?-([1-9][0-9]{0,2}))(?![A-Z0-9/-])");
     private static final Pattern STANDALONE=Pattern.compile(
         "(?i)^\\s*(?:(?:PAGE|P\\.|FOLIO)\\s*[:#-]?\\s*)?"+
         "([A-D]-[1-9][0-9]{0,2}|[1-9][0-9]?-([1-9][0-9]{0,2}))\\s*$");
     private static final Pattern BODY_LABEL=Pattern.compile(
         "(?i).*\\b(?:TABLE|FIGURE|FIG\\.?|SECTION|CHAPTER|APPENDIX)\\s*$");
+    // Revision/date metadata can look exactly like a numeric chapter folio.
+    // Keep an explicit "PAGE 15-10" folio candidate, but never infer a page
+    // from "Rev. 15-10", "Date: 15-10" or a YYYY-MM-DD stamp.
+    private static final Pattern METADATA_LABEL=Pattern.compile(
+        "(?i).*\\b(?:REV(?:ISION)?\\.?|VER(?:SION)?\\.?|DATE[D]?|UPDATED|ISSUED)\\s*[:=]?\\s*$");
     public record Hint(String label,String confidence) {
         public String evidence(){
             return "printed_page="+label+" printed_page_provenance="+confidence;
@@ -50,7 +55,9 @@ public final class ManualPrintedPage {
             // "TABLE D-1", "FIGURE 5-20", etc., even within that line.
             Matcher header=PAGE.matcher(rows[i]);
             while(header.find()){
-                if(BODY_LABEL.matcher(rows[i].substring(0,header.start())).matches())
+                String preceding=rows[i].substring(0,header.start());
+                if(BODY_LABEL.matcher(preceding).matches() ||
+                        METADATA_LABEL.matcher(preceding).matches())
                     continue;
                 selected=consumeLabel(selected,header.group(1));
                 if("AMBIGUOUS".equals(selected))
