@@ -1,3 +1,19 @@
+## GA-08/12/13/18 — 2026-11-10: conflicting static write-site witnesses
+
+The function naming proposal engine refuses to mark a role as REVIEW_REQUIRED
+when the same static instruction PC in one function is claimed to write two
+different hardware registers in a single source snapshot. This complements
+existing function-name disagreement and Ghidra revision/transaction preflight:
+no contradictory proposal can enter the explicit function-name Apply path.
+The A-register role explorer likewise downgrades conflicting PC/register,
+module/target or function-name observations to PATH_UNCERTAIN, with no
+persistent variable/pointer rename (read-only evidence only). Exact duplicate
+site witnesses remain deduplicated and a bounded 120,000-site limit prevents
+unbounded grouping. Java21 synthetic adversarial self-tests, full Java25
+Ghidra 12.1.4 PUBLIC extension build and isolated true synthetic Ghidra CI
+are mandatory exact-SHA gates. Static PCs do not prove instruction execution
+or runtime register lifetime. GA-08/12/13/18 PARTIAL; GA-14 deferred.
+
 ## GA-12/13/15/18 — 2026-11-10: historical Agentic row-source completeness
 
 Historical Agentic checkpoints can no longer claim `complete=true` after

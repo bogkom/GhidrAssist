@@ -104,3 +104,15 @@ Decompiler `HighVariable` temporary values; those remain GA-08
 PARTIAL. It does **not** create an append-only authorship journal
 or authorize naming on original ECU411 firmware/project. No
 stopped Wyse/Precision/legacy Supervisor process is restarted.
+
+## 2026-11-10 — per-instruction-PC evidence identity and revision ambiguity
+
+A duplicated Listing instruction PC is only an identical source witness if
+its A-register, module, selected MM interpretation and hardware target are
+identical. Different targets or pointers at the same PC, or different
+function names for the same function entry in one input collection, yield
+`PATH_UNCERTAIN` and no candidate hint. The read-only parser also limits
+site inventory to 120,000 entries prior to grouping. This is an evidence
+consistency guard, not an invented stable decompiler HighVariable or
+permission to Apply a pointer/argument rename. No runtime execution or
+active MC68332 memory mapping is inferred.

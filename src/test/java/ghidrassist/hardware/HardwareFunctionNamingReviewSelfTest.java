@@ -137,6 +137,25 @@ public final class HardwareFunctionNamingReviewSelfTest {
         ok(HardwareFunctionNamingReview.propose(false,conflicting,List.of())
             .get(0).status==HardwareNamingReview.Status.FAMILY_UNCERTAIN,
             "generic CPU32 cannot promote even conflicting MC68332 evidence");
+        var contradictoryPc=new java.util.ArrayList<>(writes);
+        contradictoryPc.add(obs(0x1000,0x1002,"SIMCR",true,"FUN_00001000"));
+        var samePc=HardwareFunctionNamingReview.propose(
+            true,contradictoryPc,List.of());
+        ok(samePc.size()==1 &&
+            samePc.get(0).status==HardwareNamingReview.Status.EVIDENCE_TOO_WEAK &&
+            samePc.get(0).proposedName.isEmpty() &&
+            samePc.get(0).writeSites==3,
+            "same write PC cannot establish two different hardware register writes");
+        java.util.Collections.reverse(contradictoryPc);
+        var reversedPc=HardwareFunctionNamingReview.propose(
+            true,contradictoryPc,List.of());
+        ok(reversedPc.get(0).status==HardwareNamingReview.Status.EVIDENCE_TOO_WEAK &&
+            reversedPc.get(0).proposedName.isEmpty(),
+            "conflicting PC evidence is independent of input ordering");
+        ok(HardwareFunctionNamingReview.toCsvRows(samePc).contains("EVIDENCE_TOO_WEAK") &&
+            !HardwareFunctionNamingReview.toCsvRows(samePc)
+                .contains("REVIEW_REQUIRED"),
+            "contradictory PC never exports Apply-ready function name");
         System.out.println("HardwareFunctionNamingReviewSelfTest OK");
     }
 }
