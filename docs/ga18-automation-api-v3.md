@@ -730,3 +730,23 @@ multi-page stitching; full Ghidra 12.1.4 PUBLIC/Java25 extension build;
 actual isolated synthetic Ghidra Program object and its unchanged
 revision. The synthetic bridge test does not perform model calls and
 does not claim to test a real user investigation.
+
+## 2026-11-10 — headless async Decompiler Program-lifecycle evidence
+
+The native Java25/Ghidra 12.1.4 PUBLIC synthetic Automation smoke
+previously passed its seven immediate task-identity assertions, then
+closed the source Program while a background `AutomationDecompiler`
+task was still using Ghidra's decompiler database. This could log
+`ClosedException: File is closed` **after** the nominal test PASS.
+The isolated test script now polls a bounded 36-second terminal state
+(COMPLETED or FAILED) before returning control to headless teardown,
+and a distinct eighth assertion records this lifecycle boundary.
+The extension-build workflow pins both vector/RESET **16** source
+assertions and Decompiler binding **8** assertions and explicitly
+rejects closed-Program background exceptions. The existing asynchronous
+product API remains unchanged.
+
+This is a synthetic test lifecycle fix, not independent evidence of
+successful decompilation, real MCU execution, VBR/ISR activity or a
+production Ghidra project. No local Wyse/Precision/Supervisor worker
+is started.

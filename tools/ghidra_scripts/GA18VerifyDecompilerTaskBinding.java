@@ -52,6 +52,26 @@ public class GA18VerifyDecompilerTaskBinding extends GhidraScript {
                         && error.getCause().getMessage().contains("task_id mismatch");
                 }
                 check(rejected, "wrong task ID rejected");
+                // An API task can outlive its read-only status check. The
+                // headless analyzer closes currentProgram when post-scripts
+                // exit; do not let the test's async decompiler retain it.
+                // This is a bounded fixture lifecycle gate, not real ISR.
+                long deadline=System.nanoTime()+
+                    java.util.concurrent.TimeUnit.SECONDS.toNanos(36);
+                JsonObject settled;
+                do {
+                    settled=(JsonObject)status.invoke(instance,
+                        currentProgram,id,0,0);
+                    if(!"RUNNING".equals(
+                            settled.get("state").getAsString()))break;
+                    if(System.nanoTime()>=deadline)
+                        throw new IllegalStateException(
+                            "Synthetic Decompiler task did not settle before Program close");
+                    Thread.sleep(50);
+                }while(true);
+                check("COMPLETED".equals(settled.get("state").getAsString()) ||
+                        "FAILED".equals(settled.get("state").getAsString()),
+                    "synthetic Decompiler task finished before Program close");
             } finally {
                 type.getMethod("close").invoke(instance);
             }
