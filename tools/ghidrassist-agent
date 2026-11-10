@@ -59,7 +59,7 @@ def _decode_checkpoint_json(raw):
             if quoted:
                 if escaped:
                     escaped = False
-                elif char == "\\\\":
+                elif char == "\\":
                     escaped = True
                 elif char == '"':
                     quoted = False
