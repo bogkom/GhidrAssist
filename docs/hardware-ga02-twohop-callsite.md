@@ -223,3 +223,39 @@ the .W negative interpretation.
 This is strictly read-only Ghidra 12.1.4 PUBLIC/Java25
 synthetic headless evidence on exact CI SHA, not an
 executed two-CALL trace or physical memory-map proof.
+
+## 2026-11-10 — closed CPU32 bridge control-flow semantics
+
+The bounded two-hop source solver now rejects **structurally connected but
+semantically impossible** intermediate CALL CFGs before propagating the
+outer caller's A/D values into a nested leaf STORE:
+
+- Conditional CPU32 `Bcc` requires **two distinct** successors (jump and
+  fallthrough); an unconditional `BRA` requires exactly **one**; `NOP`,
+  immediate register definitions, copies, adjustments and conservative
+  clobbers are linear one-successor instructions. Only a decoded ordinary
+  `RTS` can terminate the bridge without a successor.
+- The one intermediate `CALL_BARRIER` must be a `JSR` or `BSR` and
+  retain exactly one local return successor. A non-branch operation cannot
+  impersonate a branch/return by changing its `Kind`. Unexpected implicit
+  A/D effects on `Bcc/BRA/NOP` are not silently accepted as inert.
+- Intermediate function entry, branch instruction PCs and target CALL
+  coordinate must be aligned MCU24 source identities; mismatched/out-of-
+  range and self-recursive bridges become **rejected/UNKNOWN**, not a
+  potentially valid argument flow or a report crash. Existing A7 removal
+  at both CALL boundaries and complete contiguous Ghidra Listing checks
+  remain mandatory.
+
+The model still accepts a **real two-edge convergent BNE** where both
+source branches agree on the argument before the nested JSR, preserves the
+distinct per-caller `SIMCR/CSBAR` candidate words and rejects hidden
+P-code register clobbers as unresolved aliases. Tests deliberately include
+fabricated one-edge BNE, forked BRA/NOP/MOVEA, duplicated successors,
+incorrect JSR mnemonic, opcode/kind disagreements, out-of-range and odd
+source PCs, recursion, and an agreeing positive branch.
+
+Java21 deterministic suite and the full Java25/Ghidra 12.1.4 PUBLIC
+extension plus real isolated synthetic two-hop/indexed/wrap headless CI
+remain exact-SHA gates. Evidence is static **MAY** only: no executed
+branch/CALL, SIMCR/MM latch, physical bus map, VBR/ISR activation, or
+Review/Apply authorization. GA-02/03/18 remain PARTIAL.
