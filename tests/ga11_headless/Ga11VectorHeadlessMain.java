@@ -86,7 +86,7 @@ public final class Ga11VectorHeadlessMain {
             "generic-profile","trambar-source","csbar-mm0-reject",
             "mmio-read-reference","csbar-csor-conditional",
             "simcr-mm0-literal","trambar-unknown","csor-alternatives",
-            "branch-simcr","call-barrier","leaf-return","call-context","joint-source","two-hop","two-hop-indexed","two-hop-indexed-wrap","indirect-adjacent","indirect-bounded","indirect-reset-xref","branch-leaf","branch-cache","cancel-incomplete",
+            "branch-simcr","call-barrier","leaf-return","moveq-return","call-context","joint-source","two-hop","two-hop-indexed","two-hop-indexed-wrap","indirect-adjacent","indirect-bounded","indirect-reset-xref","branch-leaf","branch-cache","cancel-incomplete",
             "function-stage-resume","function-rename","scoped-variable","agentic-evidence","receipt-restart-write",
             "receipt-restart-read","apply-preserve","provenance-csv",
             "movec-vbr","vbr-relocation").contains(ga18Mode),
@@ -2486,6 +2486,90 @@ public final class Ga11VectorHeadlessMain {
                     result.addProperty("leaf_real_unproved_call_keeps_alias",true);
                     result.addProperty("leaf_real_generic_profile_conservative",true);
                     result.addProperty("leaf_real_program_read_only",true);
+                } else if("moveq-return".equals(ga18Mode)) {
+                    // Actual decoded CPU32 MOVEQ #signed8,D0 + RTS is
+                    // input-independent. A two-byte MOVEQ uses sign
+                    // extension, not a forged positive zero-extended word.
+                    int t=full.startTransaction(
+                        "GA02 isolated signed MOVEQ post-return witnesses");
+                    try{
+                        full.getMemory().setBytes(address(full,0x640L),
+                            java.util.HexFormat.of().parseHex(
+                                "207c00fffa0070804e75"));
+                        full.getMemory().setBytes(address(full,0x600L),
+                            java.util.HexFormat.of().parseHex(
+                                "4eb90000064030804e75"));
+                        full.getMemory().setBytes(address(full,0x660L),
+                            java.util.HexFormat.of().parseHex(
+                                "727f4e75"));
+                        full.getMemory().setBytes(address(full,0x670L),
+                            java.util.HexFormat.of().parseHex(
+                                "70804e73"));
+                    }finally{full.endTransaction(t,true);}
+                    defineFixtureFunction(full,0x640L,10,
+                        "ga02_signed_moveq_simcr_return");
+                    defineFixtureFunction(full,0x600L,10,
+                        "ga02_call_signed_moveq_leaf");
+                    defineFixtureFunction(full,0x660L,4,
+                        "ga02_four_byte_moveq_rts");
+                    defineFixtureFunction(full,0x670L,4,
+                        "ga02_moveq_rte_not_rts");
+                    long revision=full.getModificationNumber();
+                    var leafMethod=GhidraHardwareFlowService.class
+                        .getDeclaredMethod("verifiedLeafReturn",
+                            Program.class,Function.class,TaskMonitor.class);
+                    leafMethod.setAccessible(true);
+                    var mainLeaf=full.getFunctionManager().getFunctionAt(
+                        address(full,0x640L));
+                    var oneMoveq=full.getListing().getInstructionAt(
+                        address(full,0x646L));
+                    check(oneMoveq!=null &&
+                        oneMoveq.getMnemonicString().toUpperCase(Locale.ROOT)
+                            .startsWith("MOVEQ") &&
+                        oneMoveq.getLength()==2,
+                        "Actual Ghidra CPU32 signed MOVEQ not exactly two bytes");
+                    var source=(Map<?,?>)leafMethod.invoke(
+                        null,full,mainLeaf,TaskMonitor.DUMMY);
+                    check(Long.valueOf(0xfffa00L).equals(source.get("A0")) &&
+                        Long.valueOf(0xffff80L).equals(source.get("D0")),
+                        "Real Ghidra signed MOVEQ #-128,D0 did not survive RTS");
+                    var minimal=(Map<?,?>)leafMethod.invoke(null,full,
+                        full.getFunctionManager().getFunctionAt(
+                            address(full,0x660L)),TaskMonitor.DUMMY);
+                    check(minimal.equals(Map.of("D1",0x7fL)),
+                        "Real four-byte MOVEQ #127,D1 / RTS was not recognized");
+                    var rte=(Map<?,?>)leafMethod.invoke(null,full,
+                        full.getFunctionManager().getFunctionAt(
+                            address(full,0x670L)),TaskMonitor.DUMMY);
+                    check(rte.isEmpty(),
+                        "RTE cannot be mistaken for a signed MOVEQ leaf RTS");
+                    var selected=new GhidraHardwareFlowService().analyze(
+                        full,TaskMonitor.DUMMY,true);
+                    check(selected.rawCfgMmioSites.stream().anyMatch(site->
+                        site.pc()==0x606L && site.address()==0xfffa00L &&
+                        "SIMCR".equals(site.register()) &&
+                        Integer.valueOf(0xff80).equals(site.literal()) &&
+                        site.unknownCall()),
+                        "Signed MOVEQ post-CALL MMIO source not conservatively recovered");
+                    check(selected.markdown.contains(
+                        "- Strictly verified leaf CALL return-register sites: 1"),
+                        "Unsigned or unreturned source was promoted as extra CALL proof");
+                    check(full.getModificationNumber()==revision,
+                        "Signed MOVEQ source analysis mutated isolated Program");
+                    var generic=new GhidraHardwareFlowService().analyze(
+                        full,TaskMonitor.DUMMY,false);
+                    check(generic.markdown.contains(
+                        "- Strictly verified leaf CALL return-register sites: 0"),
+                        "Generic CPU32 inherited MC68332 hardware CALL proof");
+                    check(full.getModificationNumber()==revision,
+                        "Generic CPU32 source review unexpectedly edited Program");
+                    result.addProperty("moveq_real_cpu32_two_byte_opcode",true);
+                    result.addProperty("moveq_real_signed_d0_return",true);
+                    result.addProperty("moveq_real_four_byte_leaf",true);
+                    result.addProperty("moveq_real_rte_rejected",true);
+                    result.addProperty("moveq_real_simcr_may_source_only",true);
+                    result.addProperty("moveq_real_generic_profile_conservative",true);
+                    result.addProperty("moveq_real_program_read_only",true);
                 } else if("cancel-incomplete".equals(ga18Mode)) {
                     // Deterministic cancellation *during* a real Ghidra
                     // traversal (not only before entry). No partial report
