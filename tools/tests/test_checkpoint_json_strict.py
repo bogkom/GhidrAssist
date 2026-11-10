@@ -21,6 +21,7 @@ ROOT = Path(__file__).resolve().parents[2]
 def load(path, name):
     loader = importlib.machinery.SourceFileLoader(name, str(path))
     module = types.ModuleType(loader.name)
+    module.__file__ = str(path)
     loader.exec_module(module)
     return module
 
