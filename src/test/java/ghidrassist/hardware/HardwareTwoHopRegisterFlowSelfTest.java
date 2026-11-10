@@ -397,6 +397,126 @@ public final class HardwareTwoHopRegisterFlowSelfTest {
             wrapTwoHop.rows().get(0).effectiveAddress()==0xfffffeL,
             "two-hop source can cross the MCU24 bus wrap without alias loss");
 
+        // A graph can be a closed DAG with one CALL/RTS and STILL be
+        // impossible under CPU32 instruction semantics. Before this guard
+        // the source solver accepted single-edge Bcc and forked BRA/NOP
+        // as if they were genuine register-propagation paths.
+        var singleBcc=new HardwareTwoHopRegisterFlow.Bridge(0x640,
+            List.of(step(0x640,OTHER,null,null,0,"BNE",0x642L),
+                jsr(0x642,0x648),ret(0x648)),0x642,0x700L,true);
+        var noFalseBranch=scan(List.of(left),List.of(singleBcc),
+            List.of(leaf),48);
+        ok(noFalseBranch.rejectedBridge()==1 &&
+            noFalseBranch.possibleStores()==0 && noFalseBranch.rows().isEmpty(),
+            "Bcc missing its alternate successor cannot prove nested MMIO context");
+        var forkedBra=new HardwareTwoHopRegisterFlow.Bridge(0x640,
+            List.of(step(0x640,OTHER,null,null,0,"BRA",0x642L,0x644L),
+                jsr(0x642,0x648),
+                step(0x644,OTHER,null,null,0,"NOP",0x642L),
+                ret(0x648)),0x642,0x700L,true);
+        ok(scan(List.of(left),List.of(forkedBra),
+            List.of(leaf),48).rejectedBridge()==1,
+            "Unconditional BRA cannot fork into two source contexts");
+        var forkedNop=new HardwareTwoHopRegisterFlow.Bridge(0x640,
+            List.of(step(0x640,OTHER,null,null,0,"NOP",0x642L,0x644L),
+                jsr(0x642,0x648),
+                step(0x644,OTHER,null,null,0,"NOP",0x642L),
+                ret(0x648)),0x642,0x700L,true);
+        ok(scan(List.of(left),List.of(forkedNop),
+            List.of(leaf),48).rejectedBridge()==1,
+            "NOP cannot fork the bridge into two unproved paths");
+        var forkedRegister=new HardwareTwoHopRegisterFlow.Bridge(0x640,
+            List.of(step(0x640,SET_POINTER,"A1",null,simcr,
+                    "MOVEA.L",0x642L,0x644L),
+                jsr(0x642,0x648),
+                step(0x644,OTHER,null,null,0,"NOP",0x642L),
+                ret(0x648)),0x642,0x700L,true);
+        ok(scan(List.of(left),List.of(forkedRegister),
+            List.of(leaf),48).rejectedBridge()==1,
+            "Register assignment cannot invent a conditional CFG fork");
+        var duplicateBcc=new HardwareTwoHopRegisterFlow.Bridge(0x640,
+            List.of(step(0x640,OTHER,null,null,0,"BNE",0x642L,0x642L),
+                jsr(0x642,0x648),ret(0x648)),
+            0x642,0x700L,true);
+        ok(scan(List.of(left),List.of(duplicateBcc),
+            List.of(leaf),48).rejectedBridge()==1,
+            "Two duplicate Bcc targets do not constitute two possible paths");
+        var fakeCall=new HardwareTwoHopRegisterFlow.Bridge(0x640,
+            List.of(step(0x640,COPY_POINTER,"A1","A0",0,
+                    "MOVEA.L",0x642L),
+                step(0x642,CALL_BARRIER,null,null,0,
+                    "NOP",0x648L),ret(0x648)),
+            0x642,0x700L,true);
+        ok(scan(List.of(left),List.of(fakeCall),
+            List.of(leaf),48).rejectedBridge()==1,
+            "Only a real JSR/BSR can be the intermediate CALL barrier");
+        var corruptBranch=new HardwareTwoHopRegisterFlow.Bridge(0x640,
+            List.of(step(0x640,OTHER,null,null,0,"BNE",0x642L,0x644L)
+                    .withSideEffects(Set.of("D0")),
+                step(0x642,OTHER,null,null,0,"NOP",0x646L),
+                step(0x644,OTHER,null,null,0,"NOP",0x646L),
+                jsr(0x646,0x64c),ret(0x64c)),
+            0x646,0x700L,true);
+        ok(scan(List.of(left),List.of(corruptBranch),
+            List.of(leaf),48).rejectedBridge()==1,
+            "Unexpected P-code A/D register mutation invalidates bare branch");
+        var truncatedSource=new HardwareTwoHopRegisterFlow.Bridge(
+            0x1000000L,bridge.steps(),0x1000002L,0x700L,true);
+        ok(HardwareTwoHopRegisterFlow.analyze(
+            List.of(new HardwareCallsiteRegisterFlow.Call(
+                0x600,0x60c,0x1000000L,
+                Map.of("A0",simcr,"D0",0x40caL),false)),
+            List.of(truncatedSource),List.of(leaf),
+            Set.of(simcr),48).rejectedBridge()==1,
+            "25-bit source function cannot alias a 24-bit MC68332 bridge");
+        var selfCall=new HardwareTwoHopRegisterFlow.Bridge(
+            0x640,bridge.steps(),0x642,0x640L,true);
+        ok(scan(List.of(left),List.of(selfCall),
+            List.of(leaf),48).rejectedBridge()==1,
+            "Self-recursive intermediate target cannot masquerade as two-hop leaf");
+        var oddSource=new HardwareTwoHopRegisterFlow.Bridge(
+            0x641,bridge.steps(),0x643,0x700L,true);
+        ok(HardwareTwoHopRegisterFlow.analyze(
+            List.of(new HardwareCallsiteRegisterFlow.Call(
+                0x600,0x60c,0x641L,
+                Map.of("A0",simcr,"D0",0x40caL),false)),
+            List.of(oddSource),List.of(leaf),
+            Set.of(simcr),48).rejectedBridge()==1,
+            "Odd source instruction/function positions remain UNKNOWN");
+        // Positive control: a legitimate two-edge conditional branch
+        // remains accepted, and agreeing A0 on both paths still reaches
+        // the nested JSR with the exact source MMIO candidate.
+        var agreeingBranch=new HardwareTwoHopRegisterFlow.Bridge(0x640,
+            List.of(step(0x640,OTHER,null,null,0,"BNE",0x642L,0x644L),
+                step(0x642,SET_POINTER,"A1",null,simcr,
+                    "MOVEA.L",0x646L),
+                step(0x644,SET_POINTER,"A1",null,simcr,
+                    "MOVEA.L",0x646L),
+                jsr(0x646,0x64c),ret(0x64c)),
+            0x646,0x700L,true);
+        var preserved=scan(List.of(left),List.of(agreeingBranch),
+            List.of(leaf),48);
+        ok(preserved.possibleStores()==1 &&
+            preserved.rows().size()==1 &&
+            preserved.rows().get(0).effectiveAddress()==simcr &&
+            preserved.rows().get(0).writtenWord()==0x40ca,
+            "Valid convergent branch retains concrete two-hop SIMCR source");
+        // Hidden register writes still invalidate the seeded value, even
+        // when the CFG shape itself is valid.
+        var clobbered=new HardwareTwoHopRegisterFlow.Bridge(0x640,
+            List.of(step(0x640,COPY_POINTER,"A1","A0",0,
+                    "MOVEA.L",0x642L).withSideEffects(Set.of("A1")),
+                jsr(0x642,0x648),ret(0x648)),
+            0x642,0x700L,true);
+        var uncertainClobber=scan(List.of(left),List.of(clobbered),
+            List.of(leaf),48);
+        ok(uncertainClobber.rows().isEmpty() &&
+            uncertainClobber.unknownAliases()==1,
+            "Implicit P-code A1 write keeps nested MMIO source unresolved");
+        ok(pair.possibleStores()==2 && pair.rows().size()==2 &&
+            pair.rows().get(0).effectiveAddress()==simcr,
+            "Unsafe bridge fixtures never alter previously valid caller contexts");
+
         System.out.println("HardwareTwoHopRegisterFlowSelfTest PASS: assertions="+checks);
     }
 }
