@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.TreeMap;
 import java.util.TreeSet;
 
@@ -17,13 +18,47 @@ import java.util.TreeSet;
 public final class HardwareProfileManifestComparison {
     private HardwareProfileManifestComparison() {}
     public static final int MAX_DISPLAY_FINDINGS=100;
-    public record Finding(String kind,String record,String description) {}
+    public record Finding(String kind,String record,String description) {
+        public Finding {
+            if(kind==null || record==null || description==null ||
+                    !List.of("RIGHT_ONLY","LEFT_ONLY","DEFINITION_DIFFERENCE",
+                        "SOURCE_PAGE_LABEL_DIFFERENCE","CROSS_NAME_ADDRESS_OVERLAP")
+                        .contains(kind) ||
+                    record.isBlank() || record.length()>160 ||
+                    description.isBlank() || description.length()>1024 ||
+                    record.codePoints().anyMatch(Character::isISOControl) ||
+                    description.codePoints().anyMatch(Character::isISOControl))
+                throw new IllegalArgumentException(
+                    "Malformed external profile comparison source finding");
+        }
+    }
     public record Report(String device, String leftManual, String rightManual,
             boolean matchingClaimedPdfDigest, int equalDefinitions,
             int changedDefinitions, int changedPageLabels,
             int leftOnly, int rightOnly, int overlappingDifferentNames,
             int omittedFindings, List<Finding> findings) {
-        public Report { findings=List.copyOf(findings); }
+        public Report {
+            if(device==null || device.isBlank() || device.length()>64 ||
+                    leftManual==null || leftManual.isBlank() ||
+                    leftManual.length()>256 || rightManual==null ||
+                    rightManual.isBlank() || rightManual.length()>256 ||
+                    equalDefinitions<0 || changedDefinitions<0 ||
+                    changedPageLabels<0 || leftOnly<0 || rightOnly<0 ||
+                    overlappingDifferentNames<0 || omittedFindings<0 ||
+                    (long)equalDefinitions+changedDefinitions+leftOnly+rightOnly>
+                        2L*HardwareProfileManifestPreview.MAX_ROWS ||
+                    findings==null || findings.size()>MAX_DISPLAY_FINDINGS ||
+                    findings.stream().anyMatch(Objects::isNull))
+                throw new IllegalArgumentException(
+                    "Unbounded external profile comparison summary");
+            long noted=(long)changedDefinitions+changedPageLabels+
+                leftOnly+rightOnly+overlappingDifferentNames;
+            if(findings.size()!=Math.min(noted,MAX_DISPLAY_FINDINGS) ||
+                    omittedFindings!=Math.max(0L,noted-MAX_DISPLAY_FINDINGS))
+                throw new IllegalArgumentException(
+                    "Claimed profile source discrepancy count contradicts retained findings");
+            findings=List.copyOf(findings);
+        }
         public String render() {
             StringBuilder out=new StringBuilder(
                 "EXTERNAL MCU PROFILE COMPARISON — UNVERIFIED CLAIMS ONLY\n\n")
