@@ -1,3 +1,16 @@
+## GA-01/02/03/11/18 — 2026-11-10: shared vector-handler provenance integrity
+
+Both generic CPU32 STORE/MOVEC and selected-MC68332 SIMCR/MM source
+correlation now reject inconsistent report rows for different vector
+slots resolving to the same exact handler function. Canonical typed
+source paths accept only 32-bit CPU32 function identifiers (eight hex
+digits); this is NOT evidence of MCU24 physical addressing or active IRQ.
+Deterministic Java21 contradictory-record and address-width tests, Java25
+full Ghidra 12.1.4 PUBLIC build and genuine isolated synthetic headless CI
+are exact-commit merge gates. Existing source-per-handler caching,
+displayed-only counts, read-only behavior and RESET/MM evidence separation
+are preserved. GA-01/02/03/11/18 remain PARTIAL; GA-14 deferred.
+
 ## GA-01/02/03/11/18 — 2026-11-10: fail-closed generic vector/RESET source reports
 
 The generic 32-bit CPU32 vector/RESET report now validates bounded

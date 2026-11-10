@@ -125,7 +125,17 @@ public final class HardwareVectorResetCorrelation {
                     "Inconsistent bounded vector/RESET source inventory");
             int last=1,shownExact=0,shownInterior=0,shownShared=0,
                 shownOutside=0;
+            // Every slot pointing at one exact handler is audited once.
+            // Publicly constructed summaries must not give that same
+            // function contradictory source evidence in different slots.
+            Map<Long,Row> byHandler=new HashMap<>();
             for(Row row:rows) {
+                if(row.relation()!=Relation.INTERIOR_FUNCTION_POINTER_NOT_ENTRY) {
+                    Row prior=byHandler.putIfAbsent(row.functionEntry(),row);
+                    if(prior!=null && !sameHandlerEvidence(prior,row))
+                        throw new IllegalArgumentException(
+                            "Conflicting source evidence for shared vector handler");
+                }
                 if(row.vectorNumber()<=last ||
                         row.flowUncertain() != true &&
                             (!resetRootRecognized || resetGraphIncomplete))
@@ -250,6 +260,17 @@ public final class HardwareVectorResetCorrelation {
         }
     }
 
+    private static boolean sameHandlerEvidence(Row a,Row b) {
+        return a.pointer()==b.pointer() && a.relation()==b.relation() &&
+            a.memoryStoreEffect().equals(b.memoryStoreEffect()) &&
+            a.vbrEffect().equals(b.vbrEffect()) &&
+            a.flowUncertain()==b.flowUncertain() &&
+            a.storeSourcePath().equals(b.storeSourcePath()) &&
+            a.vbrSourcePath().equals(b.vbrSourcePath()) &&
+            a.observedUnknownPath().equals(b.observedUnknownPath()) &&
+            a.frontierPath().equals(b.frontierPath());
+    }
+
     private static String hex(long value) {
         return String.format(Locale.ROOT, "0x%08X", value);
     }
@@ -268,7 +289,7 @@ public final class HardwareVectorResetCorrelation {
                 !List.of(kinds).contains(parts[0]) ||
                 !parts[1].equals(hex(root)))return false;
         for(int i=1;i<parts.length;i++)
-            if(!parts[i].matches("0x[0-9A-F]{8,16}"))return false;
+            if(!parts[i].matches("0x[0-9A-F]{8}"))return false;
         return true;
     }
 

@@ -340,6 +340,25 @@ public final class HardwareVectorResetCorrelationSelfTest {
         check(limited.markdown().contains("omitted rows: 3") &&
                 limited.displayedStoreCandidates()==1,
             "capped display never publishes uninspected effect totals");
+        var firstShared=sharedHandler.rows().get(0);
+        var secondShared=sharedHandler.rows().get(1);
+        var forgedShared=new HardwareVectorResetCorrelation.Row(
+            secondShared.vectorNumber(),secondShared.pointer(),
+            secondShared.functionEntry(),secondShared.relation(),
+            secondShared.memoryStoreEffect(),secondShared.vbrEffect(),
+            secondShared.flowUncertain(),"NONE",secondShared.vbrSourcePath(),
+            secondShared.observedUnknownPath(),secondShared.frontierPath());
+        bad(()->new HardwareVectorResetCorrelation.Summary(
+            false,0,true,false,2,2,2,0,0,false,
+            List.of(firstShared,forgedShared)),
+            "one handler cannot expose conflicting STORE source paths across vector slots");
+        bad(()->new HardwareVectorResetCorrelation.Row(
+                26,0x130L,0x130L,
+                HardwareVectorResetCorrelation.Relation.IN_RESET_STATIC_CALL_SUBSET,
+                "STATIC_CANDIDATE","UNKNOWN",true,
+                "MEMORY_STORE -> 0x00000130 -> 0x0000000100000000",
+                "NONE","NONE","NONE"),
+            "generic CPU32 function witnesses cannot encode over-32-bit addresses");
         bad(()->new HardwareVectorResetCorrelation.Row(
                 26,0x130L,0x130L,
                 HardwareVectorResetCorrelation.Relation.IN_RESET_STATIC_CALL_SUBSET,

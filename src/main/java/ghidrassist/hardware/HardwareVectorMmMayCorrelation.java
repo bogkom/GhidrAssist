@@ -84,6 +84,7 @@ public final class HardwareVectorMmMayCorrelation {
                     displayTruncated!=(rows.size()<exactEntries))
                 throw new IllegalArgumentException("Inconsistent vector MM report");
             Set<Long> uniqueRoots=new HashSet<>();
+            Map<Long,Row> byHandler=new java.util.HashMap<>();
             int previousSlot=1;
             for(Row row:rows) {
                 if(row.vectorNumber()<=previousSlot ||
@@ -99,6 +100,10 @@ public final class HardwareVectorMmMayCorrelation {
                         "Contradictory vector MM report row");
                 previousSlot=row.vectorNumber();
                 uniqueRoots.add(row.functionEntry());
+                Row prior=byHandler.putIfAbsent(row.functionEntry(),row);
+                if(prior!=null && !sameHandlerEvidence(prior,row))
+                    throw new IllegalArgumentException(
+                        "Conflicting MC68332 source evidence for shared vector handler");
             }
             if(uniqueRoots.size()!=distinctShownRoots)
                 throw new IllegalArgumentException(
@@ -187,6 +192,21 @@ public final class HardwareVectorMmMayCorrelation {
             return out.append("\n").toString();
         }
     }
+    private static boolean sameHandlerEvidence(Row a,Row b) {
+        return a.pointer()==b.pointer() &&
+            a.resetRelation()==b.resetRelation() &&
+            a.resetRelationUncertain()==b.resetRelationUncertain() &&
+            a.mmLowByte().equals(b.mmLowByte()) &&
+            a.unknownAlias()==b.unknownAlias() &&
+            a.unknownControl()==b.unknownControl() &&
+            a.cycle()==b.cycle() && a.limited()==b.limited() &&
+            a.examined()==b.examined() &&
+            a.mmSource().equals(b.mmSource()) &&
+            a.aliasSource().equals(b.aliasSource()) &&
+            a.observedUnknownSource().equals(b.observedUnknownSource()) &&
+            a.frontierSource().equals(b.frontierSource());
+    }
+
     private static String hex(long id) {
         return String.format(Locale.ROOT,"0x%08X",id);
     }
@@ -201,7 +221,7 @@ public final class HardwareVectorMmMayCorrelation {
                 !List.of(kinds).contains(parts[0]) ||
                 !parts[1].equals(hex(root)))return false;
         for(int i=1;i<parts.length;i++)
-            if(!parts[i].matches("0x[0-9A-F]{8,16}"))return false;
+            if(!parts[i].matches("0x[0-9A-F]{8}"))return false;
         return true;
     }
     private static String witness(

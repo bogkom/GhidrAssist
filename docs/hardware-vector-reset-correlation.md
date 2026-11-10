@@ -251,3 +251,24 @@ The displayed-only STORE/MOVEC counters count **vector rows**, not unique
 handler function identities: two vector slots pointing to the same
 handler legitimately contribute two rows, while its bounded source
 analysis remains cached once per revision-local report.
+
+## 2026-11-10 — duplicate-handler source integrity across vector slots
+
+A single exact function entry may be referenced by several distinct vector
+slots. The generic CPU32 STORE/MOVEC correlation and selected-MC68332
+SIMCR/MM MAY correlation memoize a per-handler source summary within one
+read-only Program analysis. Their public immutable report constructors now
+also reject conflicting records for that shared handler: differences in
+RESET relation, uncertainty, source classifications, typed chains or bounded
+inspection totals cannot be hidden behind different vector numbers.
+A legitimate repeated vector still contributes one row per slot, and no
+additional CALL or ISR edge is inferred. Canonical function witness tokens
+are exactly eight uppercase hexadecimal digits in the CPU32 32-bit address
+model (also for selected MC68332 24-bit candidates); 64-bit spoofed source
+function addresses are rejected instead of rendered as a valid chain.
+
+Java21 adverse source tests include duplicate-handler contradictions and
+out-of-model witness tokens. Full Java25/Ghidra 12.1.4 PUBLIC build and
+isolated genuine headless synthetic gates must pass at the PR HEAD before
+merge. No runtime RESET, ISR, VBR, latched MM, MMIO execution, physical bus
+map, Ghidra database write or Review/Apply authority is established.
