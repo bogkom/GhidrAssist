@@ -168,6 +168,48 @@ public final class HardwareFunctionStageCacheSelfTest {
         long last=0x200L+(HardwareFunctionStageCache.MAX_FUNCTIONS+11L)*16;
         check(cache.get(first,fresh,scope,last,100,graph,targets)==null,
             "overflow functions recompute instead of displacing earlier work");
+        // Weak or hostile import identities are not a durable source
+        // witness. Do not replay a complete function fixed point on the
+        // basis of a missing/UNKNOWN profile import label alone.
+        var weak=new HardwareFunctionStageCache.Scope(
+            3,"68000:BE:32:CPU32",null,true);
+        var unknown=new HardwareFunctionStageCache.Scope(
+            3,"68000:BE:32:CPU32","UNKNOWN",true);
+        var blank=new HardwareFunctionStageCache.Scope(
+            3,"68000:BE:32:CPU32","  ",true);
+        long weakEpoch=cache.begin(first);
+        for(var invalidScope:List.of(weak,unknown,blank)) {
+            check(!cache.put(first,weakEpoch,invalidScope,0x100,100,
+                    graph,targets,computed) &&
+                cache.get(first,weakEpoch,invalidScope,0x100,100,
+                    graph,targets)==null,
+                "weak source identity cannot publish or reuse function checkpoint");
+        }
+        check(cache.get(first,weakEpoch,scope,0x100,100,graph,targets)==computed,
+            "rejected weak scope must not evict a valid source checkpoint");
+        var newScope=new HardwareFunctionStageCache.Scope(
+            3,"68000:BE:32:CPU32","new-import-source",true);
+        check(cache.get(first,weakEpoch,newScope,0x100,100,graph,targets)==null,
+            "changed nonempty import source invalidates completed function");
+        check(cache.completed(first)==0,
+            "changed import identity removes stale in-memory source evidence");
+        for(String forbiddenLabel:List.of(
+                "68000:BE:32:CPU32\nSPOOF","68000:BE:32:CPU32\u202e",
+                "x".repeat(129))) {
+            boolean rejected=false;
+            try {new HardwareFunctionStageCache.Scope(
+                3,forbiddenLabel,"synthetic-import",true);}
+            catch(IllegalArgumentException expected){rejected=true;}
+            check(rejected,"invalid language metadata cannot spoof checkpoint identity");
+        }
+        for(String forbiddenImport:List.of(
+                "source\rSPOOF","source\u2066", "x".repeat(257))) {
+            boolean rejected=false;
+            try {new HardwareFunctionStageCache.Scope(
+                3,"68000:BE:32:CPU32",forbiddenImport,true);}
+            catch(IllegalArgumentException expected){rejected=true;}
+            check(rejected,"unsafe import label cannot define a resumable checkpoint");
+        }
         System.out.println("HardwareFunctionStageCacheSelfTest OK");
     }
 }

@@ -1,3 +1,18 @@
+## GA-12/13/15/18 — 2026-11-10: checkpoint source and export loss accounting
+
+In-memory completed-function GA-12 checkpoint reuse now requires a nonblank,
+non-`UNKNOWN` import identity and rejects forged control/format characters
+in bounded source/language metadata. Weak source identity yields a cache miss,
+not a successful fixed-point resume; an existing valid checkpoint is not
+invalidated by such a failed query. The stronger on-disk full-input SHA-256
+and Program binding remain independent authorization gates. GA-13 read-only
+provenance CSV now emits explicit `TRUNCATED_SOURCE_ROWS` receipt whenever
+any retained row lost source cell bytes, separately from `OMITTED_ROWS` after
+the row count cap. Neither receipt grants Apply/Undo authority. Java21
+negative regressions, full Java25/Ghidra 12.1.4 PUBLIC compile and genuine
+isolated synthetic GitHub Actions are exact-SHA merge requirements.
+GA-12/13/15/18 remain PARTIAL; GA-14 deferred.
+
 ## GA-06/15/16/18 — 2026-11-10: strict indexed PDF selected-result identity
 
 The RAG PDF selected search result and reconstructed physical page must

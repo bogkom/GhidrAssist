@@ -120,6 +120,27 @@ public final class HardwareChangeProvenanceSelfTest {
             cappedFields.contains("3 rows omitted by cap") &&
             cappedFields.contains("SOURCE_TRUNCATED"),
             "both row count and each cell are bounded; omissions signaled");
+        check(bounded.contains("\"TRUNCATED_SOURCE_ROWS\"") &&
+            bounded.contains("1 source rows contain truncated cells") &&
+            bounded.contains("INCOMPLETE_EXPORT_NEVER_AUTO_APPLY"),
+            "a full-row-count export with truncated source text needs an explicit incomplete receipt");
+        check(cappedFields.contains("\"TRUNCATED_SOURCE_ROWS\"") &&
+            cappedFields.contains(
+                HardwareChangeProvenance.MAX_CSV_ROWS+
+                    " source rows contain truncated cells") &&
+            cappedFields.contains("\"OMITTED_ROWS\""),
+            "simultaneous omitted and truncated evidence losses must be recorded independently");
+        check(!csv.contains("TRUNCATED_SOURCE_ROWS") &&
+            !safe.contains("TRUNCATED_SOURCE_ROWS"),
+            "complete source records do not fabricate an incompleteness marker");
+        var twoLarge=new HardwareChangeProvenance.ReviewRow(
+            "REGISTER","0x00","NAME",null,"ANALYSIS",
+            "MANUAL_REVIEW",false,"X".repeat(600));
+        String mixed=HardwareChangeProvenance.csv(List.of(twoLarge,a,twoLarge));
+        check(mixed.contains("2 source rows contain truncated cells") &&
+            mixed.lines().count()==5 &&
+            mixed.contains("INCOMPLETE_EXPORT_NEVER_AUTO_APPLY"),
+            "truncated-source receipt counts affected rows, not individual cells");
         System.out.println("HardwareChangeProvenanceSelfTest OK");
     }
 }

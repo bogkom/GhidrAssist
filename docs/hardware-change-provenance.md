@@ -164,3 +164,13 @@ cover lowercase UNKNOWN, false matching short/64-character values,
 Unicode lookalikes, malformed live metadata and valid mixed-case
 SHA equivalents. Full Ghidra 12.1.4 PUBLIC Java25 build and isolated
 synthetic headless CI remain required before merge.
+
+## 2026-11-10 — source-cell loss receipt even without omitted rows
+
+A CSV within the 5000-row limit may still contain truncated 512-character
+source cells. The export now adds a counted `TRUNCATED_SOURCE_ROWS` audit
+receipt with `EXPORT_INCOMPLETE` and `INCOMPLETE_EXPORT_NEVER_AUTO_APPLY`;
+`OMITTED_ROWS` remains independent when additional rows were excluded.
+Rows with multiple truncated fields count once. This changes only the
+local read-only export, not Ghidra selections, Apply, Undo, persisted
+checkpoint identity or claims about who authored a SourceType symbol.

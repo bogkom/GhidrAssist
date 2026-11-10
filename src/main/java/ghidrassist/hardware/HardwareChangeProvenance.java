@@ -88,6 +88,18 @@ public final class HardwareChangeProvenance {
         return "\"" + normalized.replace("\"","\"\"") + "\"";
     }
 
+    /** A bounded cell can hide source material even if all review rows
+     * fit the export limit. A separate receipt must carry that loss. */
+    private static boolean truncated(ReviewRow row) {
+        return over(row.kind()) || over(row.range()) ||
+            over(row.proposedName()) || over(row.displayExistingName()) ||
+            over(row.ghidraSourceType()) || over(row.decision()) ||
+            over(row.evidence());
+    }
+    private static boolean over(String text) {
+        return text!=null && text.length()>MAX_CSV_CELL_CHARS;
+    }
+
     public static String csv(List<ReviewRow> rows) {
         if(rows==null || rows.stream().anyMatch(r->r==null))
             throw new IllegalArgumentException("Missing/null provenance row");
@@ -95,8 +107,10 @@ public final class HardwareChangeProvenance {
             "kind,address_range,proposed_name,existing_name,ghidra_source_type,"+
             "source_interpretation,proposed_origin,preflight_decision,selected,evidence\n");
         int retained=Math.min(rows.size(),MAX_CSV_ROWS);
+        int truncatedRows=0;
         for(int i=0;i<retained;i++){
             ReviewRow row=rows.get(i);
+            if(truncated(row))truncatedRows++;
             out.append(cell(row.kind())).append(',').append(cell(row.range()))
                 .append(',').append(cell(row.proposedName())).append(',')
                 .append(cell(row.displayExistingName())).append(',')
@@ -107,6 +121,17 @@ public final class HardwareChangeProvenance {
                 .append(',').append(cell(row.decision())).append(',')
                 .append(row.selected()).append(',')
                 .append(cell(row.evidence())).append('\n');
+        }
+        if(truncatedRows>0) {
+            out.append(cell("TRUNCATED_SOURCE_ROWS")).append(',')
+                .append(cell("")).append(',').append(cell(""))
+                .append(',').append(cell("")).append(',').append(cell("UNKNOWN"))
+                .append(',').append(cell("EXPORT_INCOMPLETE"))
+                .append(',').append(cell("LOCAL_READ_ONLY_CSV"))
+                .append(',').append(cell("INCOMPLETE_EXPORT_NEVER_AUTO_APPLY"))
+                .append(',').append("false").append(',')
+                .append(cell(truncatedRows+" source rows contain truncated cells"))
+                .append('\n');
         }
         if(rows.size()>retained){
             // A counted extra marker is explicit loss of review provenance.
