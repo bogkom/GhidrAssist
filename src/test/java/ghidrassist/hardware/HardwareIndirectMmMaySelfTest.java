@@ -92,6 +92,28 @@ public final class HardwareIndirectMmMaySelfTest {
             cycle.rows().get(0).source().unknownWitness()==null &&
             cycle.markdown().contains("A cycle-only uncertainty has no"),
             "cyclic source may contain MM but never invents a missing callee chain");
+        // End-to-end byte-witnessed computed JSR source report: the
+        // depth-4 backedge returns to the already observed target root.
+        // It is recursion but NOT a fabricated uninspected MM frontier.
+        var rootedLoop=List.of(
+            node(0x900,false,false,false,0x902L),
+            node(0x902,false,false,false,0x904L),
+            node(0x904,false,false,false,0x906L),
+            node(0x906,false,false,false,0x908L),
+            node(0x908,true,false,false,0x900L));
+        var loopReport=HardwareIndirectMmMay.analyze(
+            List.of(w(0x610,0x616,0x900)),rootedLoop,16);
+        var loopSource=loopReport.rows().get(0).source();
+        check(loopSource.mayMm() && loopSource.cycle() &&
+            loopSource.unknownControl() &&
+            !loopSource.limited() &&
+            loopSource.frontierWitness()==null &&
+            loopSource.unknownWitness()==null &&
+            loopSource.mmWitness().chain().equals(
+                List.of(0x900L,0x902L,0x904L,0x906L,0x908L)) &&
+            loopReport.markdown().contains("MM_SOURCE -> 0x00000900") &&
+            !loopReport.markdown().contains("DEPTH_CUTOFF ->"),
+            "byte-verified indirect JSR deep backedge is recursion, not an unvisited source");
         var chain=new ArrayList<HardwareInterproceduralMmEffects.FunctionNode>();
         for(int i=0;i<7;i++)
             chain.add(node(0x900+i*2,i==6,false,false,
