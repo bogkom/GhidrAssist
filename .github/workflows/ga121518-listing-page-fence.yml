@@ -1,0 +1,35 @@
+name: GA-12/15/18 Listing page start and revision fence
+on:
+  pull_request:
+    paths:
+      - 'src/main/java/ghidrassist/automation/AutomationListing.java'
+      - 'src/main/java/ghidrassist/automation/AutomationServer.java'
+      - 'tools/ghidrassist-agent'
+      - 'tests/automation/test_api_completion_surface.py'
+      - '.github/workflows/ga121518-listing-page-fence.yml'
+  push:
+    branches: [master]
+    paths:
+      - 'src/main/java/ghidrassist/automation/AutomationListing.java'
+      - 'src/main/java/ghidrassist/automation/AutomationServer.java'
+      - 'tools/ghidrassist-agent'
+      - 'tests/automation/test_api_completion_surface.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  cli-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate CLI source and explicit page-anchor refusals
+        run: |
+          set -euo pipefail
+          python3 -m unittest discover -s tests/automation -p 'test_api_completion_surface.py' -v
+          python3 - <<'PY'
+          import ast
+          from pathlib import Path
+          ast.parse(Path("tools/ghidrassist-agent").read_text())
+          print("GA-12/15/18 Listing anchor CLI syntax PASS")
+          PY
