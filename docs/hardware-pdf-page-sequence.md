@@ -26,3 +26,16 @@ CI: deterministic negative folio sequence checks and full Ghidra 12.1.4
 extension build. Actual RAG ingestion/source-page lookup must be tested
 on a non-sensitive local PDF in an isolated Ghidra 12.1.4 session before
 merging; no firmware or user documents are published.
+
+## 2026-11-10 — false-folio date rejection and immutable sequence claims
+
+The printed-folio extractor no longer treats ISO revision dates such as
+2026-11-10 (or date/version labels such as Rev. 15-10) as numbered folios
+in a vendor manual header. Numeric chapter folios remain candidates when
+independently labeled, and a true D-5 alongside a revision date remains
+visible as a HEADER_CANDIDATE. The audit's public Result record independently
+checks the claimed classification against both supplied printed labels and
+strictly increasing physical PDF positions; callers cannot directly publish
+a fabricated SEQUENTIAL_CANDIDATE for mismatched sources. All statements
+remain source-only; actual PDF bytes, publisher SHA, edition and folio
+presence must be checked by independent provenance gates.

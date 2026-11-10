@@ -40,6 +40,47 @@ public final class ManualPaginationAuditSelfTest {
         try{compare(216,"D-2",215,"D-1");}
         catch(IllegalArgumentException e){bad=true;}
         check(bad,"physical PDF order must be increasing");
+        // A consumer may receive a public Result directly: do not allow
+        // it to assert sequential verified pages with contradictory input.
+        for(Runnable forged:new Runnable[]{
+                ()->new ManualPaginationAudit.Result(
+                    ManualPaginationAudit.Status.SEQUENTIAL_CANDIDATE,
+                    "D-1","D-9",215,216),
+                ()->new ManualPaginationAudit.Result(
+                    ManualPaginationAudit.Status.SEQUENTIAL_CANDIDATE,
+                    "D-1","D-1",215,216),
+                ()->new ManualPaginationAudit.Result(
+                    ManualPaginationAudit.Status.SEQUENTIAL_CANDIDATE,
+                    "D-1","UNKNOWN",215,216),
+                ()->new ManualPaginationAudit.Result(
+                    ManualPaginationAudit.Status.SEQUENTIAL_CANDIDATE,
+                    null,"D-2",0,216),
+                ()->new ManualPaginationAudit.Result(
+                    ManualPaginationAudit.Status.PHYSICAL_GAP_CONSISTENT_CANDIDATE,
+                    "D-1","D-2",215,218),
+                ()->new ManualPaginationAudit.Result(
+                    ManualPaginationAudit.Status.SECTION_CHANGED,
+                    "D-1","D-2",215,216),
+                ()->new ManualPaginationAudit.Result(
+                    ManualPaginationAudit.Status.SEQUENTIAL_CANDIDATE,
+                    "D-1","D-2",216,215),
+                ()->new ManualPaginationAudit.Result(
+                    ManualPaginationAudit.Status.SEQUENTIAL_CANDIDATE,
+                    "D-1","D-2",215,0),
+                ()->new ManualPaginationAudit.Result(
+                    null,"D-1","D-2",215,216)}) {
+            boolean denied=false;
+            try {forged.run();}
+            catch(IllegalArgumentException expected){denied=true;}
+            check(denied,
+                "public folio status cannot contradict physical page spacing or labels");
+        }
+        var allowed=new ManualPaginationAudit.Result(
+            ManualPaginationAudit.Status.SEQUENTIAL_CANDIDATE,
+            "D-1","D-2",215,216);
+        check(allowed.equals(
+            ManualPaginationAudit.compare(215,"D-1",216,"D-2")),
+            "public audit record and computed source-only pagination agree");
         System.out.println("ManualPaginationAuditSelfTest OK");
     }
 }

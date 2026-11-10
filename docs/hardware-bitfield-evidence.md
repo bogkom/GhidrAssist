@@ -389,3 +389,18 @@ real MCU execution is independently authenticated. The full manual
 PDF digest remains pinned separately in official publisher CI and in
 index-time RAG metadata; the two cannot be conflated.
 
+
+## 2026-11-10 — fail-closed sourced bitfield public-result consistency
+
+GA-10 public FieldEvidence now rejects zero masks, invalid/bidirectional
+field names, values exceeding the shifted source mask and missing or
+ambiguous numeric physical PDF page claims. Public DECODED Result records
+must contain a complete word of the claimed width (8/16/32), unique
+non-overlapping source fields, exact values derived from that static word,
+and a precise complement mask for all uninterpreted register bits. Non-DECODED
+statuses cannot publish fabricated interpreted fields or an untyped-bit
+remainder. The same consistency checks apply when a public source report
+is constructed directly, not merely when decode() produced the record.
+This does not independently authenticate a local manual, claim executed
+writes or establish active MC68332 register state. Java21 deterministic
+adversarial tests and full Java25/Ghidra 12.1.4 PUBLIC CI are required.

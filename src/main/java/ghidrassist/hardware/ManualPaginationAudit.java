@@ -21,6 +21,13 @@ public final class ManualPaginationAudit {
     }
     public record Result(Status status,String previous,String current,
                          int previousPdfPage,int currentPdfPage) {
+        public Result {
+            if(status==null || invalidPhysical(previousPdfPage,currentPdfPage) ||
+                    status!=classify(previousPdfPage,previous,
+                        currentPdfPage,current))
+                throw new IllegalArgumentException(
+                    "Contradictory printed/PDF-page sequence report");
+        }
         public String evidence() {
             return "printed_page_sequence_status="+status+
                 " printed_page_sequence_evidence=UNVERIFIED_HEADER_CANDIDATE"+
@@ -36,11 +43,12 @@ public final class ManualPaginationAudit {
         try {return new Folio(m.group(1),Integer.parseInt(m.group(2)));}
         catch(NumberFormatException e){return null;}
     }
-    public static Result compare(int previousPhysical,String previousPrinted,
-                                 int currentPhysical,String currentPrinted) {
-        if(currentPhysical<1 || previousPhysical<0 ||
-                (previousPhysical>0 && previousPhysical>=currentPhysical))
-            throw new IllegalArgumentException("Non-increasing physical PDF page numbers");
+    private static boolean invalidPhysical(int previousPhysical,int currentPhysical) {
+        return currentPhysical<1 || previousPhysical<0 ||
+            (previousPhysical>0 && previousPhysical>=currentPhysical);
+    }
+    private static Status classify(int previousPhysical,String previousPrinted,
+                                   int currentPhysical,String currentPrinted) {
         Folio now=parse(currentPrinted);
         Folio prev=parse(previousPrinted);
         Status status;
@@ -55,7 +63,15 @@ public final class ManualPaginationAudit {
                 phys==1?Status.SEQUENTIAL_CANDIDATE:
                 Status.PHYSICAL_GAP_CONSISTENT_CANDIDATE;
         }
-        return new Result(status,previousPrinted,currentPrinted,
-            previousPhysical,currentPhysical);
+        return status;
+    }
+    public static Result compare(int previousPhysical,String previousPrinted,
+                                 int currentPhysical,String currentPrinted) {
+        if(invalidPhysical(previousPhysical,currentPhysical))
+            throw new IllegalArgumentException(
+                "Non-increasing physical PDF page numbers");
+        return new Result(classify(previousPhysical,previousPrinted,
+                currentPhysical,currentPrinted),
+            previousPrinted,currentPrinted,previousPhysical,currentPhysical);
     }
 }
