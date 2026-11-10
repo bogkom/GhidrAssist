@@ -1,3 +1,21 @@
+## GA-06/10/16/18 — 2026-11-10: exact publisher field-source report coherence
+
+Read-only MC68332 source reports for (1) 15 SIMCR/SYNCR physical-page
+**name tokens**, (2) 15 independently reviewed diagram bit positions
+and (3) ten SYPCR/PICR/PITR excerpt citations now validate their
+**public** Row/Report constructors. Selected-device metadata and
+canonical reviewed identities/order are fixed; positive rows require
+their exact in-range folio/mask/state and counters; SYPCR/PICR/PITR
+positive excerpts must hash to their own bounded text rather than
+accepting an arbitrary well-formed digest. Generic CPU32 never acquires
+MC68332 publisher identity. Java21 adversarial regressions, independently
+SHA-256-pinned 265-page publisher PDF extraction, full Ghidra 12.1.4
+PUBLIC/Java25 build and synthetic headless CI are required at exact SHA.
+Source text is untrusted without the separate publisher-byte job,
+and this report consistency never proves instruction execution, MM,
+VBR/ISR, physical bus mapping or Review/Apply authorization.
+GA-06/10/16/18 PARTIAL; GA-14 deferred.
+
 ## GA-01/02/03/11/12/18 — 2026-11-10: typed RESET/indirect-JSR/MOVEC report coherence
 
 The read-only selected-MC68332 same-function indirect JSR / SIMCR-MM
