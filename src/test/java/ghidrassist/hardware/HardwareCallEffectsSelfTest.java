@@ -321,16 +321,16 @@ public final class HardwareCallEffectsSelfTest {
         // CPU32 source identities come from 32-bit Program addresses,
         // not arbitrary unsigned values stored in a Java long. Reject
         // forged CALL edges before constructing a partial source report.
-        long wide=0x1_0000_0000L;
-        java.util.List<Runnable> wideInputs=java.util.List.of(
-            ()->n(wide,false,false,false),
-            ()->n(0,false,false,false,wide),
-            ()->HardwareCallEffects.inspect(wide,List.of(n(0,false,false,false)),1,2),
+        long wideAddressProbe=0x1_0000_0000L;
+        java.util.List<Runnable> wideAddressProbeInputs=java.util.List.of(
+            ()->n(wideAddressProbe,false,false,false),
+            ()->n(0,false,false,false,wideAddressProbe),
+            ()->HardwareCallEffects.inspect(wideAddressProbe,List.of(n(0,false,false,false)),1,2),
             ()->new HardwareCallEffects.SourceWitness(
-                HardwareCallEffects.WitnessKind.MEMORY_STORE,List.of(0L,wide)),
-            ()->new HardwareCallEffects.Detailed(wide,evidenced.summary(),
+                HardwareCallEffects.WitnessKind.MEMORY_STORE,List.of(0L,wideAddressProbe)),
+            ()->new HardwareCallEffects.Detailed(wideAddressProbe,evidenced.summary(),
                 null,null,null,null));
-        for(Runnable probe:wideInputs) {
+        for(Runnable probe:wideAddressProbeInputs) {
             boolean rejected=false;
             try {probe.run();}
             catch(IllegalArgumentException expected){rejected=true;}
