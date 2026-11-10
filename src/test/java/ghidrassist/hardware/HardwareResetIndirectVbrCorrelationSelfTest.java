@@ -207,7 +207,7 @@ public final class HardwareResetIndirectVbrCorrelationSelfTest {
             "Indirect source inventory count bounded in public Result");
         reject(()->new HardwareResetIndirectVbrCorrelation.Result(
             r.indirectSources(),r.vbrSources(),r.colocatedPairs(),
-            0,0,false,true,false,r.rows(),
+            0,0,true,true,false,r.rows(),
             r.pageOffset(),r.pageLimit(),r.nextOffset(),r.hasMore()),
             "Contradictory displayTruncated claim cannot fake full evidence");
         reject(()->new HardwareResetIndirectVbrCorrelation.Result(
