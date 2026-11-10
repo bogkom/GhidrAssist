@@ -137,3 +137,38 @@ Java21 regression for both widths.
 
 This is source-only uncertainty, not execution, an active SIMCR MM latch,
 a physical bus map, verified Ghidra Apply permission or a firmware edit.
+
+## 2026-11-10 — exact CPU32 MOVEQ signed register return across CALL (GA-02/03)
+
+The existing read-only input-independent leaf-return verification now
+supports canonical `MOVEQ #signed8,Dn` in addition to full-width
+`MOVE.L/MOVEA.L` immediate definitions:
+
+- `MOVEQ` writes **only D0–D7**, in exactly **two instruction bytes**.
+  Its 8-bit literal is **sign-extended**, so `#-128` returns the
+  source-proven `0xFFFF80` lower MCU24 register bits, not `0x000080`.
+  An unextended/oversized synthetic operand, false A-register destination,
+  missing fallthrough, hidden P-code register output or different instruction
+  size is **not** eligible.
+- A complete `MOVEQ; RTS` leaf is four bytes, rather than the old
+  minimum eight for `MOVE.L #imm32; RTS`. The native isolated Ghidra
+  decoder must still confirm the full function body, exact instruction
+  lengths, direct CALL function identity, no nested call or CALLOTHER and
+  no unsafe implicit register writes.
+- The existing acyclic branch-return solver can carry signed `MOVEQ`
+  values across Bcc/BRA only if **every** path to **every RTS** agrees.
+  Divergent A-registers are downgraded to unknown without discarding a
+  separate identical D0; cycles, RTE, conflicting bytes and phantom
+  branch paths are refused.
+- A signed return may yield a **static possible SIMCR STORE candidate**
+  in the caller, but the prior unknown-CALL hazard remains explicit.
+  No active MM latch, reached/executed CALL, physical bus mapping or
+  Review/Apply permission is inferred.
+
+Java21 straight-leaf and branch synthetic tests include sign bounds,
+cross-CALL word `0xFF80`, and malformed negative cases. Genuine
+Ghidra 12.1.4 PUBLIC headless acceptance now executes **both** the
+existing `leaf-return` fixture and a new `moveq-return` fixture using
+real CPU32 bytes, a four-byte positive `MOVEQ;RTS` and an `RTE` negative
+control, with full extension build and read-only/generic-profile checks.
+GA-02/03/18 PARTIAL; GA-14 deferred.
