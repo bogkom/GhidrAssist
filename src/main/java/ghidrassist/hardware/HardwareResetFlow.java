@@ -55,6 +55,54 @@ public final class HardwareResetFlow {
         return new Vector(sp,pc,true,"candidate vector; firmware origin not independently verified");
     }
 
+    /**
+     * GA-01/11: the vector's initial A7/SSP word and its PC are distinct
+     * source observations. A suspicious stack pointer must be reported,
+     * not silently substituted for proof that the reset PC executed.
+     * The 24-bit rule is *only* selected for a concrete MC68332 profile:
+     * generic 32-bit CPU32 projects may legitimately use wider addresses.
+     *
+     * An initial SP of 0x01000000 may be the top (one past the last
+     * address) of a downward-growing 24-bit stack; it is NOT a mapped
+     * stack witness or a reason to reject an otherwise eligible reset PC.
+     */
+    public enum InitialStackEvidence {
+        NULL_OR_ERASED_SOURCE,
+        ODD_WORD_ACCESS_RISK,
+        ONE_PAST_MCU24_TOP_CANDIDATE,
+        OUTSIDE_SELECTED_MCU24_CONTEXT,
+        ALIGNED_BUT_MEMORY_UNVERIFIED
+    }
+
+    public static InitialStackEvidence inspectInitialStack(long initialSp,
+            boolean selectedMc68332) {
+        if(initialSp<0 || initialSp>0xffffffffL)
+            throw new IllegalArgumentException("Invalid RESET initial stack word");
+        if(initialSp==0 || initialSp==0xffffffffL)
+            return InitialStackEvidence.NULL_OR_ERASED_SOURCE;
+        if((initialSp&1L)!=0)
+            return InitialStackEvidence.ODD_WORD_ACCESS_RISK;
+        if(selectedMc68332 && initialSp==0x1000000L)
+            return InitialStackEvidence.ONE_PAST_MCU24_TOP_CANDIDATE;
+        if(selectedMc68332 && initialSp>0xffffffL)
+            return InitialStackEvidence.OUTSIDE_SELECTED_MCU24_CONTEXT;
+        return InitialStackEvidence.ALIGNED_BUT_MEMORY_UNVERIFIED;
+    }
+
+    /**
+     * Fail closed before joining Ghidra functions when an explicitly
+     * selected MC68332 reset PC is outside its 24-bit source-image address
+     * range. The CPU32 has a 32-bit programmer model, so a value with high
+     * address bits might alias on a physical bus; WITHOUT independent
+     * remapping evidence, do not invent that alias or a RESET CALL graph.
+     * Generic CPU32 analysis retains its original 32-bit interpretation.
+     */
+    public static boolean sourceResetPcEligible(Vector vector,
+            boolean selectedMc68332) {
+        return vector!=null && vector.valid() &&
+            (!selectedMc68332 || vector.resetPc()<=0xffffffL);
+    }
+
     private static long word(byte[] bytes,int start){
         long result=0;
         for(int n=start;n<start+4;n++)result=(result<<8)|(bytes[n]&0xffL);

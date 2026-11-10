@@ -226,6 +226,57 @@ public class GA18VerifyResetIndirectVbrJointSource extends GhidraScript {
             check(cfg.contains("CALL fallthrough") &&
                 cfg.contains("does not prove callee return"),
                 "no executed JSR / selected VBR / active MM conclusion");
+            check(report.contains(
+                    "Initial SSP source quality: ALIGNED_BUT_MEMORY_UNVERIFIED") &&
+                    report.contains("NOT proof of mapped RAM") &&
+                    report.contains("0x00FFF7FC"),
+                "native selected MC68332 report separates valid source SSP from RAM/execution proof");
+            // A real synthetic Ghidra Program with a CPU32 32-bit PC whose
+            // high byte is set must NOT be turned into a selected MC68332
+            // 24-bit RESET root by truncating its address. The same bytes
+            // remain a generic CPU32 (wide) source observation. The project
+            // is isolated and the original fixture bytes are restored.
+            Method resetGate=service.getDeclaredMethod("resetStaticCandidates",
+                Program.class,java.util.List.class,java.util.List.class,boolean.class);
+            resetGate.setAccessible(true);
+            byte originalPcHigh=currentProgram.getMemory().getByte(at(4));
+            check(originalPcHigh==0,"synthetic original vector high byte");
+            int mutateVector=currentProgram.startTransaction(
+                "GA18 isolated high-PC vector source probe");
+            try{
+                currentProgram.getMemory().setByte(at(4),(byte)1);
+            }finally{
+                currentProgram.endTransaction(mutateVector,true);
+            }
+            try{
+                Object selectedHigh=resetGate.invoke(null,currentProgram,
+                    java.util.List.of(),java.util.List.of(),true);
+                Method resetMd=selectedHigh.getClass().getDeclaredMethod("markdown");
+                resetMd.setAccessible(true);
+                String selectedText=(String)resetMd.invoke(selectedHigh);
+                check(selectedText.contains(
+                        "UNKNOWN RESET ROOT — SELECTED MC68332 24-BIT SOURCE BOUND") &&
+                        selectedText.contains("0x01000100") &&
+                        selectedText.contains("No Ghidra function/RESET CALL graph"),
+                    "native selected MC68332 refuses a high-PC physical alias");
+                Object genericHigh=resetGate.invoke(null,currentProgram,
+                    java.util.List.of(),java.util.List.of(),false);
+                String genericText=(String)resetMd.invoke(genericHigh);
+                check(genericText.contains("0x01000100") &&
+                        !genericText.contains("SELECTED MC68332 24-BIT SOURCE BOUND"),
+                    "native generic CPU32 does not inherit MC68332 physical limit");
+            }finally{
+                int restoreVector=currentProgram.startTransaction(
+                    "GA18 restore isolated CPU32 reset vector bytes");
+                try{
+                    currentProgram.getMemory().setByte(at(4),originalPcHigh);
+                }finally{
+                    currentProgram.endTransaction(restoreVector,true);
+                }
+            }
+            check(currentProgram.getMemory().getByte(at(4))==originalPcHigh,
+                "original isolated synthetic RESET vector byte restored");
+            println("GA18 REAL MC68332 RESET SOURCE-SCOPE PASS: highPcRefused=1 genericWide=1 stackSource=1");
             // Mutation occurs inside the ACTUAL production Analyze call,
             // after its revision capture and after N real TaskMonitor
             // checkpoints. A separate, isolated Program transaction changes

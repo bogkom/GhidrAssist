@@ -27,6 +27,57 @@ public final class HardwareResetFlowSelfTest {
         byte[] erased=new byte[8];java.util.Arrays.fill(erased,(byte)0xff);
         ok(!HardwareResetFlow.readVector(erased).valid(),
             "erased reset PC cannot masquerade as reset handler");
+        // Selected MC68332 is a 24-bit source-image address scope;
+        // generic CPU32 remains a 32-bit source survey. A high-PC
+        // Ghidra function must NOT become a fabricated device RESET root.
+        byte[] upperPc=ecu.clone();
+        upperPc[4]=0x01;
+        var high=HardwareResetFlow.readVector(upperPc);
+        ok(high.valid() && high.resetPc()==0x01002bc0L &&
+            HardwareResetFlow.sourceResetPcEligible(high,false) &&
+            !HardwareResetFlow.sourceResetPcEligible(high,true),
+            "MC68332-only 24-bit source gate preserves generic CPU32 survey");
+        ok(HardwareResetFlow.sourceResetPcEligible(v,true) &&
+            HardwareResetFlow.sourceResetPcEligible(v,false) &&
+            !HardwareResetFlow.sourceResetPcEligible(
+                HardwareResetFlow.readVector(odd),true) &&
+            !HardwareResetFlow.sourceResetPcEligible(null,true),
+            "normal selected 24-bit RESET still eligible, malformed PC not");
+        var top=HardwareResetFlow.InitialStackEvidence
+            .ONE_PAST_MCU24_TOP_CANDIDATE;
+        var aligned=HardwareResetFlow.InitialStackEvidence
+            .ALIGNED_BUT_MEMORY_UNVERIFIED;
+        var nullSp=HardwareResetFlow.InitialStackEvidence
+            .NULL_OR_ERASED_SOURCE;
+        var oddSp=HardwareResetFlow.InitialStackEvidence
+            .ODD_WORD_ACCESS_RISK;
+        var outside=HardwareResetFlow.InitialStackEvidence
+            .OUTSIDE_SELECTED_MCU24_CONTEXT;
+        ok(HardwareResetFlow.inspectInitialStack(0x00fff7fcL,true)==aligned &&
+            HardwareResetFlow.inspectInitialStack(0x00fff7fcL,false)==aligned,
+            "realistic even image-zero SSP is only source-aligned, never RAM proof");
+        ok(HardwareResetFlow.inspectInitialStack(0,true)==nullSp &&
+            HardwareResetFlow.inspectInitialStack(0xffffffffL,true)==nullSp &&
+            HardwareResetFlow.inspectInitialStack(0x00001001L,false)==oddSp,
+            "zero, erased and odd SSP warnings do not assert executed RESET");
+        ok(HardwareResetFlow.inspectInitialStack(0x01000000L,true)==top &&
+            HardwareResetFlow.inspectInitialStack(0x01000000L,false)==aligned &&
+            HardwareResetFlow.inspectInitialStack(0x02000000L,true)==outside &&
+            HardwareResetFlow.inspectInitialStack(0x02000000L,false)==aligned,
+            "one-past 24-bit stack top is distinct from invalid PC or wide CPU32");
+        byte[] oddStack=ecu.clone();
+        oddStack[3]=(byte)0xfd;
+        ok(HardwareResetFlow.readVector(oddStack).valid() &&
+            HardwareResetFlow.sourceResetPcEligible(
+                HardwareResetFlow.readVector(oddStack),true) &&
+            HardwareResetFlow.inspectInitialStack(
+                HardwareResetFlow.readVector(oddStack).initialSp(),true)==oddSp,
+            "odd SSP is a warning; source-valid RESET PC stays separately eligible");
+        boolean badStack=false;
+        try{HardwareResetFlow.inspectInitialStack(0x100000000L,true);}
+        catch(IllegalArgumentException expected){badStack=true;}
+        ok(badStack,"SP words beyond unsigned 32-bit rejected");
+
         // A reset vector pointing inside an existing function cannot
         // borrow the function's earlier JSR/BSR prefix. Otherwise the
         // unexecuted prefix could fabricate reachable MMIO/ISR sites.

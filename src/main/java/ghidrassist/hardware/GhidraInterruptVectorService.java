@@ -30,6 +30,23 @@ public final class GhidraInterruptVectorService {
             Set<Long> resetVisited,
             List<HardwareCallEffects.FunctionNode> callGraph)
             throws CancelledException {
+        return analyze(program,monitor,resetRootRecognized,resetGraphIncomplete,
+            resetVisited,callGraph,false);
+    }
+
+    /**
+     * The image-zero vector bytes remain 32-bit for generic CPU32. Only an
+     * explicitly selected MC68332 may apply the 24-bit external source
+     * address scope, already required for relocated VBR candidates.
+     * A high vector pointer becomes UNKNOWN/OUTSIDE device source range;
+     * do NOT truncate it or resolve a wider Ghidra mapping as an ISR.
+     */
+    public static String analyze(Program program,TaskMonitor monitor,
+            boolean resetRootRecognized,boolean resetGraphIncomplete,
+            Set<Long> resetVisited,
+            List<HardwareCallEffects.FunctionNode> callGraph,
+            boolean mc68332Selected)
+            throws CancelledException {
         if(resetVisited==null || callGraph==null)
             throw new IllegalArgumentException("Missing reset-call evidence");
         String language=program.getLanguageID().toString().toUpperCase(Locale.ROOT);
@@ -57,7 +74,9 @@ public final class GhidraInterruptVectorService {
                         long word=0;
                         for(byte b:bytes)word=(word<<8)|(b&0xffL);
                         raw=word;
-                        if(word!=0 && word!=0xffffffffL && (word&1)==0){
+                        if(word!=0 && word!=0xffffffffL && (word&1)==0 &&
+                                (!mc68332Selected ||
+                                 word<=HardwareVbrRelocationEvidence.MAX_24BIT)){
                             try{
                                 Address dest=program.getAddressFactory()
                                     .getDefaultAddressSpace().getAddress(word);
@@ -83,7 +102,9 @@ public final class GhidraInterruptVectorService {
                 // Unreadable/truncated/bad vector must never be treated as zero.
             }
             observations.add(new HardwareInterruptVectors.Observation(
-                vector,raw,mapped,function,exactFunctionEntry));
+                vector,raw,mapped,function,exactFunctionEntry,
+                mc68332Selected && raw!=null && raw!=0xffffffffL &&
+                raw>HardwareVbrRelocationEvidence.MAX_24BIT));
         }
         return HardwareInterruptVectors.inspect(0,observations,32).markdown()
             + HardwareVectorResetCorrelation.inspect(
