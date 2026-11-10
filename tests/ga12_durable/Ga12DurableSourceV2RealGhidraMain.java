@@ -281,7 +281,7 @@ public final class Ga12DurableSourceV2RealGhidraMain {
             phase.equals("source-edit")||phase.equals("source-v1")||
             phase.equals("source-corrupt")||phase.equals("source-profile")||
             phase.equals("source-mismatch")||phase.equals("source-incomplete")||
-            phase.equals("source-name"),
+            phase.equals("source-name")||phase.equals("source-forged"),
             "unexpected isolated V2 phase");
         Path ghidra=Path.of(args[0]).toRealPath();
         Path projectDir=Path.of(args[1]).toRealPath();
