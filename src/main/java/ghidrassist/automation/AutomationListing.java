@@ -24,6 +24,13 @@ public final class AutomationListing {
             throw new IllegalStateException("Stale Listing location belongs to a different program");
         if(offset<0 || offset>4096 || limit<1 || limit>64)
             throw new IllegalArgumentException("Invalid Listing range pagination");
+        // CodeBrowser cursor movement does not change Program modification.
+        // Subsequent pages must retain the first response's explicit start
+        // address and revision; a fresh UI location is not the old cursor.
+        if(offset>0 && (expectedRevision==null ||
+                startText==null || startText.isBlank()))
+            throw new IllegalArgumentException(
+                "Subsequent Listing page requires explicit start and revision");
         long revision=program.getModificationNumber();
         if(expectedRevision!=null && revision!=expectedRevision.longValue())
             throw new IllegalStateException("Listing revision mismatch");
