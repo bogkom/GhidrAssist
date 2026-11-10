@@ -8,6 +8,7 @@ on:
       - 'src/main/java/ghidrassist/hardware/HardwareVerifiedBranchReturn.java'
       - 'src/test/java/ghidrassist/hardware/HardwareCallCheckpointIntegrationSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/HardwareCheckpointValueWitnessSelfTest.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareRegisterJoinCheckpointSelfTest.java'
       - '.github/workflows/ga02-ga12-cache-signature-integration.yml'
   workflow_dispatch:
 permissions:
@@ -41,6 +42,7 @@ jobs:
             src/main/java/ghidrassist/hardware/HardwareRegisterOperand.java \
             src/test/java/ghidrassist/hardware/HardwareCallCheckpointIntegrationSelfTest.java \
             src/test/java/ghidrassist/hardware/HardwareCheckpointValueWitnessSelfTest.java \
+            src/test/java/ghidrassist/hardware/HardwareRegisterJoinCheckpointSelfTest.java \
             src/test/java/ghidrassist/hardware/HardwareVerifiedLeafReturnSelfTest.java \
             src/test/java/ghidrassist/hardware/HardwareVerifiedBranchReturnSelfTest.java \
             src/test/java/ghidrassist/hardware/HardwareDataflowSliceSelfTest.java \
@@ -48,6 +50,7 @@ jobs:
           for test_class in \
             HardwareCallCheckpointIntegrationSelfTest \
             HardwareCheckpointValueWitnessSelfTest \
+            HardwareRegisterJoinCheckpointSelfTest \
             HardwareVerifiedLeafReturnSelfTest \
             HardwareVerifiedBranchReturnSelfTest \
             HardwareDataflowSliceSelfTest \
