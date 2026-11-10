@@ -20,20 +20,62 @@ public final class HardwareIndirectMmMay {
     private static final int MAX_FUNCTIONS=100;
 
     public record Row(HardwareIndirectCallEvidence.Site witness,
-                      HardwareInterproceduralMmEffects.Summary source) {}
+                      HardwareInterproceduralMmEffects.Summary source) {
+        public Row {
+            if(witness==null || source==null || source.visited()<0)
+                throw new IllegalArgumentException("Invalid indirect MM source row");
+            // This report is rooted at a byte-verified computed target.
+            // The shared CALL-site solver records function-only descendants
+            // starting at that target, NEVER the caller's instruction PC.
+            // Reject a synthetic/mismatched witness even if its flags look
+            // plausible; such data must not be published as source proof.
+            var witnesses=new HardwareInterproceduralMmEffects.SourceWitness[]{
+                source.mmWitness(),source.aliasWitness(),
+                source.unknownWitness(),source.frontierWitness()};
+            for(var path:witnesses)
+                if(path!=null && path.chain().get(0)!=witness.target())
+                    throw new IllegalArgumentException(
+                        "Indirect source chain belongs to another target");
+        }
+    }
     public record Report(int totalWitnesses,int omittedWitnesses,List<Row> rows) {
         public Report {
-            if(rows==null || rows.stream().anyMatch(row ->
-                    row==null || row.witness()==null || row.source()==null ||
-                    row.source().visited()<0))
-                throw new IllegalArgumentException("Invalid MAY source row");
-            rows=List.copyOf(rows);
-            if(totalWitnesses<0 || omittedWitnesses<0 ||
+            // List.of/immutable Java lists may throw NullPointerException
+            // from contains(null); preserve the fail-closed API contract as
+            // an explicit IllegalArgumentException for malformed rows.
+            if(rows==null || rows.size()>MAX_ROWS ||
+                    rows.stream().anyMatch(java.util.Objects::isNull) ||
+                    totalWitnesses<0 ||
+                    totalWitnesses>HardwareIndirectCallEvidence.MAX_SITES ||
+                    omittedWitnesses<0 ||
                     totalWitnesses!=rows.size()+omittedWitnesses)
                 throw new IllegalArgumentException("Invalid MAY source counts");
+            Set<Long> pcs=new HashSet<>();
+            for(Row row:rows)
+                if(!pcs.add(row.witness().callPc()))
+                    throw new IllegalArgumentException(
+                        "Duplicate computed JSR source PC in report");
+            rows=List.copyOf(rows);
         }
         private static String hex(long value) {
             return String.format(Locale.ROOT,"0x%08X",value);
+        }
+        private static String witness(
+                HardwareInterproceduralMmEffects.SourceWitness path) {
+            if(path==null)return "NONE";
+            StringBuilder out=new StringBuilder(path.kind().name());
+            for(long entry:path.chain())
+                out.append(" -> ").append(hex(entry));
+            return out.toString();
+        }
+        private static String observedUnknown(
+                HardwareInterproceduralMmEffects.Summary effect) {
+            var path=effect.unknownWitness();
+            if(path==null ||
+                    path.kind()!=HardwareInterproceduralMmEffects.WitnessKind.UNKNOWN_FLOW &&
+                    path.kind()!=HardwareInterproceduralMmEffects.WitnessKind.MISSING_TARGET)
+                return "NONE";
+            return witness(path);
         }
         private static String classification(
                 HardwareInterproceduralMmEffects.Summary effect) {
@@ -58,7 +100,13 @@ public final class HardwareIndirectMmMay {
                 .append(". Unknown STORE address or width, unknown control flow, ")
                 .append("unresolved callee, cycles and exhausted depth/node ")
                 .append("or shared batch budget remain UNKNOWN; ")
-                .append("negative evidence is bounded only.\n");
+                .append("negative evidence is bounded only. ")
+                .append("MM/alias/observed unknown function chains start at ")
+                .append("the byte-proven target (NOT the calling JSR PC); ")
+                .append("uninspected frontier endpoints were NOT examined. ")
+                .append("NONE is not proof that an omitted or unresolved source ")
+                .append("cannot exist. A cycle-only uncertainty has no ")
+                .append("fabricated callee chain.\n");
             if(omittedWitnesses>0)
                 b.append("- **INCOMPLETE INDIRECTION MAY EVIDENCE:** ")
                  .append("omitted candidates cannot prove absence of MMIO.\n");
@@ -66,8 +114,11 @@ public final class HardwareIndirectMmMay {
                 b.append("\n| Caller | Computed JSR PC | Byte-witnessed target | ")
                  .append("SIMCR/MM low-byte MAY | Unknown alias/width | ")
                  .append("Unknown CALL/flow | Cycle | Limited | ")
-                 .append("Examined functions | Source proof |\n")
-                 .append("|---|---|---|---|---|---|---|---|---|---|\n");
+                 .append("Examined functions | Source proof | ")
+                 .append("MM source chain | Alias source chain | ")
+                 .append("Observed unknown/missing chain | ")
+                 .append("Uninspected frontier chain |\n")
+                 .append("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n");
                 for(Row r:rows){
                     var w=r.witness();var s=r.source();
                     b.append("| ").append(hex(w.caller()))
@@ -79,7 +130,12 @@ public final class HardwareIndirectMmMay {
                      .append(" | ").append(s.cycle())
                      .append(" | ").append(s.limited())
                      .append(" | ").append(s.visited())
-                     .append(" | ").append(w.provenance()).append(" |\n");
+                     .append(" | ").append(w.provenance())
+                     .append(" | ").append(witness(s.mmWitness()))
+                     .append(" | ").append(witness(s.aliasWitness()))
+                     .append(" | ").append(observedUnknown(s))
+                     .append(" | ").append(witness(s.frontierWitness()))
+                     .append(" |\n");
                 }
             }else
                 b.append("- No eligible byte-witnessed indirect JSR source ")

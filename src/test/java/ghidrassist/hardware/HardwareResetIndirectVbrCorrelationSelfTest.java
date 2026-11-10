@@ -106,6 +106,17 @@ public final class HardwareResetIndirectVbrCorrelationSelfTest {
             "Same indirect instruction PC cannot be double counted");
         reject(()->join(List.of(j1),List.of(v1,v1),true,false,0,0,10),
             "Same MOVEC instruction PC cannot be double counted");
+        var impossibleVbr=new HardwareResetIndirectVbrCorrelation.Vbr(
+            0x130L,j1.pc(),0x800L,false);
+        reject(()->join(List.of(j1),List.of(impossibleVbr),
+                true,false,0,0,10),
+            "Decoded JSR and MOVEC at the same PC cannot be co-located evidence");
+        reject(()->new HardwareResetIndirectVbrCorrelation.SourceInventory(
+                List.of(j1),List.of(impossibleVbr),Set.of(0x130L),
+                true,false,0,0),
+            "Same-PC cross-kind contradiction must fail at snapshot capture");
+        check(r.rows().stream().allMatch(row->row.indirectPc()!=row.vbrPc()),
+            "Legitimate static co-located sources remain distinct instruction sites");
         reject(()->new HardwareResetIndirectVbrCorrelation.Indirect(
             0x130L,0x12eL,0x500L,true,false),
             "Indirect source PC before declared function entry rejected");

@@ -93,3 +93,36 @@ repeat determinism, generic CPU32 gate and non-promotion to Apply.
 Java21 independently verifies allowed label integrity and output
 bounds. Existing adjacent source and Automation API call-path
 regressions must remain green on the exact PR SHA.
+
+
+## 2026-11-10 — target-rooted source chains for indirect SIMCR/MM MAY
+
+The read-only computed-JSR SIMCR/MM report now carries its underlying
+bounded `HardwareInterproceduralMmEffects` source witnesses, instead
+of exposing only `STATIC_MAY_MM_LOW_BYTE` or `UNKNOWN` booleans.
+Each row separately labels shortest deterministic `MM_SOURCE`,
+`STORE_ALIAS`, **observed** `UNKNOWN_FLOW`/`MISSING_TARGET` and
+**uninspected** `DEPTH_CUTOFF`/`NODE_CUTOFF`/`BATCH_CUTOFF`
+function-entry chains. When the original unknown witness denotes only
+a cutoff, the observed-unknown field remains `NONE` and the cutoff
+is shown independently. Cycles remain a separate uncertain flag and
+never fabricate a callee chain.
+
+A source chain begins at the **byte-verified computed JSR target**, not
+the caller's JSR PC. The report refuses a chain rooted at another target,
+duplicate computed-call PC or oversized manually created result. This is
+only static function-level source connectivity, NOT a verified execution,
+feasible CFG route, indirect graph edge, RESET/ISR reachability, latched
+SIMCR MM, selected VBR or Review/Apply permission. Omitted/exhausted
+sources stay UNKNOWN, and no disk cache replays those source chains.
+
+The same revision-scoped joint JSR/MOVEC co-location inventory now rejects
+an impossible cross-kind collision at one decoded instruction PC, even
+when each type's inventory is individually duplicate-free or the queried
+page does not display that source pair. Exact-page counts, omission flags
+and native revision fences are otherwise unchanged. Synthetic Java21
+regressions exercise positive MM, uncertain aliases/flow, missing target,
+cycles, limited depth with a positive skipped leaf, reversed inventory,
+foreign-root chains, same-PC JSR/MOVEC collision and later-page refusal.
+Real Ghidra 12.1.4 PUBLIC Java25 extension/headless CI must pass before
+integration. GA-01/02/03/11/18 remain PARTIAL.

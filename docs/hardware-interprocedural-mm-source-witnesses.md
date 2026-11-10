@@ -84,3 +84,22 @@ enumeration; cutoff-only API compatibility; two malformed summary forms
 and Markdown disclosure of both paths. The existing exact-head Ghidra
 12.1.4 PUBLIC Java25 build and synthetic headless Actions remain the
 integration gates. GA-02/03/18 remain PARTIAL.
+
+
+## 2026-11-10 — computed JSR reports use the same bounded typed chains
+
+`HardwareIndirectMmMay` now displays all four source categories
+from its existing target-rooted `HardwareInterproceduralMmEffects`
+summary, rather than reducing the result to effect/unknown flags.
+Its report record checks that every nonempty chain begins at the
+byte-witnessed indirect target (not the caller) and rejects repeated
+decoded JSR PCs. A true UNKNOWN_FLOW or checked missing function is
+presented independently of an uninspected cutoff; cycles without
+observed unknown nodes do not invent a chain. This remains static
+candidate connectivity, with no direct/RESET/ISR edge promotion,
+runtime write-order or original firmware manipulation.
+
+The GA-01/11 co-location join also rejects overlapping decoded JSR and
+MOVEC site PCs across the two otherwise individually valid source lists.
+Independent Java21 tests and complete Java25 Ghidra 12.1.4 PUBLIC
+synthetic headless tests remain the exact-SHA merge gates.

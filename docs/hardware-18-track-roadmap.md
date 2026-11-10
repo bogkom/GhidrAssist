@@ -1,3 +1,34 @@
+## GA-01/02/03/11/18 — 2026-11-10: target-rooted computed JSR/MMIO chains and MOVEC identity gate
+
+The byte-witnessed indirect CPU32 JSR -> SIMCR/MM MAY report now
+publishes the shared solver's bounded, typed target-rooted function
+witnesses for modeled MM sources, unknown STORE aliases, inspected
+unknown-flow/missing-function sources, and separately uninspected
+depth/node/batch frontiers. This closes a presentation/evidence gap
+after the previous direct CALL-site dual-witness improvement: flags
+alone masked the actual candidate origin and omission boundary.
+The read-only report rejects a source witness rooted at a different
+computed CALL target, repeated CALL PC, and unbounded result rows.
+Cycles without a source witness remain explicitly uncertain.
+
+The joint RESET/indirect-JSR/MOVEC same-function correlation now
+also rejects the logically impossible reuse of a **single decoded
+instruction PC** for both JSR and MOVEC, including at an on-demand
+page beyond the first window and during immutable source-inventory
+capture. This prevents internally inconsistent mixed source snapshots
+from appearing as meaningful MM/VBR co-location.
+
+No new direct CALL graph edges, actual RESET dispatch, executed STORE,
+latched SIMCR MM, runtime VBR/ISR, physical CS map, Review/Apply/Undo
+authorization or durable cross-JVM source publication is inferred.
+Java21 deterministic positive/negative coverage for partial MM paths,
+observed UNKNOWN vs skipped frontier, cross-target forgery, source
+reordering and cross-kind PC identity; Java25 full Ghidra 12.1.4 PUBLIC
+build and genuine isolated synthetic headless CI are merge gates.
+See [indirect JSR source provenance](hardware-ga02-indirect-jsr-source-provenance.md)
+and [CALL source witnesses](hardware-interprocedural-mm-source-witnesses.md).
+GA-01/02/03/11/18 remain PARTIAL; GA-14 deferred.
+
 ## GA-08/13/18 — 2026-11-10: fail-closed executable digest in rename receipt audits
 
 Both GA-08 pointer-variable and GA-13 function-rename **read-only**
