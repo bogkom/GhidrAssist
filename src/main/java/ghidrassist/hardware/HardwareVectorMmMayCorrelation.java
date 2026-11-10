@@ -193,6 +193,9 @@ public final class HardwareVectorMmMayCorrelation {
     /** Fail closed on injected text, unbounded or cross-root source paths. */
     private static boolean validWitness(String value,long root,String... kinds) {
         if("NONE".equals(value))return true;
+        // Guard the allocation BEFORE splitting any public report text.
+        // Four hops plus one omitted-target entry have a small fixed shape.
+        if(value.length()>(MAX_ROOT_DEPTH+3)*24)return false;
         String[] parts=value.split(" -> ",-1);
         if(parts.length<2 || parts.length>MAX_ROOT_DEPTH+3 ||
                 !List.of(kinds).contains(parts[0]) ||
