@@ -46,7 +46,25 @@ public final class HardwareVectorResetCorrelation {
 
     public record Row(int vectorNumber, long pointer, long functionEntry,
                       Relation relation, String memoryStoreEffect,
-                      String vbrEffect, boolean flowUncertain) {}
+                      String vbrEffect, boolean flowUncertain,
+                      String storeSourcePath,String vbrSourcePath,
+                      String observedUnknownPath,String frontierPath) {
+        /** Preserve the original seven-field vector row constructor. */
+        public Row(int vectorNumber,long pointer,long functionEntry,
+                Relation relation,String memoryStoreEffect,String vbrEffect,
+                boolean flowUncertain) {
+            this(vectorNumber,pointer,functionEntry,relation,
+                memoryStoreEffect,vbrEffect,flowUncertain,
+                "NONE","NONE","NONE","NONE");
+        }
+        public Row {
+            if(relation==null || memoryStoreEffect==null ||
+                    vbrEffect==null || storeSourcePath==null ||
+                    vbrSourcePath==null || observedUnknownPath==null ||
+                    frontierPath==null)
+                throw new IllegalArgumentException("Missing vector source evidence");
+        }
+    }
 
     public record Summary(boolean relocatedSource, long tableAddress,
                           boolean resetRootRecognized, boolean resetGraphIncomplete,
@@ -88,6 +106,14 @@ public final class HardwareVectorResetCorrelation {
                .append("bounded candidate call subtree, not necessarily MMIO. ")
                .append("VBR means a possible static MOVEC site. UNKNOWN / ")
                .append("not observed are NOT evidence of no hardware effects.\n")
+               .append("- Typed direct-CALL source paths start at each exact ")
+               .append("vector handler entry and identify the shortest ")
+               .append("observed candidate STORE/MOVEC function, actually ")
+               .append("missing/unknown-flow source, or an independently ")
+               .append("uninspected depth/node frontier. NONE does not ")
+               .append("prove absence of unmodeled effects. Cycle-only ")
+               .append("uncertainty never fabricates a missing CALL. ")
+               .append("Paths are not instruction PCs or runtime flows.\n")
                .append("- **STATIC ONLY**: an exception-vector pointer and a ")
                .append("RESET direct-call connection do NOT demonstrate active ")
                .append("VBR, interrupt execution, branch feasibility, first SIMCR ")
@@ -104,8 +130,11 @@ public final class HardwareVectorResetCorrelation {
                     "| Vector | Relocated source-image pointer | Containing function | ":
                     "| Vector | Image-zero pointer | Containing function | ")
                .append("RESET relation | Memory STORE in static call subtree | ")
-               .append("VBR in static call subtree | Flow uncertainty |\n")
-               .append("|---|---|---|---|---|---|---|\n");
+               .append("VBR in static call subtree | Flow uncertainty | ")
+               .append("STORE source function path | MOVEC source function path | ")
+               .append("Observed unknown or missing function path | ")
+               .append("Uninspected depth/node frontier path |\n")
+               .append("|---|---|---|---|---|---|---|---|---|---|---|\n");
             for (Row row : rows) {
                 out.append("| ").append(row.vectorNumber()).append(" | ")
                    .append(hex(row.pointer())).append(" | ")
@@ -113,7 +142,11 @@ public final class HardwareVectorResetCorrelation {
                    .append(row.relation()).append(" | ")
                    .append(row.memoryStoreEffect()).append(" | ")
                    .append(row.vbrEffect()).append(" | ")
-                   .append(row.flowUncertain()).append(" |\n");
+                   .append(row.flowUncertain()).append(" | ")
+                   .append(row.storeSourcePath()).append(" | ")
+                   .append(row.vbrSourcePath()).append(" | ")
+                   .append(row.observedUnknownPath()).append(" | ")
+                   .append(row.frontierPath()).append(" |\n");
             }
             if (displayTruncated)
                 out.append("- Rows truncated by display cap; numeric totals cover ")
@@ -124,6 +157,21 @@ public final class HardwareVectorResetCorrelation {
 
     private static String hex(long value) {
         return String.format(Locale.ROOT, "0x%08X", value);
+    }
+
+    private static String witness(HardwareCallEffects.SourceWitness source) {
+        if(source==null)return "NONE";
+        StringBuilder out=new StringBuilder(source.kind().name());
+        // A deep generic direct-CALL survey may have many nodes; the
+        // rendered vector correlation uses a max-depth of only four.
+        // Keep public rendering bounded even for forged long reports.
+        int shown=Math.min(source.chain().size(),16);
+        for(int i=0;i<shown;i++)
+            out.append(" -> ").append(hex(source.chain().get(i)));
+        if(shown<source.chain().size())
+            out.append(" -> ... ").append(source.chain().size()-shown)
+                .append(" omitted source entries (not an exact full path)");
+        return out.toString();
     }
 
     private static String effect(boolean possible, HardwareCallEffects.Summary summary) {
@@ -185,11 +233,11 @@ public final class HardwareVectorResetCorrelation {
         // Multiple vector slots may point to the same exact handler. The
         // transitive STORE/VBR effect is read-only and depends on the target,
         // not on the candidate vector number. Cache only in this call.
-        Map<Long,HardwareCallEffects.Summary> effectsByEntry=new HashMap<>();
+        Map<Long,HardwareCallEffects.Detailed> effectsByEntry=new HashMap<>();
         List<Row> rows = new ArrayList<>();
         for (Target target : sorted) {
             Relation relation;
-            HardwareCallEffects.Summary effects = null;
+            HardwareCallEffects.Detailed detail = null;
             if (!target.exactEntry()) {
                 interior++;
                 relation = Relation.INTERIOR_FUNCTION_POINTER_NOT_ENTRY;
@@ -204,19 +252,30 @@ public final class HardwareVectorResetCorrelation {
                     relation = Relation.OUTSIDE_OBSERVED_RESET_SUBSET;
                     outside++;
                 }
-                effects=effectsByEntry.computeIfAbsent(target.functionEntry(),
-                    entry->HardwareCallEffects.summarize(entry,graph,4,100));
             }
-            if (rows.size() < maxRows)
+            if (rows.size() < maxRows) {
+                // Only the displayed exact-entry slots need detailed
+                // effects; numeric vector relation totals cover all slots.
+                // Multiple slots sharing one handler reuse a single
+                // in-memory, revision-local source audit.
+                if(target.exactEntry())
+                    detail=effectsByEntry.computeIfAbsent(target.functionEntry(),
+                        entry->HardwareCallEffects.inspect(entry,graph,4,100));
+                HardwareCallEffects.Summary effects=detail==null?
+                    null:detail.summary();
                 rows.add(new Row(target.vectorNumber(), target.pointer(),
                     target.functionEntry(), relation,
                     effect(effects != null && effects.possibleMemoryStore(), effects),
                     effect(effects != null && effects.possibleVbrWrite(), effects),
-                    // A closed LOCAL callee subtree cannot make a vector's
-                    // relation to RESET certain when the RESET root or its
-                    // observed direct-call graph is itself incomplete.
+                    // RESET scope and target-local source evidence are
+                    // independent unknown horizons.
                     !resetRootRecognized || resetGraphIncomplete ||
-                    effects == null || effects.unresolved() || effects.truncated()));
+                    effects == null || effects.unresolved() || effects.truncated(),
+                    witness(detail==null?null:detail.storeWitness()),
+                    witness(detail==null?null:detail.vbrWitness()),
+                    witness(detail==null?null:detail.observedUnknownWitness()),
+                    witness(detail==null?null:detail.frontierWitness())));
+            }
         }
         return new Summary(relocatedSource,sourceBase,
             resetRootRecognized,resetGraphIncomplete,sorted.size(), exact,
