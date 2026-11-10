@@ -1,3 +1,15 @@
+## GA-02/03/15/18 — 2026-11-10: CALL-site SIMCR/MM source report integrity
+
+The public transitive MM CALL-site source report now rejects fabricated
+cross-target witness paths, impossible observed-chain versus inspected
+function counts, zero-visit resolved evidence, malformed row inventory
+and an unresolved computed CALL promoted into a known callee. Missing
+roots and omitted frontier targets stay conservative UNKNOWN. Java21
+regression, full Java25 Ghidra 12.1.4 PUBLIC extension compilation and
+synthetic headless CI are exact-SHA gates. Read-only source evidence is
+not actual execution, RESET sequencing, active ISR/VBR or latched MM.
+GA-02/03/15/18 remain PARTIAL; GA-14 deferred.
+
 ## GA-02/03/11/18 — 2026-11-10: bounded MC68332 source witness visit coherence
 
 Selected-MC68332 vector-handler SIMCR/MM source reporting now rejects
