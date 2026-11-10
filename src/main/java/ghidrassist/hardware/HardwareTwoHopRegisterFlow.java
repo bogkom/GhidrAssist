@@ -27,6 +27,10 @@ public final class HardwareTwoHopRegisterFlow {
     public static final int MAX_ROWS=48;
     private static final Pattern BRANCH=Pattern.compile(
         "B(?:RA|CC|CS|EQ|NE|GE|GT|HI|LE|LS|LT|MI|PL|VC|VS)(?:\\.[BWSL])?");
+    private static final Pattern RETURNING_CALL=Pattern.compile(
+        "JSR|BSR(?:\\.[BWSL])?");
+    private static final Pattern UNCONDITIONAL=Pattern.compile(
+        "BRA(?:\\.[BWSL])?");
     private static final Set<String> SET=Set.of("MOVE.L","MOVEA.L","MOVEQ","LEA");
     private static final Set<String> COPY=Set.of("MOVE.L","MOVEA.L");
 
@@ -37,8 +41,10 @@ public final class HardwareTwoHopRegisterFlow {
     public record Bridge(long entry,List<HardwareDataflow.Step> steps,
             long innerCallPc,Long finalTarget,boolean complete) {
         public Bridge {
-            if(entry<0 || innerCallPc<0 || finalTarget!=null&&finalTarget<0 ||
-                    steps==null || steps.size()>MAX_BRIDGE_STEPS)
+            if(entry<0 || innerCallPc<0 ||
+                    finalTarget!=null && finalTarget<0 ||
+                    steps==null || steps.size()>MAX_BRIDGE_STEPS ||
+                    steps.stream().anyMatch(java.util.Objects::isNull))
                 throw new IllegalArgumentException("Invalid two-hop bridge");
             steps=List.copyOf(steps);
         }
@@ -135,19 +141,69 @@ public final class HardwareTwoHopRegisterFlow {
      * stated direct target; NO memory, VBR or unknown instructions. A finite
      * cycle is rejected rather than summarized by an unproved fixed point.
      */
+    /** MC68332 source-address identity, not a runtime active-bus claim. */
+    private static boolean sourcePc(long address) {
+        return address>=0 && address<=HardwareDataflow.MASK24 &&
+            (address&1L)==0;
+    }
+
+    /**
+     * Only a true CPU32 control-flow instruction can fork or redirect a
+     * closed bridge path. P-code register propagation must never run on
+     * fake one-successor Bcc, two-successor BRA/NOP, or dangling implicit
+     * fallthrough. The caller-supplied steps remain untrusted until the
+     * separate real Ghidra instruction decoder verifies them.
+     */
+    private static boolean sourceSuccessors(HardwareDataflow.Step step) {
+        int size=step.successors.size();
+        // Opcode/kind disagreement must never reinterpret a branch as
+        // a linear register clobber or hide a CPU32 return.
+        if(step.kind!=HardwareDataflow.Kind.OTHER &&
+                step.kind!=HardwareDataflow.Kind.CALL_BARRIER &&
+                ("RTS".equals(step.mnemonic) ||
+                 BRANCH.matcher(step.mnemonic).matches()))
+            return false;
+        if("RTS".equals(step.mnemonic))return
+            step.kind==HardwareDataflow.Kind.OTHER && size==0 &&
+            (step.sideEffectRegisters.isEmpty() ||
+                step.sideEffectRegisters.equals(Set.of("A7")));
+        if(step.kind==HardwareDataflow.Kind.CALL_BARRIER)
+            return size==1 && RETURNING_CALL.matcher(step.mnemonic).matches() &&
+                (step.sideEffectRegisters.isEmpty() ||
+                    step.sideEffectRegisters.equals(Set.of("A7")));
+        if(step.kind==HardwareDataflow.Kind.OTHER &&
+                UNCONDITIONAL.matcher(step.mnemonic).matches())
+            return size==1 && step.sideEffectRegisters.isEmpty();
+        if(step.kind==HardwareDataflow.Kind.OTHER &&
+                BRANCH.matcher(step.mnemonic).matches())
+            return size==2 && !step.successors.get(0).equals(
+                step.successors.get(1)) && step.sideEffectRegisters.isEmpty();
+        // Every NOP and modeled A/D instruction has exactly one successor
+        // in an acyclic, fully decoded intermediate CALL bridge.
+        return size==1;
+    }
+
     private static boolean safeBridge(Bridge bridge){
-        if(!bridge.complete() || bridge.steps().isEmpty())return false;
+        if(!sourcePc(bridge.entry()) || !sourcePc(bridge.innerCallPc()) ||
+                bridge.innerCallPc()<bridge.entry() ||
+                bridge.finalTarget()!=null &&
+                    (!sourcePc(bridge.finalTarget()) ||
+                     bridge.finalTarget()==bridge.entry()) ||
+                !bridge.complete() || bridge.steps().isEmpty())return false;
         Map<Long,HardwareDataflow.Step> nodes=new HashMap<>();
         Map<Long,Integer> degree=new HashMap<>();
         int calls=0,returns=0,edges=0;
         for(HardwareDataflow.Step step:bridge.steps()){
-            if(step==null || nodes.putIfAbsent(step.address,step)!=null)
+            if(step==null || !sourcePc(step.address) ||
+                    step.address<bridge.entry() ||
+                    nodes.putIfAbsent(step.address,step)!=null)
                 return false;
             degree.put(step.address,0);
         }
         if(!nodes.containsKey(bridge.entry()))return false;
         for(HardwareDataflow.Step step:bridge.steps()){
             String m=step.mnemonic;
+            if(!sourceSuccessors(step))return false;
             if(step.kind==HardwareDataflow.Kind.CALL_BARRIER){
                 if(step.address!=bridge.innerCallPc() ||
                         !step.verifiedCallReturns.isEmpty() ||
@@ -175,9 +231,6 @@ public final class HardwareTwoHopRegisterFlow {
                 }else if(!"NOP".equals(m) && !BRANCH.matcher(m).matches())
                     return false;
             }else return false; // Any STORE, MOVEC, unknown alias or effect.
-            if(step.successors.isEmpty() && !"RTS".equals(m))
-                return false;
-            if(step.successors.size()>2)return false;
             for(Long successor:step.successors){
                 if(successor==null || !degree.containsKey(successor))
                     return false;
