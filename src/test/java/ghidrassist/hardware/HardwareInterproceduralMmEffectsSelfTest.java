@@ -140,6 +140,52 @@ public final class HardwareInterproceduralMmEffectsSelfTest {
         ok(cycle.rows().get(0).summary().cycle() &&
             cycle.rows().get(0).summary().unknownControl(),
             "cyclic call graph not classified closed");
+        // A recognized CALL target that is ALREADY scheduled is never
+        // an uninspected frontier just because its referencing instruction
+        // is inside a function at the depth boundary.
+        var selfLoopAtDepth0=run(
+            List.of(node(0x130,true,false,false,0x130L,0x130L)),
+            sourceCall,0,1,2).rows().get(0).summary();
+        ok(selfLoopAtDepth0.visited()==1 &&
+            selfLoopAtDepth0.mayMm() && selfLoopAtDepth0.cycle() &&
+            selfLoopAtDepth0.unknownControl() &&
+            !selfLoopAtDepth0.limited() &&
+            selfLoopAtDepth0.mmWitness().chain().equals(List.of(0x130L)) &&
+            selfLoopAtDepth0.frontierWitness()==null &&
+            selfLoopAtDepth0.unknownWitness()==null,
+            "self CALL with depth zero is observed recursion, not fabricated skipped MM");
+        var cyclicAtDepth=run(List.of(
+                node(0x130,false,false,false,0x160L),
+                node(0x160,true,false,false,0x130L)),
+            sourceCall,1,2,2).rows().get(0).summary();
+        ok(cyclicAtDepth.visited()==2 && cyclicAtDepth.mayMm() &&
+            cyclicAtDepth.cycle() && !cyclicAtDepth.limited() &&
+            cyclicAtDepth.frontierWitness()==null,
+            "backedge to scheduled root remains cycle-only on exact depth boundary");
+        var sharedAtDepth=run(List.of(
+                node(0x130,false,false,false,0x160L,0x190L),
+                node(0x160,false,false,false,0x190L),
+                node(0x190,true,false,false)),
+            sourceCall,1,3,2).rows().get(0).summary();
+        ok(sharedAtDepth.mayMm() && sharedAtDepth.visited()==3 &&
+            !sharedAtDepth.cycle() && !sharedAtDepth.limited() &&
+            !sharedAtDepth.unknownControl() &&
+            sharedAtDepth.frontierWitness()==null &&
+            sharedAtDepth.mmWitness().chain().equals(List.of(0x130L,0x190L)),
+            "known diamond cross-edge at depth cap is complete, not an omitted horizon");
+        var trulySkippedAtDepth=run(List.of(
+                node(0x130,false,false,false,0x160L),
+                node(0x160,false,false,false,0x190L),
+                node(0x190,true,false,false)),
+            sourceCall,1,3,2).rows().get(0).summary();
+        ok(trulySkippedAtDepth.limited() &&
+            !trulySkippedAtDepth.mayMm() &&
+            trulySkippedAtDepth.unknownControl() &&
+            trulySkippedAtDepth.frontierWitness().kind()==
+                HardwareInterproceduralMmEffects.WitnessKind.DEPTH_CUTOFF &&
+            trulySkippedAtDepth.frontierWitness().chain()
+                .equals(List.of(0x130L,0x160L,0x190L)),
+            "previously unseen CALL child still has explicit depth frontier");
         var depth=run(diamond,List.of(calls.get(0)),0,20,20);
         ok(depth.rows().get(0).summary().limited() &&
             !depth.rows().get(0).summary().mayMm() &&
