@@ -10,13 +10,22 @@ public class SearchResult {
     private final String sourceType;
     private final int pageNumber;
     private final boolean uncertainTable;
+    /** SHA-256 captured at PDF/text indexing, NOT a live-file attestation. */
+    private final String indexedSha256;
 
     public SearchResult(String filename, String snippet, double score, int chunkId) {
-        this(filename, snippet, score, chunkId, null, null, -1, false);
+        this(filename, snippet, score, chunkId, null, null, -1, false, null);
     }
 
     public SearchResult(String filename, String snippet, double score, int chunkId,
             String sourcePath, String sourceType, int pageNumber, boolean uncertainTable) {
+        this(filename,snippet,score,chunkId,sourcePath,sourceType,
+            pageNumber,uncertainTable,null);
+    }
+
+    public SearchResult(String filename, String snippet, double score, int chunkId,
+            String sourcePath, String sourceType, int pageNumber,
+            boolean uncertainTable,String indexedSha256) {
         this.filename = filename;
         this.snippet = snippet;
         this.score = score;
@@ -25,6 +34,7 @@ public class SearchResult {
         this.sourceType = sourceType;
         this.pageNumber = pageNumber;
         this.uncertainTable = uncertainTable;
+        this.indexedSha256 = indexedSha256;
     }
 
     public String getFilename() { return filename; }
@@ -35,4 +45,5 @@ public class SearchResult {
     public String getSourceType() { return sourceType; }
     public int getPageNumber() { return pageNumber; }
     public boolean isUncertainTable() { return uncertainTable; }
+    public String getIndexedSha256() { return indexedSha256; }
 }
