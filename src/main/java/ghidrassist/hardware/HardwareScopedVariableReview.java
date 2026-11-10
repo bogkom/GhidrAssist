@@ -21,16 +21,35 @@ public final class HardwareScopedVariableReview {
     }
 
     /** Snapshot of a Ghidra Variable; storage/ordinal must identify one row. */
+    public static final String LEGACY_TYPE_UNVERIFIED="LEGACY_TYPE_UNVERIFIED";
     public record Observation(long functionEntry,String currentName,Kind kind,
             int ordinal,String storage,boolean pointerType,boolean userDefined,
-            boolean autoParameter) {
+            boolean autoParameter,String dataTypeIdentity,int firstUseOffset) {
+        /**
+         * Legacy source-only observation (and existing CLI tests): it remains
+         * reviewable, but is NOT a sufficient typed Ghidra Apply identity.
+         * Only the live Function-DB adapter can supply a current type/use
+         * snapshot. This avoids inventing decompiler HighVariable identity.
+         */
+        public Observation(long functionEntry,String currentName,Kind kind,
+                int ordinal,String storage,boolean pointerType,
+                boolean userDefined,boolean autoParameter) {
+            this(functionEntry,currentName,kind,ordinal,storage,pointerType,
+                userDefined,autoParameter,LEGACY_TYPE_UNVERIFIED,Integer.MIN_VALUE);
+        }
         public Observation {
             if(functionEntry<0 || functionEntry>0xffffffL ||
                     currentName==null || currentName.isBlank() ||
                     currentName.length()>256 || kind==null ||
                     ordinal<0 || ordinal>1024 ||
-                    storage==null || storage.isBlank() || storage.length()>256)
+                    storage==null || storage.isBlank() || storage.length()>256 ||
+                    dataTypeIdentity==null || dataTypeIdentity.isBlank() ||
+                    dataTypeIdentity.length()>1024)
                 throw new IllegalArgumentException("Invalid function-local variable evidence");
+        }
+        public boolean hasLiveTypeIdentity() {
+            return !LEGACY_TYPE_UNVERIFIED.equals(dataTypeIdentity) &&
+                firstUseOffset!=Integer.MIN_VALUE;
         }
     }
 

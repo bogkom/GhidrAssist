@@ -1,3 +1,22 @@
+## GA-08/12/13/18 — 2026-11-10: exact live scoped-pointer datatype/first-use Review identity
+
+The existing Ghidra Function-DB scoped pointer parameter/local Review now
+captures the exact Ghidra datatype path/size and function-relative first-use
+offset in addition to function entry, variable kind/ordinal/storage/name,
+pointer flag and ABI auto/forced status. A changed pointee type or first-use
+scope cannot be re-used as an old Apply proposal even if both remain pointers
+at the same stack/register location. Historical 8-field source-only
+observations remain inspectable but are explicitly **not** complete live
+Apply identities; batch Apply rejects them before the native transaction.
+The native all-or-nothing Apply rechecks typed provenance after each rename.
+A real Ghidra 12.1.4 synthetic fixture rejects a forged type-only proposal
+in a two-variable batch without a partial edit or receipt, then verifies
+fresh Apply/Undo/Redo. The GA13-POINTER-VARIABLE-1 durable receipt schema
+remains backward-compatible; it does *not* persist pointee datatype identity,
+which remains an explicit separate cross-JVM audit improvement. Deterministic
+Java21 source tests and complete Java25 extension/integration CI on exact
+SHA remain mandatory. GA-08/12/13/18 PARTIAL; GA-14 deferred.
+
 ## GA-08/12/13/18 — 2026-11-10: typed scoped-pointer receipt and redo audit
 
 The **existing** real Ghidra Function-DB pointer parameter/local Review→Apply→Undo

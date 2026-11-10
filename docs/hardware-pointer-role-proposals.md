@@ -127,3 +127,18 @@ reject a surviving CURRENT approval on a live variable that lost pointer
 type, USER_DEFINED source, or acquired auto/forced-indirect ABI semantics.
 Revision and storage equality remain mandatory. A-register role hints
 continue to be read-only, PATH_UNCERTAIN or REVIEW_ONLY, never Apply input.
+
+## 2026-11-10 — type-specific existing Function-DB variable Review
+
+Unlike static A-register MMIO hints, an exact Ghidra Function-DB parameter
+or local has assigned storage, datatype and function-relative first use.
+Scoped-pointer previews now include datatype path/size and first-use offset
+in their in-memory typed identity; the live Apply transaction refuses
+replayed legacy source-only observations and changed pointer target types
+or first-use positions, even if pointerType, name and storage appear the
+same. A trusted original executable checksum and native Program revision
+remain separate requirements. This does not make a physical A0..A7 reuse
+hint a stable HighVariable, prove runtime execution or authorize new names
+without explicit user Review. The existing v1 durable receipt format does
+not yet contain the entire datatype path and must not be over-interpreted
+as cross-restart proof of pointee type equality.
