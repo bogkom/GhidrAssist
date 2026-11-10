@@ -179,6 +179,119 @@ public final class HardwareDurableFunctionStages {
         return true;
     }
 
+    /**
+     * GA-02/03/12: independently recompute ONLY the A/D constant lattice
+     * from the translated source CFG (not the stored predecessor states).
+     * Every predecessor contributes to a join by intersection: unequal,
+     * absent or clobbered constants become UNKNOWN. Loops use a bounded
+     * iterative worklist. This deliberately does not execute instructions,
+     * re-run the peripheral/MM/VBR solver or grant Review/Apply authority.
+     *
+     * At a cold function entry every A/D register is UNKNOWN. Contextual
+     * one-hop CALL arguments are deliberately not eligible for GA-12 disk
+     * restoration: no caller context is bound to its per-function key.
+     */
+    private static boolean sourceBoundRegisterJoins(long entry,
+            Map<Long,HardwareDataflow.Step> graph,
+            HardwareDataflow.Result result) {
+        if(graph==null || !graph.containsKey(entry) ||
+                result==null || result.iterations<1 ||
+                result.iterations>30000)
+            return false;
+        Map<Long,Map<String,Long>> at=new HashMap<>();
+        ArrayDeque<Long> queue=new ArrayDeque<>();
+        Set<Long> scheduled=new HashSet<>();
+        at.put(entry,Map.of());
+        queue.add(entry);scheduled.add(entry);
+        int iterations=0;
+        while(!queue.isEmpty()) {
+            // Full fixed-point completion cannot require fewer transfers
+            // than its independent register-only projection. A forged tiny
+            // iteration receipt must never be accepted as convergence.
+            if(++iterations>result.iterations)return false;
+            Long pc=queue.removeFirst();scheduled.remove(pc);
+            var step=graph.get(pc);
+            if(step==null)return false;
+            var out=new HashMap<>(at.get(pc));
+            switch(step.kind) {
+                case SET_POINTER -> {
+                    if(step.register!=null)
+                        out.put(step.register,
+                            step.operand&HardwareDataflow.MASK24);
+                }
+                case COPY_POINTER -> {
+                    if(step.register!=null) {
+                        Long value=out.get(step.sourceRegister);
+                        if(value==null)out.remove(step.register);
+                        else out.put(step.register,value);
+                    }
+                }
+                case ADJUST_POINTER -> {
+                    if(step.register!=null) {
+                        Long value=out.get(step.register);
+                        boolean data=step.register.startsWith("D");
+                        if(value==null || data &&
+                                step.writeBits!=8 && step.writeBits!=16 &&
+                                step.writeBits!=32) {
+                            out.remove(step.register);
+                        }else {
+                            long mask=data && step.writeBits==8?0xffL:
+                                data && step.writeBits==16?0xffffL:
+                                HardwareDataflow.MASK24;
+                            long adjusted=(value&~mask) |
+                                ((value+step.operand)&mask);
+                            out.put(step.register,
+                                adjusted&HardwareDataflow.MASK24);
+                        }
+                    }
+                }
+                case CLOBBER_POINTER -> {
+                    if(step.register!=null)out.remove(step.register);
+                }
+                case CALL_BARRIER -> {
+                    out.clear();
+                    for(var constant:step.verifiedCallReturns.entrySet())
+                        out.put(constant.getKey(),constant.getValue()&
+                            HardwareDataflow.MASK24);
+                }
+                default -> {
+                    // STORE/VBR/OTHER do not assign A/D source registers.
+                    // Their implicit P-code clobbers are handled below.
+                }
+            }
+            for(String clobber:step.sideEffectRegisters)
+                if(step.kind!=HardwareDataflow.Kind.CALL_BARRIER ||
+                        !step.verifiedCallReturns.containsKey(clobber))
+                    out.remove(clobber);
+            for(Long next:step.successors) {
+                if(!graph.containsKey(next))continue;
+                Map<String,Long> before=at.get(next);
+                if(before==null) {
+                    at.put(next,new HashMap<>(out));
+                    if(scheduled.add(next))queue.addLast(next);
+                }else {
+                    // An incoming unknown/mismatched predecessor MUST
+                    // erase a spurious constant at a CFG branch merge.
+                    var joined=new HashMap<>(before);
+                    joined.entrySet().removeIf(e ->
+                        !Objects.equals(out.get(e.getKey()),e.getValue()));
+                    if(!joined.equals(before)) {
+                        at.put(next,joined);
+                        if(scheduled.add(next))queue.addLast(next);
+                    }
+                }
+            }
+        }
+        if(at.size()!=result.reachedNodes)return false;
+        Map<Long,Map<String,Long>> proven=new HashMap<>();
+        for(var e:at.entrySet())
+            if(!e.getValue().isEmpty())
+                proven.put(e.getKey(),e.getValue());
+        // Compare EVERY nonempty pre-instruction register state, not just
+        // the STORE sites. Empty (UNKNOWN) states cannot be invented away.
+        return proven.equals(result.knownPointersAtEntry);
+    }
+
     private static boolean sourceBoundComplete(long entry,
             Collection<HardwareDataflow.Step> steps,
             Collection<Long> targets,HardwareDataflow.Result result) {
@@ -188,7 +301,8 @@ public final class HardwareDurableFunctionStages {
         if(reachable==null || result.reachedNodes!=reachable.size() ||
                 result.iterations<result.reachedNodes ||
                 !reachable.keySet().containsAll(
-                    result.knownPointersAtEntry.keySet()))
+                    result.knownPointersAtEntry.keySet()) ||
+                !sourceBoundRegisterJoins(entry,reachable,result))
             return false;
         int expectedEffects=0;
         for(var step:reachable.values())

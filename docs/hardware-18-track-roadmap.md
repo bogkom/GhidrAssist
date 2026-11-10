@@ -1,5 +1,52 @@
 # GhidrAssist — 18-track hardware-analysis development ledger
 
+## GA-02/03/12/18 — 2026-11-10: independent A/D register-join reconstruction before durable CFG publication
+
+GA-12 completed per-function fixed-point checkpoints now receive a
+**separate, bounded, register-only, source-derived fixed-point audit** on
+both disk `save` and `load`. Starting at the source function entry
+with unknown A/D registers, the verifier iteratively propagates
+translated `SET_POINTER`, `COPY_POINTER`, partial-byte/word/long
+`ADJUST_POINTER`, `CLOBBER_POINTER`, `CALL_BARRIER` with strictly
+verified post-RTS register constants, and implicit source P-code
+side-effect clobbers. At every directed CFG merge or back edge, only
+constants **agreed by all observed source predecessors** survive;
+unknown, missing or conflicting values collapse to UNKNOWN.
+
+The verifier reconstructs **every** nonempty pre-instruction A/D
+register map independently of the typed disk payload, compares it
+exactly with `knownPointersAtEntry`, and respects the already bounded
+3,000-Step CFG, source-edge limit and the completed result's maximum
+fixed-point iteration count. No progress/partial checkpoint is upgraded
+to completed evidence. A locally forged, **correctly rehashed**
+checkpoint that invents a convergent A0/D0 source, keeps A0 across a
+clobbered path, claims a register constant before it is defined, or
+retains A0 through a loop back edge is now a cache miss; a rejected
+`save` does not overwrite the last valid source. A matching diamond,
+correct input-independent verified leaf return, or compatible loop
+remains eligible for restart.
+
+Independent Java21 regression covers conflicting/agreeing branch
+joins, CALL return and pre-RTS register state, an A0-clobber fork,
+converging D0 .B/.W arithmetic, a cyclic kill-and-join, valid
+checkpoint roundtrip, and resealed false MMIO `0x40CA` witnesses
+with exact project/CFG/JAR envelope keys. It runs in two distinct
+GA-02/03 + GA-12 and GA-12 durable checkpoint Actions lanes.
+Full Java25 Ghidra 12.1.4 PUBLIC extension build and actual isolated
+synthetic Ghidra headless regression are required before merge.
+
+This check **does not repeat the MMIO/VBR state solver** and does
+not independently authenticate a checkpoint writer, prove execution
+of an MCU path, bus mapping, an active MM latch or a VBR/ISR. Generic
+source CPU32 and explicitly selected MC68332 profiles remain
+separately bound by existing keys. Contextual one-hop CALL inputs
+without a keyed caller are not eligible for disk-source publication:
+the register replay starts from unknown entry values, avoiding false
+cross-caller reuse. The accepted scope uses no ECU411 original
+firmware, production Ghidra projects, user profiles, OAuth or stopped
+Wyse/Precision/Supervisor process. GA-02/03/12/18 remain PARTIAL;
+GA-14 remains deferred.
+
 ## GA-02/03/12/18 — 2026-11-10: source-equivalent value witnesses in durable CALL/CFG checkpoints
 
 Beyond the already integrated exact Program/JAR/Step hashes, rooted CFG
