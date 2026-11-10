@@ -115,8 +115,36 @@ public final class HardwareResetFlowSelfTest {
         ok(graph.evidence().get(0).chain().equals(
             "0x00002BC0 -> 0x00003000"),"one possible direct-call path is preserved");
         ok(graph.evidence().get(1).chain().equals(
-            "0x00002BC0 -> 0x00004000 -> 0x00005000"),
-            "alternate possible call path is preserved, not address-sorted");
+            "0x00002BC0 -> 0x00003000 -> 0x00005000"),
+            "canonical shortest source CALL chain is independent of reference order");
+        var reversedGraph=HardwareResetFlow.trace(0x2bc0,List.of(
+            fn(0x5000,true,false,false),
+            fn(0x3000,false,true,false,0x5000L),
+            fn(0x2bc0,false,false,false,0x3000L,0x4000L),
+            fn(0x4000,false,false,false,0x5000L)),
+            List.of(0x5000L,0x3000L),8,50,20);
+        ok(graph.equals(reversedGraph) &&
+            graph.evidence().get(1).chain().equals(
+                reversedGraph.evidence().get(1).chain()),
+            "RESET source evidence is stable across reversed CALL and node inventories");
+        var cappedOrderA=HardwareResetFlow.trace(0,List.of(
+            fn(0,false,false,false,0x400L,0x100L),
+            fn(0x400,false,false,false),
+            fn(0x100,false,false,false)),List.of(0x400L),3,2,10);
+        var cappedOrderB=HardwareResetFlow.trace(0,List.of(
+            fn(0x100,false,false,false),
+            fn(0,false,false,false,0x100L,0x400L),
+            fn(0x400,false,false,false)),List.of(0x400L),3,2,10);
+        ok(cappedOrderA.equals(cappedOrderB) &&
+            cappedOrderA.evidence().isEmpty() && cappedOrderA.truncated() &&
+            cappedOrderA.unresolved() && cappedOrderA.visitedFunctions()==2,
+            "bounded RESET frontier does not depend on Ghidra reference order");
+        var fullOrder=HardwareResetFlow.trace(0,List.of(
+            fn(0,false,false,false,0x400L,0x100L),
+            fn(0x400,true,false,false),
+            fn(0x100,false,false,false)),List.of(0x400L),3,3,10);
+        ok(fullOrder.evidence().size()==1 && !fullOrder.truncated(),
+            "uncapped source graph retains MMIO candidate despite sorted edges");
         ok(graph.markdown(0x2bc0,0x2bc0).contains("STATIC CANDIDATES ONLY") &&
            graph.markdown(0x2bc0,0x2bc0).contains("Address order is not execution order"),
             "must not claim a runtime execution trace");

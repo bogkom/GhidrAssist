@@ -2,6 +2,16 @@
 
 ## GA-02/03/18 — 2026-11-10: deterministic bounded interprocedural MM source witness paths
 
+The shared `HardwareCallEffects.FunctionNode` also canonically sorts
+direct target adjacency for both the generic static CALL-effect analysis
+and RESET-rooted candidate paths. Reversed Ghidra reference enumeration
+can no longer select a different subset under the same bounded node
+budget or change the shortest convergent RESET witness. Duplicate edges
+remain representable; canonical numerical order is NOT execution order.
+The Java21 RESET and static CALL-effect tests now cover reversed inputs,
+convergent paths, deterministic truncated subsets and positive uncapped
+controls.
+
 The read-only transitive CALL-site SIMCR/MM report now carries independently
 typed **shortest function-only source witness chains** for positive modeled
 SIMCR MM candidates, unknown STORE aliases and unknown control-flow or

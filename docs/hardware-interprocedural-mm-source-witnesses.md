@@ -7,6 +7,13 @@ existing conservative `mayMm`, `unknownAlias`, `unknownControl`, `cycle`,
 `limited` and `visited` flags; they **never** convert a negative bounded
 search into proof of no initialization.
 
+- Paths use canonically sorted CALL target adjacency. The shared
+  `HardwareCallEffects.FunctionNode` now normalizes target identities
+  at construction for both bounded CALL-effect summaries and RESET
+  candidate paths; duplicate references are retained, but do not consume
+  unique-node capacity. Before this extension the RESET path for a
+  converging graph or a bounded subset could depend on Ghidra's reference
+  enumeration order. Canonical order is NOT execution order.
 - Paths use only the pre-existing canonical CALL target graph. Their
   addresses are function entries, **not** instruction PCs. Each path starts
   at the queried callee, not the caller's CALL instruction. A witness does
@@ -30,6 +37,11 @@ search into proof of no initialization.
   shortest canonically selected witness per category is shown. It is a
   reproducible counterexample to a closed negative claim, not a complete
   inventory of all sources.
+
+Deterministic Java21 tests also include two independent RESET/CallEffects
+lanes: reversed target and function inventory order, a convergent RESET
+path and a truncated budget where a higher-address STORE remains UNKNOWN,
+plus the corresponding uncapped positive control.
 
 Deterministic Java21 tests cover converging paths, competing MM sources,
 independent alias/unknown witnesses, reversed source enumeration, duplicate
