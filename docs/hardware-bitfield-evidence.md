@@ -312,3 +312,58 @@ Java21 source/view CI, pinned publisher PDF CI and complete Ghidra 12.1.4
 PUBLIC Java25 build / synthetic real-Ghidra regression are required.
 GA-06/10/16/18 remain PARTIAL; GA-14 deferred.
 
+
+## 2026-11-10 — MC68332 SYPCR, PICR and PITR: 10 additional source fields
+
+The pinned NXP-hosted MC68332UM (Motorola 1995, publisher SHA-256
+`02c2cb99738dd45a785798bba3e7dcc34bb0d54fb5fba42900e6ecb8356bf28a`)
+has 265 pages. A reviewed visual comparison of the **original register
+diagrams**, separately corroborated by the publisher-pinned PDF CI,
+identifies the following 10 fields. These folios are one-based physical
+PDF pages, not software-emitted chapter numbers.
+
+| Register, actual width and internal offset | Printed/physical diagram and description folio | Field / independently reviewed mask | Bits without a writable meaning |
+|---|---|---|---|
+| SYPCR, **8 bits**, +0x0A21 | D-10 / PDF **224** | SWE 0x80; SWP 0x40; SWT[1:0] 0x30; HME 0x08; BME 0x04; BMT[1:0] 0x03 | none inside the 8-bit register; diagram bits 15:8 are **NOT USED** |
+| PICR, **16 bits**, +0x0A22 | D-11 / PDF **225** | PIRQL[2:0] 0x0700; PIV[7:0] 0x00FF | 0xF800 — unimplemented bits 15:11 |
+| PITR, **16 bits**, +0x0A24 | D-11 / PDF **225** | PTP 0x0100; PITM[7:0] 0x00FF | 0xFE00 — bits 15:9 not used |
+
+The register addresses and widths were independently supported by the
+existing SIM Table D-2 physical PDF 218 (printed D-4) CI lane.
+**The register location source folio and the field-diagram folio are
+separate:** the existing register `sourcePage` D-4 entry is kept to
+preserve the Table D-2 address verification; each new bitfield has its
+exact D-10/D-11 descriptive source folio. The historic 15-field
+SIMCR/SYNCR source witness remains isolated; the 10 new fields are
+reviewed by `HardwareSimProtectionTimerWitness` and its own CI gate.
+
+The SYPCR register can be **written once following power-on or reset**.
+The profile exposes that note on all its documented fields but does not
+assert the first accepted write, current watchdog state or an actual
+timeout. The apparent reset bits are not used to populate automatic
+reset-value assertions (e.g. SWP and PTP depend on MODCLK conditions).
+PICR vector fields do **not** imply interrupt enablement or an active
+ISR. PITR modulus and prescaler do **not** prove a running timer.
+Unmodeled bits are never decoded; SWSR is a distinct 8-bit watchdog
+service register, not a bitfield-based control word.
+
+The existing read-only `ga_mc68332_field_citations` native RAG tool
+now additionally supports `register=SYPCR|PICR|PITR`, still requiring
+explicit `device=MC68332` and an exact filename. The entire pair
+of PDF pages 224/225 is read under one Lucene snapshot and checked for
+identical index-time source SHA, path and library. A per-field source
+candidate includes mask, excerpt digest, precise printed/physical page
+and full descriptive heading. The output explicitly says
+`INDEXED_TEXT_NOT_CURRENT_FILE_AUTHENTICATION`, i.e. a matching
+string or an indexed document hash does not authenticate the current
+local PDF or any hardware activity.
+
+Java21 adversarial regressions check page swaps, forged descriptions,
+bitfield mask drift, omitted/extra fields, wrong widths, SYPCR
+write-once caveats, generic CPU32, and stale/cross-library RAG pages.
+The independent official publisher PDF CI downloads and authenticates
+the original 265-page bytes before checking D-10/D-11 source prose.
+All tests use synthetic data, GitHub Actions, and isolated Ghidra only:
+no real ECU411 firmware, user Ghidra project, OAuth, or paused
+Wyse/Precision/Supervisor tests are touched. GA-06/10/16 remain PARTIAL.
+

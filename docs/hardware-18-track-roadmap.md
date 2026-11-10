@@ -1,3 +1,36 @@
+## GA-06/10/16/18 — 2026-11-10: ten MC68332 protection/periodic timer bitfields
+
+The next MC68332-only source review expands beyond the previously verified
+15 SIMCR/SYNCR bitfields: SYPCR (six 8-bit fields), PICR (three-bit
+periodic interrupt level plus eight-bit vector), and PITR (timer
+prescaler plus eight-bit modulus). All **10 new masks and their
+source heading/meaning pairs** are independently correlated with the
+reviewed MC68332UM Motorola 1995 diagrams, printed D-10/D-11,
+**physical PDF pages 224/225**, while original register identities,
+offsets and widths remain linked to the already checked Table D-2 on
+physical PDF page 218. The same immutable 265-page official NXP PDF SHA
+is checked in separate GitHub Actions before extracting any field source.
+Historic D-5/D-6/D-7 15-field source evidence stays scoped separately.
+
+Only complete static register-width literal values may be decoded, under
+the explicitly selected MC68332 profile: SYPCR has a first-write
+after-reset caveat, but neither actual write acceptance nor watchdog
+function is proved; PICR/PITR candidates never prove active interrupt,
+vector/ISR, timer frequency or hardware execution. No reset register
+value is inferred, especially for MODCLK-dependent fields. SWSR
+watchdog servicing remains an unproven source-side sequence.
+
+The existing `ga_mc68332_field_citations` RAG tool additionally
+accepts SYPCR/PICR/PITR through an exact two-folio Lucene snapshot,
+requiring the original publisher SHA **at index time**. The warning
+`INDEXED_TEXT_NOT_CURRENT_FILE_AUTHENTICATION` remains mandatory:
+indexed text is not independent proof of current local PDF bytes.
+Focused Java21 source-only negative tests, official SHA-pinned PDF CI,
+full Ghidra 12.1.4 PUBLIC Java25 integration, and synthetic headless/GUI
+CI are required before any merge. See
+[bitfield source evidence](hardware-bitfield-evidence.md).
+GA-06/10/16/18 remain PARTIAL; GA-14 deferred.
+
 ## GA-06/10/16/18 — 2026-11-10: independent publisher field-description excerpts and RAG binding
 
 Beyond the already implemented NXP-hosted MC68332UM (Motorola 1995)
