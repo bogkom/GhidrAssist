@@ -139,7 +139,10 @@ public final class RAGSearchToolProvider implements ToolProvider {
                                 new java.io.File(hit.getSourcePath()).toURI().toASCIIString()
                                 + ("pdf".equalsIgnoreCase(hit.getSourceType())
                                     && hit.getPageNumber() > 0 ? "#page=" + hit.getPageNumber() : ""))
+                            .append(" LIBRARY_ID: ").append(hit.getIndexedLibraryId())
                             .append(" LAYOUT_UNCERTAIN: ").append(hit.isUncertainTable())
+                            .append(ghidrassist.core.RAGSourceProvenance.inspect(
+                                hit.getSourceType(),hit.getIndexedSha256()).evidence())
                             .append("\nEXCERPT: ").append(hit.getSnippet()).append("\n\n");
                     }
                     boolean more = hits.size() > end;
@@ -156,16 +159,19 @@ public final class RAGSearchToolProvider implements ToolProvider {
                     return ToolResult.error("filename and physical PDF page required");
                 String filename = args.get("filename").getAsString().trim();
                 int physicalPage = readInt(args, "page", 0, 1, Integer.MAX_VALUE);
-                if (scope.equals("selected") && !active.contains(RAGEngine.getDocumentLibrary(filename)))
-                    return ToolResult.error("Document is not in an active RAG library: " + filename);
                 int offset = readInt(args, "offset", 0, 0, Integer.MAX_VALUE);
                 int limit = readInt(args, "max_chars", 16000, 1, 64000);
-                String content = RAGEngine.getIndexedPdfPage(filename, physicalPage);
+                var pageSource=RAGEngine.getIndexedPdfPageEvidence(filename,physicalPage);
+                if(scope.equals("selected") && !active.contains(pageSource.libraryId()))
+                    return ToolResult.error("Document is not in an active RAG library: "+filename);
+                String content = pageSource.text();
                 int from = Math.min(offset, content.length());
                 int to = (int) Math.min((long) content.length(), (long) from + limit);
                 boolean more = to < content.length();
                 return ToolResult.success("SOURCE: " + filename + " PDF_PAGE: " + physicalPage
                     + " RAG_SCOPE: " + scope
+                    + ghidrassist.core.RAGSourceProvenance.inspect(
+                        "pdf",pageSource.indexedSha256()).evidence()
                     + " totalCharacters=" + content.length()
                     + " returnedCharacters=" + (to - from)
                     + " offset=" + offset

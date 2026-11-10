@@ -160,6 +160,10 @@ public class RAGEngine {
             if (!pdf && !isTextDocument(lower))
                 throw new IOException("Unsupported document extension: " + name);
             String path = file.getCanonicalPath();
+            // Index-time SHA must describe the SAME bytes as the parsed
+            // PDF/text chunks. Importing a changed source between hashing
+            // and extraction must preserve the previous intact index.
+            long originalSize=file.length();
             String digest = sha256(file);
             Document old = findDocumentMetadata(name);
             if (old != null) {
@@ -172,6 +176,8 @@ public class RAGEngine {
                         + ". Rename one of the files to use both documents.");
                 if (digest.equals(old.get("sha256")) &&
                     libraryId.equals(libraryOf(old))) {
+                    RAGSourceProvenance.requireStableIndexBytes(
+                        digest,originalSize,sha256(file),file.length());
                     notices.add(name + ": unchanged; skipped indexing.");
                     continue;
                 }
@@ -206,7 +212,12 @@ public class RAGEngine {
                 }
             }
             if (chunks.isEmpty()) throw new IOException("Empty document: " + name);
-            // Atomic replacement: a failed PDF extraction must never delete the old version.
+            RAGSourceProvenance.requireStableIndexBytes(
+                digest,originalSize,sha256(file),file.length());
+            // Atomic replacement: a failed PDF extraction or a modified
+            // source must never delete/replace the old indexed document.
+            // This double-hash is a bounded-time snapshot consistency
+            // check, NOT an atomic filesystem content lock.
             indexLock.lock();
             try {
                 indexWriter.updateDocuments(new Term("filename", name), chunks);
@@ -648,7 +659,8 @@ public class RAGEngine {
             snippet = snippet.substring(0, 4000) + "\n[EXCERPT TRUNCATED - OPEN ORIGINAL PDF]";
         }
         return new SearchResult(doc.get("filename"), snippet, score, chunk,
-            doc.get("source_path"), doc.get("source_type"), page, uncertain);
+            doc.get("source_path"), doc.get("source_type"), page, uncertain,
+            doc.get("sha256"),libraryOf(doc));
     }
 
     private static SearchResult enrichVectorResult(VectorSearchResult vector, String userQuery) {
@@ -684,32 +696,51 @@ public class RAGEngine {
         } finally {indexLock.unlock();}
     }
 
-    /** Retrieve the full indexed text for a physical PDF page (not a search excerpt). */
-    public static String getIndexedPdfPage(String filename, int physicalPage) throws IOException {
-        if (filename == null || filename.isBlank() || physicalPage < 1)
-            throw new IllegalArgumentException("Provide filename and positive physical PDF page");
+    /**
+     * Read one indexed PDF page AND its SHA/source/library metadata from
+     * the SAME Lucene snapshot. Conflicting duplicate chunks or mismatched
+     * document provenance are not merged into misleading RAG evidence.
+     */
+    public static RAGIndexedPdfPageEvidence.Page getIndexedPdfPageEvidence(
+            String filename,int physicalPage) throws IOException {
+        if(filename==null || filename.isBlank() ||
+                physicalPage<1 || physicalPage>100000)
+            throw new IllegalArgumentException("Provide exact filename and bounded PDF page");
         indexLock.lock();
-        try (DirectoryReader reader = DirectoryReader.open(indexWriter)) {
-            IndexSearcher searcher = new IndexSearcher(reader);
-            TopDocs hits = searcher.search(new TermQuery(new Term("filename", filename)), reader.numDocs());
-            java.util.TreeMap<Integer,String> chunks = new java.util.TreeMap<>();
-            for (ScoreDoc hit : hits.scoreDocs) {
-                Document document = searcher.storedFields().document(hit.doc);
-                IndexableField page = document.getField("page_number");
-                if (page == null || page.numericValue() == null
-                        || page.numericValue().intValue() != physicalPage) continue;
-                IndexableField chunk = document.getField("chunk_id");
-                int chunkId = chunk == null || chunk.numericValue() == null
-                    ? hit.doc : chunk.numericValue().intValue();
-                String content = document.get("content");
-                if (content != null) chunks.put(chunkId, content);
+        try(DirectoryReader reader=DirectoryReader.open(indexWriter)) {
+            IndexSearcher searcher=new IndexSearcher(reader);
+            TopDocs hits=searcher.search(
+                new TermQuery(new Term("filename",filename)),reader.numDocs());
+            List<RAGIndexedPdfPageEvidence.Chunk> chunks=new ArrayList<>();
+            for(ScoreDoc hit:hits.scoreDocs) {
+                Document doc=searcher.storedFields().document(hit.doc);
+                IndexableField page=doc.getField("page_number");
+                if(page==null || page.numericValue()==null ||
+                        page.numericValue().intValue()!=physicalPage)continue;
+                IndexableField id=doc.getField("chunk_id");
+                int chunkId=id==null || id.numericValue()==null?
+                    hit.doc:id.numericValue().intValue();
+                chunks.add(new RAGIndexedPdfPageEvidence.Chunk(
+                    physicalPage,chunkId,doc.get("content"),
+                    doc.get("sha256"),doc.get("source_path"),
+                    doc.get("source_type"),libraryOf(doc)));
             }
-            if (chunks.isEmpty())
-                throw new IOException("Physical PDF page not indexed: " + filename + " page " + physicalPage);
-            return String.join("\\n\\n", chunks.values());
-        } finally {
-            indexLock.unlock();
-        }
+            if(chunks.isEmpty())
+                throw new IOException("Physical PDF page not indexed: "+
+                    filename+" page "+physicalPage);
+            try {
+                return RAGIndexedPdfPageEvidence.join(physicalPage,chunks);
+            }catch(IllegalArgumentException conflicting) {
+                throw new IOException("Inconsistent indexed PDF page provenance: "+
+                    filename+" page "+physicalPage,conflicting);
+            }
+        }finally{indexLock.unlock();}
+    }
+
+    /** Legacy callers receive the same verified page text, no cross-page stitch. */
+    public static String getIndexedPdfPage(String filename,int physicalPage)
+            throws IOException {
+        return getIndexedPdfPageEvidence(filename,physicalPage).text();
     }
 
     public static void deleteDocument(String filename) throws IOException {

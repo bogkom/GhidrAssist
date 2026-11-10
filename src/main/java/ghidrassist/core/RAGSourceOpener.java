@@ -17,6 +17,12 @@ public final class RAGSourceOpener {
         if (!source.isFile()) throw new IOException("Original document not found: " + source);
         if (!Desktop.isDesktopSupported()) throw new IOException("Desktop document opening is unsupported.");
         Desktop desktop = Desktop.getDesktop();
+        if ("pdf".equalsIgnoreCase(result.getSourceType())) {
+            // Indexed text can outlive the underlying file. Refuse to open
+            // a changed local manual as though it were the cited page.
+            RAGSourceProvenance.requireCurrentPdf(source.toPath(),
+                result.getIndexedSha256());
+        }
         if ("pdf".equalsIgnoreCase(result.getSourceType()) && result.getPageNumber() > 0 &&
             desktop.isSupported(Desktop.Action.BROWSE)) {
             URI fileUri = source.toURI();

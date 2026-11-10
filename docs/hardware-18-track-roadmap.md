@@ -1,3 +1,48 @@
+## GA-06/10/16/18 — 2026-11-10: indexed PDF digest and current-file RAG provenance
+
+Existing GA-10/16 CI already pins publisher-hosted MC68332UM (Motorola 1995)
+SHA-256 and checks exact physical PDF folios, source tokens, independently
+reviewed SIMCR/SYNCR bitfield diagrams and MCU-specific SIM register tables.
+This package closes the separate **runtime RAG provenance gap** rather than
+duplicating official-PDF tests.
+
+Both ordinary text and PDF imports now require identical **pre- and
+post-extraction SHA-256 and file length**, before atomic Lucene replacement;
+even the unchanged-file skip performs a second consistency check. An
+interrupted extraction or modified input is a failed import rather than
+a new digest with stale text.
+
+Search results now propagate each Lucene source document's **index-time**
+SHA-256, physical PDF page and file path. Full-page retrieval joins chunks
+only when their page, digest, path, document type, source library and distinct
+chunk IDs agree, with a bounded total text cap and fail-closed response to
+conflicting/ambiguous metadata. Native RAG search/page results and GUI search-result panels identify the
+pinned public MC68332UM bytes using the same reviewed SHA-256 constant as
+the bitfield source ledger; any older/missing digest remains UNKNOWN. The
+selected project's library scope is checked against the page's actual
+Lucene snapshot, avoiding separate mutable metadata reads. GUI full-page
+inspection additionally binds the result's **original** SHA, source path,
+library and physical page to the current index snapshot, refusing stale
+search hits after a document is reindexed or moved between libraries.
+
+Before external source-page viewing, the current local PDF is streamed
+and SHA-256 compared to the indexed bytes, with PDF-header, regular-file,
+symlink, size and during-read replacement checks. A changed or unpinned
+local file cannot be presented as the indexed citation; it requires reindex.
+This is **not** an OS-atomic guarantee against changes after the check, and
+a checksum or familiar filename does not prove edition, folio content,
+hardware register semantics or a real MCU. Arbitrary indexed text remains
+untrusted; profile/device selection remains explicit. No Ghidra writes,
+Review/Apply/Undo changes, private firmware, user configuration mutation,
+stopped local host tests or publication of PDF bytes.
+
+Java21 deterministic regression covers changed/rewrapped/legacy digest,
+cross-page and cross-library chunk mixing, duplicate IDs and bounded
+source-file checks; Java25 complete Ghidra 12.1.4 PUBLIC extension build
+and synthetic headless CI remain required. See
+[RAG source integrity](hardware-rag-source-provenance.md).
+GA-06/10/16/18 remain PARTIAL; GA-14 deferred.
+
 # GhidrAssist — 18-track hardware-analysis development ledger
 
 ## GA-01/02/03/11/12/18 — 2026-11-10: fail-closed source inventory after disk CFG restart
