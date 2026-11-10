@@ -166,6 +166,7 @@ def main():
                                          "source-profile")):
                     raise RuntimeError(
                         "Saved Review input/full fingerprint refusal mismatch")
+            restored=source_proofs["source-read"]
             forged=source_proofs["source-forged"]
             if (not forged["reused"] or forged["source_inventory_retained"] or
                     forged["source_pairs"]!=0 or
@@ -180,7 +181,6 @@ def main():
                 raise RuntimeError(
                     "Correctly resealed fabricated MAY-MM source leaked after restart")
             initial=source_proofs["source-write"]
-            restored=source_proofs["source-read"]
             corrupted=source_proofs["source-corrupt"]
             mismatched=source_proofs["source-mismatch"]
             incomplete=source_proofs["source-incomplete"]
