@@ -269,7 +269,7 @@ public final class HardwareInterproceduralMmEffectsSelfTest {
         catch(IllegalArgumentException expected){fail=true;}
         ok(fail,"reject duplicate functions");
         var validRoot=evidence.rows().get(0).summary();
-        invalid=false;
+        boolean invalid=false;
         try {
             new HardwareInterproceduralMmEffects.Row(
                 call(0x100,0x118,0x400L),validRoot);
@@ -530,7 +530,7 @@ public final class HardwareInterproceduralMmEffectsSelfTest {
         ok(cycle.rows().get(0).summary().cycle() &&
             cycle.rows().get(0).summary().unknownWitness()==null,
             "cycle-only uncertainty remains explicit, without a fake source witness");
-        boolean invalid=false;
+        invalid=false;
         try {
             new HardwareInterproceduralMmEffects.SourceWitness(
                 HardwareInterproceduralMmEffects.WitnessKind.MM_SOURCE,
