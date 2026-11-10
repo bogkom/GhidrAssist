@@ -90,3 +90,47 @@ regressions remain required on the exact PR SHA.
 
 This is bounded static source correlation only; no active VBR/IRQ,
 executable CALL ordering, MM latch or ECU411 runtime effect is inferred.
+
+
+## 2026-11-10 — typed handler-rooted STORE/MOVEC and uncertainty witnesses
+
+The vector/RESET report previously displayed only the transitive
+`STATIC_CANDIDATE` or `UNKNOWN` effect flags per exact vector handler.
+The underlying bounded CALL subtree now preserves deterministic **shortest
+function-entry chains** to a modeled generic P-code `MEMORY_STORE` or
+`MOVEC_VBR` source. Separate typed paths identify an actually inspected
+`UNKNOWN_FLOW` or missing direct-call function
+(`MISSING_TARGET`) and an independently **uninspected**
+`DEPTH_CUTOFF` or `NODE_CUTOFF` frontier.
+
+The same `HardwareCallEffects.inspect` traversal computes both the old
+boolean `Summary` and the new `Detailed` typed witnesses in one
+bounded BFS. `summarize` retains its historical signature and conservative
+flags. The shortest source chains are canonical by hop count and numeric
+function-entry order, not Ghidra reference order; only displayed
+vector slots evaluate transitive effects and repeated handler entries share
+the same read-only per-report result. All numerical vector counts still
+cover the whole bounded input inventory.
+
+A pointer into a function **interior** receives no whole-function
+source path. If a candidate handler's function body is missing from the
+bounded graph, its path is labeled `MISSING_TARGET`, never a zero-effect
+proof. A possible STORE beyond depth/node budget is `UNKNOWN` and has a
+typed frontier. Actual unknown control in one sibling and an uninspected
+potential STORE in another are shown independently. Recursion-only
+uncertainty never invents a missing callee. Report paths are function
+entry candidates, **not decoded instruction traces or runtime proof**.
+
+The additional source fields do not infer MCU identity from generic CPU32,
+actual RESET execution, an active VBR, ISR execution, a latched SIMCR MM
+value, bus/CS physical mapping, or Review/Apply approval. No on-disk
+checkpoint or original firmware is mutated.
+
+Java21 synthetic regression checks short and long convergent paths, valid
+deep chains without recursion overflow, direct store/VBR, missing source
+versus uninspected frontier, independently observed unknown plus frontier,
+cycles, input reordering, source record forgery, interior function pointers
+and vector-row display caps. Java25 full Ghidra 12.1.4 PUBLIC extension
+build, real isolated synthetic headless/vector correlation and existing
+Actions security gates are required on the exact final PR SHA.
+GA-01/02/03/11/18 remain PARTIAL.
