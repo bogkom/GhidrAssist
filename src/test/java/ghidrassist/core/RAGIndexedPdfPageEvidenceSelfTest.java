@@ -31,6 +31,30 @@ public final class RAGIndexedPdfPageEvidenceSelfTest {
             page.chunks()==2 && "0123".equals(page.indexedSha256()) &&
             "hardware".equals(page.libraryId()),
             "Correct same-index sources joined in numeric chunk order");
+        var hit=new SearchResult("manual.pdf","SIMCR",0.95,1,
+            "/manual.pdf","pdf",219,false,"0123","hardware");
+        RAGIndexedPdfPageEvidence.requireSameSource(page,hit);
+        checks++;
+        refuse(()->RAGIndexedPdfPageEvidence.requireSameSource(page,
+            new SearchResult("manual.pdf","SIMCR",0.95,1,
+                "/manual.pdf","pdf",219,false,"3456","hardware")),
+            "Stale search-result SHA cannot borrow a new indexed page");
+        refuse(()->RAGIndexedPdfPageEvidence.requireSameSource(page,
+            new SearchResult("manual.pdf","SIMCR",0.95,1,
+                "/manual.pdf","pdf",219,false,"0123","other")),
+            "Moving source to another library invalidates former result");
+        refuse(()->RAGIndexedPdfPageEvidence.requireSameSource(page,
+            new SearchResult("manual.pdf","SIMCR",0.95,1,
+                "/new-location.pdf","pdf",219,false,"0123","hardware")),
+            "Same digest at another location is not the selected source");
+        refuse(()->RAGIndexedPdfPageEvidence.requireSameSource(page,
+            new SearchResult("manual.pdf","SIMCR",0.95,1,
+                "/manual.pdf","pdf",220,false,"0123","hardware")),
+            "Reindexed physical PDF page mismatch requires new selection");
+        refuse(()->RAGIndexedPdfPageEvidence.requireSameSource(page,
+            new SearchResult("manual.pdf","SIMCR",0.95,1,
+                "/manual.pdf","pdf",219,false,"0123")),
+            "Legacy hit without library claim cannot inherit current page");
         refuse(()->RAGIndexedPdfPageEvidence.join(
             219,List.of(first,chunk(219,2,"MM","deadbeef",
                 "/manual.pdf","hardware","pdf"))),

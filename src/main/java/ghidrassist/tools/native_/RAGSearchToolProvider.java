@@ -139,6 +139,7 @@ public final class RAGSearchToolProvider implements ToolProvider {
                                 new java.io.File(hit.getSourcePath()).toURI().toASCIIString()
                                 + ("pdf".equalsIgnoreCase(hit.getSourceType())
                                     && hit.getPageNumber() > 0 ? "#page=" + hit.getPageNumber() : ""))
+                            .append(" LIBRARY_ID: ").append(hit.getIndexedLibraryId())
                             .append(" LAYOUT_UNCERTAIN: ").append(hit.isUncertainTable())
                             .append(ghidrassist.core.RAGSourceProvenance.inspect(
                                 hit.getSourceType(),hit.getIndexedSha256()).evidence())

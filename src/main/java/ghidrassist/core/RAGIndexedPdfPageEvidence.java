@@ -39,6 +39,22 @@ public final class RAGIndexedPdfPageEvidence {
         }
     }
 
+    /**
+     * A GUI result may be stale after reindexing or moving a PDF between
+     * libraries. Never display the new document's text as if it were the
+     * previously selected search hit, even when filename and chunk match.
+     */
+    public static void requireSameSource(Page current,SearchResult selected) {
+        if(current==null || selected==null ||
+                !"pdf".equalsIgnoreCase(selected.getSourceType()) ||
+                current.physicalPage()!=selected.getPageNumber() ||
+                !Objects.equals(current.indexedSha256(),selected.getIndexedSha256()) ||
+                !Objects.equals(current.sourcePath(),selected.getSourcePath()) ||
+                !Objects.equals(current.libraryId(),selected.getIndexedLibraryId()))
+            throw new IllegalArgumentException(
+                "STALE_INDEXED_PDF_SOURCE: rerun document search");
+    }
+
     /** Fail closed on any inconsistent document/page identity. */
     public static Page join(int requestedPage,List<Chunk> chunks) {
         if(requestedPage<1 || requestedPage>100000 || chunks==null ||

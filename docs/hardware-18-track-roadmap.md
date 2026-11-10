@@ -16,11 +16,14 @@ Search results now propagate each Lucene source document's **index-time**
 SHA-256, physical PDF page and file path. Full-page retrieval joins chunks
 only when their page, digest, path, document type, source library and distinct
 chunk IDs agree, with a bounded total text cap and fail-closed response to
-conflicting/ambiguous metadata. Native RAG search/page results identify the
+conflicting/ambiguous metadata. Native RAG search/page results and GUI search-result panels identify the
 pinned public MC68332UM bytes using the same reviewed SHA-256 constant as
 the bitfield source ledger; any older/missing digest remains UNKNOWN. The
 selected project's library scope is checked against the page's actual
-Lucene snapshot, avoiding separate mutable metadata reads.
+Lucene snapshot, avoiding separate mutable metadata reads. GUI full-page
+inspection additionally binds the result's **original** SHA, source path,
+library and physical page to the current index snapshot, refusing stale
+search hits after a document is reindexed or moved between libraries.
 
 Before external source-page viewing, the current local PDF is streamed
 and SHA-256 compared to the indexed bytes, with PDF-header, regular-file,

@@ -20,6 +20,12 @@ without a pre-open comparison against the indexed file's SHA-256.
 - The page tool reads the page text, digest and source library from **one
   Lucene snapshot**; the active-library filter now checks the returned
   page's own library, not a separate mutable metadata read.
+- GUI RAG results display a selectable full indexed SHA/pin and explicitly
+  identify unverified current-file and page semantics. Viewing a selected
+  full PDF page after reindexing checks that the **current** Lucene page
+  still matches the originally selected search hit's digest, source path,
+  library ID and physical folio; stale hits are refused with an instruction
+  to rerun search, never silently promoted to a different indexed document.
 - Import now double-hashes each local PDF/text file: once before
   extraction/embeddings and once immediately before Lucene update. A changed
   file, different length or noncanonical digest aborts the import BEFORE

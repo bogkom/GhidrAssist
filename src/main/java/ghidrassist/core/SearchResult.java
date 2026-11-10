@@ -12,6 +12,8 @@ public class SearchResult {
     private final boolean uncertainTable;
     /** SHA-256 captured at PDF/text indexing, NOT a live-file attestation. */
     private final String indexedSha256;
+    /** RAG library ID read from the SAME indexed hit, not a later lookup. */
+    private final String indexedLibraryId;
 
     public SearchResult(String filename, String snippet, double score, int chunkId) {
         this(filename, snippet, score, chunkId, null, null, -1, false, null);
@@ -26,6 +28,13 @@ public class SearchResult {
     public SearchResult(String filename, String snippet, double score, int chunkId,
             String sourcePath, String sourceType, int pageNumber,
             boolean uncertainTable,String indexedSha256) {
+        this(filename,snippet,score,chunkId,sourcePath,sourceType,
+            pageNumber,uncertainTable,indexedSha256,null);
+    }
+
+    public SearchResult(String filename, String snippet, double score, int chunkId,
+            String sourcePath, String sourceType, int pageNumber,
+            boolean uncertainTable,String indexedSha256,String indexedLibraryId) {
         this.filename = filename;
         this.snippet = snippet;
         this.score = score;
@@ -35,6 +44,7 @@ public class SearchResult {
         this.pageNumber = pageNumber;
         this.uncertainTable = uncertainTable;
         this.indexedSha256 = indexedSha256;
+        this.indexedLibraryId = indexedLibraryId;
     }
 
     public String getFilename() { return filename; }
@@ -46,4 +56,5 @@ public class SearchResult {
     public int getPageNumber() { return pageNumber; }
     public boolean isUncertainTable() { return uncertainTable; }
     public String getIndexedSha256() { return indexedSha256; }
+    public String getIndexedLibraryId() { return indexedLibraryId; }
 }

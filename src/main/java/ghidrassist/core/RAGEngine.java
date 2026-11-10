@@ -660,7 +660,7 @@ public class RAGEngine {
         }
         return new SearchResult(doc.get("filename"), snippet, score, chunk,
             doc.get("source_path"), doc.get("source_type"), page, uncertain,
-            doc.get("sha256"));
+            doc.get("sha256"),libraryOf(doc));
     }
 
     private static SearchResult enrichVectorResult(VectorSearchResult vector, String userQuery) {

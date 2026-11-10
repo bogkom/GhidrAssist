@@ -385,6 +385,25 @@ public class RAGManagementTab extends JPanel {
         panel.add(titleLabel);
         panel.add(Box.createVerticalStrut(2));
         panel.add(metaLabel);
+        if ("pdf".equalsIgnoreCase(result.getSourceType())) {
+            // Indexed provenance is NOT independent verification of the
+            // currently present PDF bytes. Keep the full digest selectable.
+            var provenance=ghidrassist.core.RAGSourceProvenance.inspect(
+                result.getSourceType(),result.getIndexedSha256());
+            JTextArea indexedSource=new JTextArea(
+                "Indexed PDF SHA-256: "+provenance.indexedSha256()+
+                " | "+provenance.pin()+"\n"+
+                "Indexed bytes only; current file, edition and page contents UNVERIFIED");
+            indexedSource.setEditable(false);
+            indexedSource.setLineWrap(true);
+            indexedSource.setWrapStyleWord(true);
+            indexedSource.setOpaque(false);
+            indexedSource.setForeground(Color.DARK_GRAY);
+            indexedSource.setFont(indexedSource.getFont().deriveFont(Font.PLAIN,10f));
+            indexedSource.setToolTipText(provenance.evidence());
+            indexedSource.setAlignmentX(Component.LEFT_ALIGNMENT);
+            panel.add(indexedSource);
+        }
         if (result.isUncertainTable()) {
             JLabel caution = new JLabel("Possible table / columns: verify exact register and bit values in source PDF.");
             caution.setForeground(new Color(160, 90, 0));
@@ -406,15 +425,30 @@ public class RAGManagementTab extends JPanel {
         panel.add(excerptScroll);
 
         // Set max width
-        panel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 240));
+        panel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 280));
 
         return panel;
     }
 
     private void showIndexedPage(SearchResult result) {
         try {
-            String content = ghidrassist.core.RAGEngine.getIndexedChunkContent(
-                result.getFilename(), result.getChunkId());
+            String content;
+            if("pdf".equalsIgnoreCase(result.getSourceType()) &&
+                    result.getPageNumber()>0) {
+                var current=ghidrassist.core.RAGEngine.getIndexedPdfPageEvidence(
+                    result.getFilename(),result.getPageNumber());
+                ghidrassist.core.RAGIndexedPdfPageEvidence.requireSameSource(
+                    current,result);
+                var provenance=ghidrassist.core.RAGSourceProvenance.inspect(
+                    "pdf",current.indexedSha256());
+                content="["+provenance.evidence()+"]\n"+
+                    "Indexed full physical PDF page, NOT an authenticated "+
+                    "current file or verified hardware register definition.\n\n"+
+                    current.text();
+            }else {
+                content=ghidrassist.core.RAGEngine.getIndexedChunkContent(
+                    result.getFilename(),result.getChunkId());
+            }
             JTextArea full = new JTextArea(content, 28, 95);
             full.setEditable(false);
             full.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
@@ -422,7 +456,7 @@ public class RAGManagementTab extends JPanel {
             JOptionPane.showMessageDialog(this, new JScrollPane(full),
                 result.getFilename() + " / PDF page " + result.getPageNumber(),
                 JOptionPane.INFORMATION_MESSAGE);
-        } catch (java.io.IOException ex) {
+        } catch (java.io.IOException | IllegalArgumentException ex) {
             JOptionPane.showMessageDialog(this, "Unable to read indexed page: " + ex.getMessage(),
                 "RAG index error", JOptionPane.ERROR_MESSAGE);
         }
