@@ -1,3 +1,29 @@
+## GA-01/02/03/11/18 — 2026-11-10: known CALL targets are not missing depth frontiers
+
+The read-only bounded transitive SIMCR/MM and RESET direct-CALL analyzers
+now distinguish an already-scheduled CALL target at the maximum traversal
+depth from an actually uninspected target. A recognized recursive
+backedge or convergent diamond edge may end at the depth boundary
+without asserting a **false** `DEPTH_CUTOFF` or a falsely truncated
+RESET graph. Cycle/unknown-control flags remain conservative; genuinely
+unscheduled deeper functions still yield an explicit omitted frontier,
+and a decoded direct CALL into a missing function remains observed
+UNKNOWN rather than a silently closed negative. Generic STORE/MOVEC
+solver parity is regression-tested.
+
+The selected-MC68332 MOVEC/VBR table planner also rejects unbounded,
+null, odd, negative and over-24-bit RESET source function identities
+before assigning priority to source-image table candidates. No generic
+CPU32-to-device 24-bit aliasing is inferred. These changes affect
+source-evidence precision and validation only; no executable CALL or
+RESET path, active MM latch, runtime VBR/IRQ, physical map, new
+Review/Apply authority, user program mutation or Supervisor host
+test is inferred. Java21 deterministic regressions and Java25 full
+Ghidra 12.1.4 PUBLIC isolated synthetic CI are exact-SHA merge gates.
+See [interprocedural MM sources](hardware-interprocedural-mm-source-witnesses.md)
+and [relocated VBR sources](hardware-relocated-vbr-source-candidates.md).
+GA-01/02/03/11/18 remain PARTIAL; GA-14 deferred.
+
 ## GA-01/02/03/11/18 — 2026-11-10: shortest typed vector-handler STORE and MOVEC CALL witnesses
 
 The bounded read-only `HardwareCallEffects` BFS now retains **typed
