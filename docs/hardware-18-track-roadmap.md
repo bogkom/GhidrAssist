@@ -1,3 +1,21 @@
+## GA-02/03/18 — 2026-11-10: source-only two-hop conditional-branch CFG coherence
+
+The selected MC68332 outer CALL → intermediate single JSR/BSR → direct
+leaf MMIO source pipeline now refuses fake bridge control flow even
+when all supplied steps form a closed acyclic graph. Conditional Bcc
+must have two distinct successors, unconditional BRA exactly one,
+linear A/D instructions and NOP exactly one, RTS none and only
+a real JSR/BSR can introduce the inner CALL barrier. Decoded source
+coordinates are aligned MCU24, recursive/out-of-range cases are
+rejected as incomplete rather than returning guessed evidence or
+crashing the Ghidra report. Source regressions include forged CFGs,
+missing fallthrough, hidden P-code register effects and a positive
+convergent branch producing consistent source candidate words.
+Independent Java21, Java25 Ghidra 12.1.4 PUBLIC extension build and
+real isolated synthetic headless CI remain exact-SHA gates. This does
+not prove branch feasibility, code execution, latched SIMCR/MM or
+Review/Apply eligibility. GA-02/03/18 PARTIAL; GA-14 deferred.
+
 ## GA-06/18 — 2026-11-10: untrusted external profile Preview/Comparison constructor safety
 
 The tab-delimited external MCU manifest parser is read-only and the
