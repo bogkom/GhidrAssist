@@ -182,87 +182,26 @@ public final class RAGSearchToolProvider implements ToolProvider {
                 }
 
                 if(FIELD.equals(name)) {
-                    // An exact checksum at import and a familiar manual name
-                    // do NOT select hardware. Explicit concrete MCU required.
-                    if(!args.has("device") ||
-                            !"MC68332".equals(args.get("device").getAsString()))
+                    if(!args.has("device") || !args.has("filename") ||
+                            !args.has("register"))
                         return ToolResult.error(
-                            "Explicit device=MC68332 required for source citations");
-                    if(!args.has("filename") || !args.has("register"))
-                        return ToolResult.error(
-                            "Indexed filename and SIMCR/SYNCR register required");
+                            "Explicit device, exact indexed filename and register required");
                     String filename=args.get("filename").getAsString().trim();
-                    if(filename.isBlank())
-                        return ToolResult.error("Blank indexed source filename");
-                    String register=args.get("register").getAsString().trim()
-                        .toUpperCase(java.util.Locale.ROOT);
-                    if(!register.equals("SIMCR") && !register.equals("SYNCR"))
-                        return ToolResult.error("Only reviewed SIMCR/SYNCR supported");
-                    String field=args.has("field")?
-                        args.get("field").getAsString().trim()
-                            .toUpperCase(java.util.Locale.ROOT):null;
-                    var sourcePages=RAGEngine.getIndexedPdfPagesEvidence(
-                        filename,List.of(219,220,221));
+                    var pages=RAGEngine.getIndexedPdfPagesEvidence(
+                        filename,ghidrassist.core.RAGManualFieldCitationView.PAGES);
                     ghidrassist.core.RAGIndexedPdfPageEvidence
-                        .requireOneIndexedDocument(sourcePages);
-                    var first=sourcePages.get(219);
+                        .requireOneIndexedDocument(pages);
                     if(scope.equals("selected") &&
-                            !active.contains(first.libraryId()))
+                            !active.contains(pages.get(219).libraryId()))
                         return ToolResult.error(
-                            "Source not in selected project's active RAG library");
-                    var provenance=ghidrassist.core.RAGSourceProvenance.inspect(
-                        "pdf",first.indexedSha256());
-                    if(provenance.pin()!=ghidrassist.core.RAGSourceProvenance.Pin
-                            .OFFICIAL_MC68332UM_SHA256_AT_INDEX)
-                        return ToolResult.error(
-                            "INDEXED_SHA256_NOT_PUBLISHER_PINNED: refuse positive field citation");
-                    var pages=new java.util.TreeMap<Integer,String>();
-                    for(var item:sourcePages.entrySet())
-                        pages.put(item.getKey(),item.getValue().text());
-                    var review=ghidrassist.hardware.HardwareManualFieldExcerptEvidence
-                        .inspect(ghidrassist.hardware.HardwareProfiles.mc68332(),
-                            pages,first.indexedSha256());
-                    StringBuilder result=new StringBuilder(
-                        "DEVICE: MC68332 EXPLICIT; SOURCE: "+filename+
-                        " REGISTER: "+register+
-                        " EDITION_CLAIM: "+review.editionClaim()+
-                        " INDEXED_SHA256: "+first.indexedSha256()+
-                        "\nPHYSICAL_PDF_PAGES: 219,220,221"+
-                        " PRINTED_FOLIOS: D-5,D-6,D-7"+
-                        "\nSOURCE_STATUS: INDEXED_TEXT_CANDIDATE_NOT_AUTHENTICATED"+
-                        "\nALL_15_REVIEWED_TEXT_CANDIDATES: "+
-                        review.allReviewedTextCandidatesMatch()+
-                        "\nCAUTION: indexed text/SHA are NOT independent proof "+
-                        "of current PDF bytes, actual manual edition, MCU "+
-                        "identity, execution, MM latch or Review/Apply. "+
-                        "Publisher PDF bytes are verified only in separate CI.\n");
-                    int shown=0;
-                    for(var row:review.citations()) {
-                        var ref=row.reviewed();
-                        if(!ref.register().equals(register) ||
-                                field!=null && !ref.field().equals(field))
-                            continue;
-                        shown++;
-                        result.append("FIELD: ").append(ref.field())
-                            .append(" MASK: 0x")
-                            .append(Long.toHexString(ref.mask())
-                                .toUpperCase(java.util.Locale.ROOT))
-                            .append(" DIAGRAM_PDF: ").append(ref.diagramPage())
-                            .append(" PRINTED_FOLIO: ").append(ref.printedFolio())
-                            .append(" DESCRIPTION_PDF: ")
-                            .append(ref.descriptionPage())
-                            .append(" STATE: ").append(row.state())
-                            .append(" EXCERPT_SHA256: ")
-                            .append(row.excerptSha256()==null?"UNKNOWN":
-                                row.excerptSha256()).append("\n");
-                        if(row.excerpt()!=null)
-                            result.append("MATCHED_INDEXED_EXCERPT: ")
-                                .append(row.excerpt()).append("\n");
-                    }
-                    if(shown==0)
-                        return ToolResult.error(
-                            "Unknown or unreviewed field for selected register");
-                    return ToolResult.success(result.toString());
+                            "Document not in selected program's active RAG library");
+                    String text=ghidrassist.core.RAGManualFieldCitationView.render(
+                        args.get("device").getAsString(),
+                        filename,
+                        args.get("register").getAsString(),
+                        args.has("field")?args.get("field").getAsString():null,
+                        pages);
+                    return ToolResult.success(text);
                 }
 
                 if (!args.has("filename") || !args.has("page"))
