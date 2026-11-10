@@ -7,6 +7,8 @@ on:
       - 'tests/ga11_headless/Ga11VectorHeadlessMain.java'
       - 'src/main/java/ghidrassist/hardware/HardwareFunctionRenameReceipt.java'
       - 'src/main/java/ghidrassist/hardware/HardwareFunctionRenameService.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareScopedVariableReceipt.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareScopedVariableService.java'
       - '.github/workflows/ga13-receipt-restart-headless.yml'
   workflow_dispatch:
 
@@ -72,6 +74,10 @@ jobs:
           assert summary.get("ga13_same_saved_project_reopened") is True,summary
           assert summary.get("ga13_different_process_pids") is True,summary
           assert summary.get("ga13_matching_persisted_fields")==4,summary
+          assert summary.get("ga13_pointer_type_use_cross_jvm") is True,summary
+          assert first.get("ga13_pointer_restart_typed_current") is True,first
+          assert second.get("ga13_pointer_restart_typed_current") is True,second
+          assert first.get("ga13_pointer_restart_type_use")==second.get("ga13_pointer_restart_type_use")
           assert first.get("rename_receipt_first_jvm_saved") is True,first
           assert second.get("rename_receipt_second_jvm_reopened") is True,second
           assert second.get("rename_receipt_saved_name_and_source") is True,second
