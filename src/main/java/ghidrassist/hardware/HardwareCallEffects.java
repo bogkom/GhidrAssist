@@ -121,6 +121,15 @@ public final class HardwareCallEffects {
         chain.add(to);
         return new SourceWitness(kind,chain);
     }
+    /**
+     * Do not reconstruct a longer chain when an earlier BFS witness
+     * is already strictly shorter. Without this guard, a 50k-function
+     * survey containing STORE in every node would rebuild quadratic
+     * aggregate path prefixes although its first source is known.
+     */
+    private static boolean couldImprove(SourceWitness current,int chainLength) {
+        return current==null || chainLength<=current.chain().size();
+    }
     private static SourceWitness best(SourceWitness current,
             SourceWitness candidate) {
         if(current==null)return candidate;
@@ -177,7 +186,8 @@ public final class HardwareCallEffects {
             if(out.visits>=maxFunctions) {
                 out.cap=true;out.unknown=true;
                 Layer skipped=queue.peekFirst();
-                if(skipped!=null)
+                if(skipped!=null &&
+                        couldImprove(frontier,skipped.depth()+1))
                     frontier=best(frontier,at(WitnessKind.NODE_CUTOFF,
                         parents,skipped.entry()));
                 break;
@@ -186,19 +196,23 @@ public final class HardwareCallEffects {
             FunctionNode node=graph.get(current.entry());
             if(node==null) {
                 out.unknown=true;
-                observedUnknown=best(observedUnknown,
-                    at(WitnessKind.MISSING_TARGET,parents,current.entry()));
+                if(couldImprove(observedUnknown,current.depth()+1))
+                    observedUnknown=best(observedUnknown,
+                        at(WitnessKind.MISSING_TARGET,parents,current.entry()));
                 continue;
             }
             inspected.add(current.entry());
             out.visits++;
-            if(node.memoryStore())
+            if(node.memoryStore() &&
+                    couldImprove(store,current.depth()+1))
                 store=best(store,at(WitnessKind.MEMORY_STORE,
                     parents,current.entry()));
-            if(node.vbrWrite())
+            if(node.vbrWrite() &&
+                    couldImprove(vbr,current.depth()+1))
                 vbr=best(vbr,at(WitnessKind.MOVEC_VBR,
                     parents,current.entry()));
-            if(node.unresolvedFlow())
+            if(node.unresolvedFlow() &&
+                    couldImprove(observedUnknown,current.depth()+1))
                 observedUnknown=best(observedUnknown,
                     at(WitnessKind.UNKNOWN_FLOW,parents,current.entry()));
             out.memory|=node.memoryStore();
@@ -207,17 +221,19 @@ public final class HardwareCallEffects {
             for(long callee:node.directCallees()) {
                 if(!graph.containsKey(callee)) {
                     out.unknown=true;
-                    observedUnknown=best(observedUnknown,
-                        edge(WitnessKind.MISSING_TARGET,parents,
-                            current.entry(),callee));
+                    if(couldImprove(observedUnknown,current.depth()+2))
+                        observedUnknown=best(observedUnknown,
+                            edge(WitnessKind.MISSING_TARGET,parents,
+                                current.entry(),callee));
                     continue;
                 }
                 if(current.depth()>=maxDepth) {
                     if(!discovered.contains(callee)) {
                         out.cap=true;out.unknown=true;
-                        frontier=best(frontier,
-                            edge(WitnessKind.DEPTH_CUTOFF,parents,
-                                current.entry(),callee));
+                        if(couldImprove(frontier,current.depth()+2))
+                            frontier=best(frontier,
+                                edge(WitnessKind.DEPTH_CUTOFF,parents,
+                                    current.entry(),callee));
                     }
                     continue;
                 }
@@ -226,9 +242,10 @@ public final class HardwareCallEffects {
                     // the incidental order or number of Ghidra references.
                     if(discovered.size()>=maxFunctions) {
                         out.cap=true;out.unknown=true;
-                        frontier=best(frontier,
-                            edge(WitnessKind.NODE_CUTOFF,parents,
-                                current.entry(),callee));
+                        if(couldImprove(frontier,current.depth()+2))
+                            frontier=best(frontier,
+                                edge(WitnessKind.NODE_CUTOFF,parents,
+                                    current.entry(),callee));
                     } else {
                         discovered.add(callee);
                         parents.put(callee,current.entry());
