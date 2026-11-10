@@ -1127,6 +1127,14 @@ def main():
     parser.add_argument("--offset", type=int, default=0)
     parser.add_argument("--limit", type=int, default=100)
     args = parser.parse_args()
+    # Check a resumed page BEFORE reading any local bearer session receipt.
+    # CodeBrowser navigation does not change Program revision, so an
+    # unanchored second page could silently switch the instruction window.
+    if args.action == "listing-range" and args.offset > 0 and (
+            not args.address or not args.address.strip()
+            or args.expected_revision is None):
+        parser.error("listing-range: nonzero offset requires an explicit "
+                     "first-page start address and --expected-revision")
     if args.action=="report-set-verify":
         if not args.input:
             parser.error("report-set-verify requires --input")
@@ -1264,11 +1272,6 @@ def main():
               "agentic-binding-create": "agentic.review.binding.create"}[args.action]
     if method == "analysis.paths" and args.origin == "entry" and not args.address:
         parser.error("paths --origin entry requires an address")
-    if method == "listing.range" and args.offset > 0 and (
-            not args.address or not args.address.strip()
-            or args.expected_revision is None):
-        parser.error("listing-range: nonzero offset requires an explicit "
-                     "first-page start address and --expected-revision")
     if method == "ui.tab.select" and not args.address:
         parser.error("tab-select requires exact tab title")
     if method == "ui.table.select" and (
