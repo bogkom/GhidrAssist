@@ -51,6 +51,8 @@ public final class RAGSimProtectionTimerCitationViewSelfTest {
             s.contains("DESCRIPTION_PDF: 224 PRINTED_FOLIO: D-10") &&
             s.contains("WRITE_ONCE_REGISTER: true") &&
             s.contains("ALL_10_REVIEWED_TEXT_CANDIDATES: true") &&
+            s.contains("ALL_10_PINNED_PUBLISHER_EXCERPTS: false") &&
+            s.contains("MATCHES_PINNED_EXCERPT: false") &&
             s.contains("INDEXED_TEXT_NOT_CURRENT_FILE_AUTHENTICATION"),
             "SYPCR SWT static field provenance and explicit write-once caution");
         var pic=RAGSimProtectionTimerCitationView.render("MC68332",

@@ -6,6 +6,7 @@ on:
       - 'src/main/java/ghidrassist/hardware/HardwareBitfieldDecoder.java'
       - 'src/main/java/ghidrassist/hardware/HardwareBitfieldSourceLedger.java'
       - 'src/main/java/ghidrassist/hardware/HardwareSimProtectionTimerWitness.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareSimProtectionTimerPublisherPins.java'
       - 'src/test/java/ghidrassist/hardware/HardwareSimProtectionTimerWitnessSelfTest.java'
       - 'src/main/java/ghidrassist/core/RAGSimProtectionTimerCitationView.java'
       - 'src/test/java/ghidrassist/core/RAGSimProtectionTimerCitationViewSelfTest.java'
@@ -35,6 +36,7 @@ jobs:
             src/main/java/ghidrassist/hardware/HardwareBitfieldSourceLedger.java \
             src/main/java/ghidrassist/hardware/HardwareBitfieldDecoder.java \
             src/main/java/ghidrassist/hardware/HardwareSimProtectionTimerWitness.java \
+            src/main/java/ghidrassist/hardware/HardwareSimProtectionTimerPublisherPins.java \
             src/main/java/ghidrassist/core/SearchResult.java \
             src/main/java/ghidrassist/core/RAGIndexedPdfPageEvidence.java \
             src/main/java/ghidrassist/core/RAGSourceProvenance.java \

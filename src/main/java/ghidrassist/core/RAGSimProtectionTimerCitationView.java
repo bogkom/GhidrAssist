@@ -2,6 +2,7 @@ package ghidrassist.core;
 
 import ghidrassist.hardware.HardwareProfiles;
 import ghidrassist.hardware.HardwareSimProtectionTimerWitness;
+import ghidrassist.hardware.HardwareSimProtectionTimerPublisherPins;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -56,6 +57,8 @@ public final class RAGSimProtectionTimerCitationView {
             .append("\nREVIEWED_FOLIOS: D-10/PDF224 D-11/PDF225")
             .append("\nALL_10_REVIEWED_TEXT_CANDIDATES: ")
             .append(result.allTenCandidatesMatch())
+            .append("\nALL_10_PINNED_PUBLISHER_EXCERPTS: ")
+            .append(HardwareSimProtectionTimerPublisherPins.allTenMatch(result))
             .append("\nSTATUS: INDEXED_TEXT_NOT_CURRENT_FILE_AUTHENTICATION")
             .append("\nCAUTION: selected device is explicit, but no watchdog ")
             .append("running/timeout, active periodic interrupt/vector, ")
@@ -78,6 +81,11 @@ public final class RAGSimProtectionTimerCitationView {
                 .append(" STATE: ").append(row.state())
                 .append(" INDEXED_EXCERPT_SHA256: ")
                 .append(row.excerptSha256()==null?"UNKNOWN":row.excerptSha256())
+                .append(" PINNED_PUBLISHER_EXCERPT_SHA256: ")
+                .append(HardwareSimProtectionTimerPublisherPins.expected(
+                    ref.register(),ref.field()))
+                .append(" MATCHES_PINNED_EXCERPT: ")
+                .append(HardwareSimProtectionTimerPublisherPins.matches(row))
                 .append("\n");
             if(row.excerpt()!=null)
                 out.append("BOUNDED_INDEXED_EXCERPT: ").append(row.excerpt())

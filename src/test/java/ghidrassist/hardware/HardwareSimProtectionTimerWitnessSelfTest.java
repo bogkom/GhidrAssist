@@ -90,6 +90,9 @@ public final class HardwareSimProtectionTimerWitnessSelfTest {
             good.rows().stream().filter(x->x.reviewed().physicalPage()==224).count()==6 &&
             good.rows().stream().filter(x->x.reviewed().physicalPage()==225).count()==4,
             "Only six SYPCR write-once fields; two distinct printed/physical folios");
+        ok(!HardwareSimProtectionTimerPublisherPins.allTenMatch(good) &&
+            HardwareSimProtectionTimerPublisherPins.matches(good)==0,
+            "Synthetic plausible meaning does not equal official publisher excerpt bytes");
         ok(good.markdown().contains("NO PDF AUTHENTICATION") &&
             good.markdown().contains("active PIT interrupt/vector") &&
             good.markdown().contains("D-11"),
@@ -171,13 +174,17 @@ public final class HardwareSimProtectionTimerWitnessSelfTest {
             var publisher=HardwareSimProtectionTimerWitness.inspect(profile,
                 Map.of(224,Files.readString(Path.of(args[0])),
                     225,Files.readString(Path.of(args[1]))));
-            ok(publisher.allTenCandidatesMatch(),
-                "NXP SHA-pinned MC68332UM exact D-10/D-11 pages: 10 field headings and meanings");
-            for(var entry:publisher.rows())
+            ok(publisher.allTenCandidatesMatch() &&
+                HardwareSimProtectionTimerPublisherPins.allTenMatch(publisher),
+                "NXP SHA-pinned MC68332UM D-10/D-11 all 10 frozen publisher excerpt hashes");
+            for(var entry:publisher.rows()){
+                ok(HardwareSimProtectionTimerPublisherPins.matches(entry),
+                    "Publisher field excerpt SHA immutable: "+entry.reviewed().key());
                 System.out.println("PINNED_SIM_PROTECTION_FIELD "+
                     entry.reviewed().key()+" PDF="+entry.reviewed().physicalPage()+
                     " mask=0x"+Long.toHexString(entry.reviewed().mask())+
                     " excerptSHA256="+entry.excerptSha256());
+            }
             System.out.println("PINNED MC68332UM SYPCR/PICR/PITR SOURCE PASS fields=10");
         }
         System.out.println("HardwareSimProtectionTimerWitnessSelfTest PASS checks="+checks);
