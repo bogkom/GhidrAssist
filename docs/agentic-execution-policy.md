@@ -530,3 +530,21 @@ This is a regression of durable **translated CFG worklist** recovery,
 not proof of authentic P-code extraction for all instruction types or
 an end-user restored work session. New model/Review/Apply permissions
 continue to require independent approval.
+
+## GA-12/15 — 2026-11-10: historical checkpoint attribution completeness
+
+A completed historical Agentic checkpoint is readable offline as a bounded,
+read-only archive; its SHA-256 is a corruption checksum, not proof of the
+publisher, actor, original tool execution, firmware execution or PDF edition.
+A `complete=true` archive is now rejected if *any* retained row has blank or
+missing fact, source observation (`evidence`) or originating tool
+(`toolUsed`) — even if an attacker recalculated the payload SHA. The CLI
+also refuses to *capture* a successful live run as complete when its
+reported rows lack source attribution, independently of the provider's
+terminal SUCCESS flag. Older incomplete archives remain browseable with
+`complete=false`; they are never eligible for read-only resume-check or
+historical Review authorization. Java live Review-draft and cross-JVM
+saved-checkpoint imports enforce the same per-row boundary before preparing
+new proposals; no old plan, policy, tool permissions or Apply/Undo authority
+is inherited. Deterministic Python and Java25/Ghidra 12.1.4 PUBLIC CI are
+required on exact source SHA. No local host Supervisor runs are resumed.

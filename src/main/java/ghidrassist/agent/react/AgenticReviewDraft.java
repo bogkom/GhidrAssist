@@ -151,9 +151,13 @@ public final class AgenticReviewDraft {
         List<String> sourceRows=new ArrayList<>();
         for(JsonElement item:excerpts) {
             JsonObject row=item.getAsJsonObject();
-            sourceRows.add(text(row,"fact",512));
-            text(row,"evidence",512);
-            text(row,"tool_used",128);
+            String fact=text(row,"fact",512);
+            String evidence=text(row,"evidence",512);
+            String tool=text(row,"tool_used",128);
+            if(fact.isBlank() || evidence.isBlank() || tool.isBlank())
+                throw new IllegalArgumentException(
+                    "Review draft cannot inherit unattributed observations");
+            sourceRows.add(fact);
         }
 
         // Live revision and run identity prevent trusting a copied (or
@@ -249,8 +253,15 @@ public final class AgenticReviewDraft {
             // Require all evidence to be structurally bounded; show at most
             // 20 truncated facts to the new planning prompt.
             String fact=optionalHistoricalEvidence(row,"fact",2048);
-            optionalHistoricalEvidence(row,"evidence",2048);
-            optionalHistoricalEvidence(row,"toolUsed",128);
+            String evidence=optionalHistoricalEvidence(row,"evidence",2048);
+            String tool=optionalHistoricalEvidence(row,"toolUsed",128);
+            // Old checkpoints may predate GA-15 missing-source accounting.
+            // Their self-consistent digest is a corruption check, not
+            // sufficient evidence to promote a source-less historic fact
+            // into a complete new Review proposal after restart.
+            if(fact.isBlank() || evidence.isBlank() || tool.isBlank())
+                throw new IllegalArgumentException(
+                    "Historical Agentic checkpoint contains unattributed evidence");
             count(row,"timestamp");
             if(!row.has("relevance") ||
                     !row.get("relevance").isJsonPrimitive() ||

@@ -705,8 +705,17 @@ def capture_agentic_checkpoint(session, output, page_size=100, parent=None):
     if len(rows)!=expected[5]:
         raise ValueError("Agentic checkpoint omitted retained rows")
     # A nonzero-offset page is never individually complete. Complete here
-    # means the entire unchanged run was stitched without omissions.
-    complete = bool(expected[3]=="SUCCESS" and expected[5]>0 and
+    # means the entire unchanged run was stitched without omissions AND
+    # every retained finding has its own attributable observation/tool.
+    # This also guards older Agentic providers which did not track the
+    # missing-source count independently of their success state.
+    all_attributed = all(
+        isinstance(row, dict) and all(
+            isinstance(row.get(field), str) and row[field].strip()
+            for field in ("fact", "evidence", "toolUsed"))
+        for row in rows)
+    complete = bool(all_attributed and
+                    expected[3]=="SUCCESS" and expected[5]>0 and
                     len(expected[2])==64 and
                     all(c in "0123456789abcdefABCDEF" for c in expected[2]) and
                     expected[6]==expected[5] and expected[7]==0 and not expected[8])
@@ -822,6 +831,12 @@ def load_verified_agentic_payload(source):
                 type(row.get("relevance"))!=int or
                 type(row.get("timestamp"))!=int or row["timestamp"]<0):
             raise ValueError("Invalid Agentic evidence row")
+        if payload["complete"] and any(
+                not isinstance(row.get(field), str) or
+                not row[field].strip()
+                for field in ("fact", "evidence", "toolUsed")):
+            raise ValueError(
+                "False-complete Agentic evidence checkpoint: missing row attribution")
     return payload,digest
 
 

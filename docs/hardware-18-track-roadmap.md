@@ -1,3 +1,17 @@
+## GA-12/13/15/18 — 2026-11-10: historical Agentic row-source completeness
+
+Historical Agentic checkpoints can no longer claim `complete=true` after
+rehashing if a retained finding lacks a nonblank fact, source observation
+or tool of origin. Live CLI capture independently downgrades successful-but-
+uncited findings to INCOMPLETE; old archives with complete=false remain
+read-only inspectable. Java same-Program Review drafts and cross-JVM
+historical Review import enforce matching source attribution for every
+retained row. These are integrity and Review-readiness checks, not source
+authentication or resumable LLM sessions; Program fingerprint and new
+Review/Apply authorization gates remain separate. Java/Python regressions,
+full Ghidra 12.1.4 PUBLIC Java25 build and isolated synthetic CI are exact-
+SHA merge requirements. GA-12/13/15/18 PARTIAL; GA-14 deferred.
+
 ## GA-12/13/15/18 — 2026-11-10: checkpoint source and export loss accounting
 
 In-memory completed-function GA-12 checkpoint reuse now requires a nonblank,
