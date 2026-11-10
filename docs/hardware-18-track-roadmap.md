@@ -1,3 +1,19 @@
+## GA-08/12/13/18 — 2026-11-10: public persisted rename receipt state revalidation
+
+Read-only saved function-rename audit snapshots now recompute every public
+approval state from the actual saved GA-13 receipt, live function name,
+current SourceType and full executable import identity. Callers cannot
+construct forged `CURRENT_APPROVED_NAME` rows after a Program edit, source
+change or `USER_DEFINED` classification loss. Public inventories require
+strict function address order and no duplicates or missing rows. Generic
+CPU32 revisions may not certify the selected MC68332 rename report in the
+CSV fence; old unknown-source receipts remain inspectable as
+`SOURCE_UNVERIFIED`. These are consistency checks, not an append-only Undo
+log, author authentication or a new Apply permission. Deterministic Java21
+regressions, full Java25/Ghidra 12.1.4 PUBLIC integration and real isolated
+synthetic Ghidra Actions remain exact-HEAD gates. GA-08/12/13/18 PARTIAL;
+GA-14 deferred.
+
 ## GA-08/12/13/18 — 2026-11-10: conflicting static write-site witnesses
 
 The function naming proposal engine refuses to mark a role as REVIEW_REQUIRED
