@@ -129,7 +129,13 @@ public final class HardwareScopedVariableReceipt {
     /** One decoded stored record correlated with the *current* live Variable. */
     public record Observation(String optionKey,String serialized,
             String liveName,String liveStorage,
-            boolean pointerType,boolean userDefined) {
+            boolean pointerType,boolean userDefined,boolean autoParameter) {
+        /** Compatibility for read-only historical observations. An old row
+         * does not assert a Ghidra auto/forced parameter. */
+        public Observation(String key,String serialized,String liveName,
+                String liveStorage,boolean pointerType,boolean userDefined) {
+            this(key,serialized,liveName,liveStorage,pointerType,userDefined,false);
+        }
         public Observation {
             if(optionKey==null || serialized==null ||
                     optionKey.length()>64 ||
@@ -139,17 +145,57 @@ public final class HardwareScopedVariableReceipt {
         }
     }
     public record Row(Entry receipt,String currentName,
-                      String currentStorage,State state) {
+                      String currentStorage,boolean pointerType,
+                      boolean userDefined,boolean autoParameter,State state) {
         public Row {
             if(receipt==null || state==null)
                 throw new IllegalArgumentException("Malformed variable audit row");
         }
     }
+    /**
+     * A public audit State must be derived from the saved operation and the
+     * live variable identity. Callers cannot certify a stale, non-pointer,
+     * externally renamed or auto/forced parameter by passing CURRENT.
+     * SHA syntax is only a metadata check, not authentication of source bytes.
+     */
+    private static State classify(Entry receipt,String liveName,
+            String liveStorage,boolean pointerType,boolean userDefined,
+            boolean autoParameter,String importSha256) {
+        if(liveName==null)return State.VARIABLE_MISSING;
+        if(!HardwareAnalysisRevision.isVerifiableExecutableSha256(
+                    receipt.importSha256()) ||
+                !HardwareAnalysisRevision.isVerifiableExecutableSha256(
+                    importSha256))
+            return State.SOURCE_UNVERIFIED;
+        if(!receipt.importSha256().equalsIgnoreCase(importSha256))
+            return State.SOURCE_CHANGED;
+        if(!Objects.equals(receipt.storage(),liveStorage))
+            return State.STORAGE_CHANGED;
+        if(!pointerType || !userDefined || autoParameter)
+            return State.TYPE_OR_SOURCE_CHANGED;
+        if(!receipt.afterName().equals(liveName))
+            return State.NAME_CHANGED_AFTER_APPROVAL;
+        return State.CURRENT_APPROVED_NAME;
+    }
+    private static final Comparator<Row> ROW_ORDER=
+        Comparator.comparingLong((Row row)->row.receipt().function())
+            .thenComparing(row->row.receipt().kind())
+            .thenComparingInt(row->row.receipt().ordinal());
     public record Snapshot(List<Row> rows,long revision,String sourceSha256) {
         public Snapshot {
             if(rows==null || rows.size()>MAX_ROWS || revision<0 ||
                     sourceSha256==null || sourceSha256.length()>128)
                 throw new IllegalArgumentException("Unbounded variable audit snapshot");
+            Row prior=null;
+            for(Row row:rows) {
+                if(row==null || prior!=null && ROW_ORDER.compare(prior,row)>=0 ||
+                        row.state()!=classify(row.receipt(),row.currentName(),
+                            row.currentStorage(),row.pointerType(),row.userDefined(),
+                            row.autoParameter(),sourceSha256))
+                    throw new IllegalArgumentException(
+                        "Forged, reordered or contradictory variable receipt audit");
+                prior=row;
+            }
             rows=List.copyOf(rows);
         }
         public long count(State state){
@@ -182,6 +228,7 @@ public final class HardwareScopedVariableReceipt {
         public String csvRevisionBound(HardwareAnalysisRevision captured,
                 Supplier<HardwareAnalysisRevision> current) {
             if(captured==null || current==null ||
+                    !captured.mc68332Selected() ||
                     captured.modificationNumber()!=revision ||
                     !Objects.equals(captured.sourceSha256(),sourceSha256))
                 throw new IllegalArgumentException("Wrong variable audit revision fence");
@@ -208,30 +255,14 @@ public final class HardwareScopedVariableReceipt {
             Entry record=decode(observed.serialized());
             if(!record.optionKey().equals(observed.optionKey()))
                 throw new IllegalArgumentException("Variable receipt option key mismatch");
-            State state;
-            if(observed.liveName()==null)state=State.VARIABLE_MISSING;
-            // Syntax is a necessary gate for a current approval claim.
-            // Matching non-hex legacy source labels are never trusted as
-            // a verified binary identity. This does not authenticate bytes.
-            else if(!HardwareAnalysisRevision.isVerifiableExecutableSha256(
-                        record.importSha256()) ||
-                    !HardwareAnalysisRevision.isVerifiableExecutableSha256(
-                        importSha256))
-                state=State.SOURCE_UNVERIFIED;
-            else if(!record.importSha256().equalsIgnoreCase(importSha256))
-                state=State.SOURCE_CHANGED;
-            else if(!Objects.equals(record.storage(),observed.liveStorage()))
-                state=State.STORAGE_CHANGED;
-            else if(!observed.pointerType() || !observed.userDefined())
-                state=State.TYPE_OR_SOURCE_CHANGED;
-            else if(!record.afterName().equals(observed.liveName()))
-                state=State.NAME_CHANGED_AFTER_APPROVAL;
-            else state=State.CURRENT_APPROVED_NAME;
-            rows.add(new Row(record,observed.liveName(),observed.liveStorage(),state));
+            State state=classify(record,observed.liveName(),
+                observed.liveStorage(),observed.pointerType(),
+                observed.userDefined(),observed.autoParameter(),importSha256);
+            rows.add(new Row(record,observed.liveName(),observed.liveStorage(),
+                observed.pointerType(),observed.userDefined(),
+                observed.autoParameter(),state));
         }
-        rows.sort(Comparator.comparingLong((Row r)->r.receipt().function())
-            .thenComparing(r->r.receipt().kind())
-            .thenComparingInt(r->r.receipt().ordinal()));
+        rows.sort(ROW_ORDER);
         return new Snapshot(rows,revision,importSha256);
     }
 }
