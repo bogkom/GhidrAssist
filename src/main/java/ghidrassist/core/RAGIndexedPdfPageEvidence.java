@@ -39,6 +39,26 @@ public final class RAGIndexedPdfPageEvidence {
         }
     }
 
+    /** Legacy indexed rows may remain viewable as UNKNOWN but cannot
+     * authenticate a current search hit or a cross-folio source group. */
+    private static boolean claimedIdentity(String digest,String path,String library) {
+        if(digest==null || !digest.matches("[0-9a-f]{64}") ||
+                path==null || path.isBlank() || path.length()>4096 ||
+                library==null || library.isBlank() || library.length()>256)
+            return false;
+        for(String value:new String[]{path,library})
+            for(int i=0;i<value.length();) {
+                int code=value.codePointAt(i);
+                if(Character.isISOControl(code) ||
+                        Character.getType(code)==Character.FORMAT ||
+                        Character.getType(code)==Character.LINE_SEPARATOR ||
+                        Character.getType(code)==Character.PARAGRAPH_SEPARATOR)
+                    return false;
+                i+=Character.charCount(code);
+            }
+        return true;
+    }
+
     /**
      * A GUI result may be stale after reindexing or moving a PDF between
      * libraries. Never display the new document's text as if it were the
@@ -46,6 +66,10 @@ public final class RAGIndexedPdfPageEvidence {
      */
     public static void requireSameSource(Page current,SearchResult selected) {
         if(current==null || selected==null ||
+                !claimedIdentity(current.indexedSha256(),
+                    current.sourcePath(),current.libraryId()) ||
+                !claimedIdentity(selected.getIndexedSha256(),
+                    selected.getSourcePath(),selected.getIndexedLibraryId()) ||
                 !"pdf".equalsIgnoreCase(selected.getSourceType()) ||
                 current.physicalPage()!=selected.getPageNumber() ||
                 !Objects.equals(current.indexedSha256(),selected.getIndexedSha256()) ||
@@ -70,10 +94,8 @@ public final class RAGIndexedPdfPageEvidence {
             Page current=item.getValue();
             if(item.getKey()==null || current==null ||
                     item.getKey()!=current.physicalPage() ||
-                    current.indexedSha256()==null ||
-                    !current.indexedSha256().matches("[0-9a-f]{64}") ||
-                    current.sourcePath()==null || current.sourcePath().isBlank() ||
-                    current.libraryId()==null || current.libraryId().isBlank())
+                    !claimedIdentity(current.indexedSha256(),
+                        current.sourcePath(),current.libraryId()))
                 throw new IllegalArgumentException("Missing indexed source identity");
             if(previous!=null && (
                     !Objects.equals(previous.indexedSha256(),current.indexedSha256()) ||
