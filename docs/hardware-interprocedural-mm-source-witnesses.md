@@ -154,3 +154,20 @@ Program bytes or executed CALL/RESET paths. No MCU24 bus mapping, active
 VBR/IRQ, actual SIMCR write, or latched MM is inferred. Java21 adverse
 source regression and exact-commit full Java25/Ghidra 12.1.4 PUBLIC
 synthetic CI remain required.
+
+## 2026-11-10 — complete CPU32 U32 source-identity input gate
+
+The generic read-only CPU32 call-effect graph and SIMCR/MM source solver
+now reject source function IDs, direct CALL destinations, caller IDs,
+CALL instruction PCs, explicit root requests and typed witness entries
+outside unsigned 32-bit address range **before** BFS or report rendering.
+An address stored as a Java long is not evidence of a wider processor;
+0xFFFFFFFF remains the inclusive 32-bit model boundary. This closes a
+source input gap after the vector and CALL report renderer checks; a
+publicly supplied >32-bit node must not be normalized into a seemingly
+valid 32-bit hardware function. Selected MC68332's separate 24-bit
+device gating remains unchanged, and generic CPU32 must not imply MCU24
+physical address decoding. No CALL execution, RESET ordering, active
+interrupt/VBR, latched SIMCR MM or physical bus mapping is inferred.
+Deterministic Java21 negative and boundary tests and full Java25 Ghidra
+12.1.4 PUBLIC synthetic GitHub Actions are exact-head merge gates.
