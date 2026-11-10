@@ -1,3 +1,34 @@
+## GA-01/02/03/11/18 — 2026-11-10: selected-MC68332 vector handler -> SIMCR/MM MAY roots
+
+MC68332 exact-entry image-zero and candidate relocated MOVEC/VBR
+vector handlers now have a separate **device-specific transitive
+SIMCR/MM low-byte MAY** report. The former generic `memory STORE`
+source correlation was insufficient to distinguish actual potential
+SIMCR byte overlap from unrelated memory writes. The existing bounded
+MM source solver now accepts exact function-entry roots directly
+(`inspectRoots`) so no fake vector-to-handler CALL-site PC, runtime
+ISR dispatch, or direct RESET graph edge is constructed. Repeated
+vector slots share one root summary within this single Program analysis.
+
+The added device-gated report names typed shortest source-function
+chains for potential MM STORE, unknown alias/width, inspected missing
+target/unknown flow, and independently skipped depth/node/batch
+frontiers. It preserves the separate RESET reachability confidence
+horizon, counts the full bounded exact/interior vector inventory,
+inspects only capped displayed exact entries (32 image-zero/12 per
+relocated source table), and rejects 32-bit CPU32 pointer reinterpretation
+as a selected MC68332 24-bit vector target.
+
+Generic CPU32 receives no device-specific MM status. Neither table
+is established as active VBR; a potential MM STORE is not an executed
+write or latched MM value. No ISR firing, physical bus/CS mapping,
+Review/Apply/Undo authorization, original ECU411 source, or production
+Ghidra project is modified. Java21 deterministic source regressions,
+Java25 complete Ghidra 12.1.4 PUBLIC build and isolated genuine
+synthetic headless image-zero/relocated gates are required on final
+PR SHA. See [vector/RESET correlation](hardware-vector-reset-correlation.md).
+GA-01/02/03/11/18 remain PARTIAL; GA-14 deferred.
+
 ## GA-01/02/03/11/18 — 2026-11-10: known CALL targets are not missing depth frontiers
 
 The read-only bounded transitive SIMCR/MM and RESET direct-CALL analyzers

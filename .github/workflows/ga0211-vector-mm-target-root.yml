@@ -1,0 +1,53 @@
+name: GA-02/03/11 exact vector-handler SIMCR MM source roots
+
+on:
+  pull_request:
+    paths:
+      - 'src/main/java/ghidrassist/hardware/HardwareVectorMmMayCorrelation.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareInterproceduralMmEffects.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareVectorResetCorrelation.java'
+      - 'src/main/java/ghidrassist/hardware/GhidraInterruptVectorService.java'
+      - 'src/main/java/ghidrassist/hardware/GhidraHardwareFlowService.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareVectorMmMayCorrelationSelfTest.java'
+      - '.github/workflows/ga0211-vector-mm-target-root.yml'
+  push:
+    branches: [master]
+    paths:
+      - 'src/main/java/ghidrassist/hardware/HardwareVectorMmMayCorrelation.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareInterproceduralMmEffects.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareVectorResetCorrelation.java'
+      - 'src/main/java/ghidrassist/hardware/GhidraInterruptVectorService.java'
+      - 'src/main/java/ghidrassist/hardware/GhidraHardwareFlowService.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareVectorMmMayCorrelationSelfTest.java'
+      - '.github/workflows/ga0211-vector-mm-target-root.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+jobs:
+  static-vector-mm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Compile bounded device-specific function-entry source correlation
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/vector-mm"
+          javac --release 21 -d "$RUNNER_TEMP/vector-mm" \
+            src/main/java/ghidrassist/hardware/HardwareCallEffects.java \
+            src/main/java/ghidrassist/hardware/HardwareVectorResetCorrelation.java \
+            src/main/java/ghidrassist/hardware/HardwareInterproceduralMmEffects.java \
+            src/main/java/ghidrassist/hardware/HardwareVectorMmMayCorrelation.java \
+            src/test/java/ghidrassist/hardware/HardwareVectorMmMayCorrelationSelfTest.java
+      - name: Run source-root and vector-table uncertainty regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          java -ea -cp "$RUNNER_TEMP/vector-mm" \
+            ghidrassist.hardware.HardwareVectorMmMayCorrelationSelfTest

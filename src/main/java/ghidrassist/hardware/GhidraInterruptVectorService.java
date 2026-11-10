@@ -47,6 +47,18 @@ public final class GhidraInterruptVectorService {
             List<HardwareCallEffects.FunctionNode> callGraph,
             boolean mc68332Selected)
             throws CancelledException {
+        return analyze(program,monitor,resetRootRecognized,resetGraphIncomplete,
+            resetVisited,callGraph,mc68332Selected,null);
+    }
+
+    /** Optional source-only SIMCR/MM lane for a manually selected MC68332. */
+    public static String analyze(Program program,TaskMonitor monitor,
+            boolean resetRootRecognized,boolean resetGraphIncomplete,
+            Set<Long> resetVisited,
+            List<HardwareCallEffects.FunctionNode> callGraph,
+            boolean mc68332Selected,
+            List<HardwareInterproceduralMmEffects.FunctionNode> mmGraph)
+            throws CancelledException {
         if(resetVisited==null || callGraph==null)
             throw new IllegalArgumentException("Missing reset-call evidence");
         String language=program.getLanguageID().toString().toUpperCase(Locale.ROOT);
@@ -109,7 +121,11 @@ public final class GhidraInterruptVectorService {
         return HardwareInterruptVectors.inspect(0,observations,32).markdown()
             + HardwareVectorResetCorrelation.inspect(
                 resetRootRecognized,resetGraphIncomplete,resetVisited,
-                resolved,callGraph,32).markdown();
+                resolved,callGraph,32).markdown()
+            + (mc68332Selected && mmGraph!=null?
+                HardwareVectorMmMayCorrelation.inspect(
+                    false,0,resetRootRecognized,resetGraphIncomplete,
+                    resetVisited,resolved,mmGraph,32).markdown():"");
     }
     /**
      * Scan a strictly bounded list of local MOVEC-to-VBR source-image
@@ -125,6 +141,20 @@ public final class GhidraInterruptVectorService {
             int sourceSitesOmitted,boolean resetRootRecognized,
             boolean resetGraphIncomplete,Set<Long> resetVisited,
             List<HardwareCallEffects.FunctionNode> callGraph)
+            throws CancelledException {
+        return analyzeRelocatedSourceTables(program,selectedDevice,monitor,
+            sites,sourceSitesOmitted,resetRootRecognized,resetGraphIncomplete,
+            resetVisited,callGraph,null);
+    }
+
+    /** Optional vector MM lane: no synthetic direct-CALL/IRQ edge. */
+    public static String analyzeRelocatedSourceTables(Program program,
+            HardwareProfiles.Profile selectedDevice,TaskMonitor monitor,
+            List<HardwareVbrRelocationEvidence.Site> sites,
+            int sourceSitesOmitted,boolean resetRootRecognized,
+            boolean resetGraphIncomplete,Set<Long> resetVisited,
+            List<HardwareCallEffects.FunctionNode> callGraph,
+            List<HardwareInterproceduralMmEffects.FunctionNode> mmGraph)
             throws CancelledException {
         if(program==null || sites==null || sourceSitesOmitted<0 ||
                 resetVisited==null || callGraph==null)
@@ -220,6 +250,10 @@ public final class GhidraInterruptVectorService {
                 .append(HardwareVectorResetCorrelation.inspectRelocated(
                     base,resetRootRecognized,resetGraphIncomplete,resetVisited,
                     targets,callGraph,12).markdown());
+            if(mmGraph!=null)
+                report.append(HardwareVectorMmMayCorrelation.inspect(
+                    true,base,resetRootRecognized,resetGraphIncomplete,
+                    resetVisited,targets,mmGraph,12).markdown());
         }
         return report.toString();
     }

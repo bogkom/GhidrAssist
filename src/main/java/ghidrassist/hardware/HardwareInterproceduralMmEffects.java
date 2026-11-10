@@ -309,14 +309,11 @@ public final class HardwareInterproceduralMmEffects {
             observedUnknown!=null?observedUnknown:frontierUnknown,
             frontierUnknown);
     }
-    public static Report analyze(Collection<FunctionNode> functions,
-            Collection<CallSite> calls,Collection<Long> interestingCallers,
-            int maxDepth,int maxCount,int rowCap){
-        if(functions==null || calls==null || interestingCallers==null ||
-                maxDepth<0 || maxDepth>32 || maxCount<1 || maxCount>10000 ||
-                rowCap<1 || rowCap>1000 || functions.size()>50000 ||
-                calls.size()>200000)
-            throw new IllegalArgumentException("Invalid bounded call graph");
+    /** Validate exactly the same source graph for CALL sites and vector roots. */
+    private static Map<Long,FunctionNode> sourceGraph(
+            Collection<FunctionNode> functions) {
+        if(functions==null || functions.size()>50_000)
+            throw new IllegalArgumentException("Invalid bounded MM source graph");
         Map<Long,FunctionNode> graph=new HashMap<>();
         long edges=0;
         for(FunctionNode n:functions) {
@@ -326,6 +323,43 @@ public final class HardwareInterproceduralMmEffects {
             if(edges>MAX_FUNCTION_EDGES)
                 throw new IllegalArgumentException("Unbounded source CALL edges");
         }
+        return graph;
+    }
+
+    /**
+     * Inspect exact function-entry roots without fabricating a CALL-site PC.
+     * Intended for independently observed vector pointer candidates; a
+     * pointer is NOT evidence of an actual ISR invocation or direct CALL.
+     * Roots are canonical and share one finite per-invocation work budget.
+     * No summary or root identity is ever persisted across revisions.
+     */
+    public static Map<Long,Summary> inspectRoots(
+            Collection<FunctionNode> functions,Collection<Long> roots,
+            int maxDepth,int maxCount) {
+        if(roots==null || roots.size()>64 || maxDepth<0 || maxDepth>32 ||
+                maxCount<1 || maxCount>10_000)
+            throw new IllegalArgumentException("Invalid bounded vector MM roots");
+        Map<Long,FunctionNode> graph=sourceGraph(functions);
+        TreeSet<Long> sorted=new TreeSet<>();
+        for(Long root:roots)
+            if(root==null || root<0 || !sorted.add(root))
+                throw new IllegalArgumentException("Invalid or repeated MM root");
+        BatchBudget budget=new BatchBudget();
+        Map<Long,Summary> result=new LinkedHashMap<>();
+        for(Long root:sorted)
+            result.put(root,inspect(root,graph,maxDepth,maxCount,budget));
+        return Collections.unmodifiableMap(result);
+    }
+
+    public static Report analyze(Collection<FunctionNode> functions,
+            Collection<CallSite> calls,Collection<Long> interestingCallers,
+            int maxDepth,int maxCount,int rowCap){
+        if(functions==null || calls==null || interestingCallers==null ||
+                maxDepth<0 || maxDepth>32 || maxCount<1 || maxCount>10000 ||
+                rowCap<1 || rowCap>1000 || functions.size()>50000 ||
+                calls.size()>200000)
+            throw new IllegalArgumentException("Invalid bounded call graph");
+        Map<Long,FunctionNode> graph=sourceGraph(functions);
         List<CallSite> sorted=new ArrayList<>(calls);
         if(sorted.contains(null))throw new IllegalArgumentException("Null call");
         sorted.sort(Comparator.comparingLong(CallSite::function)
