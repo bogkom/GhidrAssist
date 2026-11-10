@@ -6,6 +6,7 @@ on:
       - 'tools/ghidrassist-agent-start'
       - 'tools/ga18-wyse-test.sh'
       - 'tests/automation/test_launcher.py'
+      - 'tests/automation/test_agent_transport_receipts.py'
       - 'tests/automation/test_review_preview.py'
       - 'tools/ga18-wyse-api-smoke.py'
       - 'tools/ga18-wyse-review-smoke.py'
