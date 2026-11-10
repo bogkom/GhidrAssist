@@ -57,6 +57,14 @@ public final class HardwareVectorResetCorrelationSelfTest {
               shared.vbrEffect().equals("STATIC_CANDIDATE") &&
               shared.flowUncertain(),
               "callee STORE/VBR are possible, unknown flow remains explicit");
+        check(shared.storeSourcePath().equals(
+                "MEMORY_STORE -> 0x00000130 -> 0x00000160") &&
+            shared.vbrSourcePath().equals(
+                "MOVEC_VBR -> 0x00000130") &&
+            shared.observedUnknownPath().equals(
+                "UNKNOWN_FLOW -> 0x00000130 -> 0x00000160") &&
+            shared.frontierPath().equals("NONE"),
+            "vector target now names shortest typed STORE/MOVEC and unknown CALL chains");
         var outside = report.rows().get(1);
         check(outside.relation() ==
             HardwareVectorResetCorrelation.Relation.OUTSIDE_OBSERVED_RESET_SUBSET
@@ -66,16 +74,26 @@ public final class HardwareVectorResetCorrelationSelfTest {
         check(interior.relation() ==
             HardwareVectorResetCorrelation.Relation.INTERIOR_FUNCTION_POINTER_NOT_ENTRY
             && interior.memoryStoreEffect().equals("UNKNOWN")
-            && interior.vbrEffect().equals("UNKNOWN"),
-            "never promote interior pointer to handler entry or effects");
+            && interior.vbrEffect().equals("UNKNOWN") &&
+            interior.storeSourcePath().equals("NONE") &&
+            interior.vbrSourcePath().equals("NONE") &&
+            interior.observedUnknownPath().equals("NONE") &&
+            interior.frontierPath().equals("NONE"),
+            "interior vector pointer cannot borrow complete-function source chains");
         check(report.rows().get(3).flowUncertain()
-            && report.rows().get(3).memoryStoreEffect().equals("STATIC_CANDIDATE"),
-            "cycles cannot erase possible effects");
+            && report.rows().get(3).memoryStoreEffect().equals("STATIC_CANDIDATE")
+            && report.rows().get(3).storeSourcePath().equals(
+                "MEMORY_STORE -> 0x00000300 -> 0x00000310")
+            && report.rows().get(3).observedUnknownPath().equals("NONE"),
+            "cycles cannot erase possible STORE or invent unknown function chains");
         var md = report.markdown();
         check(md.contains("STATIC ONLY") && md.contains("runtime VBR")
             && md.contains("NOT function entries")
-            && md.contains("not necessarily MMIO"),
-            "no execution, physical map, or hardware latch claim");
+            && md.contains("not necessarily MMIO") &&
+            md.contains("STORE source function path") &&
+            md.contains("Uninspected depth/node frontier path") &&
+            md.contains("not instruction PCs or runtime flows"),
+            "typed witnesses never claim execution, physical map or MM latch");
         check(!report.relocatedSource() && report.tableAddress()==0 &&
             md.contains("Vector table input: image-zero bytes ONLY") &&
             md.contains("| Vector | Image-zero pointer |"),
@@ -221,6 +239,97 @@ public final class HardwareVectorResetCorrelationSelfTest {
             java.util.Collections.nCopies(
                 HardwareCallEffects.MAX_SOURCE_FUNCTIONS+1,graph.get(0)),16),
             "unbounded transitive effect graph refused before per-handler analysis");
+        // Exact vector entries outside the image-zero RESET subtree still
+        // have their own independent transitive source evidence; no actual
+        // interrupt or active relocated VBR is implied.
+        var depthNodes=List.of(
+            new HardwareCallEffects.FunctionNode(0x700,false,false,false,
+                List.of(0x702L)),
+            new HardwareCallEffects.FunctionNode(0x702,false,false,false,
+                List.of(0x704L)),
+            new HardwareCallEffects.FunctionNode(0x704,false,false,false,
+                List.of(0x706L)),
+            new HardwareCallEffects.FunctionNode(0x706,false,false,false,
+                List.of(0x708L)),
+            new HardwareCallEffects.FunctionNode(0x708,false,false,false,
+                List.of(0x70AL)),
+            new HardwareCallEffects.FunctionNode(0x70A,true,false,false,
+                List.of()));
+        var depthVector=HardwareVectorResetCorrelation.inspectRelocated(
+            0x800L,true,false,Set.of(0x100L),
+            List.of(new HardwareVectorResetCorrelation.Target(
+                55,0x700L,0x700L,true)),depthNodes,12);
+        var depthRow=depthVector.rows().get(0);
+        check(depthRow.memoryStoreEffect().equals("UNKNOWN") &&
+            depthRow.storeSourcePath().equals("NONE") &&
+            depthRow.observedUnknownPath().equals("NONE") &&
+            depthRow.frontierPath().equals(
+                "DEPTH_CUTOFF -> 0x00000700 -> 0x00000702 -> "+
+                "0x00000704 -> 0x00000706 -> 0x00000708 -> 0x0000070A") &&
+            depthRow.flowUncertain(),
+            "unvisited fifth-hop STORE is a typed frontier, not a false negative");
+        var missingVector=HardwareVectorResetCorrelation.inspect(
+            true,false,Set.of(0x100L),
+            List.of(new HardwareVectorResetCorrelation.Target(
+                56,0x500L,0x500L,true)),graph,12);
+        check(missingVector.rows().get(0).observedUnknownPath().equals(
+                "MISSING_TARGET -> 0x00000500") &&
+            missingVector.rows().get(0).frontierPath().equals("NONE") &&
+            missingVector.rows().get(0).flowUncertain(),
+            "recognized pointer without an included function body remains checked missing");
+        var dualNodes=List.of(
+            new HardwareCallEffects.FunctionNode(0x900L,false,false,false,
+                List.of(0x940L,0x920L)),
+            new HardwareCallEffects.FunctionNode(0x920L,false,false,true,
+                List.of()),
+            new HardwareCallEffects.FunctionNode(0x940L,false,false,false,
+                List.of(0x942L)),
+            new HardwareCallEffects.FunctionNode(0x942L,false,false,false,
+                List.of(0x944L)),
+            new HardwareCallEffects.FunctionNode(0x944L,false,false,false,
+                List.of(0x946L)),
+            new HardwareCallEffects.FunctionNode(0x946L,false,false,false,
+                List.of(0x948L)),
+            new HardwareCallEffects.FunctionNode(0x948L,true,false,false,
+                List.of()));
+        var dualVector=HardwareVectorResetCorrelation.inspect(
+            true,true,Set.of(0x100L),
+            List.of(new HardwareVectorResetCorrelation.Target(
+                57,0x900L,0x900L,true)),dualNodes,12);
+        var dualRow=dualVector.rows().get(0);
+        check(dualRow.observedUnknownPath().equals(
+                "UNKNOWN_FLOW -> 0x00000900 -> 0x00000920") &&
+            dualRow.frontierPath().equals(
+                "DEPTH_CUTOFF -> 0x00000900 -> 0x00000940 -> "+
+                "0x00000942 -> 0x00000944 -> 0x00000946 -> 0x00000948") &&
+            dualRow.storeSourcePath().equals("NONE") &&
+            dualRow.memoryStoreEffect().equals("UNKNOWN"),
+            "independent observed UNKNOWN and uninspected MM candidate both visible");
+        check(dualVector.equals(HardwareVectorResetCorrelation.inspect(
+                true,true,Set.of(0x100L),
+                List.of(new HardwareVectorResetCorrelation.Target(
+                    57,0x900L,0x900L,true)),
+                List.of(dualNodes.get(6),dualNodes.get(4),dualNodes.get(3),
+                    dualNodes.get(1),dualNodes.get(0),dualNodes.get(5),
+                    dualNodes.get(2)),12)),
+            "vector source witnesses independent of function-node listing order");
+        var displayCap=HardwareVectorResetCorrelation.inspect(
+            true,false,Set.of(0x100L),
+            List.of(new HardwareVectorResetCorrelation.Target(
+                    58,0x130L,0x130L,true),
+                new HardwareVectorResetCorrelation.Target(
+                    59,0x700L,0x700L,true)),
+            graph,1);
+        check(displayCap.recognizedTargets()==2 &&
+            displayCap.rows().size()==1 && displayCap.displayTruncated() &&
+            displayCap.rows().get(0).storeSourcePath().contains("0x00000160"),
+            "vector row cap preserves complete counts and shown source witnesses");
+        boolean invalidWitness=false;
+        try {new HardwareVectorResetCorrelation.Row(2,0x100L,0x100L,
+                HardwareVectorResetCorrelation.Relation.RESET_ROOT_UNKNOWN,
+                "UNKNOWN","UNKNOWN",true,null,"NONE","NONE","NONE");}
+        catch(IllegalArgumentException expected){invalidWitness=true;}
+        check(invalidWitness,"null typed source-cell is not a valid vector report");
         System.out.println("HardwareVectorResetCorrelationSelfTest PASS: assertions="+assertions);
     }
 }
