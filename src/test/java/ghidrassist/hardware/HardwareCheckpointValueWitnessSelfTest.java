@@ -215,6 +215,93 @@ public final class HardwareCheckpointValueWitnessSelfTest {
             check(!HardwareDurableFunctionStages.save(dir,full,
                 0x100,400,wrapSteps,targets,modifiedSigned),
                 "Signed index cannot be laundered into a different address");
+            // A direct literal STORE must preserve its encoded target and
+            // word, not merely a plausible 24-bit address/16-bit number.
+            var directSteps=List.of(
+                new HardwareDataflow.Step(0x100,STORE_DIRECT,
+                    null,0xfffa00L,0,0x40ca,16,List.of(0x102L),
+                    "MOVE.W #40ca,$FFFA00"),
+                new HardwareDataflow.Step(0x102,OTHER,null,0,0,null,0,
+                    List.of(),"RTS"));
+            var direct=HardwareDataflow.analyze(
+                0x100,directSteps,targets,400);
+            check(HardwareDurableFunctionStages.save(dir,full,
+                    0x100,400,directSteps,targets,direct) &&
+                HardwareDurableFunctionStages.load(dir,full,
+                    0x100,400,directSteps,targets).isPresent(),
+                "Direct literal STORE is independently source-consistent");
+            var d=direct.snapshots.get(0);
+            check(!HardwareDurableFunctionStages.save(dir,full,0x100,400,
+                    directSteps,targets,changed(direct,0,edit(
+                        d,0xfffa68L,d.writtenWord,d.vbr,
+                        d.knownPeripheralWords))) &&
+                !HardwareDurableFunctionStages.save(dir,full,0x100,400,
+                    directSteps,targets,changed(direct,0,edit(
+                        d,d.effectiveAddress,0x40cb,d.vbr,
+                        d.knownPeripheralWords))),
+                "Direct STORE target and immediate cannot be forged");
+
+            // A partial byte write invalidates an overlapped full 16-bit
+            // word. No previous complete constant may reappear from a
+            // synthetic post-STORE checkpoint at that register.
+            var partialSteps=List.of(
+                step(0x100,SET_POINTER,"A0",0xfffa00L,null,0,0x102),
+                new HardwareDataflow.Step(0x102,STORE_INDIRECT,
+                    "A0",0,0,0xca,8,List.of(0x104L),"MOVE.B #ca,(A0)"),
+                new HardwareDataflow.Step(0x104,OTHER,null,0,0,null,0,
+                    List.of(),"RTS"));
+            var partial=HardwareDataflow.analyze(
+                0x100,partialSteps,targets,400);
+            check(partial.snapshots.get(0).knownPeripheralWords.isEmpty() &&
+                HardwareDurableFunctionStages.save(dir,full,0x100,400,
+                    partialSteps,targets,partial),
+                "Partial width leaves whole MMIO register UNKNOWN");
+            var ps=partial.snapshots.get(0);
+            var fakeWord=changed(partial,0,edit(ps,ps.effectiveAddress,
+                ps.writtenWord,ps.vbr,Map.of(0xfffa00L,0x40ca)));
+            check(!HardwareDurableFunctionStages.save(dir,full,0x100,400,
+                partialSteps,targets,fakeWord),
+                "Byte STORE cannot invent a known complete 16-bit register");
+
+            // A missing A-register target clears the tracked peripheral
+            // lattice; knowing the literal alone cannot authorize MMIO.
+            var missingAddressSteps=List.of(
+                new HardwareDataflow.Step(0x100,STORE_INDIRECT,
+                    "A0",0,0,0x40ca,16,List.of(0x102L),"MOVE.W #40ca,(A0)"),
+                new HardwareDataflow.Step(0x102,OTHER,null,0,0,null,0,
+                    List.of(),"RTS"));
+            var unresolved=HardwareDataflow.analyze(
+                0x100,missingAddressSteps,targets,400);
+            var u=unresolved.snapshots.get(0);
+            check(u.effectiveAddress==null &&
+                u.knownPeripheralWords.isEmpty() &&
+                HardwareDurableFunctionStages.save(dir,full,0x100,400,
+                    missingAddressSteps,targets,unresolved),
+                "Unknown indirect pointer remains UNKNOWN even with literal");
+            check(!HardwareDurableFunctionStages.save(dir,full,0x100,400,
+                missingAddressSteps,targets,changed(unresolved,0,
+                    edit(u,null,u.writtenWord,u.vbr,
+                        Map.of(0xfffa00L,0x40ca)))),
+                "Unknown A0 cannot fabricate complete SIMCR peripheral evidence");
+
+            // Physical bus wiring or executing an instruction is not
+            // implied by modulo-24 source arithmetic at 0xFFFFFE + 2.
+            var wrapSteps24=List.of(
+                step(0x100,SET_POINTER,"A0",0xfffffeL,null,0,0x102),
+                step(0x102,SET_POINTER,"D1",1L,null,0,0x104),
+                new HardwareDataflow.Step(0x104,"A0",null,"D1",
+                    16,2,0,0x40ca,16,List.of(0x106L),
+                    "modulo24 indexed source"),
+                new HardwareDataflow.Step(0x106,OTHER,null,0,0,null,0,
+                    List.of(),"RTS"));
+            var wrap=HardwareDataflow.analyze(
+                0x100,wrapSteps24,Set.of(0L),400);
+            check(wrap.snapshots.get(0).effectiveAddress==0L &&
+                HardwareDurableFunctionStages.save(dir,full,0x100,400,
+                    wrapSteps24,Set.of(0L),wrap) &&
+                HardwareDurableFunctionStages.load(dir,full,0x100,400,
+                    wrapSteps24,Set.of(0L)).isPresent(),
+                "Modulo24 source calculation remains consistent at wrap boundary");
             System.out.println(
                 "HardwareCheckpointValueWitnessSelfTest OK: synthetic read-only source");
         }finally {
