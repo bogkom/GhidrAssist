@@ -137,3 +137,15 @@ This test touches synthetic/private test data only; no actual
 ECU411 firmware or production Ghidra project is opened or changed.
 The work remains within GitHub Actions, with the historical
 Wyse/Precision and legacy Supervisor services stopped.
+
+## 2026-11-10 — conflicting source PCs cannot approve hardware names
+
+Conservative role proposals detect contradictory observations claiming that
+one instruction PC writes two different peripheral register names in the
+same function/revision. Such a function is `EVIDENCE_TOO_WEAK`, with an empty
+proposed rename, and the seven-column CSV retains that refusal. Exact
+repeated observations of one register at the same PC still deduplicate.
+This prevents cross-snapshot contradictory source rows from reaching the
+existing Review/Apply transaction gate; the live name, Program identity,
+modification number, MC68332 selection, symbol collisions and receipt
+persistence continue to be rechecked inside the undoable transaction.
