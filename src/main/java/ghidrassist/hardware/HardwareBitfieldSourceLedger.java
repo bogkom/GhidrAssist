@@ -83,6 +83,13 @@ public final class HardwareBitfieldSourceLedger {
         List<Entry> collected=new ArrayList<>();
         int excluded=0;
         for(HardwareProfiles.Register register:profile.registers) {
+            // Historical 15-row SIMCR/SYNCR evidence, independently
+            // reviewed against D-5/D-6/D-7, remains deliberately scoped.
+            // The D-10/D-11 protection/timer field set is independently
+            // audited by HardwareSimProtectionTimerWitness; including it
+            // here would incorrectly claim those rows were in D-5/D-7.
+            if(!register.name.equals("SIMCR") &&
+                    !register.name.equals("SYNCR"))continue;
             for(HardwareProfiles.BitField field:register.fields) {
                 var range=ManualPdfPageClaim.physicalRange(field.sourcePage);
                 if(range==null) {

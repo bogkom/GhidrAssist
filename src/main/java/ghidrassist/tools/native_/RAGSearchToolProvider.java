@@ -80,9 +80,9 @@ public final class RAGSearchToolProvider implements ToolProvider {
         citedProps.add("filename",stringProperty(
             "Exact indexed MC68332UM PDF source filename"));
         citedProps.add("register",stringProperty(
-            "SIMCR or SYNCR; reviewed field description scope only"));
+            "SIMCR/SYNCR/SYPCR/PICR/PITR; reviewed MC68332 fields only"));
         citedProps.add("field",stringProperty(
-            "Optional single field such as MM, W, X, Y or STEXT"));
+            "Optional reviewed field e.g. MM, SWE, SWT, PIRQL, PITM"));
         citedProps.add("scope",scopeProperty());
         citations.add("properties",citedProps);
         JsonArray citationRequired=new JsonArray();
@@ -101,7 +101,7 @@ public final class RAGSearchToolProvider implements ToolProvider {
                 page, getProviderName()),
             new NativeTool(FIELD,
                 "Read reviewed MC68332UM field heading, meaning, source folio "
-                + "and SHA-256 evidence from a single indexed D-5/D-6/D-7 snapshot. "
+                + "and SHA-256 evidence from one indexed D-5/D-6/D-7 or D-10/D-11 source snapshot. "
                 + "Explicit MC68332 required; index-time text NOT PDF authentication.",
                 citations,getProviderName()));
     }
@@ -190,20 +190,31 @@ public final class RAGSearchToolProvider implements ToolProvider {
                         return ToolResult.error(
                             "Explicit device=MC68332 required, not generic CPU32");
                     String filename=args.get("filename").getAsString().trim();
+                    String register=args.get("register").getAsString().trim()
+                        .toUpperCase(java.util.Locale.ROOT);
+                    boolean newFields=register.equals("SYPCR") ||
+                        register.equals("PICR") || register.equals("PITR");
+                    if(!newFields && !register.equals("SIMCR") &&
+                            !register.equals("SYNCR"))
+                        return ToolResult.error("Unreviewed MC68332 register");
+                    List<Integer> physicalPages=newFields?
+                        ghidrassist.core.RAGSimProtectionTimerCitationView.PAGES:
+                        ghidrassist.core.RAGManualFieldCitationView.PAGES;
                     var pages=RAGEngine.getIndexedPdfPagesEvidence(
-                        filename,ghidrassist.core.RAGManualFieldCitationView.PAGES);
+                        filename,physicalPages);
                     ghidrassist.core.RAGIndexedPdfPageEvidence
                         .requireOneIndexedDocument(pages);
                     if(scope.equals("selected") &&
-                            !active.contains(pages.get(219).libraryId()))
+                            !active.contains(pages.get(physicalPages.get(0)).libraryId()))
                         return ToolResult.error(
                             "Document not in selected program's active RAG library");
-                    String text=ghidrassist.core.RAGManualFieldCitationView.render(
-                        args.get("device").getAsString(),
-                        filename,
-                        args.get("register").getAsString(),
-                        args.has("field")?args.get("field").getAsString():null,
-                        pages);
+                    String field=args.has("field")?
+                        args.get("field").getAsString():null;
+                    String text=newFields?
+                        ghidrassist.core.RAGSimProtectionTimerCitationView.render(
+                            "MC68332",filename,register,field,pages):
+                        ghidrassist.core.RAGManualFieldCitationView.render(
+                            "MC68332",filename,register,field,pages);
                     return ToolResult.success(text);
                 }
 

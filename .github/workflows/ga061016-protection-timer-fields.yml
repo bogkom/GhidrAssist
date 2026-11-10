@@ -1,0 +1,56 @@
+name: GA-06/10/16 MC68332 SYPCR PICR PITR source field regression
+on:
+  pull_request:
+    paths:
+      - 'src/main/java/ghidrassist/hardware/HardwareProfiles.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareBitfieldDecoder.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareBitfieldSourceLedger.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareSimProtectionTimerWitness.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareSimProtectionTimerPublisherPins.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareSimProtectionTimerWitnessSelfTest.java'
+      - 'src/main/java/ghidrassist/core/RAGSimProtectionTimerCitationView.java'
+      - 'src/test/java/ghidrassist/core/RAGSimProtectionTimerCitationViewSelfTest.java'
+      - 'src/main/java/ghidrassist/tools/native_/RAGSearchToolProvider.java'
+      - '.github/workflows/ga061016-protection-timer-fields.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  java21-actual-source-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Compile independent register and RAG source-citation regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/sim-protection"
+          javac --release 21 -d "$RUNNER_TEMP/sim-protection" \
+            src/main/java/ghidrassist/hardware/HardwareProfiles.java \
+            src/main/java/ghidrassist/hardware/ManualPdfPageClaim.java \
+            src/main/java/ghidrassist/hardware/HardwareBitfieldSourceLedger.java \
+            src/main/java/ghidrassist/hardware/HardwareBitfieldDecoder.java \
+            src/main/java/ghidrassist/hardware/HardwareSimProtectionTimerWitness.java \
+            src/main/java/ghidrassist/hardware/HardwareSimProtectionTimerPublisherPins.java \
+            src/main/java/ghidrassist/core/SearchResult.java \
+            src/main/java/ghidrassist/core/RAGIndexedPdfPageEvidence.java \
+            src/main/java/ghidrassist/core/RAGSourceProvenance.java \
+            src/main/java/ghidrassist/core/RAGSimProtectionTimerCitationView.java \
+            src/test/java/ghidrassist/hardware/HardwareSimProtectionTimerWitnessSelfTest.java \
+            src/test/java/ghidrassist/core/RAGSimProtectionTimerCitationViewSelfTest.java \
+            src/test/java/ghidrassist/hardware/HardwareBitfieldDecoderSelfTest.java \
+            src/test/java/ghidrassist/hardware/HardwareProfilesSelfTest.java
+          java -cp "$RUNNER_TEMP/sim-protection" \
+            ghidrassist.hardware.HardwareSimProtectionTimerWitnessSelfTest
+          java -cp "$RUNNER_TEMP/sim-protection" \
+            ghidrassist.core.RAGSimProtectionTimerCitationViewSelfTest
+          java -cp "$RUNNER_TEMP/sim-protection" \
+            ghidrassist.hardware.HardwareBitfieldDecoderSelfTest
+          java -cp "$RUNNER_TEMP/sim-protection" \
+            ghidrassist.hardware.HardwareProfilesSelfTest
+          echo 'JAVA21 10-FIELD READONLY SOURCE/DECODE/RAG PASS'

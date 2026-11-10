@@ -89,7 +89,23 @@ public final class HardwareProfilesSelfTest {
                 check(occupiedBytes.add(start+byteOffset),
                     "overlapping register bytes at " + Long.toHexString(start+byteOffset));
         }
-        check(m.register("SYPCR").offset==0x0a21, "byte-oriented SYPCR");
+        check(m.register("SYPCR").offset==0x0a21 &&
+                m.register("SYPCR").widthBits==8 &&
+                m.register("SYPCR").fields.size()==6 &&
+                m.register("SYPCR").resetValue==null,
+            "SYPCR byte-oriented six sourced fields, reset conditional");
+        check(m.register("PICR").fields.size()==2 &&
+                m.register("PITR").fields.size()==2 &&
+                m.register("PICR").resetValue==null &&
+                m.register("PITR").resetValue==null,
+            "PICR/PITR 16-bit two-field source claims no runtime reset");
+        check(m.register("SYPCR").fields.stream().allMatch(x->
+                x.sourcePage.equals("D-10 (PDF page 224)")) &&
+              m.register("PICR").fields.stream().allMatch(x->
+                x.sourcePage.equals("D-11 (PDF page 225)")) &&
+              m.register("PITR").fields.stream().allMatch(x->
+                x.sourcePage.equals("D-11 (PDF page 225)")),
+            "new field descriptions anchored to exact printed/physical PDF folios");
         check(m.register("PEPAR").offset==0x0a17, "byte-oriented PEPAR");
         check(m.register("PFPAR").offset==0x0a1f, "byte-oriented PFPAR");
         check(m.register("QILR").offset==0x0c04 &&

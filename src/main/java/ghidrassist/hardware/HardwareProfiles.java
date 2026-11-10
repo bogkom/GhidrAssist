@@ -243,8 +243,30 @@ public final class HardwareProfiles {
         r.add(reg("SIM", "CREG", 0x0a38, 16, source));
         r.add(reg("SIM", "DREG", 0x0a3a, 16, source));
         // Additional SIM register locations from MC68332UM Table D-2.
-        r.add(new Register("SIM","SYPCR",0x0a21,8,List.of(),source,
-            "D-4 (PDF page 218)",Access.SUPERVISOR,WritePolicy.UNKNOWN,null));
+        // MC68332UM Motorola 1995, printed D-10 / physical PDF 224.
+        // SYPCR is an EIGHT-BIT register; upper 15:8 of the pictured
+        // longword are NOT USED. The manual says the register can be
+        // written ONCE after power-on/reset; these are static source
+        // candidates, not proof that the watchdog or monitor is enabled.
+        List<BitField> sypcrFields=List.of(
+            new BitField("SWE",0x80,"Software watchdog enable",
+                null,"D-10 (PDF page 224)",true),
+            new BitField("SWP",0x40,"Software watchdog prescale",
+                null,"D-10 (PDF page 224)",true),
+            new BitField("SWT",0x30,"Software watchdog timing bits 5:4",
+                null,"D-10 (PDF page 224)",true),
+            new BitField("HME",0x08,"Halt monitor enable",
+                null,"D-10 (PDF page 224)",true),
+            new BitField("BME",0x04,"External bus monitor enable",
+                null,"D-10 (PDF page 224)",true),
+            new BitField("BMT",0x03,"Bus monitor timing bits 1:0",
+                null,"D-10 (PDF page 224)",true));
+        // D-4/Table D-2 is the independently checked address citation.
+        // D-10 is the separate diagram/description citation for fields.
+        r.add(new Register("SIM","SYPCR",0x0a21,8,sypcrFields,
+            source+" ; MC68332UM Motorola 1995 D.2.12 (PDF 224)",
+            "D-4 (PDF page 218)",Access.SUPERVISOR,
+            WritePolicy.UNKNOWN,null));
         r.add(new Register("SIM","SWSR",0x0a27,8,List.of(),source,
             "D-4 (PDF page 218)",Access.SUPERVISOR,WritePolicy.UNKNOWN,null));
         r.add(new Register("SIM","PORTE0",0x0a11,8,List.of(),source,
@@ -266,12 +288,28 @@ public final class HardwareProfiles {
         r.add(new Register("SIM", "RSR", 0x0a07, 8, List.of(), source,
             "D-4/D-7 (PDF pages 218/221)", Access.SUPERVISOR,
             WritePolicy.READ_ONLY, null));
-        r.add(new Register("SIM", "PICR", 0x0a22, 16, List.of(), source,
+        // Motorola 1995 MC68332UM, D.2.13/D.2.14, printed D-11,
+        // physical PDF 225. PICR[15:11] unimplemented, PITR[15:9]
+        // not used. Complete 16-bit literal only; PICR PIV does NOT
+        // prove interrupt enablement and PITR does NOT prove active timer.
+        List<BitField> picrFields=List.of(
+            new BitField("PIRQL",0x0700,"Periodic interrupt request level",
+                null,"D-11 (PDF page 225)",false),
+            new BitField("PIV",0x00ff,"Periodic interrupt vector number",
+                null,"D-11 (PDF page 225)",false));
+        List<BitField> pitrFields=List.of(
+            new BitField("PTP",0x0100,"Periodic interrupt timer prescaler",
+                null,"D-11 (PDF page 225)",false),
+            new BitField("PITM",0x00ff,"Periodic interrupt timer modulus",
+                null,"D-11 (PDF page 225)",false));
+        r.add(new Register("SIM", "PICR", 0x0a22, 16, picrFields,
+            source+" ; MC68332UM Motorola 1995 D.2.13 (PDF 225)",
             "D-4 (PDF page 218)", Access.SUPERVISOR,
-            WritePolicy.UNKNOWN, null));
-        r.add(new Register("SIM", "PITR", 0x0a24, 16, List.of(), source,
+            WritePolicy.READ_WRITE, null));
+        r.add(new Register("SIM", "PITR", 0x0a24, 16, pitrFields,
+            source+" ; MC68332UM Motorola 1995 D.2.14 (PDF 225)",
             "D-4 (PDF page 218)", Access.SUPERVISOR,
-            WritePolicy.UNKNOWN, null));
+            WritePolicy.READ_WRITE, null));
         r.add(new Register("SIM","CSPAR0",0x0a44,16,List.of(),source,
             "D-4 (PDF page 218)",Access.SUPERVISOR,
             WritePolicy.UNKNOWN,null));

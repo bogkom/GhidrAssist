@@ -4,6 +4,11 @@ on:
     paths:
       - '.github/workflows/ga10-ga16-official-mc68332-pdf.yml'
       - 'src/main/java/ghidrassist/hardware/HardwareProfiles.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareSimProtectionTimerWitness.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareSimProtectionTimerPublisherPins.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareSimProtectionTimerWitnessSelfTest.java'
+      - 'src/main/java/ghidrassist/core/RAGSimProtectionTimerCitationView.java'
+      - 'src/test/java/ghidrassist/core/RAGSimProtectionTimerCitationViewSelfTest.java'
       - 'src/main/java/ghidrassist/hardware/HardwareBitfieldSourceLedger.java'
       - 'src/main/java/ghidrassist/hardware/HardwareBitfieldPageWitness.java'
       - 'src/main/java/ghidrassist/hardware/HardwareBitfieldLayoutWitness.java'
@@ -65,7 +70,7 @@ jobs:
           pdf="$MC68332_PDF"
           pages="$(pdfinfo "$pdf" | awk '/^Pages:/ {print $2}')"
           test "$pages" = 265
-          for page in 218 219 220 221; do
+          for page in 218 219 220 221 224 225; do
             pdftotext -f "$page" -l "$page" -layout "$pdf" "$RUNNER_TEMP/page-$page.txt"
             test -s "$RUNNER_TEMP/page-$page.txt"
           done
@@ -75,7 +80,14 @@ jobs:
           grep -Fq 'SYNCR' "$RUNNER_TEMP/page-220.txt"
           grep -Fq 'STEXT' "$RUNNER_TEMP/page-221.txt"
           grep -Fq 'RSR' "$RUNNER_TEMP/page-221.txt"
-          echo 'PHYSICAL_PDF_FOLIOS_219_220_221_PASS; no PDF bytes uploaded'
+          grep -Fq 'SYPCR' "$RUNNER_TEMP/page-224.txt"
+          grep -Fq 'SWE' "$RUNNER_TEMP/page-224.txt"
+          grep -Fq 'SWT' "$RUNNER_TEMP/page-224.txt"
+          grep -Fq 'PICR' "$RUNNER_TEMP/page-225.txt"
+          grep -Fq 'PIRQL' "$RUNNER_TEMP/page-225.txt"
+          grep -Fq 'PITR' "$RUNNER_TEMP/page-225.txt"
+          grep -Fq 'PITM' "$RUNNER_TEMP/page-225.txt"
+          echo 'PHYSICAL_PDF_FOLIOS_219_220_221_224_225_PASS; no PDF bytes uploaded'
       - name: Verify per-field text matches explicitly claimed publisher PDF folios
         shell: bash
         run: |
@@ -85,6 +97,8 @@ jobs:
             src/main/java/ghidrassist/hardware/HardwareProfiles.java \
             src/main/java/ghidrassist/hardware/ManualPdfPageClaim.java \
             src/main/java/ghidrassist/hardware/HardwareBitfieldSourceLedger.java \
+            src/main/java/ghidrassist/hardware/HardwareSimProtectionTimerWitness.java \
+            src/main/java/ghidrassist/hardware/HardwareSimProtectionTimerPublisherPins.java \
             src/main/java/ghidrassist/hardware/HardwareBitfieldPageWitness.java \
             src/main/java/ghidrassist/hardware/HardwareBitfieldLayoutWitness.java \
             src/main/java/ghidrassist/hardware/HardwareManualFieldExcerptEvidence.java \
@@ -96,6 +110,7 @@ jobs:
             src/test/java/ghidrassist/hardware/HardwareSimChipSelectTableWitnessSelfTest.java \
             src/test/java/ghidrassist/hardware/HardwareBitfieldLayoutWitnessSelfTest.java \
             src/test/java/ghidrassist/hardware/HardwareManualFieldExcerptEvidenceSelfTest.java \
+            src/test/java/ghidrassist/hardware/HardwareSimProtectionTimerWitnessSelfTest.java \
             src/test/java/ghidrassist/hardware/HardwareBitfieldPageWitnessSelfTest.java
           java -cp "$RUNNER_TEMP/mc68332-field-witness" \
             ghidrassist.hardware.HardwareBitfieldPageWitnessSelfTest \
@@ -135,3 +150,11 @@ jobs:
             "$RUNNER_TEMP/page-219.txt" "$RUNNER_TEMP/page-220.txt" \
             "$RUNNER_TEMP/page-221.txt"
           echo 'PINNED PUBLISHER PAGE+EDITION+EXCERPT 15-FIELD SOURCE PASS; source only'
+
+          # D-10 and D-11 are PHYSICAL pages 224 and 225 (1 based).
+          # Profile claims 6 SYPCR byte fields and 4 PICR/PITR word
+          # fields; static reset, watchdog and ISR activation NOT inferred.
+          java -cp "$RUNNER_TEMP/mc68332-field-witness" \
+            ghidrassist.hardware.HardwareSimProtectionTimerWitnessSelfTest \
+            "$RUNNER_TEMP/page-224.txt" "$RUNNER_TEMP/page-225.txt"
+          echo 'PUBLISHER SYPCR/PICR/PITR D-10/D-11 10-FIELD SOURCE PASS'

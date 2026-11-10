@@ -153,6 +153,51 @@ public final class HardwareBitfieldDecoderSelfTest {
             sourceZero.fields().stream().allMatch(field->field.value()==0) &&
             mc.register("SYNCR").resetValue==null,
             "decoded zero value from a synthetic literal is NOT a reset assertion");
+        var syp=HardwareBitfieldDecoder.decode(mc,"SYPCR",0xac,8);
+        check(syp.status()==HardwareBitfieldDecoder.Status.DECODED &&
+                syp.fields().size()==6 && syp.unspecifiedMask()==0 &&
+                syp.fields().stream().allMatch(x->x.writeOnceAfterReset()) &&
+                syp.summary().contains("first accepted write NOT PROVEN"),
+            "SYPCR six 8-bit sourced fields with WRITE-ONCE caution");
+        var sypVals=new java.util.HashMap<String,Integer>();
+        for(var v:syp.fields())sypVals.put(v.name(),v.value());
+        check(sypVals.get("SWE")==1 && sypVals.get("SWP")==0 &&
+                sypVals.get("SWT")==2 && sypVals.get("HME")==1 &&
+                sypVals.get("BME")==1 && sypVals.get("BMT")==0 &&
+                mc.register("SYPCR").resetValue==null,
+            "SYPCR 0xAC masked static values, not reset or runtime");
+        check(HardwareBitfieldDecoder.decode(mc,"SYPCR",0xac,16).status()
+                ==HardwareBitfieldDecoder.Status.WIDTH_MISMATCH &&
+              HardwareBitfieldDecoder.decode(mc,"SYPCR",0x1ac,8).status()
+                ==HardwareBitfieldDecoder.Status.VALUE_OUT_OF_RANGE &&
+              HardwareBitfieldDecoder.decode(cpu,"SYPCR",0xac,8).status()
+                ==HardwareBitfieldDecoder.Status.DEVICE_NOT_SELECTED,
+            "reject word write, out-of-range byte and generic CPU32");
+        var pic=HardwareBitfieldDecoder.decode(mc,"PICR",0x07ff,16);
+        check(pic.fields().size()==2 &&
+                pic.unspecifiedMask()==0xf800 &&
+                pic.fields().stream().anyMatch(x->
+                    x.name().equals("PIRQL") && x.value()==7) &&
+                pic.fields().stream().anyMatch(x->
+                    x.name().equals("PIV") && x.value()==0xff) &&
+                pic.summary().contains("no active interrupt"),
+            "PICR seven request levels/8-bit vector candidates, no ISR execution");
+        var pit=HardwareBitfieldDecoder.decode(mc,"PITR",0x01a5,16);
+        check(pit.fields().size()==2 &&
+                pit.unspecifiedMask()==0xfe00 &&
+                pit.fields().stream().anyMatch(x->
+                    x.name().equals("PTP") && x.value()==1) &&
+                pit.fields().stream().anyMatch(x->
+                    x.name().equals("PITM") && x.value()==0xa5) &&
+                pit.summary().contains("no active interrupt"),
+            "PITR static prescaler/timing modulus without running timer");
+        check(HardwareBitfieldDecoder.decode(mc,"PICR",0x07ff,8).status()
+                ==HardwareBitfieldDecoder.Status.WIDTH_MISMATCH &&
+              HardwareBitfieldDecoder.decode(mc,"PITR",null,16).status()
+                ==HardwareBitfieldDecoder.Status.VALUE_UNKNOWN &&
+              HardwareBitfieldDecoder.decode(mc,"SWSR",0x55,8).status()
+                ==HardwareBitfieldDecoder.Status.NO_SOURCED_FIELDS,
+            "partial PICR, unknown PITR, and SWSR service sequence never decoded as fields");
         System.out.println("HardwareBitfieldDecoderSelfTest OK");
     }
 }
