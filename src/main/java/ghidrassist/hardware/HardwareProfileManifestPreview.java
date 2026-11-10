@@ -23,9 +23,9 @@ public final class HardwareProfileManifestPreview {
     public record Source(String device,String manualId,String url,
                          String edition,String claimedSha256) {
         public Source {
-            id(device,0);
-            id(manualId,0);
-            documentUrl(url,0);
+            HardwareProfileManifestPreview.id(device,0);
+            HardwareProfileManifestPreview.id(manualId,0);
+            HardwareProfileManifestPreview.documentUrl(url,0);
             if(edition==null || !edition.matches("[A-Za-z0-9 ._/-]{1,64}") ||
                     claimedSha256==null ||
                     !("UNKNOWN".equals(claimedSha256) ||
@@ -35,8 +35,8 @@ public final class HardwareProfileManifestPreview {
     }
     public record Module(String id,int offset,int size,String page) {
         public Module {
-            id(id,0);
-            page(page,0);
+            HardwareProfileManifestPreview.id(id,0);
+            HardwareProfileManifestPreview.page(page,0);
             if(offset<0 || size<1 || (long)offset+size>4096)
                 throw new IllegalArgumentException("Invalid external module aperture");
         }
@@ -45,9 +45,9 @@ public final class HardwareProfileManifestPreview {
     public record Register(String module,String name,int offset,
                            int widthBits,String page) {
         public Register {
-            id(module,0);
-            id(name,0);
-            page(page,0);
+            HardwareProfileManifestPreview.id(module,0);
+            HardwareProfileManifestPreview.id(name,0);
+            HardwareProfileManifestPreview.page(page,0);
             if(widthBits!=8 && widthBits!=16 && widthBits!=32 ||
                     offset<0 || (long)offset+widthBits/8>4096 ||
                     offset%(widthBits/8)!=0)
@@ -57,9 +57,9 @@ public final class HardwareProfileManifestPreview {
     }
     public record Field(String register,String name,long mask,String page) {
         public Field {
-            id(register,0);
-            id(name,0);
-            page(page,0);
+            HardwareProfileManifestPreview.id(register,0);
+            HardwareProfileManifestPreview.id(name,0);
+            HardwareProfileManifestPreview.page(page,0);
             if(mask<1 || mask>0xffffffffL)
                 throw new IllegalArgumentException("Invalid external field mask");
         }
