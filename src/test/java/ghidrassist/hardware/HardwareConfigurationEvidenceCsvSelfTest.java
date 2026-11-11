@@ -149,7 +149,7 @@ public final class HardwareConfigurationEvidenceCsvSelfTest {
 
         // The total cap includes omission markers, not just evidence rows.
         String nearCap=HardwareConfigurationEvidenceCsv.HEADER+
-            blankRow.repeat(HardwareConfigurationEvidenceCsv.MAX_ROWS-1);
+            store.repeat(HardwareConfigurationEvidenceCsv.MAX_ROWS-1);
         String capped=HardwareConfigurationEvidenceCsv.withUnifiedSources(
             nearCap,merged,true);
         check(capped.split("\\n",-1).length-2==
@@ -160,7 +160,7 @@ public final class HardwareConfigurationEvidenceCsvSelfTest {
         boolean noMarkerRoom=false;
         try{HardwareConfigurationEvidenceCsv.withUnifiedSources(
             HardwareConfigurationEvidenceCsv.HEADER+
-            blankRow.repeat(HardwareConfigurationEvidenceCsv.MAX_ROWS),
+            store.repeat(HardwareConfigurationEvidenceCsv.MAX_ROWS),
             merged,true);}
         catch(IllegalArgumentException expected){noMarkerRoom=true;}
         check(noMarkerRoom,"full source CSV refuses unreportable merged omissions");
