@@ -136,7 +136,8 @@ public final class HardwareResetFlow {
                     evidence.size()>MAX_EVIDENCE ||
                     visitedFunctions<0 || visitedFunctions>MAX_NODES ||
                     visitedEntries.size()!=visitedFunctions ||
-                    !rootRecognized && visitedFunctions!=0 ||
+                    rootRecognized != (visitedFunctions>0) ||
+                    !rootRecognized && (!unresolved || recursive || truncated) ||
                     recursive && (!unresolved || visitedFunctions==0) ||
                     truncated && !unresolved)
                 throw new IllegalArgumentException(
@@ -146,12 +147,21 @@ public final class HardwareResetFlow {
                         entry>HardwareCallEffects.MAX_CPU32_ADDRESS)
                     throw new IllegalArgumentException(
                         "Invalid RESET visited-function identity");
+            String sourceRoot=null;
             Set<Long> evidenceIds=new HashSet<>();
             for(Evidence source:evidence) {
                 if(source==null || !evidenceIds.add(source.functionEntry()) ||
                         !visitedEntries.contains(source.functionEntry()))
                     throw new IllegalArgumentException(
                         "Missing or duplicate RESET source function");
+                String[] chainSteps=source.chain().split(" -> ",-1);
+                if(chainSteps.length>visitedFunctions)
+                    throw new IllegalArgumentException(
+                        "RESET evidence path exceeds inspected functions");
+                if(sourceRoot==null)sourceRoot=chainSteps[0];
+                else if(!sourceRoot.equals(chainSteps[0]))
+                    throw new IllegalArgumentException(
+                        "Conflicting RESET evidence roots");
                 // Every source-only direct-CALL hop is a function already
                 // observed in the bounded BFS. An unvisited frontier is
                 // never displayed as an observed hardware source.

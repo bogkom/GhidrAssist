@@ -1,3 +1,15 @@
+## GA-01/02/11/18 — 2026-11-11: RESET public summary root coherence (pending CI)
+
+The read-only RESET static source Summary constructor now rejects recognized
+roots with no inspected function, missing-root reports without UNKNOWN,
+witness paths longer than the inspected-function count, and multiple
+incompatible source roots in one published inventory. Source graph traversal
+and Review/Apply remain unchanged. Java21 adversarial source regressions,
+full Java25 Ghidra 12.1.4 PUBLIC build and genuine synthetic headless CI
+must pass at the exact PR SHA before integration. This is source-report
+consistency, not proof of executed RESET, latched MM, active ISR/VBR or
+physical bus mapping. GA-01/02/11/18 remain PARTIAL.
+
 ## GA-07/13/18 — 2026-11-11: imported CSV formula provenance
 
 The read-only evidence CSV merger now rejects unescaped spreadsheet formula

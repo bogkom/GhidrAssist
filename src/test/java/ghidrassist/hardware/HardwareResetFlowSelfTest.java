@@ -338,6 +338,22 @@ public final class HardwareResetFlowSelfTest {
                 new HardwareResetFlow.Evidence(
                 1L,"0x00000001",0,false,true)),
             Set.of(1L)));
+        badResetReports.add(()->new HardwareResetFlow.Summary(
+            true,0,true,false,false,List.of(),Set.of()));
+        badResetReports.add(()->new HardwareResetFlow.Summary(
+            false,0,false,false,false,List.of(),Set.of()));
+        badResetReports.add(()->new HardwareResetFlow.Summary(
+            true,4,false,false,false,List.of(
+                new HardwareResetFlow.Evidence(1L,
+                    "0x00000000 -> 0x00000001",1,true,false),
+                new HardwareResetFlow.Evidence(3L,
+                    "0x00000002 -> 0x00000003",1,true,false)),
+                Set.of(0L,1L,2L,3L)));
+        badResetReports.add(()->new HardwareResetFlow.Summary(
+            true,2,false,false,false,List.of(
+                new HardwareResetFlow.Evidence(1L,
+                    "0x00000000 -> 0x00000002 -> 0x00000001",2,true,false)),
+                Set.of(0L,1L)));
         for(Runnable forged:badResetReports) {
             boolean denied=false;
             try {forged.run();}
