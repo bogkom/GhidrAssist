@@ -1,3 +1,16 @@
+## GA-07/13 — 2026-11-11: total CSV row budget includes omission markers (pending CI)
+
+The unified read-only hardware evidence CSV now reserves room for
+OMITTED_MERGED_SITES whenever merged detail and unknown-alias summary
+would exceed the 5000-row total cap. A source CSV already occupying all
+5000 rows fails closed if new merged evidence cannot be represented with
+an omission marker. The standalone serializer likewise reserves a row
+for OMITTED_ROWS, preventing a 5001st record. Deterministic boundary
+regressions check both paths. This is bounded export metadata only;
+no hardware execution, physical map or Review/Apply is inferred.
+GA-07/13 remain PARTIAL pending exact-SHA Java21, full Java25 Ghidra
+12.1.4 PUBLIC build and real synthetic CI verification.
+
 ## GA-07/13 — 2026-11-11: bounded decoded upstream CSV cells (pending exact-SHA CI)
 
 The unified read-only hardware evidence CSV parser now bounds each decoded

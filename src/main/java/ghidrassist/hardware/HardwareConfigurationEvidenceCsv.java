@@ -115,9 +115,13 @@ public final class HardwareConfigurationEvidenceCsv {
         if(merged==null)throw new IllegalArgumentException("Missing merged evidence");
         int rows=validatedSourceRows(rawCsv);
         StringBuilder out=new StringBuilder(rawCsv);
+        int totalExtra=merged.rows().size()+(merged.unboundAliasStores()>0?1:0);
+        int available=MAX_ROWS-rows;
+        if(totalExtra>available && available==0)
+            throw new IllegalArgumentException("No room for CSV omission marker");
         int omitted=0;
         for(HardwareStartupEvidenceMerge.Row s:merged.rows()){
-            if(rows>=MAX_ROWS){omitted++;continue;}
+            if(rows>=MAX_ROWS-(totalExtra>available?1:0)){omitted++;continue;}
             String names= (s.sources().contains(
                 HardwareStartupEvidenceMerge.Source.LISTING_REFERENCE)?"LISTING_REF":"")+
                 (s.sources().contains(HardwareStartupEvidenceMerge.Source.CFG_PCODE)?
@@ -139,13 +143,14 @@ public final class HardwareConfigurationEvidenceCsv {
             rows++;
         }
         if(merged.unboundAliasStores()>0) {
-            if(rows<MAX_ROWS)
+            if(rows<MAX_ROWS-(totalExtra>available?1:0)) {
                 out.append(row("UNBOUND_ALIAS_SUMMARY","","",
                     selectedMc68332?"UNKNOWN_TARGET":"UNVERIFIED_MCU_REGISTER",
                     "UNKNOWN","CFG_PCODE","UNKNOWN","UNKNOWN","UNKNOWN",
                     "UNKNOWN","","UNBOUND_ALIAS_COUNT="+merged.unboundAliasStores(),
                     "true","POSSIBLE_ANY_MMIO_NEVER_AUTO_APPLY"));
-            else omitted++;
+                rows++;
+            } else omitted++;
         }
         if(omitted>0)out.append(row("OMITTED_MERGED_SITES","","","","",
             "","","","","","",
@@ -158,9 +163,13 @@ public final class HardwareConfigurationEvidenceCsv {
         if(stores==null || paths==null)
             throw new IllegalArgumentException("Evidence missing");
         StringBuilder out=new StringBuilder(HEADER);
+        // Reserve the omission marker only if evidence actually exceeds
+        // the budget; exactly MAX_ROWS rows must remain lossless.
+        long requested=(long)stores.sites().size()+paths.size();
+        int detailBudget=requested>MAX_ROWS?MAX_ROWS-1:MAX_ROWS;
         int emitted=0,omitted=0;
         for(HardwareCfgWriteAudit.Finding s:stores.sites()){
-            if(emitted>=MAX_ROWS){omitted++;continue;}
+            if(emitted>=detailBudget){omitted++;continue;}
             out.append(row("STORE",hex(s.function()),hex(s.pc()),
                 mc68332Selected?s.register():"UNVERIFIED_MCU_REGISTER",
                 s.address()<0?"UNKNOWN":hex(s.address()),
@@ -175,7 +184,7 @@ public final class HardwareConfigurationEvidenceCsv {
         }
         for(HardwareCfgStorePaths.Pair p:paths){
             if(p==null)throw new IllegalArgumentException("Null path");
-            if(emitted>=MAX_ROWS){omitted++;continue;}
+            if(emitted>=detailBudget){omitted++;continue;}
             out.append(row("CFG_PATH",hex(p.function()),hex(p.aPc()),
                 mc68332Selected?p.aRegister():"UNVERIFIED_MCU_REGISTER",
                 "UNKNOWN","MODELED_CFG","UNKNOWN","UNKNOWN","UNKNOWN",
