@@ -1,3 +1,13 @@
+## GA-07/13/18 — 2026-11-11: imported CSV formula provenance
+
+The read-only evidence CSV merger now rejects unescaped spreadsheet formula
+prefixes in every decoded imported source cell, including Unicode Cf,
+whitespace and leading TAB. CSV quoting is not a formula defense. The
+existing serializer's apostrophe-prefixed cells remain accepted. Java21
+adversarial regression fixtures are added; full Ghidra 12.1.4 PUBLIC/Java25
+and real synthetic CI on exact SHA are mandatory before merge. This is not
+Apply authorization or evidence of MCU execution.
+
 ## GA-07/13/18 — 2026-11-11: fail-closed source CSV record provenance
 
 The read-only evidence CSV merger now rejects syntactically valid
