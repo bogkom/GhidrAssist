@@ -74,6 +74,7 @@ public final class HardwareConfigurationEvidenceCsv {
                 if(i>=rawCsv.length() || rawCsv.charAt(i++)!='"')
                     throw new IllegalArgumentException("Unquoted source CSV cell");
                 boolean closed=false;
+                int decodedChars=0;
                 while(i<rawCsv.length()) {
                     char c=rawCsv.charAt(i++);
                     if(c=='\r')throw new IllegalArgumentException("CR in source CSV");
@@ -82,6 +83,11 @@ public final class HardwareConfigurationEvidenceCsv {
                         if(i<rawCsv.length() && rawCsv.charAt(i)=='"')i++;
                         else {closed=true;break;}
                     }
+                    // Serialized cells are clipped to 512 UTF-16 units; the
+                    // formula-neutralizing apostrophe may add one more.
+                    // Do not let forged upstream rows bypass that budget.
+                    if(++decodedChars>MAX_CSV_CELL_CHARS+1)
+                        throw new IllegalArgumentException("Oversized source CSV cell");
                 }
                 if(!closed)throw new IllegalArgumentException("Open source CSV quote");
                 fields++;
