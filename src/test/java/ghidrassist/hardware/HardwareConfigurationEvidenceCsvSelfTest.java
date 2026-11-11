@@ -107,9 +107,39 @@ public final class HardwareConfigurationEvidenceCsvSelfTest {
             catch(IllegalArgumentException expected){refused=true;}
             check(refused,"oversized quoted CSV source cell rejected");
         }
-        String blankRow="\"\",".repeat(13)+"\"\"\n";
+        // Quoted, 14-column records are not automatically trustworthy:
+        // the upstream source must never impersonate the merged view or
+        // append more source rows after its sole terminal omission marker.
+        String emptyTail=",\"\"".repeat(13)+"\n";
+        for(String forgedKind : List.of("MERGED_SITE",
+                "UNBOUND_ALIAS_SUMMARY","OMITTED_MERGED_SITES",
+                "UNRECOGNIZED","'=HYPERLINK(1)")) {
+            String forged=HardwareConfigurationEvidenceCsv.HEADER+
+                "\""+forgedKind+"\""+emptyTail;
+            boolean refused=false;
+            try{HardwareConfigurationEvidenceCsv.withUnifiedSources(forged,merged,true);}
+            catch(IllegalArgumentException expected){refused=true;}
+            check(refused,"forged source record type must be rejected");
+        }
+        String omission="\"OMITTED_ROWS\""+emptyTail;
+        String store="\"STORE\""+emptyTail;
+        String path="\"CFG_PATH\""+emptyTail;
+        for(String forged : List.of(
+                omission+omission, omission+store, omission+path,
+                path+store, store+omission+store, store+path+store)) {
+            boolean refused=false;
+            try{HardwareConfigurationEvidenceCsv.withUnifiedSources(
+                HardwareConfigurationEvidenceCsv.HEADER+forged,merged,true);}
+            catch(IllegalArgumentException expected){refused=true;}
+            check(refused,"source ordering and terminal omission marker enforced");
+        }
+        check(HardwareConfigurationEvidenceCsv.withUnifiedSources(
+            HardwareConfigurationEvidenceCsv.HEADER+store+path+omission,
+            HardwareStartupEvidenceMerge.reconcile(List.of()),true)
+            .contains("\"OMITTED_ROWS\""),
+            "canonical source order remains accepted");
         String oversizedRaw=HardwareConfigurationEvidenceCsv.HEADER+
-            blankRow.repeat(HardwareConfigurationEvidenceCsv.MAX_ROWS+1);
+            store.repeat(HardwareConfigurationEvidenceCsv.MAX_ROWS+1);
         boolean overBudget=false;
         try{HardwareConfigurationEvidenceCsv.withUnifiedSources(oversizedRaw,merged,true);}
         catch(IllegalArgumentException expected){overBudget=true;}
@@ -118,7 +148,7 @@ public final class HardwareConfigurationEvidenceCsvSelfTest {
 
         // The total cap includes omission markers, not just evidence rows.
         String nearCap=HardwareConfigurationEvidenceCsv.HEADER+
-            blankRow.repeat(HardwareConfigurationEvidenceCsv.MAX_ROWS-1);
+            store.repeat(HardwareConfigurationEvidenceCsv.MAX_ROWS-1);
         String capped=HardwareConfigurationEvidenceCsv.withUnifiedSources(
             nearCap,merged,true);
         check(capped.split("\\n",-1).length-2==
@@ -129,7 +159,7 @@ public final class HardwareConfigurationEvidenceCsvSelfTest {
         boolean noMarkerRoom=false;
         try{HardwareConfigurationEvidenceCsv.withUnifiedSources(
             HardwareConfigurationEvidenceCsv.HEADER+
-            blankRow.repeat(HardwareConfigurationEvidenceCsv.MAX_ROWS),
+            store.repeat(HardwareConfigurationEvidenceCsv.MAX_ROWS),
             merged,true);}
         catch(IllegalArgumentException expected){noMarkerRoom=true;}
         check(noMarkerRoom,"full source CSV refuses unreportable merged omissions");
@@ -160,7 +190,7 @@ public final class HardwareConfigurationEvidenceCsvSelfTest {
             "exactly 5000 evidence rows remain complete without a false omission");
         String noExtra=HardwareConfigurationEvidenceCsv.withUnifiedSources(
             HardwareConfigurationEvidenceCsv.HEADER+
-            blankRow.repeat(HardwareConfigurationEvidenceCsv.MAX_ROWS),
+            store.repeat(HardwareConfigurationEvidenceCsv.MAX_ROWS),
             HardwareStartupEvidenceMerge.reconcile(List.of()),true);
         check(noExtra.split("\\n",-1).length-2==
             HardwareConfigurationEvidenceCsv.MAX_ROWS &&
