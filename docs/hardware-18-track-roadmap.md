@@ -1,3 +1,15 @@
+## GA-07/13/18 — 2026-11-11: fail-closed source CSV record provenance
+
+The read-only evidence CSV merger now rejects syntactically valid
+14-column imported rows that impersonate MERGED_SITE, unbound-alias or
+omitted-merged views, unknown record types, repeated/early omission markers,
+and source STORE rows after CFG_PATH. Only canonical STORE*, CFG_PATH*,
+optional terminal OMITTED_ROWS source ordering is accepted. The merged
+report still cannot authorize Review/Apply, and this check is a schema
+provenance gate, not a proof of hardware execution or source truth.
+Java21 adversarial regressions and full Ghidra 12.1.4 PUBLIC/Java25
+CI are required on the exact commit. GA-07/13/18 remain PARTIAL.
+
 ## GA-07/13 — 2026-11-11: total CSV row budget includes omission markers (pending CI)
 
 The unified read-only hardware evidence CSV now reserves room for
