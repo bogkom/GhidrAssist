@@ -78,6 +78,28 @@ public final class HardwareConfigurationEvidenceCsvSelfTest {
             "non-CSV",merged,true);}
         catch(IllegalArgumentException expected){rejectedMerged=true;}
         check(rejectedMerged,"invalid raw CSV must fail closed");
+        // The merger must reject forged rows, not merely trust a matching
+        // header prefix. A valid source-only CSV remains accepted above.
+        for(String forged : List.of(
+                HardwareConfigurationEvidenceCsv.HEADER+"not,a,quoted,row\n",
+                HardwareConfigurationEvidenceCsv.HEADER+"\"STORE\",\"broken\"\n",
+                HardwareConfigurationEvidenceCsv.HEADER+"\"STORE\",\"open\n",
+                HardwareConfigurationEvidenceCsv.HEADER+"\"STORE\",\"x\"",
+                HardwareConfigurationEvidenceCsv.HEADER+"\"STORE\",\"x\";\n",
+                HardwareConfigurationEvidenceCsv.HEADER+"\"STORE\",\"embedded\rcontrol\"\n")) {
+            boolean refused=false;
+            try{HardwareConfigurationEvidenceCsv.withUnifiedSources(forged,merged,true);}
+            catch(IllegalArgumentException expected){refused=true;}
+            check(refused,"untrusted CSV row must fail closed");
+        }
+        String blankRow="\"\",".repeat(13)+"\"\"\n";
+        String oversizedRaw=HardwareConfigurationEvidenceCsv.HEADER+
+            blankRow.repeat(HardwareConfigurationEvidenceCsv.MAX_ROWS+1);
+        boolean overBudget=false;
+        try{HardwareConfigurationEvidenceCsv.withUnifiedSources(oversizedRaw,merged,true);}
+        catch(IllegalArgumentException expected){overBudget=true;}
+        check(overBudget,"raw CSV source row budget must be enforced");
+
         // Source Ghidra labels are untrusted. Unicode format controls
         // and whitespace can hide executable spreadsheet formulas despite
         // RFC-style quoted CSV cells. Keep the original prefix visible but

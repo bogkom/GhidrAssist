@@ -56,19 +56,58 @@ public final class HardwareConfigurationEvidenceCsv {
         return String.join(",",parts)+"\n";
     }
     /**
+     * The upstream CSV is an untrusted interchange boundary. Validate the
+     * exact 14-column quoted schema before appending a second evidence view:
+     * a header prefix alone must not license forged or malformed rows.
+     */
+    private static int validatedSourceRows(String rawCsv) {
+        if(rawCsv==null || !rawCsv.startsWith(HEADER))
+            throw new IllegalArgumentException("Untrusted source CSV header");
+        int rows=0, start=HEADER.length();
+        if(start==rawCsv.length())return 0;
+        if(rawCsv.charAt(rawCsv.length()-1)!='\n')
+            throw new IllegalArgumentException("Unterminated source CSV row");
+        while(start<rawCsv.length()) {
+            int fields=0;
+            int i=start;
+            while(true) {
+                if(i>=rawCsv.length() || rawCsv.charAt(i++)!='"')
+                    throw new IllegalArgumentException("Unquoted source CSV cell");
+                boolean closed=false;
+                while(i<rawCsv.length()) {
+                    char c=rawCsv.charAt(i++);
+                    if(c=='\r')throw new IllegalArgumentException("CR in source CSV");
+                    if(c=='\n')throw new IllegalArgumentException("Embedded CSV newline");
+                    if(c=='"') {
+                        if(i<rawCsv.length() && rawCsv.charAt(i)=='"')i++;
+                        else {closed=true;break;}
+                    }
+                }
+                if(!closed)throw new IllegalArgumentException("Open source CSV quote");
+                fields++;
+                if(i>=rawCsv.length())
+                    throw new IllegalArgumentException("Unterminated source CSV row");
+                char separator=rawCsv.charAt(i++);
+                if(separator=='\n')break;
+                if(separator!=',')
+                    throw new IllegalArgumentException("Invalid source CSV separator");
+            }
+            if(fields!=14)throw new IllegalArgumentException("Wrong source CSV column count");
+            if(++rows>MAX_ROWS)throw new IllegalArgumentException("Source CSV row budget exceeded");
+            start=i;
+        }
+        return rows;
+    }
+
+    /**
      * Append normalized, deduplicated sources without deleting the raw CFG
      * provenance rows. MERGED_SITE rows are a second VIEW of the same PCs,
      * not additional executed stores. Strict cap keeps exports bounded.
      */
     public static String withUnifiedSources(String rawCsv,
             HardwareStartupEvidenceMerge.Report merged,boolean selectedMc68332) {
-        if(rawCsv==null || !rawCsv.startsWith(HEADER) || merged==null)
-            throw new IllegalArgumentException("Untrusted CSV or merged evidence");
-        int rows=0;
-        for(int k=0;k<rawCsv.length();k++)
-            if(rawCsv.charAt(k)=='\n')rows++;
-        rows--; // header, never count as a source observation
-        if(rows<0)throw new IllegalArgumentException("Incomplete source CSV");
+        if(merged==null)throw new IllegalArgumentException("Missing merged evidence");
+        int rows=validatedSourceRows(rawCsv);
         StringBuilder out=new StringBuilder(rawCsv);
         int omitted=0;
         for(HardwareStartupEvidenceMerge.Row s:merged.rows()){
