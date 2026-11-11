@@ -97,17 +97,17 @@ public final class HardwareConfigurationEvidenceCsvSelfTest {
         // oversized cells before building the unified view.
         String[] oversizedCells={"X".repeat(
             HardwareConfigurationEvidenceCsv.MAX_CSV_CELL_CHARS+2),
-            "\\\"".repeat(HardwareConfigurationEvidenceCsv.MAX_CSV_CELL_CHARS+2)};
+            "\"".repeat(HardwareConfigurationEvidenceCsv.MAX_CSV_CELL_CHARS+2)};
         for(String oversizedCell:oversizedCells){
-            String quoted="\\\""+oversizedCell.replace("\\\"","\\\"\\\"")+"\\\"";
+            String quoted="\""+oversizedCell.replace("\"","\"\"")+"\"";
             String forged=HardwareConfigurationEvidenceCsv.HEADER+quoted+
-                ",\\\"\\\"".repeat(13)+"\\n";
+                ",\"\"".repeat(13)+"\n";
             boolean refused=false;
             try{HardwareConfigurationEvidenceCsv.withUnifiedSources(forged,merged,true);}
             catch(IllegalArgumentException expected){refused=true;}
             check(refused,"oversized quoted CSV source cell rejected");
         }
-        String blankRow="\\\"\\\",".repeat(13)+"\\\"\\\"\\n";
+        String blankRow="\"\",".repeat(13)+"\"\"\n";
         String oversizedRaw=HardwareConfigurationEvidenceCsv.HEADER+
             blankRow.repeat(HardwareConfigurationEvidenceCsv.MAX_ROWS+1);
         boolean overBudget=false;
