@@ -121,6 +121,15 @@ public final class HardwareConfigurationEvidenceCsvSelfTest {
             catch(IllegalArgumentException expected){refused=true;}
             check(refused,"forged source record type must be rejected");
         }
+        // Quoted source fields may still carry executable spreadsheet formulas.
+        for(String injected : List.of("=1+1", " +SUM(1)", "\u2060@SUM(1)", "\t=2")) {
+            String forged=HardwareConfigurationEvidenceCsv.HEADER+
+                "\"STORE\",\""+injected+"\""+",\"\"".repeat(12)+"\n";
+            boolean refused=false;
+            try{HardwareConfigurationEvidenceCsv.withUnifiedSources(forged,merged,true);}
+            catch(IllegalArgumentException expected){refused=true;}
+            check(refused,"formula-bearing imported source field rejected");
+        }
         String omission="\"OMITTED_ROWS\""+emptyTail;
         String store="\"STORE\""+emptyTail;
         String path="\"CFG_PATH\""+emptyTail;
