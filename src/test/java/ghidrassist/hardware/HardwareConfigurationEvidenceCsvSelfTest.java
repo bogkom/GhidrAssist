@@ -145,6 +145,28 @@ public final class HardwareConfigurationEvidenceCsvSelfTest {
             cappedSerialized.contains("\"OMITTED_ROWS\""),
             "serializer reserves a row for its own omission marker");
 
+        // Exactly MAX_ROWS detail records must remain complete: an
+        // omission marker is reserved only when there is actual overflow.
+        var exactStores=HardwareCfgWriteAudit.inspect(true,
+            java.util.stream.IntStream.range(0,HardwareConfigurationEvidenceCsv.MAX_ROWS)
+                .mapToObj(i->new HardwareCfgWriteAudit.Site(0x100,0x100+i*2,
+                    "SIMCR",0xfffa00,false,16,0x40ca,0,0,false,false,false))
+                .toList());
+        String exactCsv=HardwareConfigurationEvidenceCsv.serialize(
+            exactStores,List.of(),true);
+        check(exactCsv.split("\\n",-1).length-2==
+            HardwareConfigurationEvidenceCsv.MAX_ROWS &&
+            !exactCsv.contains("\"OMITTED_ROWS\""),
+            "exactly 5000 evidence rows remain complete without a false omission");
+        String noExtra=HardwareConfigurationEvidenceCsv.withUnifiedSources(
+            HardwareConfigurationEvidenceCsv.HEADER+
+            blankRow.repeat(HardwareConfigurationEvidenceCsv.MAX_ROWS),
+            HardwareStartupEvidenceMerge.reconcile(List.of()),true);
+        check(noExtra.split("\\n",-1).length-2==
+            HardwareConfigurationEvidenceCsv.MAX_ROWS &&
+            !noExtra.contains("\"OMITTED_MERGED_SITES\""),
+            "full source CSV is valid when no merged evidence is appended");
+
         // Source Ghidra labels are untrusted. Unicode format controls
         // and whitespace can hide executable spreadsheet formulas despite
         // RFC-style quoted CSV cells. Keep the original prefix visible but
