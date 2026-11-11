@@ -93,7 +93,7 @@ public final class HardwareConfigurationEvidenceCsvSelfTest {
             check(refused,"untrusted CSV row must fail closed");
         }
         String blankRow="\"\",".repeat(13)+"\"\"\n";
-        oversizedRaw=HardwareConfigurationEvidenceCsv.HEADER+
+        String oversizedRaw=HardwareConfigurationEvidenceCsv.HEADER+
             blankRow.repeat(HardwareConfigurationEvidenceCsv.MAX_ROWS+1);
         boolean overBudget=false;
         try{HardwareConfigurationEvidenceCsv.withUnifiedSources(oversizedRaw,merged,true);}
