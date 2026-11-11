@@ -64,12 +64,17 @@ public final class HardwareConfigurationEvidenceCsv {
         if(rawCsv==null || !rawCsv.startsWith(HEADER))
             throw new IllegalArgumentException("Untrusted source CSV header");
         int rows=0, start=HEADER.length();
+        // A syntactically valid row must not impersonate a merged view or
+        // smuggle an omission marker into the middle of the source stream.
+        // Source serialization emits STORE*, CFG_PATH*, [OMITTED_ROWS].
+        int phase=0;
         if(start==rawCsv.length())return 0;
         if(rawCsv.charAt(rawCsv.length()-1)!='\n')
             throw new IllegalArgumentException("Unterminated source CSV row");
         while(start<rawCsv.length()) {
             int fields=0;
             int i=start;
+            StringBuilder kind=new StringBuilder();
             while(true) {
                 if(i>=rawCsv.length() || rawCsv.charAt(i++)!='"')
                     throw new IllegalArgumentException("Unquoted source CSV cell");
@@ -86,6 +91,7 @@ public final class HardwareConfigurationEvidenceCsv {
                     // Serialized cells are clipped to 512 UTF-16 units; the
                     // formula-neutralizing apostrophe may add one more.
                     // Do not let forged upstream rows bypass that budget.
+                    if(fields==0)kind.append(c);
                     if(++decodedChars>MAX_CSV_CELL_CHARS+1)
                         throw new IllegalArgumentException("Oversized source CSV cell");
                 }
@@ -99,6 +105,18 @@ public final class HardwareConfigurationEvidenceCsv {
                     throw new IllegalArgumentException("Invalid source CSV separator");
             }
             if(fields!=14)throw new IllegalArgumentException("Wrong source CSV column count");
+            String recordType=kind.toString();
+            if("STORE".equals(recordType)) {
+                if(phase!=0)throw new IllegalArgumentException("Out-of-order source STORE");
+            } else if("CFG_PATH".equals(recordType)) {
+                if(phase>1)throw new IllegalArgumentException("Out-of-order source CFG_PATH");
+                phase=1;
+            } else if("OMITTED_ROWS".equals(recordType)) {
+                if(phase==2)throw new IllegalArgumentException("Duplicate source omission marker");
+                phase=2;
+            } else {
+                throw new IllegalArgumentException("Untrusted source CSV record type");
+            }
             if(++rows>MAX_ROWS)throw new IllegalArgumentException("Source CSV row budget exceeded");
             start=i;
         }
