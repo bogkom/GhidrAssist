@@ -163,9 +163,13 @@ public final class HardwareConfigurationEvidenceCsv {
         if(stores==null || paths==null)
             throw new IllegalArgumentException("Evidence missing");
         StringBuilder out=new StringBuilder(HEADER);
+        // Reserve the omission marker only if evidence actually exceeds
+        // the budget; exactly MAX_ROWS rows must remain lossless.
+        long requested=(long)stores.sites().size()+paths.size();
+        int detailBudget=requested>MAX_ROWS?MAX_ROWS-1:MAX_ROWS;
         int emitted=0,omitted=0;
         for(HardwareCfgWriteAudit.Finding s:stores.sites()){
-            if(emitted>=MAX_ROWS-1){omitted++;continue;}
+            if(emitted>=detailBudget){omitted++;continue;}
             out.append(row("STORE",hex(s.function()),hex(s.pc()),
                 mc68332Selected?s.register():"UNVERIFIED_MCU_REGISTER",
                 s.address()<0?"UNKNOWN":hex(s.address()),
@@ -180,7 +184,7 @@ public final class HardwareConfigurationEvidenceCsv {
         }
         for(HardwareCfgStorePaths.Pair p:paths){
             if(p==null)throw new IllegalArgumentException("Null path");
-            if(emitted>=MAX_ROWS-1){omitted++;continue;}
+            if(emitted>=detailBudget){omitted++;continue;}
             out.append(row("CFG_PATH",hex(p.function()),hex(p.aPc()),
                 mc68332Selected?p.aRegister():"UNVERIFIED_MCU_REGISTER",
                 "UNKNOWN","MODELED_CFG","UNKNOWN","UNKNOWN","UNKNOWN",
