@@ -60,6 +60,19 @@ public final class HardwareConfigurationEvidenceCsv {
      * exact 14-column quoted schema before appending a second evidence view:
      * a header prefix alone must not license forged or malformed rows.
      */
+    // CSV quoting alone does not neutralize spreadsheet formulas.
+    private static void requireSafeSourceCell(String value) {
+        int pos=0;
+        while(pos<value.length()) {
+            int cp=value.codePointAt(pos);
+            if(!Character.isWhitespace(cp) && !Character.isSpaceChar(cp) &&
+                    Character.getType(cp)!=Character.FORMAT)break;
+            pos+=Character.charCount(cp);
+        }
+        if((pos<value.length() && "=+-@".indexOf(value.charAt(pos))>=0) ||
+                value.startsWith("\t"))
+            throw new IllegalArgumentException("Unescaped formula in source CSV cell");
+    }
     private static int validatedSourceRows(String rawCsv) {
         if(rawCsv==null || !rawCsv.startsWith(HEADER))
             throw new IllegalArgumentException("Untrusted source CSV header");
@@ -80,6 +93,7 @@ public final class HardwareConfigurationEvidenceCsv {
                     throw new IllegalArgumentException("Unquoted source CSV cell");
                 boolean closed=false;
                 int decodedChars=0;
+                StringBuilder decoded=new StringBuilder();
                 while(i<rawCsv.length()) {
                     char c=rawCsv.charAt(i++);
                     if(c=='\r')throw new IllegalArgumentException("CR in source CSV");
@@ -91,11 +105,13 @@ public final class HardwareConfigurationEvidenceCsv {
                     // Serialized cells are clipped to 512 UTF-16 units; the
                     // formula-neutralizing apostrophe may add one more.
                     // Do not let forged upstream rows bypass that budget.
+                    decoded.append(c);
                     if(fields==0)kind.append(c);
                     if(++decodedChars>MAX_CSV_CELL_CHARS+1)
                         throw new IllegalArgumentException("Oversized source CSV cell");
                 }
                 if(!closed)throw new IllegalArgumentException("Open source CSV quote");
+                requireSafeSourceCell(decoded.toString());
                 fields++;
                 if(i>=rawCsv.length())
                     throw new IllegalArgumentException("Unterminated source CSV row");
