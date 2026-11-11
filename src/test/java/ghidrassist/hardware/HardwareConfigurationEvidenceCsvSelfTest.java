@@ -138,9 +138,8 @@ public final class HardwareConfigurationEvidenceCsvSelfTest {
             HardwareStartupEvidenceMerge.reconcile(List.of()),true)
             .contains("\"OMITTED_ROWS\""),
             "canonical source order remains accepted");
-        String blankRow="\"\",".repeat(13)+"\"\"\n";
         String oversizedRaw=HardwareConfigurationEvidenceCsv.HEADER+
-            blankRow.repeat(HardwareConfigurationEvidenceCsv.MAX_ROWS+1);
+            store.repeat(HardwareConfigurationEvidenceCsv.MAX_ROWS+1);
         boolean overBudget=false;
         try{HardwareConfigurationEvidenceCsv.withUnifiedSources(oversizedRaw,merged,true);}
         catch(IllegalArgumentException expected){overBudget=true;}
@@ -191,7 +190,7 @@ public final class HardwareConfigurationEvidenceCsvSelfTest {
             "exactly 5000 evidence rows remain complete without a false omission");
         String noExtra=HardwareConfigurationEvidenceCsv.withUnifiedSources(
             HardwareConfigurationEvidenceCsv.HEADER+
-            blankRow.repeat(HardwareConfigurationEvidenceCsv.MAX_ROWS),
+            store.repeat(HardwareConfigurationEvidenceCsv.MAX_ROWS),
             HardwareStartupEvidenceMerge.reconcile(List.of()),true);
         check(noExtra.split("\\n",-1).length-2==
             HardwareConfigurationEvidenceCsv.MAX_ROWS &&
