@@ -1,3 +1,18 @@
+## GA-07/13 — 2026-11-11: bounded decoded upstream CSV cells (pending exact-SHA CI)
+
+The unified read-only hardware evidence CSV parser now bounds each decoded
+quoted cell to 513 UTF-16 units (512 serialized source units plus at most
+one spreadsheet-formula escape apostrophe), including doubled quotes.
+Previously a syntactically valid 14-column forged source row could carry
+an arbitrarily large quoted cell even though the serializer clipped
+individual source fields. Deterministic negative regressions cover both
+plain and quote-escaped oversized cells while preserving existing source
+row and 5000-row checks. This is an interchange-boundary refusal only:
+no firmware execution, physical MMIO mapping or Review/Apply authority
+is inferred. GA-07/13 remain PARTIAL until all roadmap acceptance criteria
+are satisfied. Full Ghidra 12.1.4 PUBLIC/Java25 build and source-only
+Java21 CI are required on the final PR SHA; no local Wyse/Precision tests.
+
 ## GA-02/03/18 — 2026-11-10: canonical signed MOVEQ post-return source constants
 
 Previously, verified input-independent CPU32 CALL return registers only
