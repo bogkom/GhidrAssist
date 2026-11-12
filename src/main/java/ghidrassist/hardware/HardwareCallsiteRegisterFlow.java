@@ -31,7 +31,7 @@ public final class HardwareCallsiteRegisterFlow {
     public static final int MAX_REGISTER_CELLS=16;
 
     /** Source PCs in this MC68332 lane are aligned CPU32 coordinates. */
-    private static boolean sourcePc(long address) {
+    static boolean sourcePc(long address) {
         return address>=0 && address<=HardwareDataflow.MASK24 &&
             (address&1)==0;
     }
