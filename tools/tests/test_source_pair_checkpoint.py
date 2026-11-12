@@ -33,6 +33,11 @@ def page(offset, limit, generation="synthetic-run-A", revision=7,
         "omitted_indirect": omitted, "omitted_movec": 0,
         "reset_root_recognized": True, "reset_graph_incomplete": False,
         "observed_inventory_incomplete": incomplete,
+        "functions_with_both_sources": 2,
+        "indirect_only_functions": 0, "movec_only_functions": 0,
+        "indirect_only_sites": 0, "movec_only_sites": 0,
+        "reset_visited_functions_with_both": 1,
+        "coverage_incomplete": incomplete,
         "stage_epoch": 2,
         "offset": offset, "limit": limit, "next_offset": offset + len(rows),
         "has_more": offset + len(rows) < 2, "displayed": len(rows),
@@ -64,6 +69,11 @@ class SourceCheckpoint(unittest.TestCase):
             self.assertTrue(verified["verified"])
             self.assertTrue(verified["bounded_source_complete"])
             self.assertFalse(verified["resume_authorized"])
+            payload=json.loads(out.read_text())["payload"]
+            self.assertEqual(payload["functions_with_both_sources"],2)
+            self.assertEqual(payload["reset_visited_functions_with_both"],1)
+            self.assertEqual(payload["indirect_only_sites"],0)
+            self.assertFalse(payload["coverage_incomplete"])
             with patch.object(agent, "rpc", side_effect=self.fake_rpc):
                 with self.assertRaises(FileExistsError):
                     agent.capture_source_pairs_checkpoint({}, out, 1)
@@ -111,6 +121,70 @@ class SourceCheckpoint(unittest.TestCase):
                     with self.assertRaises(ValueError):
                         agent.capture_source_pairs_checkpoint({}, out, 1)
                 self.assertFalse(out.exists())
+
+    def test_unmatched_coverage_is_saved_without_inventing_pair_rows(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out=Path(tmp)/"unmatched.json"
+            def unmatched(_session,_method,params):
+                response=page(params["offset"],params["limit"],
+                              omitted=1,incomplete=True)
+                data=response["source_pairs"]
+                data.update(indirect_sources=3,indirect_only_functions=1,
+                            indirect_only_sites=1,coverage_incomplete=True)
+                return response
+            with patch.object(agent,"rpc",side_effect=unmatched):
+                result=agent.capture_source_pairs_checkpoint({},out,1)
+            self.assertFalse(result["bounded_source_complete"])
+            payload=json.loads(out.read_text())["payload"]
+            self.assertEqual(payload["indirect_only_sites"],1)
+            self.assertEqual(payload["indirect_only_functions"],1)
+            self.assertTrue(payload["coverage_incomplete"])
+            self.assertTrue(agent.verify_source_pairs_checkpoint(out)["verified"])
+
+    def test_cross_page_coverage_mutation_is_rejected_atomically(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out=Path(tmp)/"mutated.json"
+            def mutated(_session,_method,params):
+                response=page(params["offset"],params["limit"])
+                if params["offset"]:
+                    response["source_pairs"]["movec_only_sites"]=1
+                    response["source_pairs"]["movec_only_functions"]=1
+                return response
+            with patch.object(agent,"rpc",side_effect=mutated):
+                with self.assertRaisesRegex(ValueError,"revision/generation"):
+                    agent.capture_source_pairs_checkpoint({},out,1)
+            self.assertFalse(out.exists())
+
+    def test_invalid_coverage_and_forged_saved_pair_counts_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            for invalid in ("bool_count","over_budget","false_complete"):
+                out=Path(tmp)/(invalid+".json")
+                def invalid_rpc(_session,_method,params):
+                    response=page(params["offset"],params["limit"])
+                    data=response["source_pairs"]
+                    if invalid=="bool_count":
+                        data["functions_with_both_sources"]=True
+                    elif invalid=="over_budget":
+                        data["reset_visited_functions_with_both"]=3
+                    else:
+                        data["coverage_incomplete"]=True
+                    return response
+                with patch.object(agent,"rpc",side_effect=invalid_rpc):
+                    with self.assertRaises(ValueError):
+                        agent.capture_source_pairs_checkpoint({},out,2)
+                self.assertFalse(out.exists())
+            valid=Path(tmp)/"valid.json"
+            with patch.object(agent,"rpc",side_effect=self.fake_rpc):
+                agent.capture_source_pairs_checkpoint({},valid,2)
+            envelope=json.loads(valid.read_text())
+            envelope["payload"]["functions_with_both_sources"]=1
+            import hashlib
+            raw=json.dumps(envelope["payload"],sort_keys=True,
+                           separators=(",",":"),ensure_ascii=False).encode()
+            envelope["payload_sha256"]=hashlib.sha256(raw).hexdigest()
+            valid.write_text(json.dumps(envelope))
+            with self.assertRaisesRegex(ValueError,"coverage mismatch"):
+                agent.verify_source_pairs_checkpoint(valid)
 
     def test_incomplete_inventory_not_marked_complete(self):
         with tempfile.TemporaryDirectory() as tmp:
