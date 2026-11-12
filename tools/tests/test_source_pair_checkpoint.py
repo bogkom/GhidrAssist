@@ -186,7 +186,7 @@ class SourceCheckpoint(unittest.TestCase):
                     elif fault == "wrong_count":
                         data["total_pairs"] = 3
                     else:
-                        if params["offset"]:
+                        if params["offset"] and data["rows"]:
                             data["rows"][0] = page(0, 1)["source_pairs"]["rows"][0]
                     return response
                 with patch.object(agent, "rpc", side_effect=broken):
