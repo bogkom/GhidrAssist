@@ -129,7 +129,7 @@ def rpc(session, method, params=None):
     return response
 
 
-def _source_pairs_metadata(page):
+def _source_pairs_metadata(page, legacy=False):
     """Immutable source-generation identity and bounded inventory counters."""
     fields = ("schema", "revision", "generation", "import_sha256",
               "profile", "total_pairs", "indirect_sources",
@@ -140,6 +140,8 @@ def _source_pairs_metadata(page):
               "movec_only_functions", "indirect_only_sites",
               "movec_only_sites", "reset_visited_functions_with_both",
               "coverage_incomplete")
+    if legacy:
+        fields=fields[:14]
     identity = tuple(page[key] for key in fields)
     if (page["schema"] != 1 or page["profile"] != "MC68332_USER_SELECTED"
             or type(page["revision"]) != int or page["revision"] < 0
@@ -159,6 +161,8 @@ def _source_pairs_metadata(page):
                    ("reset_root_recognized", "reset_graph_incomplete",
                     "observed_inventory_incomplete"))):
         raise ValueError("Invalid bounded source inventory metadata")
+    if legacy:
+        return identity
     coverage = ("functions_with_both_sources", "indirect_only_functions",
                 "movec_only_functions", "indirect_only_sites",
                 "movec_only_sites", "reset_visited_functions_with_both")
@@ -294,6 +298,15 @@ def verify_source_pairs_checkpoint(source):
     digest=hashlib.sha256(canonical).hexdigest()
     if digest!=envelope.get("payload_sha256"):
         raise ValueError("Source checkpoint SHA-256 mismatch")
+    coverage_keys = (
+        "functions_with_both_sources", "indirect_only_functions",
+        "movec_only_functions", "indirect_only_sites",
+        "movec_only_sites", "reset_visited_functions_with_both",
+        "coverage_incomplete")
+    present=[key in p for key in coverage_keys]
+    if any(present) and not all(present):
+        raise ValueError("Incomplete source checkpoint coverage fields")
+    legacy=not any(present)
     metadata={
         "schema":p["schema"],"revision":p["program_revision"],
         "generation":p["generation"],"import_sha256":p["import_sha256"],
@@ -304,13 +317,9 @@ def verify_source_pairs_checkpoint(source):
         "reset_graph_incomplete":p["reset_graph_incomplete"],
         "observed_inventory_incomplete":p["observed_inventory_incomplete"],
         "stage_epoch":p["stage_epoch"],
-        **{key:p[key] for key in (
-            "functions_with_both_sources", "indirect_only_functions",
-            "movec_only_functions", "indirect_only_sites",
-            "movec_only_sites", "reset_visited_functions_with_both",
-            "coverage_incomplete")},
+        **({key:p[key] for key in coverage_keys} if not legacy else {}),
     }
-    values=_source_pairs_metadata(metadata)
+    values=_source_pairs_metadata(metadata,legacy=legacy)
     rows=p["rows"]
     if (not isinstance(rows,list) or len(rows)!=values[5] or
             type(p.get("collected_all_observed_pairs"))!=bool or
@@ -329,7 +338,7 @@ def verify_source_pairs_checkpoint(source):
     # The saved full pair set must agree with its independent function
     # coverage, without interpreting absent matches as absent hardware effects.
     observed_both=len({row["function"] for row in rows})
-    if observed_both!=p["functions_with_both_sources"]:
+    if not legacy and observed_both!=p["functions_with_both_sources"]:
         raise ValueError("Source pair function coverage mismatch")
     sha=values[3]
     valid_import=len(sha)==64 and all(c in "0123456789abcdefABCDEF" for c in sha)
@@ -339,11 +348,9 @@ def verify_source_pairs_checkpoint(source):
         raise ValueError("False source-inventory completeness")
     return {"verified":True,"payload_sha256":digest,
             "total_pairs":len(rows),"bounded_source_complete":eligible,
-            "source_coverage":{key:p[key] for key in (
-                "functions_with_both_sources", "indirect_only_functions",
-                "movec_only_functions", "indirect_only_sites",
-                "movec_only_sites", "reset_visited_functions_with_both",
-                "coverage_incomplete")},
+            "source_coverage":(
+                {key:p[key] for key in coverage_keys} if not legacy else None),
+            "coverage_available":not legacy,
             "resume_authorized":False}
 
 
