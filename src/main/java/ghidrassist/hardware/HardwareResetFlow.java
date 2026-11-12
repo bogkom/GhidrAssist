@@ -176,6 +176,20 @@ public final class HardwareResetFlow {
             visitedEntries=Set.copyOf(visitedEntries);
         }
         public String markdown(long vectorPc,long rootEntry) {
+            // A public report cannot borrow the CALL graph of another RESET.
+            if (vectorPc<0 || vectorPc>HardwareCallEffects.MAX_CPU32_ADDRESS ||
+                    rootEntry<0 || rootEntry>HardwareCallEffects.MAX_CPU32_ADDRESS ||
+                    (vectorPc&1L)!=0 || (rootEntry&1L)!=0)
+                throw new IllegalArgumentException("Invalid RESET publication coordinates");
+            if (rootRecognized) {
+                if (!exactFunctionEntry(vectorPc,rootEntry) ||
+                        !visitedEntries.contains(rootEntry))
+                    throw new IllegalArgumentException("RESET publication root mismatch");
+                for (Evidence source:evidence)
+                    if (!source.chain().startsWith(hex(rootEntry) +
+                            (source.depth()==0 ? "" : " -> ")))
+                        throw new IllegalArgumentException("RESET witness root mismatch");
+            }
             StringBuilder out=new StringBuilder();
             out.append("- RESET PC candidate: ").append(hex(vectorPc))
                .append("; containing function entry: ").append(hex(rootEntry)).append("\n")
