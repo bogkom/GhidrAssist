@@ -586,6 +586,49 @@ def main():
     # Real Ghidra tool evidence is sourced from its static Listing PC.
     all_rows=json.loads(checkpoint.read_text())["payload"]["rows"]
     assert any("00000020" in (row.get("fact") or "") for row in all_rows)
+    # GA-12/18: execute the *production* source-pairs-resume-check CLI
+    # against the actual isolated CodeBrowser JSON-RPC server, not a mock.
+    # An empty inventory remains an incomplete static observation.
+    command(args.session,"profile-select","--profile","MC68332_USER_SELECTED")
+    command(args.session,"analyze")
+    source_checkpoint=out/"ga12-real-source-pairs.json"
+    deadline=time.monotonic()+120
+    while True:
+        try:
+            command(args.session,"source-pairs-checkpoint",
+                    "--output",source_checkpoint,"--page-size",1)
+            break
+        except AssertionError:
+            if time.monotonic()>=deadline:
+                raise AssertionError("Real Ghidra never published source inventory")
+            time.sleep(1)
+    before_source=command(args.session,"status")
+    source_match=command(args.session,"source-pairs-resume-check",
+                         "--input",source_checkpoint,"--source-limit",1)
+    assert source_match["identity_matches"] and source_match["evidence_matches"],source_match
+    assert source_match["read_only"] is True,source_match
+    assert source_match["resume_authorized"] is False,source_match
+    assert source_match["apply_authorized"] is False,source_match
+    assert source_match["tool_execution_authorized"] is False,source_match
+    # A well-formed, SHA-recomputed but different generation is not bound
+    # to the current Program and must fail at the real RPC boundary.
+    forged_source=out/"ga12-forged-generation.json"
+    forged=json.loads(source_checkpoint.read_text())
+    original_generation=forged["payload"]["generation"]
+    forged["payload"]["generation"]=(
+        "00000000-0000-0000-0000-000000000001"
+        if original_generation!="00000000-0000-0000-0000-000000000001"
+        else "00000000-0000-0000-0000-000000000002")
+    canonical=json.dumps(forged["payload"],sort_keys=True,
+                         separators=(",",":"),ensure_ascii=False).encode()
+    forged["payload_sha256"]=hashlib.sha256(canonical).hexdigest()
+    forged_source.write_text(json.dumps(forged))
+    command(args.session,"source-pairs-resume-check",
+            "--input",forged_source,"--source-limit",1,success=False)
+    forged_source.unlink()
+    after_source=command(args.session,"status")
+    assert before_source["program"]==after_source["program"]
+    assert before_source["revision"]==after_source["revision"]
     receipt={
         "schema":1,"synthetic_only":True,
         "scenario":"normal","scenario_passed":True,
@@ -595,6 +638,8 @@ def main():
         "real_http_bearer_401":True,"real_cli_in_progress":True,
         "real_cli_completed":True,"source_program":"synthetic-mmio.bin",
         "source_revision_unchanged":result["revision_unchanged"],
+        "real_source_pairs_live_rebind_cli":True,
+        "real_source_pairs_forged_generation_denied":True,
         "program_revision":evidence["programRevision"],
         "stale_run_and_revision_denied":True,
         "checkpoint_no_overwrite":True,
