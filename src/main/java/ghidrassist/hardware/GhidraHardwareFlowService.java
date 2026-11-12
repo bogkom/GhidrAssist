@@ -513,7 +513,12 @@ public final class GhidraHardwareFlowService {
                                 dst.getOffset()))safe=false;
             }
             if(!safe)break;
-            steps.add(translate(insn,callee));
+            HardwareDataflow.Step translated=translate(insn,callee);
+            if(translated.successors.stream().anyMatch(
+                    successor->!HardwareCallsiteRegisterFlow.sourcePc(successor))){
+                safe=false;break;
+            }
+            steps.add(translated);
             cursor+=insn.getLength();
         }
         return new HardwareCallsiteRegisterFlow.Callee(
