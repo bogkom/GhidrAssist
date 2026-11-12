@@ -1,3 +1,17 @@
+## GA-01/11/18 — 2026-11-12: public RESET Vector eligibility fail-closed (pending exact-SHA CI)
+
+The public sourceResetPcEligible gate now independently validates unsigned
+32-bit source vector words, non-null/non-erased aligned RESET PC and the
+selected-MC68332 24-bit scope, even for caller-created Vector(valid=true).
+A caller-supplied valid flag cannot promote a forged malformed PC to a
+recognized RESET candidate. Generic CPU32 continues to accept legitimate
+wide aligned source PCs. Adversarial Java21 regressions cover forged PC/SP
+values and the generic-versus-selected-device distinction. Full Java25
+Ghidra 12.1.4 PUBLIC build and real isolated synthetic headless CI on the
+exact PR SHA remain required. This is source eligibility, not proof of
+executed RESET, MM latch, active ISR/VBR or physical mapping.
+GA-01/11/18 remain PARTIAL; GA-14 deferred.
+
 ## GA-01/02/11/18 — 2026-11-12: RESET publication identity binding (pending exact-SHA CI)
 
 The read-only RESET Summary Markdown publisher now rejects source-report

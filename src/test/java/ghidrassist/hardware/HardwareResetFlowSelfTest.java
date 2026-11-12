@@ -44,6 +44,27 @@ public final class HardwareResetFlowSelfTest {
                 HardwareResetFlow.readVector(odd),true) &&
             !HardwareResetFlow.sourceResetPcEligible(null,true),
             "normal selected 24-bit RESET still eligible, malformed PC not");
+        // Public Vector records can be constructed by callers without
+        // readVector(). Never trust a forged valid flag as a decoded PC.
+        for(long badPc:new long[]{-2L,0L,1L,0xffffffffL,0x100000000L}) {
+            var forged=new HardwareResetFlow.Vector(0x1000L,badPc,true,
+                "untrusted external vector");
+            ok(!HardwareResetFlow.sourceResetPcEligible(forged,false) &&
+                !HardwareResetFlow.sourceResetPcEligible(forged,true),
+                "forged valid flag cannot bypass RESET PC validation");
+        }
+        for(long badSp:new long[]{-1L,0x100000000L}) {
+            var forged=new HardwareResetFlow.Vector(badSp,0x2bc0L,true,
+                "untrusted external vector");
+            ok(!HardwareResetFlow.sourceResetPcEligible(forged,false) &&
+                !HardwareResetFlow.sourceResetPcEligible(forged,true),
+                "source vector words must remain unsigned 32-bit");
+        }
+        ok(HardwareResetFlow.sourceResetPcEligible(
+            new HardwareResetFlow.Vector(0x1000L,0x01002bc0L,true,"wide"),false) &&
+            !HardwareResetFlow.sourceResetPcEligible(
+            new HardwareResetFlow.Vector(0x1000L,0x01002bc0L,true,"wide"),true),
+            "valid wide CPU32 candidate remains generic-only");
         var top=HardwareResetFlow.InitialStackEvidence
             .ONE_PAST_MCU24_TOP_CANDIDATE;
         var aligned=HardwareResetFlow.InitialStackEvidence
