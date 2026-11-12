@@ -409,6 +409,89 @@ def read_source_pairs_checkpoint_page(source, offset=0, limit=32):
     }
 
 
+def check_source_pairs_resume_preflight(session, source, page_size=32):
+    """Read-only live rebind of historical static evidence; never restore execution."""
+    if type(page_size) is not int or not 1 <= page_size <= 32:
+        raise ValueError("Invalid source rebind page size")
+    verified = verify_source_pairs_checkpoint(source, _include_payload=True)
+    saved = verified["_validated_payload"]
+    if not verified["coverage_available"]:
+        raise ValueError("Legacy source inventory cannot be live-rebound without coverage")
+    # A source digest and revision alone do not prove equality of evidence.
+    # Re-read every row, compare the entire inventory, then fence generation.
+    expected = {
+        "schema": saved["schema"], "revision": saved["program_revision"],
+        "generation": saved["generation"], "import_sha256": saved["import_sha256"],
+        "profile": saved["profile"], "total_pairs": saved["total_pairs"],
+        "indirect_sources": saved["indirect_sources"],
+        "movec_sources": saved["movec_sources"],
+        "omitted_indirect": saved["omitted_indirect"],
+        "omitted_movec": saved["omitted_movec"],
+        "reset_root_recognized": saved["reset_root_recognized"],
+        "reset_graph_incomplete": saved["reset_graph_incomplete"],
+        "observed_inventory_incomplete": saved["observed_inventory_incomplete"],
+        "stage_epoch": saved["stage_epoch"],
+        **{key: saved[key] for key in (
+            "functions_with_both_sources", "indirect_only_functions",
+            "movec_only_functions", "indirect_only_sites", "movec_only_sites",
+            "reset_visited_functions_with_both", "coverage_incomplete")},
+    }
+    identity = _source_pairs_metadata(expected)
+    rows = saved["rows"]
+    for offset in range(0, len(rows) + 1, page_size):
+        reply = rpc(session, "hardware.source_pairs.page", {
+            "offset": offset, "limit": page_size,
+            "expected_revision": saved["program_revision"],
+            "expected_generation": saved["generation"]})
+        if reply.get("read_only") is not True:
+            raise ValueError("Live source provider is not explicitly read-only")
+        live = reply["source_pairs"]
+        if _source_pairs_metadata(live) != identity:
+            raise ValueError("Live source identity or inventory differs from checkpoint")
+        chunk = rows[offset:offset + page_size]
+        next_offset = offset + len(chunk)
+        if (type(live.get("offset")) is not int or live["offset"] != offset
+                or type(live.get("limit")) is not int or live["limit"] != page_size
+                or type(live.get("displayed")) is not int
+                or live["displayed"] != len(chunk)
+                or type(live.get("next_offset")) is not int
+                or live["next_offset"] != next_offset
+                or live.get("has_more") is not (next_offset < len(rows))
+                or live.get("rows") != chunk):
+            raise ValueError("Live source rows, pagination or cursor differ")
+    # When total_pairs is an exact multiple of page_size, the loop above
+    # includes the terminal empty page. Otherwise explicitly fence the end.
+    if len(rows) % page_size:
+        reply = rpc(session, "hardware.source_pairs.page", {
+            "offset": len(rows), "limit": page_size,
+            "expected_revision": saved["program_revision"],
+            "expected_generation": saved["generation"]})
+        live = reply["source_pairs"]
+        if (reply.get("read_only") is not True
+                or _source_pairs_metadata(live) != identity
+                or type(live.get("offset")) is not int
+                or live["offset"] != len(rows)
+                or type(live.get("next_offset")) is not int
+                or live["next_offset"] != len(rows)
+                or type(live.get("limit")) is not int
+                or live["limit"] != page_size
+                or type(live.get("displayed")) is not int
+                or live["displayed"] != 0
+                or live.get("rows") != []
+                or live.get("has_more") is not False):
+            raise ValueError("Live source changed at terminal generation fence")
+    return {
+        "verified_sha256": verified["payload_sha256"],
+        "identity_matches": True, "evidence_matches": True,
+        "total_pairs": len(rows),
+        "bounded_source_complete": verified["bounded_source_complete"],
+        "read_only": True, "resume_authorized": False,
+        "apply_authorized": False, "tool_execution_authorized": False,
+        "next_action": "NEW_REVIEW_REQUIRED",
+        "notice": "Static source rebind only; not execution, active MM/VBR/ISR, or Apply",
+    }
+
+
 REPORT_MAX_UNITS = 1024 * 1024
 REPORT_MAX_BYTES = 2500000
 REPORT_IDENTITY = ("format", "revision", "program_revision", "generation",
@@ -1215,7 +1298,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--session", default=os.environ.get(
         "GHIDRASSIST_AGENT_SESSION", str(Path.home() / ".local/state/ghidrassist-agent/session.json")))
-    parser.add_argument("action", choices=("status", "snapshot", "analyze", "task", "mmio", "review-preview", "profile-select", "function", "xrefs", "function-xrefs-body", "decompile", "decompile-status", "bundle", "paths", "listing", "listing-range", "goto", "tab-select", "table-select", "program-open", "review-prepare", "review-apply", "review-undo", "cancel", "report", "export", "agentic-findings", "agentic-checkpoint", "agentic-verify", "agentic-read", "agentic-resume-check", "agentic-review-draft", "agentic-lineage-verify", "agentic-lineage-chain-verify", "agentic-binding-create", "source-pairs", "source-pairs-checkpoint", "source-pairs-verify", "source-pairs-read", "report-checkpoint", "report-checkpoint-verify", "report-set-checkpoint", "report-set-verify"))
+    parser.add_argument("action", choices=("status", "snapshot", "analyze", "task", "mmio", "review-preview", "profile-select", "function", "xrefs", "function-xrefs-body", "decompile", "decompile-status", "bundle", "paths", "listing", "listing-range", "goto", "tab-select", "table-select", "program-open", "review-prepare", "review-apply", "review-undo", "cancel", "report", "export", "agentic-findings", "agentic-checkpoint", "agentic-verify", "agentic-read", "agentic-resume-check", "agentic-review-draft", "agentic-lineage-verify", "agentic-lineage-chain-verify", "agentic-binding-create", "source-pairs", "source-pairs-checkpoint", "source-pairs-verify", "source-pairs-read", "source-pairs-resume-check", "report-checkpoint", "report-checkpoint-verify", "report-set-checkpoint", "report-set-verify"))
     parser.add_argument("address", nargs="?")
     parser.add_argument("--filter", default="")
     parser.add_argument("--row", type=int, default=None)
@@ -1298,6 +1381,17 @@ def main():
             return 0
         except (OSError,ValueError,KeyError,TypeError,UnicodeError,HTTPError) as error:
             print("Report snapshot refused: "+str(error),file=sys.stderr)
+            return 1
+    if args.action=="source-pairs-resume-check":
+        if not args.input:
+            parser.error("source-pairs-resume-check requires --input")
+        try:
+            session=load_session(args.session)
+            print(json.dumps(check_source_pairs_resume_preflight(
+                session,args.input,args.source_limit),indent=2,ensure_ascii=False))
+            return 0
+        except (OSError,ValueError,KeyError,TypeError,UnicodeError,HTTPError) as error:
+            print("Live source rebind refused: "+str(error),file=sys.stderr)
             return 1
     if args.action=="source-pairs-read":
         if not args.input:

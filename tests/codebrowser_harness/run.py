@@ -551,9 +551,16 @@ def main():
                              "max_depth":4,"offset":1,"limit":1}).get("paths",{})
                         if second_page.get("total_paths")!=1 or second_page.get("paths")!=[]:
                             raise RuntimeError("HTTP paths pagination invalid")
-                        # Read-only Review gates: generic CPU32 must not
-                        # inherit MC68332 proposals; explicit selection does
-                        # not edit the Ghidra database.
+                        # Read-only Review gates: make the generic CPU32
+                        # precondition explicit because earlier probes may
+                        # have selected MC68332 in this same CodeBrowser.
+                        generic=http_call("hardware.profile.select",
+                                          {"profile":"CPU32_SURVEY"})
+                        if "CPU32" not in generic.get("ui",{}).get(
+                                "hardware",{}).get("profile",""):
+                            raise RuntimeError("Explicit generic CPU32 profile not selected")
+                        # Generic CPU32 must not inherit MC68332 proposals;
+                        # explicit profile selection does not edit the database.
                         from urllib.error import HTTPError
                         try:
                             http_call("hardware.review.preview",{"offset":0,"limit":10})
