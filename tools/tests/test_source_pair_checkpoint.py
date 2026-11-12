@@ -508,6 +508,33 @@ class SourceCheckpoint(unittest.TestCase):
             self.assertEqual(terminal["changes"], [])
             self.assertFalse(result["coverage_changed"])
 
+    def test_offline_compare_added_removed_and_bounded_pagination(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            old = Path(tmp) / "old.json"
+            new = Path(tmp) / "new.json"
+            with patch.object(agent, "rpc", side_effect=self.fake_rpc):
+                agent.capture_source_pairs_checkpoint({}, old, 2)
+
+            def shifted_rpc(session, method, params):
+                reply = page(params["offset"], params["limit"],
+                             generation="synthetic-run-B", revision=8)
+                for row in reply["source_pairs"]["rows"]:
+                    if row["function"] == 0x200:
+                        row.update(function=0x220, indirectPc=0x226, vbrPc=0x228)
+                return reply
+
+            with patch.object(agent, "rpc", side_effect=shifted_rpc):
+                agent.capture_source_pairs_checkpoint({}, new, 2)
+            first = agent.compare_source_pairs_checkpoints(old, new, 0, 1)
+            second = agent.compare_source_pairs_checkpoints(old, new, 1, 1)
+            self.assertEqual(first["total_changes"], 2)
+            self.assertTrue(first["has_more"])
+            self.assertFalse(second["has_more"])
+            self.assertEqual([first["changes"][0]["kind"], second["changes"][0]["kind"]],
+                             ["REMOVED", "ADDED"])
+            self.assertEqual(first["older_revision"], 7)
+            self.assertEqual(first["newer_revision"], 8)
+
     def test_offline_compare_rejects_tamper_wrong_import_and_bad_page(self):
         import hashlib
         with tempfile.TemporaryDirectory() as tmp:
