@@ -190,6 +190,28 @@ class SourceCheckpoint(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,"coverage mismatch"):
                 agent.verify_source_pairs_checkpoint(valid)
 
+    def test_legacy_checkpoint_remains_verifiable_without_invented_coverage(self):
+        import hashlib
+        with tempfile.TemporaryDirectory() as tmp:
+            out=Path(tmp)/"legacy.json"
+            with patch.object(agent,"rpc",side_effect=self.fake_rpc):
+                agent.capture_source_pairs_checkpoint({},out,2)
+            envelope=json.loads(out.read_text())
+            for key in ("functions_with_both_sources","indirect_only_functions",
+                        "movec_only_functions","indirect_only_sites",
+                        "movec_only_sites","reset_visited_functions_with_both",
+                        "coverage_incomplete"):
+                envelope["payload"].pop(key)
+            raw=json.dumps(envelope["payload"],sort_keys=True,
+                           separators=(",",":"),ensure_ascii=False).encode()
+            envelope["payload_sha256"]=hashlib.sha256(raw).hexdigest()
+            out.write_text(json.dumps(envelope))
+            verified=agent.verify_source_pairs_checkpoint(out)
+            self.assertTrue(verified["verified"])
+            self.assertFalse(verified["coverage_available"])
+            self.assertIsNone(verified["source_coverage"])
+            self.assertFalse(verified["resume_authorized"])
+
     def test_incomplete_inventory_not_marked_complete(self):
         with tempfile.TemporaryDirectory() as tmp:
             out = Path(tmp) / "partial.json"
