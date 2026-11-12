@@ -1246,6 +1246,8 @@ def main():
     parser.add_argument("--max-depth", type=int, default=8)
     parser.add_argument("--offset", type=int, default=0)
     parser.add_argument("--limit", type=int, default=100)
+    parser.add_argument("--source-limit", type=int, default=32,
+                        help="Offline source-pairs-read page size 1..32")
     args = parser.parse_args()
     # Check a resumed page BEFORE reading any local bearer session receipt.
     # CodeBrowser navigation does not change Program revision, so an
@@ -1302,7 +1304,7 @@ def main():
             parser.error("source-pairs-read requires --input")
         try:
             print(json.dumps(read_source_pairs_checkpoint_page(
-                args.input,args.offset,args.limit),indent=2,ensure_ascii=False))
+                args.input,args.offset,args.source_limit),indent=2,ensure_ascii=False))
             return 0
         except (OSError,ValueError,KeyError,TypeError,UnicodeError) as error:
             print("Offline source page refused: "+str(error),file=sys.stderr)
