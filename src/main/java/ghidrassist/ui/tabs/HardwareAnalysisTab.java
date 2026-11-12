@@ -337,6 +337,19 @@ public final class HardwareAnalysisTab extends JPanel {
         answer.addProperty("omitted_movec",page.omittedVbr());
         answer.addProperty("reset_root_recognized",page.resetRootRecognized());
         answer.addProperty("reset_graph_incomplete",page.resetGraphIncomplete());
+        // Retained source coverage also accounts for JSR-only and
+        // MOVEC-only functions omitted by the pair-only display.
+        // No unmatched site is evidence of absent hardware behavior.
+        var coverage=ghidrassist.hardware.HardwareResetIndirectVbrCorrelation
+            .coverage(latestJointInventory);
+        answer.addProperty("functions_with_both_sources",coverage.functionsWithBoth());
+        answer.addProperty("indirect_only_functions",coverage.indirectOnlyFunctions());
+        answer.addProperty("movec_only_functions",coverage.vbrOnlyFunctions());
+        answer.addProperty("indirect_only_sites",coverage.indirectOnlySites());
+        answer.addProperty("movec_only_sites",coverage.vbrOnlySites());
+        answer.addProperty("reset_visited_functions_with_both",
+            coverage.resetVisitedFunctionsWithBoth());
+        answer.addProperty("coverage_incomplete",coverage.inventoryIncomplete());
         answer.addProperty("observed_inventory_incomplete",
             page.omittedIndirect()>0 || page.omittedVbr()>0 ||
             page.resetGraphIncomplete() || !page.resetRootRecognized());

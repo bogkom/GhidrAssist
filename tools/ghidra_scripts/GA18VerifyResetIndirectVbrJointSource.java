@@ -171,6 +171,24 @@ public class GA18VerifyResetIndirectVbrJointSource extends GhidraScript {
             // is the only input accepted by Automation source pagination.
             Object inventory=selected.getClass().getField("sourceInventory").get(selected);
             check(inventory!=null,"production report retains bounded live source inventory");
+            // New function-level coverage must be derived from the SAME
+            // production Ghidra source inventory, not a test-only fixture.
+            Class<?> correlation=Class.forName(
+                "ghidrassist.hardware.HardwareResetIndirectVbrCorrelation",
+                true,loader);
+            Object coverage=correlation.getMethod("coverage",inventory.getClass())
+                .invoke(null,inventory);
+            Class<?> coverageType=coverage.getClass();
+            int both=(Integer)coverageType.getMethod("functionsWithBoth")
+                .invoke(coverage);
+            int jsrOnly=(Integer)coverageType.getMethod("indirectOnlySites")
+                .invoke(coverage);
+            int vbrOnly=(Integer)coverageType.getMethod("vbrOnlySites")
+                .invoke(coverage);
+            boolean incomplete=(Boolean)coverageType.getMethod("inventoryIncomplete")
+                .invoke(coverage);
+            check(both==2 && jsrOnly==0 && vbrOnly==0 && incomplete,
+                "real native JSR/MOVEC inventory coverage preserves omitted computed JSR");
             Method page=inventory.getClass().getMethod("page",int.class,int.class);
             Object firstPage=page.invoke(inventory,0,1);
             Method total=firstPage.getClass().getMethod("colocatedPairs");

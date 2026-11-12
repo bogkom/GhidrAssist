@@ -71,6 +71,59 @@ public final class HardwareResetIndirectVbrCorrelation {
         }
     }
 
+    /**
+     * GA-01/11: function-level coverage of the retained, bounded source
+     * inventory, including source sites that have NO same-function partner.
+     * These counts describe decoded source locations, never absence of
+     * hardware effects. Omitted witnesses and incomplete RESET traversal
+     * prevent any negative inference.
+     */
+    public record SourceCoverage(int functionsWithBoth,
+            int indirectOnlyFunctions,int vbrOnlyFunctions,
+            int indirectOnlySites,int vbrOnlySites,
+            int resetVisitedFunctionsWithBoth,
+            boolean inventoryIncomplete) {
+        public SourceCoverage {
+            if(functionsWithBoth<0 || indirectOnlyFunctions<0 ||
+                    vbrOnlyFunctions<0 || indirectOnlySites<0 ||
+                    vbrOnlySites<0 || resetVisitedFunctionsWithBoth<0 ||
+                    resetVisitedFunctionsWithBoth>functionsWithBoth)
+                throw new IllegalArgumentException("Invalid source coverage");
+        }
+    }
+
+    public static SourceCoverage coverage(SourceInventory inventory) {
+        if(inventory==null)throw new IllegalArgumentException("Missing source inventory");
+        Map<Long,Integer> indirectByFunction=new HashMap<>();
+        Map<Long,Integer> vbrByFunction=new HashMap<>();
+        for(Indirect item:inventory.indirect())
+            indirectByFunction.merge(item.caller(),1,Integer::sum);
+        for(Vbr item:inventory.vbr())
+            vbrByFunction.merge(item.function(),1,Integer::sum);
+        int both=0,onlyIndirectFunctions=0,onlyVbrFunctions=0;
+        int onlyIndirectSites=0,onlyVbrSites=0,resetBoth=0;
+        for(Map.Entry<Long,Integer> entry:indirectByFunction.entrySet()) {
+            if(vbrByFunction.containsKey(entry.getKey())) {
+                both++;
+                if(inventory.resetRecognized() &&
+                        inventory.resetVisited().contains(entry.getKey()))
+                    resetBoth++;
+            } else {
+                onlyIndirectFunctions++;
+                onlyIndirectSites+=entry.getValue();
+            }
+        }
+        for(Map.Entry<Long,Integer> entry:vbrByFunction.entrySet())
+            if(!indirectByFunction.containsKey(entry.getKey())) {
+                onlyVbrFunctions++;
+                onlyVbrSites+=entry.getValue();
+            }
+        return new SourceCoverage(both,onlyIndirectFunctions,
+            onlyVbrFunctions,onlyIndirectSites,onlyVbrSites,resetBoth,
+            inventory.omittedIndirect()>0 || inventory.omittedVbr()>0 ||
+            inventory.resetIncomplete() || !inventory.resetRecognized());
+    }
+
     public enum ResetRelation {
         IN_OBSERVED_RESET_CALL_SUBSET,
         OUTSIDE_OBSERVED_RESET_CALL_SUBSET,
@@ -257,7 +310,7 @@ public final class HardwareResetIndirectVbrCorrelation {
                 limit<1 || limit>MAX_DISPLAY)
             throw new IllegalArgumentException("Invalid bounded source join");
         for(Long entry:resetVisited)
-            if(entry==null || entry<0 || entry>0xffffffffL || (entry&1)!=0)
+            if(entry==null || entry<0 || entry>MCU_MAX || (entry&1)!=0)
                 throw new IllegalArgumentException("Invalid RESET source entry");
         List<Indirect> jsrs=new ArrayList<>(indirect);
         List<Vbr> movecs=new ArrayList<>(vbr);

@@ -271,6 +271,68 @@ public final class HardwareResetIndirectVbrCorrelationSelfTest {
             immutable=true;
         }
         check(immutable,"Returned candidate rows immutable");
+        // SourceInventory and direct paging must enforce the same MCU24
+        // aperture: a 32-bit host address cannot be a selected-MC68332
+        // RESET graph member, even when no pairs are displayed.
+        reject(()->HardwareResetIndirectVbrCorrelation.page(
+            List.of(),List.of(),Set.of(0x01000000L),true,false,
+            0,0,0,1),
+            "Out-of-aperture RESET root rejected by page without rows");
+        reject(()->new HardwareResetIndirectVbrCorrelation.SourceInventory(
+            List.of(),List.of(),Set.of(0x01000000L),true,false,0,0),
+            "Out-of-aperture RESET root rejected by retained inventory");
+        reject(()->HardwareResetIndirectVbrCorrelation.page(
+            List.of(),List.of(),Set.of(0xFFFFFFFEL),true,false,
+            0,0,0,1),
+            "Even aligned 32-bit host RESET roots cannot enter MCU24 evidence");
+        check(HardwareResetIndirectVbrCorrelation.page(
+            List.of(),List.of(),Set.of(0x00FFFFFEL),true,false,
+            0,0,0,1).rows().isEmpty(),
+            "Last aligned MCU24 RESET source remains admissible");
+        // The pair-only table hides legitimate unmatched source sites.
+        // Coverage must preserve these observed locations without inferring
+        // absence of MMIO/VBR effects or inventing RESET execution.
+        var coverageInventory=new HardwareResetIndirectVbrCorrelation.SourceInventory(
+            List.of(j1,j2,j3),List.of(v1,v2,v3,v4),
+            Set.of(0x100L,0x130L),true,false,0,0);
+        var coverage=HardwareResetIndirectVbrCorrelation.coverage(coverageInventory);
+        check(coverage.functionsWithBoth()==2 &&
+            coverage.indirectOnlyFunctions()==0 &&
+            coverage.vbrOnlyFunctions()==1 &&
+            coverage.indirectOnlySites()==0 &&
+            coverage.vbrOnlySites()==1 &&
+            coverage.resetVisitedFunctionsWithBoth()==1 &&
+            !coverage.inventoryIncomplete(),
+            "Function-level coverage retains unmatched MOVEC and observed RESET membership");
+        var onlyJsr=new HardwareResetIndirectVbrCorrelation.Indirect(
+            0x700L,0x708L,0x800L,false,true);
+        var onlyMovec=new HardwareResetIndirectVbrCorrelation.Vbr(
+            0x900L,0x908L,null,true);
+        var mixedInventory=new HardwareResetIndirectVbrCorrelation.SourceInventory(
+            List.of(j1,onlyJsr),List.of(v1,onlyMovec),
+            Set.of(0x130L),true,true,3,4);
+        var mixed=HardwareResetIndirectVbrCorrelation.coverage(mixedInventory);
+        check(mixed.functionsWithBoth()==1 &&
+            mixed.indirectOnlyFunctions()==1 && mixed.vbrOnlyFunctions()==1 &&
+            mixed.indirectOnlySites()==1 && mixed.vbrOnlySites()==1 &&
+            mixed.resetVisitedFunctionsWithBoth()==1 &&
+            mixed.inventoryIncomplete(),
+            "Unmatched JSR/MOVEC sites and omitted/partial RESET evidence stay visible");
+        var unknownInventory=new HardwareResetIndirectVbrCorrelation.SourceInventory(
+            List.of(j1),List.of(v1),Set.of(),false,false,0,0);
+        var unknownCoverage=HardwareResetIndirectVbrCorrelation.coverage(unknownInventory);
+        check(unknownCoverage.functionsWithBoth()==1 &&
+            unknownCoverage.resetVisitedFunctionsWithBoth()==0 &&
+            unknownCoverage.inventoryIncomplete(),
+            "Unknown RESET root cannot claim observed membership or complete coverage");
+        check(HardwareResetIndirectVbrCorrelation.coverage(
+            new HardwareResetIndirectVbrCorrelation.SourceInventory(
+                List.of(),List.of(),Set.of(),true,false,0,0))
+            .equals(new HardwareResetIndirectVbrCorrelation.SourceCoverage(
+                0,0,0,0,0,0,false)),
+            "Empty retained inventory has zero source coverage, not invented pairs");
+        reject(()->HardwareResetIndirectVbrCorrelation.coverage(null),
+            "Missing retained source inventory is not silently treated as empty");
         System.out.println("HardwareResetIndirectVbrCorrelationSelfTest PASS: assertions="+checks);
     }
 }
