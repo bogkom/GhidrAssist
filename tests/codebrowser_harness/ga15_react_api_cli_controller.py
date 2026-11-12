@@ -628,7 +628,7 @@ def main():
     forged_source.unlink()
     after_source=command(args.session,"status")
     assert before_source["program"]==after_source["program"]
-    assert before_source["revision"]==after_source["revision"]
+    assert before_source["program_writable"]==after_source["program_writable"]
     receipt={
         "schema":1,"synthetic_only":True,
         "scenario":"normal","scenario_passed":True,
