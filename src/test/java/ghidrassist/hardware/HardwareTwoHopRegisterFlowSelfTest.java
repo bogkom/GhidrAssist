@@ -503,6 +503,13 @@ public final class HardwareTwoHopRegisterFlowSelfTest {
             0x600,0x60c,0x640,0x642,0x700,0x700,0x1000000L,0x40ca,16,
             2,3,false,false),
             "out-of-range two-hop MMIO address cannot be published");
+        var fullRegisterCandidate=new HardwareTwoHopRegisterFlow.Candidate(
+            0x600,0x60c,0x640,0x642,0x700,0x700,simcr,0x40ca,16,
+            HardwareCallsiteRegisterFlow.MAX_REGISTER_CELLS,
+            HardwareCallsiteRegisterFlow.MAX_REGISTER_CELLS,false,false);
+        ok(fullRegisterCandidate.knownEntryRegisters()==
+                HardwareCallsiteRegisterFlow.MAX_REGISTER_CELLS,
+            "legitimate maximum A/D register count remains representable");
         reject(()->new HardwareTwoHopRegisterFlow.Summary(
             1,1,0,0,0,0,0,0,0,1,false,List.of()),
             "two-hop summary rejects a forged omitted-row flag");

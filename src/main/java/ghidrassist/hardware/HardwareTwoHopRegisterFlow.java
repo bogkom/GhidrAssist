@@ -72,8 +72,10 @@ public final class HardwareTwoHopRegisterFlow {
                         effectiveAddress>HardwareDataflow.MASK24) ||
                     writtenWord!=null && (writtenWord<0 || writtenWord>0xffff) ||
                     bits!=8 && bits!=16 && bits!=32 ||
-                    knownEntryRegisters<0 || knownEntryRegisters>8 ||
-                    knownInnerRegisters<0 || knownInnerRegisters>8)
+                    knownEntryRegisters<0 || knownEntryRegisters>
+                        HardwareCallsiteRegisterFlow.MAX_REGISTER_CELLS ||
+                    knownInnerRegisters<0 || knownInnerRegisters>
+                        HardwareCallsiteRegisterFlow.MAX_REGISTER_CELLS)
                 throw new IllegalArgumentException("Invalid two-hop source candidate");
         }
     }
