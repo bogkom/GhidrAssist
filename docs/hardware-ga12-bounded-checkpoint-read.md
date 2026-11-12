@@ -29,3 +29,12 @@ and isolated synthetic Ghidra workflows must PASS on the exact PR SHA.
 This is not cross-project trust, a verified hardware profile, active
 SIMCR/MM or VBR/ISR proof, and does not touch original ECU411 firmware,
 user Ghidra projects or stopped Wyse/Precision/legacy Supervisor tests.
+
+
+## Offline source-pair checkpoint comparison (GA-12/18, pending acceptance)
+
+The `ghidrassist-agent source-pairs-compare --input OLD.json --compare-input NEW.json --offset 0 --source-limit 32` command compares two separately SHA-256-verified, bounded, static source-pair inventories without contacting the Ghidra RPC server. It requires the same firmware import SHA-256, the same explicitly selected MCU profile, and modern coverage metadata on both inputs. A changed import/profile or a legacy checkpoint is refused rather than interpreted as a source delta.
+
+The read-only result reports added, removed and changed source-pair records keyed by function/indirect-JSR/MOVEC source PCs, including before/after evidence, exact total and paginated changes, source coverage before/after, generation/revision identifiers and a separate incompleteness indicator. No changes means only that the retained pair rows match: unpaired MMIO/MOVEC sources, omitted evidence, path feasibility and actual hardware state may still differ. Comparing checkpoints does **not** rebind them to a live Program, restore a CALL graph, authorize Resume/Review/Apply, or implement firmware comparison GA-14.
+
+Acceptance requires deterministic positive/negative Python tests (including forged digest, mismatched firmware, missing coverage and invalid pagination), Java 21 source gates, full Java 25 Ghidra 12.1.4 PUBLIC build and genuine isolated synthetic Ghidra CI at the final exact SHA. This section documents the proposed scope, not a formal GA-12/18 completion claim.
