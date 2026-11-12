@@ -100,6 +100,9 @@ public final class HardwareResetFlow {
     public static boolean sourceResetPcEligible(Vector vector,
             boolean selectedMc68332) {
         return vector!=null && vector.valid() &&
+            vector.initialSp()>=0 && vector.initialSp()<=0xffffffffL &&
+            vector.resetPc()>0 && vector.resetPc()<0xffffffffL &&
+            (vector.resetPc()&1L)==0 &&
             (!selectedMc68332 || vector.resetPc()<=0xffffffL);
     }
 
