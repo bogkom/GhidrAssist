@@ -44,45 +44,45 @@ counters. This hardens typed evidence only; it does not prove CALL execution,
 branch feasibility, MM latch, active ISR/VBR or physical bus mapping.
 GA-02/03/18 remain PARTIAL.
 
-## GA-01/11/18 — 2026-11-12: public RESET Vector eligibility fail-closed (pending exact-SHA CI)
+## GA-01/11/18 — 2026-11-12: public RESET Vector eligibility integrated
 
-The public sourceResetPcEligible gate now independently validates unsigned
-32-bit source vector words, non-null/non-erased aligned RESET PC and the
-selected-MC68332 24-bit scope, even for caller-created Vector(valid=true).
-A caller-supplied valid flag cannot promote a forged malformed PC to a
-recognized RESET candidate. Generic CPU32 continues to accept legitimate
-wide aligned source PCs. Adversarial Java21 regressions cover forged PC/SP
-values and the generic-versus-selected-device distinction. Full Java25
-Ghidra 12.1.4 PUBLIC build and real isolated synthetic headless CI on the
-exact PR SHA remain required. This is source eligibility, not proof of
-executed RESET, MM latch, active ISR/VBR or physical mapping.
+PR [#314](https://github.com/bogkom/GhidrAssist/pull/314) was squash-merged
+as `ada989aabbd1b140f86fe960d2bd618946287744` from tested head
+`7b9d10f43310d769095f13a3985aa03b45e7e82b`. The exact head passed
+`28/28` GitHub Actions; the merge commit passed `4/4`. The public
+`sourceResetPcEligible` gate validates unsigned 32-bit source vector words,
+non-null/non-erased aligned RESET PC and selected-MC68332 24-bit scope,
+even for caller-created `Vector(valid=true)`. Generic CPU32 continues to
+accept legitimate wide aligned source PCs. This is source eligibility, not
+proof of executed RESET, MM latch, active ISR/VBR or physical mapping.
 GA-01/11/18 remain PARTIAL; GA-14 deferred.
 
-## GA-01/02/11/18 — 2026-11-12: RESET publication identity binding (pending exact-SHA CI)
+## GA-01/02/11/18 — 2026-11-12: RESET publication identity binding integrated
 
-The read-only RESET Summary Markdown publisher now rejects source-report
-coordinates outside aligned CPU32 bounds, recognized graphs attributed to a
-different vector/function entry, and evidence chains that do not start at the
-published root. Missing roots remain explicitly UNKNOWN rather than acquiring
-a guessed CALL graph. Five adversarial source regressions cover forged
-publication coordinates and a positive exact-root witness. This guards
-report attribution, not source authentication or executed RESET; static
-CALL reachability does not prove executed MMIO, MM latch or active VBR/ISR.
-Java21 source tests, complete Java25/Ghidra 12.1.4 PUBLIC extension build,
-and genuine isolated synthetic Ghidra CI must PASS at the exact head SHA
-before integration. GA-01/02/11/18 remain PARTIAL; GA-14 deferred.
+PR [#313](https://github.com/bogkom/GhidrAssist/pull/313) was squash-merged
+as `b07bb4d51555fcbe82cff15ac77a1f56619e691f` from tested head
+`ddae359f4ce8e26cd3791133c124a0214fbba262`. The exact head passed
+`28/28` GitHub Actions; the merge commit passed `4/4`. The read-only
+RESET Summary Markdown publisher rejects source-report coordinates outside
+aligned CPU32 bounds, graphs attributed to a different vector/function
+entry, and evidence chains that do not start at the published root. Missing
+roots remain explicitly UNKNOWN rather than acquiring a guessed CALL graph.
+This guards report attribution, not source authentication or executed RESET;
+static CALL reachability does not prove executed MMIO, MM latch or active
+VBR/ISR. GA-01/02/11/18 remain PARTIAL; GA-14 deferred.
 
-## GA-01/02/11/18 — 2026-11-11: RESET public summary root coherence (pending CI)
+## GA-01/02/11/18 — 2026-11-11: RESET public summary root coherence integrated
 
-The read-only RESET static source Summary constructor now rejects recognized
-roots with no inspected function, missing-root reports without UNKNOWN,
-witness paths longer than the inspected-function count, and multiple
-incompatible source roots in one published inventory. Source graph traversal
-and Review/Apply remain unchanged. Java21 adversarial source regressions,
-full Java25 Ghidra 12.1.4 PUBLIC build and genuine synthetic headless CI
-must pass at the exact PR SHA before integration. This is source-report
-consistency, not proof of executed RESET, latched MM, active ISR/VBR or
-physical bus mapping. GA-01/02/11/18 remain PARTIAL.
+PR [#312](https://github.com/bogkom/GhidrAssist/pull/312) was squash-merged
+as `31bc93631d64b98129db1ad9939287a7c27b7d54` from tested head
+`02cf0b46c30bd37407c1aed30a22e5da415c3e63`. The exact head passed
+`28/28` GitHub Actions; the merge commit passed `4/4`. The read-only
+RESET static source Summary constructor rejects recognized roots with no
+inspected function, missing-root reports without UNKNOWN, witness paths
+longer than the inspected-function count, and multiple incompatible roots
+in one published inventory. This is source-report consistency, not proof of
+executed RESET, latched MM, active ISR/VBR or physical bus mapping.
+GA-01/02/11/18 remain PARTIAL.
 
 ## GA-07/13/18 — 2026-11-11: imported CSV formula provenance
 
