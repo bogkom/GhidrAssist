@@ -421,6 +421,9 @@ public final class AutomationServer implements AutoCloseable {
                             "Subsequent source page requires Program revision and generation");
                     result.add("source_pairs",provider.getUI().automationJointSourcePage(
                         offset,limit,expectedRevision,generation));
+                    // Explicit read-only contract for offline-checkpoint live rebind.
+                    // This endpoint only inspects the selected Program; it never Apply/Undo.
+                    result.addProperty("read_only",true);
                 } else if ("analysis.report.manifest".equals(method)) {
                     if(args.size()!=0)
                         throw new IllegalArgumentException(
