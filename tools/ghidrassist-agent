@@ -309,7 +309,7 @@ def capture_source_pairs_checkpoint(session, output, page_size=32):
             "bounded_source_complete":complete,"payload_sha256":digest}
 
 
-def verify_source_pairs_checkpoint(source):
+def verify_source_pairs_checkpoint(source, _include_payload=False):
     """Offline hash/count/provenance integrity check; never authorizes replay."""
     path=Path(source).expanduser()
     with path.open("rb") as handle:
@@ -377,7 +377,36 @@ def verify_source_pairs_checkpoint(source):
             "source_coverage":(
                 {key:p[key] for key in coverage_keys} if not legacy else None),
             "coverage_available":not legacy,
-            "resume_authorized":False}
+            "resume_authorized":False,
+            **({"_validated_payload":p} if _include_payload else {})}
+
+
+def read_source_pairs_checkpoint_page(source, offset=0, limit=32):
+    """Offline bounded browse of one hash-verified snapshot; no live RPC/replay."""
+    if (type(offset) is not int or type(limit) is not int or
+            not 0 <= offset <= 1000000 or not 1 <= limit <= 32):
+        raise ValueError("Invalid bounded offline source-pair page")
+    verified = verify_source_pairs_checkpoint(source, _include_payload=True)
+    payload = verified.pop("_validated_payload")
+    rows = payload["rows"]
+    start = min(offset, len(rows))
+    end = min(start + limit, len(rows))
+    return {
+        "offline": True, "read_only": True,
+        "verified_sha256": verified["payload_sha256"],
+        "program_revision": payload["program_revision"],
+        "generation": payload["generation"],
+        "import_sha256": payload["import_sha256"],
+        "profile": payload["profile"],
+        "total_pairs": len(rows), "offset": offset, "limit": limit,
+        "has_more": end < len(rows),
+        "bounded_source_complete": verified["bounded_source_complete"],
+        "coverage_available": verified["coverage_available"],
+        "source_coverage": verified["source_coverage"],
+        "resume_authorized": False,
+        "rows": rows[start:end],
+        "notice": "Historical static evidence only; no live Ghidra, MM/VBR activation or Apply",
+    }
 
 
 REPORT_MAX_UNITS = 1024 * 1024
@@ -1186,7 +1215,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--session", default=os.environ.get(
         "GHIDRASSIST_AGENT_SESSION", str(Path.home() / ".local/state/ghidrassist-agent/session.json")))
-    parser.add_argument("action", choices=("status", "snapshot", "analyze", "task", "mmio", "review-preview", "profile-select", "function", "xrefs", "function-xrefs-body", "decompile", "decompile-status", "bundle", "paths", "listing", "listing-range", "goto", "tab-select", "table-select", "program-open", "review-prepare", "review-apply", "review-undo", "cancel", "report", "export", "agentic-findings", "agentic-checkpoint", "agentic-verify", "agentic-read", "agentic-resume-check", "agentic-review-draft", "agentic-lineage-verify", "agentic-lineage-chain-verify", "agentic-binding-create", "source-pairs", "source-pairs-checkpoint", "source-pairs-verify", "report-checkpoint", "report-checkpoint-verify", "report-set-checkpoint", "report-set-verify"))
+    parser.add_argument("action", choices=("status", "snapshot", "analyze", "task", "mmio", "review-preview", "profile-select", "function", "xrefs", "function-xrefs-body", "decompile", "decompile-status", "bundle", "paths", "listing", "listing-range", "goto", "tab-select", "table-select", "program-open", "review-prepare", "review-apply", "review-undo", "cancel", "report", "export", "agentic-findings", "agentic-checkpoint", "agentic-verify", "agentic-read", "agentic-resume-check", "agentic-review-draft", "agentic-lineage-verify", "agentic-lineage-chain-verify", "agentic-binding-create", "source-pairs", "source-pairs-checkpoint", "source-pairs-verify", "source-pairs-read", "report-checkpoint", "report-checkpoint-verify", "report-set-checkpoint", "report-set-verify"))
     parser.add_argument("address", nargs="?")
     parser.add_argument("--filter", default="")
     parser.add_argument("--row", type=int, default=None)
@@ -1267,6 +1296,16 @@ def main():
             return 0
         except (OSError,ValueError,KeyError,TypeError,UnicodeError,HTTPError) as error:
             print("Report snapshot refused: "+str(error),file=sys.stderr)
+            return 1
+    if args.action=="source-pairs-read":
+        if not args.input:
+            parser.error("source-pairs-read requires --input")
+        try:
+            print(json.dumps(read_source_pairs_checkpoint_page(
+                args.input,args.offset,args.limit),indent=2,ensure_ascii=False))
+            return 0
+        except (OSError,ValueError,KeyError,TypeError,UnicodeError) as error:
+            print("Offline source page refused: "+str(error),file=sys.stderr)
             return 1
     if args.action=="source-pairs-verify":
         if not args.input:
