@@ -150,7 +150,24 @@ public final class HardwareResetFlowSelfTest {
            graph.markdown(0x2bc0,0x2bc0).contains("Address order is not execution order"),
             "must not claim a runtime execution trace");
 
-        var unknownRoot=HardwareResetFlow.trace(0x7000,calls,List.of(0x5000L),8,50,20);
+        // A report assembled from a different RESET source must never be
+        // published under the caller's claimed vector/function coordinates.
+        var wrongPublications=List.<Runnable>of(
+            ()->graph.markdown(0x2bc2L,0x2bc0L),
+            ()->graph.markdown(0x2bc0L,0x3000L),
+            ()->graph.markdown(0x3000L,0x3000L),
+            ()->graph.markdown(0x2bc1L,0x2bc1L),
+            ()->graph.markdown(0x100000000L,0x2bc0L));
+        for(Runnable probe:wrongPublications) {
+            boolean denied=false;
+            try {probe.run();}
+            catch(IllegalArgumentException expected){denied=true;}
+            ok(denied,"forged RESET publication identity must fail closed");
+        }
+        ok(graph.markdown(0x2bc0L,0x2bc0L).contains(
+            "candidate chain 0x00002BC0"),
+            "exact source-root publication remains available");
+                var unknownRoot=HardwareResetFlow.trace(0x7000,calls,List.of(0x5000L),8,50,20);
         ok(!unknownRoot.rootRecognized() && unknownRoot.unresolved(),
             "unrecognized root must not claim no initialization");
         var indirect=HardwareResetFlow.trace(0,List.of(
