@@ -321,5 +321,64 @@ class SourceCheckpoint(unittest.TestCase):
             self.assertFalse(out.exists())
 
 
+    def test_offline_page_stitch_and_terminal(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "source.json"
+            with patch.object(agent, "rpc", side_effect=self.fake_rpc):
+                agent.capture_source_pairs_checkpoint({}, out, 1)
+            with patch.object(agent, "rpc", side_effect=AssertionError("offline must not use RPC")):
+                first = agent.read_source_pairs_checkpoint_page(out, 0, 1)
+                second = agent.read_source_pairs_checkpoint_page(out, 1, 1)
+                end = agent.read_source_pairs_checkpoint_page(out, 2, 1)
+            self.assertTrue(first["offline"])
+            self.assertTrue(first["read_only"])
+            self.assertTrue(first["has_more"])
+            self.assertFalse(second["has_more"])
+            self.assertEqual(first["rows"] + second["rows"],
+                             agent.read_source_pairs_checkpoint_page(out, 0, 32)["rows"])
+            self.assertEqual(end["rows"], [])
+            self.assertFalse(end["has_more"])
+            self.assertFalse(end["resume_authorized"])
+            self.assertEqual(first["verified_sha256"], second["verified_sha256"])
+            self.assertEqual(first["source_coverage"], second["source_coverage"])
+
+    def test_offline_page_rejects_invalid_arguments_and_forged_hash(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "source.json"
+            with patch.object(agent, "rpc", side_effect=self.fake_rpc):
+                agent.capture_source_pairs_checkpoint({}, out, 2)
+            for offset, limit in ((-1, 1), (0, 0), (0, 33),
+                                  (1000001, 1), (True, 1), (0, False)):
+                with self.subTest(offset=offset, limit=limit):
+                    with self.assertRaisesRegex(ValueError, "bounded"):
+                        agent.read_source_pairs_checkpoint_page(out, offset, limit)
+            envelope = json.loads(out.read_text())
+            envelope["payload"]["rows"][0]["indirectPc"] = 0x166
+            out.write_text(json.dumps(envelope))
+            with self.assertRaisesRegex(ValueError, "SHA-256"):
+                agent.read_source_pairs_checkpoint_page(out, 0, 1)
+
+    def test_offline_page_legacy_coverage_is_unknown(self):
+        import hashlib
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "legacy.json"
+            with patch.object(agent, "rpc", side_effect=self.fake_rpc):
+                agent.capture_source_pairs_checkpoint({}, out, 2)
+            envelope = json.loads(out.read_text())
+            for key in ("functions_with_both_sources", "indirect_only_functions",
+                        "movec_only_functions", "indirect_only_sites",
+                        "movec_only_sites", "reset_visited_functions_with_both",
+                        "coverage_incomplete"):
+                envelope["payload"].pop(key)
+            raw = json.dumps(envelope["payload"], sort_keys=True,
+                             separators=(",", ":"), ensure_ascii=False).encode()
+            envelope["payload_sha256"] = hashlib.sha256(raw).hexdigest()
+            out.write_text(json.dumps(envelope))
+            result = agent.read_source_pairs_checkpoint_page(out, 0, 1)
+            self.assertFalse(result["coverage_available"])
+            self.assertIsNone(result["source_coverage"])
+            self.assertEqual(len(result["rows"]), 1)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
