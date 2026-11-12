@@ -257,7 +257,7 @@ public final class HardwareResetIndirectVbrCorrelation {
                 limit<1 || limit>MAX_DISPLAY)
             throw new IllegalArgumentException("Invalid bounded source join");
         for(Long entry:resetVisited)
-            if(entry==null || entry<0 || entry>0xffffffffL || (entry&1)!=0)
+            if(entry==null || entry<0 || entry>MCU_MAX || (entry&1)!=0)
                 throw new IllegalArgumentException("Invalid RESET source entry");
         List<Indirect> jsrs=new ArrayList<>(indirect);
         List<Vbr> movecs=new ArrayList<>(vbr);
