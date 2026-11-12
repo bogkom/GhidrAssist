@@ -474,31 +474,38 @@ public final class HardwareTwoHopRegisterFlowSelfTest {
         ok(scan(List.of(left),List.of(corruptBranch),
             List.of(leaf),48).rejectedBridge()==1,
             "Unexpected P-code A/D register mutation invalidates bare branch");
-        var truncatedSource=new HardwareTwoHopRegisterFlow.Bridge(
-            0x1000000L,bridge.steps(),0x1000002L,0x700L,true);
+        reject(()->new HardwareTwoHopRegisterFlow.Bridge(
+            0x1000000L,bridge.steps(),0x1000002L,0x700L,true),
+            "25-bit bridge entry and CALL PC are rejected at construction");
+        reject(()->new HardwareTwoHopRegisterFlow.Bridge(0x640,
+            List.of(step(0x640,OTHER,null,null,0,"NOP",0x1000000L)),
+            0x640,null,true),
+            "25-bit successor is rejected at the bridge source boundary");
         reject(()->new HardwareCallsiteRegisterFlow.Call(
             0x600,0x60c,0x1000000L,
             Map.of("A0",simcr,"D0",0x40caL),false),
             "25-bit exact callee target is rejected at the source boundary");
-        ok(HardwareTwoHopRegisterFlow.analyze(
-            List.of(left),List.of(truncatedSource),List.of(leaf),
-            Set.of(simcr),48).rejectedBridge()==1,
-            "25-bit bridge cannot match a verified 24-bit outer CALL");
-        var selfCall=new HardwareTwoHopRegisterFlow.Bridge(
-            0x640,bridge.steps(),0x642,0x640L,true);
-        ok(scan(List.of(left),List.of(selfCall),
-            List.of(leaf),48).rejectedBridge()==1,
-            "Self-recursive intermediate target cannot masquerade as two-hop leaf");
-        var oddSource=new HardwareTwoHopRegisterFlow.Bridge(
-            0x641,bridge.steps(),0x643,0x700L,true);
+        reject(()->new HardwareTwoHopRegisterFlow.Bridge(
+            0x640,bridge.steps(),0x642,0x640L,true),
+            "Self-recursive intermediate target is rejected at construction");
+        reject(()->new HardwareTwoHopRegisterFlow.Bridge(
+            0x641,bridge.steps(),0x643,0x700L,true),
+            "Odd bridge entry and nested CALL PC are rejected at construction");
         reject(()->new HardwareCallsiteRegisterFlow.Call(
             0x600,0x60c,0x641L,
             Map.of("A0",simcr,"D0",0x40caL),false),
             "odd exact callee target is rejected at the source boundary");
-        ok(HardwareTwoHopRegisterFlow.analyze(
-            List.of(left),List.of(oddSource),List.of(leaf),
-            Set.of(simcr),48).rejectedBridge()==1,
-            "odd bridge entry cannot match a verified 24-bit outer CALL");
+        reject(()->new HardwareTwoHopRegisterFlow.Candidate(
+            0x600,0x60c,0x640,0x642,0x700,0x701,simcr,0x40ca,16,
+            2,3,false,false),
+            "odd two-hop STORE PC cannot be published as a typed candidate");
+        reject(()->new HardwareTwoHopRegisterFlow.Candidate(
+            0x600,0x60c,0x640,0x642,0x700,0x700,0x1000000L,0x40ca,16,
+            2,3,false,false),
+            "out-of-range two-hop MMIO address cannot be published");
+        reject(()->new HardwareTwoHopRegisterFlow.Summary(
+            1,1,0,0,0,0,0,0,0,1,true,List.of()),
+            "two-hop summary rejects a forged omitted-row flag");
         // Positive control: a legitimate two-edge conditional branch
         // remains accepted, and agreeing A0 on both paths still reaches
         // the nested JSR with the exact source MMIO candidate.
