@@ -409,6 +409,61 @@ def read_source_pairs_checkpoint_page(source, offset=0, limit=32):
     }
 
 
+
+def compare_source_pairs_checkpoints(older, newer, offset=0, limit=32):
+    """Compare two authenticated offline inventories; never infer execution."""
+    if (type(offset) is not int or type(limit) is not int
+            or not 0 <= offset <= 1000000 or not 1 <= limit <= 32):
+        raise ValueError("Invalid bounded offline source-pair comparison page")
+    left = verify_source_pairs_checkpoint(older, _include_payload=True)
+    right = verify_source_pairs_checkpoint(newer, _include_payload=True)
+    a = left["_validated_payload"]
+    b = right["_validated_payload"]
+    # A changed firmware/profile cannot be interpreted as a change in
+    # source evidence for the same program.
+    if (a["import_sha256"] != b["import_sha256"]
+            or a["profile"] != b["profile"]
+            or not left["coverage_available"] or not right["coverage_available"]):
+        raise ValueError("Source comparison requires identical import/profile and explicit coverage")
+    def key(row):
+        return (row["function"], row["indirectPc"], row["vbrPc"])
+    before = {key(row): row for row in a["rows"]}
+    after = {key(row): row for row in b["rows"]}
+    changes = []
+    for identity in sorted(before.keys() | after.keys()):
+        old = before.get(identity)
+        new = after.get(identity)
+        if old == new:
+            continue
+        changes.append({
+            "kind": "ADDED" if old is None else "REMOVED" if new is None else "CHANGED",
+            "function": identity[0], "indirectPc": identity[1],
+            "vbrPc": identity[2], "before": old, "after": new,
+        })
+    start = min(offset, len(changes))
+    end = min(start + limit, len(changes))
+    # Identical rows do not prove that unpaired sources were unchanged.
+    coverage_changed = left["source_coverage"] != right["source_coverage"]
+    incomplete = (not left["bounded_source_complete"]
+                  or not right["bounded_source_complete"])
+    return {
+        "offline": True, "read_only": True, "resume_authorized": False,
+        "apply_authorized": False, "same_import": True,
+        "older_sha256": left["payload_sha256"],
+        "newer_sha256": right["payload_sha256"],
+        "older_generation": a["generation"], "newer_generation": b["generation"],
+        "older_revision": a["program_revision"],
+        "newer_revision": b["program_revision"],
+        "coverage_changed": coverage_changed,
+        "source_inventory_incomplete": incomplete,
+        "source_coverage_before": left["source_coverage"],
+        "source_coverage_after": right["source_coverage"],
+        "total_changes": len(changes), "offset": offset, "limit": limit,
+        "has_more": end < len(changes), "changes": changes[start:end],
+        "notice": "Historical static source-pair delta only; no CALL execution, active MM/VBR/ISR, or Apply",
+    }
+
+
 def check_source_pairs_resume_preflight(session, source, page_size=32):
     """Read-only live rebind of historical static evidence; never restore execution."""
     if type(page_size) is not int or not 1 <= page_size <= 32:
@@ -1298,7 +1353,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--session", default=os.environ.get(
         "GHIDRASSIST_AGENT_SESSION", str(Path.home() / ".local/state/ghidrassist-agent/session.json")))
-    parser.add_argument("action", choices=("status", "snapshot", "analyze", "task", "mmio", "review-preview", "profile-select", "function", "xrefs", "function-xrefs-body", "decompile", "decompile-status", "bundle", "paths", "listing", "listing-range", "goto", "tab-select", "table-select", "program-open", "review-prepare", "review-apply", "review-undo", "cancel", "report", "export", "agentic-findings", "agentic-checkpoint", "agentic-verify", "agentic-read", "agentic-resume-check", "agentic-review-draft", "agentic-lineage-verify", "agentic-lineage-chain-verify", "agentic-binding-create", "source-pairs", "source-pairs-checkpoint", "source-pairs-verify", "source-pairs-read", "source-pairs-resume-check", "report-checkpoint", "report-checkpoint-verify", "report-set-checkpoint", "report-set-verify"))
+    parser.add_argument("action", choices=("status", "snapshot", "analyze", "task", "mmio", "review-preview", "profile-select", "function", "xrefs", "function-xrefs-body", "decompile", "decompile-status", "bundle", "paths", "listing", "listing-range", "goto", "tab-select", "table-select", "program-open", "review-prepare", "review-apply", "review-undo", "cancel", "report", "export", "agentic-findings", "agentic-checkpoint", "agentic-verify", "agentic-read", "agentic-resume-check", "agentic-review-draft", "agentic-lineage-verify", "agentic-lineage-chain-verify", "agentic-binding-create", "source-pairs", "source-pairs-checkpoint", "source-pairs-verify", "source-pairs-read", "source-pairs-compare", "source-pairs-resume-check", "report-checkpoint", "report-checkpoint-verify", "report-set-checkpoint", "report-set-verify"))
     parser.add_argument("address", nargs="?")
     parser.add_argument("--filter", default="")
     parser.add_argument("--row", type=int, default=None)
@@ -1308,6 +1363,7 @@ def main():
     parser.add_argument("--expected-findings-revision", type=int, default=None)
     parser.add_argument("--output", default="")
     parser.add_argument("--input", default="")
+    parser.add_argument("--compare-input", default="", help="Newer offline source-pair checkpoint")
     parser.add_argument("--parent", default="")
     parser.add_argument("--ancestor", action="append", default=[],
                         help="Ordered oldest-to-newest local chain ancestor; repeat")
@@ -1381,6 +1437,17 @@ def main():
             return 0
         except (OSError,ValueError,KeyError,TypeError,UnicodeError,HTTPError) as error:
             print("Report snapshot refused: "+str(error),file=sys.stderr)
+            return 1
+    if args.action=="source-pairs-compare":
+        if not args.input or not args.compare_input:
+            parser.error("source-pairs-compare requires --input and --compare-input")
+        try:
+            print(json.dumps(compare_source_pairs_checkpoints(
+                args.input,args.compare_input,args.offset,args.source_limit),
+                indent=2,ensure_ascii=False))
+            return 0
+        except (OSError,ValueError,KeyError,TypeError,UnicodeError) as error:
+            print("Offline source comparison refused: "+str(error),file=sys.stderr)
             return 1
     if args.action=="source-pairs-resume-check":
         if not args.input:
