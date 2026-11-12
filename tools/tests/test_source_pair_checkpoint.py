@@ -139,7 +139,11 @@ class SourceCheckpoint(unittest.TestCase):
             self.assertEqual(payload["indirect_only_sites"],1)
             self.assertEqual(payload["indirect_only_functions"],1)
             self.assertTrue(payload["coverage_incomplete"])
-            self.assertTrue(agent.verify_source_pairs_checkpoint(out)["verified"])
+            verified=agent.verify_source_pairs_checkpoint(out)
+            self.assertTrue(verified["verified"])
+            self.assertEqual(verified["source_coverage"]["indirect_only_sites"],1)
+            self.assertEqual(verified["source_coverage"]["functions_with_both_sources"],2)
+            self.assertTrue(verified["source_coverage"]["coverage_incomplete"])
 
     def test_cross_page_coverage_mutation_is_rejected_atomically(self):
         with tempfile.TemporaryDirectory() as tmp:
