@@ -423,6 +423,36 @@ class SourceCheckpoint(unittest.TestCase):
                         with self.assertRaises(ValueError):
                             agent.check_source_pairs_resume_preflight({},out,1)
 
+    def test_live_rebind_rejects_malformed_nonmultiple_terminal_page(self):
+        # Two saved rows and a page size of three exercise the separate
+        # terminal generation fence, not the exact-multiple path.
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "source.json"
+            with patch.object(agent, "rpc", side_effect=self.fake_rpc):
+                agent.capture_source_pairs_checkpoint({}, out, 2)
+            for fault in ("limit", "boolean_displayed", "missing_read_only",
+                          "wrong_next_offset", "unexpected_row"):
+                def live(_session, _method, params):
+                    response = page(params["offset"], params["limit"])
+                    response["read_only"] = True
+                    if params["offset"] == 2:
+                        data = response["source_pairs"]
+                        if fault == "limit":
+                            data["limit"] = 1
+                        elif fault == "boolean_displayed":
+                            data["displayed"] = False
+                        elif fault == "missing_read_only":
+                            response.pop("read_only")
+                        elif fault == "wrong_next_offset":
+                            data["next_offset"] = 1
+                        else:
+                            data["rows"] = [page(0, 1)["source_pairs"]["rows"][0]]
+                    return response
+                with self.subTest(fault=fault):
+                    with patch.object(agent, "rpc", side_effect=live):
+                        with self.assertRaises(ValueError):
+                            agent.check_source_pairs_resume_preflight({}, out, 3)
+
     def test_live_rebind_rejects_legacy_and_invalid_page_size(self):
         with tempfile.TemporaryDirectory() as tmp:
             out=Path(tmp)/"source.json"
