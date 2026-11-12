@@ -1,3 +1,34 @@
+## GA-12/18 — 2026-11-12: integrated read-only live rebind of source-pair checkpoints
+
+PR [#319](https://github.com/bogkom/GhidrAssist/pull/319) was squash-merged
+at `f6e738bf7cad617ddf4b4e8bc562f93b884a484c` from exact candidate
+`bb6a6c4bdb60f3d37ec5f7e98c33f85407b5d800`. Its `source-pairs-resume-check`
+preflight authenticates a saved static JSR/MOVEC source-pair inventory,
+re-reads every row through the current isolated CodeBrowser RPC, checks the
+coverage counters and immutable generation through a terminal page, and
+rejects mismatched or non-read-only evidence. It grants no execution, AI
+resume, Apply or tool authority. Exact-head GitHub Actions passed **10/10**,
+including the Java 25 Ghidra 12.1.4 PUBLIC build and real CodeBrowser
+JSON-RPC/CLI acceptance; the source-pair Python regression passed **21/21**.
+This is live evidence rebind only; GA-12/18 remain PARTIAL and cross-function
+analysis provenance is still an independent requirement.
+
+## GA-02/03/18 — 2026-11-12: public one-hop CALL source coordinate gate PASS
+
+PR [#320](https://github.com/bogkom/GhidrAssist/pull/320) candidate
+`8749575205b4c839a5738475b2685e78a0879900` passed **56/56 exact-head
+GitHub Actions** and is ready for integration. Public one-hop CALL
+context, callee CFG, candidate and summary records reject odd/out-of-range
+MC68332 source coordinates, malformed CFG PCs and contradictory candidate
+or counter shapes. The live service omits invalid/out-of-scope CALL sites as
+explicit incomplete coverage instead of aborting Analyze and validates
+decoded callee successors before construction. Java 21 one-hop/two-hop
+regressions, the Java 25 Ghidra 12.1.4 PUBLIC build, and genuine isolated
+synthetic Ghidra workflows passed on the exact candidate. This prevents
+forged typed source claims; it does not prove CALL execution, path
+feasibility, MM latch, active ISR/VBR or physical bus mapping.
+GA-02/03/18 remain PARTIAL.
+
 ## GA-01/11/18 — 2026-11-12: public RESET Vector eligibility fail-closed (pending exact-SHA CI)
 
 The public sourceResetPcEligible gate now independently validates unsigned

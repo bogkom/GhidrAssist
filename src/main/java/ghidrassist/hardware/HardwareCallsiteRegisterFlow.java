@@ -30,10 +30,17 @@ public final class HardwareCallsiteRegisterFlow {
     public static final int MAX_REPORTED_ROWS=96;
     public static final int MAX_REGISTER_CELLS=16;
 
+    /** Source PCs in this MC68332 lane are aligned CPU32 coordinates. */
+    static boolean sourcePc(long address) {
+        return address>=0 && address<=HardwareDataflow.MASK24 &&
+            (address&1)==0;
+    }
+
     public record Call(long caller,long callPc,Long directCallee,
                        Map<String,Long> agreedRegisters,boolean callerIncomplete) {
         public Call {
-            if(caller<0 || callPc<0 || directCallee!=null&&directCallee<0 ||
+            if(!sourcePc(caller) || !sourcePc(callPc) ||
+                    directCallee!=null && !sourcePc(directCallee) ||
                     agreedRegisters==null ||
                     agreedRegisters.size()>MAX_REGISTER_CELLS)
                 throw new IllegalArgumentException("Invalid direct CALL context");
@@ -49,22 +56,61 @@ public final class HardwareCallsiteRegisterFlow {
     public record Callee(long entry,List<HardwareDataflow.Step> steps,
                          boolean complete) {
         public Callee {
-            if(entry<0 || steps==null || steps.size()>MAX_CALLEE_STEPS)
+            if(!sourcePc(entry) || steps==null ||
+                    steps.size()>MAX_CALLEE_STEPS ||
+                    steps.stream().anyMatch(java.util.Objects::isNull))
                 throw new IllegalArgumentException("Unbounded callee CFG");
             steps=List.copyOf(steps);
+            Set<Long> addresses=new HashSet<>();
+            for(HardwareDataflow.Step step:steps) {
+                if(!sourcePc(step.address) || !addresses.add(step.address))
+                    throw new IllegalArgumentException("Invalid callee source PC");
+                for(Long successor:step.successors)
+                    if(successor==null || !sourcePc(successor))
+                        throw new IllegalArgumentException(
+                            "Invalid callee CFG successor");
+            }
         }
     }
     public record Candidate(long caller,long callPc,long callee,long storePc,
                             HardwareDataflow.Kind kind,Long address,
                             Integer writtenWord,int writeBits,
                             boolean priorUnknownCall,boolean priorUnknownStore,
-                            int sourceRegisterCount) {}
+                            int sourceRegisterCount) {
+        public Candidate {
+            if(!sourcePc(caller) || !sourcePc(callPc) || !sourcePc(callee) ||
+                    !sourcePc(storePc) ||
+                    kind!=HardwareDataflow.Kind.STORE_DIRECT &&
+                        kind!=HardwareDataflow.Kind.STORE_INDIRECT ||
+                    address!=null && (address<0 ||
+                        address>HardwareDataflow.MASK24) ||
+                    writtenWord!=null &&
+                        (writtenWord<0 || writtenWord>0xffff) ||
+                    writeBits!=8 && writeBits!=16 && writeBits!=32 ||
+                    sourceRegisterCount<0 ||
+                    sourceRegisterCount>MAX_REGISTER_CELLS)
+                throw new IllegalArgumentException("Invalid CALL-site STORE candidate");
+        }
+    }
     public record Summary(int sampledCalls,int directCalls,int contextCalls,
                           int rejectedIncomplete,int rejectedMissingCallee,
                           int rejectedNestedOrBadCfg,int truncatedCalls,
                           int unresolvedAliases,int possibleStoreSites,
                           boolean omittedRows,List<Candidate> candidates) {
-        public Summary { candidates=List.copyOf(candidates); }
+        public Summary {
+            if(sampledCalls<0 || sampledCalls>MAX_CALL_SITES ||
+                    directCalls<0 || directCalls>sampledCalls ||
+                    contextCalls<0 || contextCalls>directCalls ||
+                    rejectedIncomplete<0 || rejectedMissingCallee<0 ||
+                    rejectedNestedOrBadCfg<0 || truncatedCalls<0 ||
+                    unresolvedAliases<0 || possibleStoreSites<0 ||
+                    candidates==null || candidates.size()>MAX_REPORTED_ROWS ||
+                    possibleStoreSites<candidates.size() ||
+                    omittedRows!=(possibleStoreSites>candidates.size()) ||
+                    candidates.stream().anyMatch(java.util.Objects::isNull))
+                throw new IllegalArgumentException("Invalid one-hop CALL summary");
+            candidates=List.copyOf(candidates);
+        }
         private static String hex(long x){return String.format(java.util.Locale.ROOT,
                 "0x%08X",x);}
         public String markdown() {

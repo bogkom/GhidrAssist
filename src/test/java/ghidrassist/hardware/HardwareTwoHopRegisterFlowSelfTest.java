@@ -476,13 +476,14 @@ public final class HardwareTwoHopRegisterFlowSelfTest {
             "Unexpected P-code A/D register mutation invalidates bare branch");
         var truncatedSource=new HardwareTwoHopRegisterFlow.Bridge(
             0x1000000L,bridge.steps(),0x1000002L,0x700L,true);
+        reject(()->new HardwareCallsiteRegisterFlow.Call(
+            0x600,0x60c,0x1000000L,
+            Map.of("A0",simcr,"D0",0x40caL),false),
+            "25-bit exact callee target is rejected at the source boundary");
         ok(HardwareTwoHopRegisterFlow.analyze(
-            List.of(new HardwareCallsiteRegisterFlow.Call(
-                0x600,0x60c,0x1000000L,
-                Map.of("A0",simcr,"D0",0x40caL),false)),
-            List.of(truncatedSource),List.of(leaf),
+            List.of(left),List.of(truncatedSource),List.of(leaf),
             Set.of(simcr),48).rejectedBridge()==1,
-            "25-bit source function cannot alias a 24-bit MC68332 bridge");
+            "25-bit bridge cannot match a verified 24-bit outer CALL");
         var selfCall=new HardwareTwoHopRegisterFlow.Bridge(
             0x640,bridge.steps(),0x642,0x640L,true);
         ok(scan(List.of(left),List.of(selfCall),
@@ -490,13 +491,14 @@ public final class HardwareTwoHopRegisterFlowSelfTest {
             "Self-recursive intermediate target cannot masquerade as two-hop leaf");
         var oddSource=new HardwareTwoHopRegisterFlow.Bridge(
             0x641,bridge.steps(),0x643,0x700L,true);
+        reject(()->new HardwareCallsiteRegisterFlow.Call(
+            0x600,0x60c,0x641L,
+            Map.of("A0",simcr,"D0",0x40caL),false),
+            "odd exact callee target is rejected at the source boundary");
         ok(HardwareTwoHopRegisterFlow.analyze(
-            List.of(new HardwareCallsiteRegisterFlow.Call(
-                0x600,0x60c,0x641L,
-                Map.of("A0",simcr,"D0",0x40caL),false)),
-            List.of(oddSource),List.of(leaf),
+            List.of(left),List.of(oddSource),List.of(leaf),
             Set.of(simcr),48).rejectedBridge()==1,
-            "Odd source instruction/function positions remain UNKNOWN");
+            "odd bridge entry cannot match a verified 24-bit outer CALL");
         // Positive control: a legitimate two-edge conditional branch
         // remains accepted, and agreeing A0 on both paths still reaches
         // the nested JSR with the exact source MMIO candidate.
