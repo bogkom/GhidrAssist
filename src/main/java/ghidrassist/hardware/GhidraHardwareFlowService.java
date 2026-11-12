@@ -477,6 +477,7 @@ public final class GhidraHardwareFlowService {
             throws CancelledException{
         if(callee==null)return null;
         long entry=callee.getEntryPoint().getOffset();
+        if(!HardwareCallsiteRegisterFlow.sourcePc(entry))return null;
         long bodyBytes=callee.getBody().getNumAddresses();
         if(bodyBytes<2 || bodyBytes>
                 HardwareCallsiteRegisterFlow.MAX_CALLEE_STEPS*16L)
@@ -491,6 +492,8 @@ public final class GhidraHardwareFlowService {
             monitor.checkCancelled();
             Instruction insn=it.next();
             if(steps.size()>=HardwareCallsiteRegisterFlow.MAX_CALLEE_STEPS ||
+                    !HardwareCallsiteRegisterFlow.sourcePc(
+                        insn.getAddress().getOffset()) ||
                     insn.getAddress().getOffset()!=cursor ||
                     insn.getFlowType().isCall() ||
                     insn.getFlowType().isComputed()){
@@ -505,7 +508,9 @@ public final class GhidraHardwareFlowService {
                 if(destinations==null || destinations.length==0)
                     safe=false;
                 else for(Address dst:destinations)
-                    if(!callee.getBody().contains(dst))safe=false;
+                    if(!callee.getBody().contains(dst) ||
+                            !HardwareCallsiteRegisterFlow.sourcePc(
+                                dst.getOffset()))safe=false;
             }
             if(!safe)break;
             steps.add(translate(insn,callee));
@@ -1037,6 +1042,13 @@ public final class GhidraHardwareFlowService {
                     continue;
                 }
                 var call=mmCallSites.get(idx);
+                if(!HardwareCallsiteRegisterFlow.sourcePc(call.function()) ||
+                        !HardwareCallsiteRegisterFlow.sourcePc(call.pc()) ||
+                        call.target()!=null &&
+                            !HardwareCallsiteRegisterFlow.sourcePc(call.target())){
+                    callerContextsOmitted++;
+                    continue;
+                }
                 Map<String,Long> registers=result.knownPointersAtEntry
                     .getOrDefault(call.pc(),Map.of());
                 callerContexts.add(new HardwareCallsiteRegisterFlow.Call(
@@ -1362,8 +1374,9 @@ public final class GhidraHardwareFlowService {
             if(callerContextsOmitted>0)
                 callsiteRegisters+="- **INCOMPLETE INPUT:** "+
                     callerContextsOmitted+
-                    " source CALL sites skipped by the bounded 96-site "+
-                    "budget or unavailable caller CFG. Missing calls are "+
+                    " source CALL sites omitted by the 96-site budget, "+
+                    "unavailable CFG, or invalid/out-of-scope source coordinates. "+
+                    "Missing calls are "+
                     "UNKNOWN, not proven side-effect-free.\n\n";
             // Reconcile only sampled exact direct CALL sites. Contextual
             // results never enter FUNCTION_STAGES, durable GA-12 caches
