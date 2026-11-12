@@ -589,7 +589,7 @@ def main():
     # GA-12/18: execute the *production* source-pairs-resume-check CLI
     # against the actual isolated CodeBrowser JSON-RPC server, not a mock.
     # An empty inventory remains an incomplete static observation.
-    command(args.session,"profile-select","--profile","MC68332_USER_SELECTED")
+    command(args.session,"profile-select","MC68332_USER_SELECTED")
     command(args.session,"analyze")
     source_checkpoint=out/"ga12-real-source-pairs.json"
     deadline=time.monotonic()+120
