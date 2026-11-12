@@ -1,3 +1,17 @@
+## GA-01/02/11/18 — 2026-11-12: RESET publication identity binding (pending exact-SHA CI)
+
+The read-only RESET Summary Markdown publisher now rejects source-report
+coordinates outside aligned CPU32 bounds, recognized graphs attributed to a
+different vector/function entry, and evidence chains that do not start at the
+published root. Missing roots remain explicitly UNKNOWN rather than acquiring
+a guessed CALL graph. Five adversarial source regressions cover forged
+publication coordinates and a positive exact-root witness. This guards
+report attribution, not source authentication or executed RESET; static
+CALL reachability does not prove executed MMIO, MM latch or active VBR/ISR.
+Java21 source tests, complete Java25/Ghidra 12.1.4 PUBLIC extension build,
+and genuine isolated synthetic Ghidra CI must PASS at the exact head SHA
+before integration. GA-01/02/11/18 remain PARTIAL; GA-14 deferred.
+
 ## GA-01/02/11/18 — 2026-11-11: RESET public summary root coherence (pending CI)
 
 The read-only RESET static source Summary constructor now rejects recognized
