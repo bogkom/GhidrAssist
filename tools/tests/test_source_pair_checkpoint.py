@@ -64,7 +64,7 @@ class SourceCheckpoint(unittest.TestCase):
                 report = agent.capture_source_pairs_checkpoint({}, out, 1)
             self.assertEqual(report["total_pairs"], 2)
             self.assertTrue(report["bounded_source_complete"])
-            self.assertEqual([x["offset"] for x in self.calls], [0, 1])
+            self.assertEqual([x["offset"] for x in self.calls], [0, 1, 2])
             verified = agent.verify_source_pairs_checkpoint(out)
             self.assertTrue(verified["verified"])
             self.assertTrue(verified["bounded_source_complete"])
@@ -77,6 +77,78 @@ class SourceCheckpoint(unittest.TestCase):
             with patch.object(agent, "rpc", side_effect=self.fake_rpc):
                 with self.assertRaises(FileExistsError):
                     agent.capture_source_pairs_checkpoint({}, out, 1)
+
+    def test_terminal_generation_fence_rejects_rerun_after_final_page(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            for fault in ("generation", "revision", "trailing", "cursor"):
+                out = Path(tmp) / (fault + ".json")
+                def late(_session, _method, params):
+                    response = page(params["offset"], params["limit"])
+                    if params["offset"] == 2:
+                        data = response["source_pairs"]
+                        if fault == "generation":
+                            data["generation"] = "synthetic-run-B"
+                        elif fault == "revision":
+                            data["revision"] = 8
+                        elif fault == "trailing":
+                            data["rows"] = [page(0, 1)["source_pairs"]["rows"][0]]
+                            data["displayed"] = 1
+                            data["next_offset"] = 3
+                        else:
+                            data["next_offset"] = 1
+                    return response
+                with patch.object(agent, "rpc", side_effect=late):
+                    with self.assertRaises(ValueError):
+                        agent.capture_source_pairs_checkpoint({}, out, 1)
+                self.assertFalse(out.exists())
+
+    def test_cpu32_site_identity_rejects_rehashed_forged_rows(self):
+        import hashlib
+        with tempfile.TemporaryDirectory() as tmp:
+            for fault in ("odd_pc", "outside_function", "same_site",
+                          "bool_address", "missing_uncertainty"):
+                out = Path(tmp) / (fault + ".json")
+                with patch.object(agent, "rpc", side_effect=self.fake_rpc):
+                    agent.capture_source_pairs_checkpoint({}, out, 2)
+                envelope = json.loads(out.read_text())
+                row = envelope["payload"]["rows"][0]
+                if fault == "odd_pc":
+                    row["indirectPc"] = 0x139
+                elif fault == "outside_function":
+                    row["vbrPc"] = 0x100
+                elif fault == "same_site":
+                    row["vbrPc"] = row["indirectPc"]
+                elif fault == "bool_address":
+                    row["indirectTarget"] = True
+                else:
+                    row.pop("uncertain")
+                raw = json.dumps(envelope["payload"], sort_keys=True,
+                                 separators=(",", ":"), ensure_ascii=False).encode()
+                envelope["payload_sha256"] = hashlib.sha256(raw).hexdigest()
+                out.write_text(json.dumps(envelope))
+                with self.assertRaisesRegex(ValueError, "source row"):
+                    agent.verify_source_pairs_checkpoint(out)
+
+    def test_cpu32_site_identity_refuses_invalid_live_rows_without_output(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            for fault in ("odd_pc", "outside_function", "same_site", "bool_mm"):
+                out = Path(tmp) / (fault + ".json")
+                def broken(_session, _method, params):
+                    response = page(params["offset"], params["limit"])
+                    for row in response["source_pairs"]["rows"]:
+                        if fault == "odd_pc":
+                            row["indirectPc"] += 1
+                        elif fault == "outside_function":
+                            row["vbrPc"] = 0x100
+                        elif fault == "same_site":
+                            row["vbrPc"] = row["indirectPc"]
+                        else:
+                            row["mayMm"] = 1
+                    return response
+                with patch.object(agent, "rpc", side_effect=broken):
+                    with self.assertRaisesRegex(ValueError, "source row"):
+                        agent.capture_source_pairs_checkpoint({}, out, 2)
+                self.assertFalse(out.exists())
 
     def test_late_generation_change_rejects_atomic_output(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -114,7 +186,7 @@ class SourceCheckpoint(unittest.TestCase):
                     elif fault == "wrong_count":
                         data["total_pairs"] = 3
                     else:
-                        if params["offset"]:
+                        if params["offset"] and data["rows"]:
                             data["rows"][0] = page(0, 1)["source_pairs"]["rows"][0]
                     return response
                 with patch.object(agent, "rpc", side_effect=broken):

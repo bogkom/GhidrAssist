@@ -183,6 +183,20 @@ def _source_pairs_metadata(page, legacy=False):
     return identity
 
 
+def _validate_source_pair_row(row):
+    """Preserve CPU32 source-site identity even for rehashed offline receipts."""
+    coords = ("function", "indirectPc", "indirectTarget", "vbrPc")
+    if (not isinstance(row, dict) or any(
+            type(row.get(k)) != int or not 0 <= row[k] <= 0xffffff
+            or row[k] & 1 for k in coords)
+            or row["indirectPc"] < row["function"]
+            or row["vbrPc"] < row["function"]
+            or row["indirectPc"] == row["vbrPc"]
+            or type(row.get("mayMm")) != bool
+            or type(row.get("uncertain")) != bool):
+        raise ValueError("Invalid selected-CPU32 source row")
+
+
 def capture_source_pairs_checkpoint(session, output, page_size=32):
     """Read-only, versioned, atomic local source evidence; never Analyze/Apply."""
     if not 1 <= page_size <= 32:
@@ -219,12 +233,27 @@ def capture_source_pairs_checkpoint(session, output, page_size=32):
             "expected_generation": expected[2]})["source_pairs"]
     if len(rows) != expected[5]:
         raise ValueError("Source pair collection omitted observed pairs")
+    # The terminal read is a generation fence: a last-page response alone
+    # cannot detect a new Analyze after that response but before publication.
+    terminal = rpc(session, "hardware.source_pairs.page", {
+        "offset": len(rows), "limit": page_size,
+        "expected_revision": expected[1],
+        "expected_generation": expected[2]})["source_pairs"]
+    if (_source_pairs_metadata(terminal) != expected
+            or type(terminal.get("offset")) != int
+            or terminal["offset"] != len(rows)
+            or type(terminal.get("limit")) != int
+            or terminal["limit"] != page_size
+            or type(terminal.get("next_offset")) != int
+            or terminal["next_offset"] != len(rows)
+            or type(terminal.get("displayed")) != int
+            or terminal["displayed"] != 0
+            or terminal.get("rows") != []
+            or terminal.get("has_more") is not False):
+        raise ValueError("Source generation changed at terminal evidence fence")
     keys = []
     for row in rows:
-        if not isinstance(row, dict) or not all(
-                type(row.get(k)) == int and 0 <= row[k] <= 0xffffff
-                for k in ("function", "indirectPc", "indirectTarget", "vbrPc")):
-            raise ValueError("Invalid source row address")
+        _validate_source_pair_row(row)
         keys.append((row["function"], row["indirectPc"], row["vbrPc"]))
     if len(set(keys)) != len(keys) or keys != sorted(keys):
         raise ValueError("Duplicate or unsorted source evidence")
@@ -328,10 +357,7 @@ def verify_source_pairs_checkpoint(source):
         raise ValueError("Inconsistent checkpoint rows/completeness")
     keys=[]
     for row in rows:
-        if not isinstance(row,dict) or not all(
-                type(row.get(k))==int and 0<=row[k]<=0xffffff
-                for k in ("function","indirectPc","indirectTarget","vbrPc")):
-            raise ValueError("Invalid source row")
+        _validate_source_pair_row(row)
         keys.append((row["function"],row["indirectPc"],row["vbrPc"]))
     if len(set(keys))!=len(keys) or keys!=sorted(keys):
         raise ValueError("Invalid source pair ordering")
