@@ -473,8 +473,11 @@ def check_source_pairs_resume_preflight(session, source, page_size=32):
                 or live["offset"] != len(rows)
                 or type(live.get("next_offset")) is not int
                 or live["next_offset"] != len(rows)
+                or type(live.get("limit")) is not int
+                or live["limit"] != page_size
+                or type(live.get("displayed")) is not int
+                or live["displayed"] != 0
                 or live.get("rows") != []
-                or live.get("displayed") != 0
                 or live.get("has_more") is not False):
             raise ValueError("Live source changed at terminal generation fence")
     return {
