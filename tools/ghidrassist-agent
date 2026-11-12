@@ -339,6 +339,11 @@ def verify_source_pairs_checkpoint(source):
         raise ValueError("False source-inventory completeness")
     return {"verified":True,"payload_sha256":digest,
             "total_pairs":len(rows),"bounded_source_complete":eligible,
+            "source_coverage":{key:p[key] for key in (
+                "functions_with_both_sources", "indirect_only_functions",
+                "movec_only_functions", "indirect_only_sites",
+                "movec_only_sites", "reset_visited_functions_with_both",
+                "coverage_incomplete")},
             "resume_authorized":False}
 
 
