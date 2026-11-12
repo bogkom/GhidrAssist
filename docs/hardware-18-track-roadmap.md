@@ -15,9 +15,10 @@ analysis provenance is still an independent requirement.
 
 ## GA-02/03/18 — 2026-11-12: public one-hop CALL source coordinate gate PASS
 
-PR [#320](https://github.com/bogkom/GhidrAssist/pull/320) candidate
-`8749575205b4c839a5738475b2685e78a0879900` passed **56/56 exact-head
-GitHub Actions** and is ready for integration. Public one-hop CALL
+PR [#320](https://github.com/bogkom/GhidrAssist/pull/320) was squash-merged
+as `64a6d303b1719fdee368bf228918c3121510f805` from exact tested candidate
+`282f7a60a85e75fb1b9b45469767ffd615712254`. The candidate passed **56/56
+exact-head GitHub Actions**; the merge commit passed **16/16** Actions. Public one-hop CALL
 context, callee CFG, candidate and summary records reject odd/out-of-range
 MC68332 source coordinates, malformed CFG PCs and contradictory candidate
 or counter shapes. The live service omits invalid/out-of-scope CALL sites as
