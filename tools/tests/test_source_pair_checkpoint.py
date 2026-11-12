@@ -380,5 +380,71 @@ class SourceCheckpoint(unittest.TestCase):
             self.assertEqual(len(result["rows"]), 1)
 
 
+    def test_live_rebind_full_inventory_and_terminal_fence(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out=Path(tmp)/"source.json"
+            with patch.object(agent,"rpc",side_effect=self.fake_rpc):
+                agent.capture_source_pairs_checkpoint({},out,1)
+            def live(_session,method,params):
+                self.assertEqual(method,"hardware.source_pairs.page")
+                response=page(params["offset"],params["limit"])
+                response["read_only"]=True
+                return response
+            with patch.object(agent,"rpc",side_effect=live) as rpc_mock:
+                result=agent.check_source_pairs_resume_preflight({},out,1)
+            self.assertTrue(result["identity_matches"])
+            self.assertTrue(result["evidence_matches"])
+            self.assertFalse(result["resume_authorized"])
+            self.assertFalse(result["apply_authorized"])
+            self.assertEqual([x.args[2]["offset"] for x in rpc_mock.call_args_list],
+                             [0,1,2])
+
+    def test_live_rebind_refuses_changed_row_generation_and_non_readonly(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out=Path(tmp)/"source.json"
+            with patch.object(agent,"rpc",side_effect=self.fake_rpc):
+                agent.capture_source_pairs_checkpoint({},out,1)
+            for fault in ("row","generation","read_only","terminal"):
+                def live(_session,_method,params):
+                    response=page(params["offset"],params["limit"])
+                    response["read_only"]=True
+                    data=response["source_pairs"]
+                    if fault=="row" and params["offset"]==1:
+                        data["rows"][0]["uncertain"]=True
+                    if fault=="generation" and params["offset"]==1:
+                        data["generation"]="synthetic-run-B"
+                    if fault=="read_only":
+                        response["read_only"]=False
+                    if fault=="terminal" and params["offset"]==2:
+                        data["generation"]="synthetic-run-B"
+                    return response
+                with self.subTest(fault=fault):
+                    with patch.object(agent,"rpc",side_effect=live):
+                        with self.assertRaises(ValueError):
+                            agent.check_source_pairs_resume_preflight({},out,1)
+
+    def test_live_rebind_rejects_legacy_and_invalid_page_size(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out=Path(tmp)/"source.json"
+            with patch.object(agent,"rpc",side_effect=self.fake_rpc):
+                agent.capture_source_pairs_checkpoint({},out,2)
+            with self.assertRaises(ValueError):
+                agent.check_source_pairs_resume_preflight({},out,33)
+            envelope=json.loads(out.read_text())
+            for key in ("functions_with_both_sources","indirect_only_functions",
+                        "movec_only_functions","indirect_only_sites",
+                        "movec_only_sites","reset_visited_functions_with_both",
+                        "coverage_incomplete"):
+                envelope["payload"].pop(key)
+            import hashlib
+            raw=json.dumps(envelope["payload"],sort_keys=True,
+                           separators=(",",":"),ensure_ascii=False).encode()
+            envelope["payload_sha256"]=hashlib.sha256(raw).hexdigest()
+            out.write_text(json.dumps(envelope))
+            with patch.object(agent,"rpc",side_effect=AssertionError("must not RPC")):
+                with self.assertRaisesRegex(ValueError,"Legacy"):
+                    agent.check_source_pairs_resume_preflight({},out,1)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
