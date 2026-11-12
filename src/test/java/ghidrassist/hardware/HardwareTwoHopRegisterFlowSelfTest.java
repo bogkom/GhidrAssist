@@ -504,7 +504,7 @@ public final class HardwareTwoHopRegisterFlowSelfTest {
             2,3,false,false),
             "out-of-range two-hop MMIO address cannot be published");
         reject(()->new HardwareTwoHopRegisterFlow.Summary(
-            1,1,0,0,0,0,0,0,0,1,true,List.of()),
+            1,1,0,0,0,0,0,0,0,1,false,List.of()),
             "two-hop summary rejects a forged omitted-row flag");
         // Positive control: a legitimate two-edge conditional branch
         // remains accepted, and agreeing A0 on both paths still reaches
