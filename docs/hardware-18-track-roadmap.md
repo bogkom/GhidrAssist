@@ -13,19 +13,21 @@ JSON-RPC/CLI acceptance; the source-pair Python regression passed **21/21**.
 This is live evidence rebind only; GA-12/18 remain PARTIAL and cross-function
 analysis provenance is still an independent requirement.
 
-## GA-02/03/18 — candidate 2026-11-12: validate public one-hop CALL source coordinates
+## GA-02/03/18 — 2026-11-12: public one-hop CALL source coordinate gate PASS
 
-The public one-hop CALL context, callee CFG, candidate and summary records
-independently reject odd or out-of-range MC68332 source coordinates,
-malformed CFG PCs and contradictory candidate/counter shapes. The live
-service now omits invalid/out-of-scope source sites as explicit incomplete
-coverage instead of aborting Analyze, and validates decoded successors before
-constructing a callee record. Deterministic Java 21 adversarial regressions
-and the complete Java 25 Ghidra 12.1.4 PUBLIC build plus genuine isolated
-synthetic Ghidra CI must pass on the exact HEAD before integration. This
-prevents forged typed source claims; it does not prove CALL execution, path
-feasibility, MM latch, active ISR/VBR or physical bus mapping. GA-02/03/18
-remain PARTIAL.
+PR [#320](https://github.com/bogkom/GhidrAssist/pull/320) candidate
+`8749575205b4c839a5738475b2685e78a0879900` passed **56/56 exact-head
+GitHub Actions** and merged as `<MERGE_SHA_PENDING>`. Public one-hop CALL
+context, callee CFG, candidate and summary records reject odd/out-of-range
+MC68332 source coordinates, malformed CFG PCs and contradictory candidate
+or counter shapes. The live service omits invalid/out-of-scope CALL sites as
+explicit incomplete coverage instead of aborting Analyze and validates
+decoded callee successors before construction. Java 21 one-hop/two-hop
+regressions, the Java 25 Ghidra 12.1.4 PUBLIC build, and genuine isolated
+synthetic Ghidra workflows passed on the exact candidate. This prevents
+forged typed source claims; it does not prove CALL execution, path
+feasibility, MM latch, active ISR/VBR or physical bus mapping.
+GA-02/03/18 remain PARTIAL.
 
 ## GA-01/11/18 — 2026-11-12: public RESET Vector eligibility fail-closed (pending exact-SHA CI)
 
