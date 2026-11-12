@@ -271,6 +271,24 @@ public final class HardwareResetIndirectVbrCorrelationSelfTest {
             immutable=true;
         }
         check(immutable,"Returned candidate rows immutable");
+        // SourceInventory and direct paging must enforce the same MCU24
+        // aperture: a 32-bit host address cannot be a selected-MC68332
+        // RESET graph member, even when no pairs are displayed.
+        reject(()->HardwareResetIndirectVbrCorrelation.page(
+            List.of(),List.of(),Set.of(0x01000000L),true,false,
+            0,0,0,1),
+            "Out-of-aperture RESET root rejected by page without rows");
+        reject(()->new HardwareResetIndirectVbrCorrelation.SourceInventory(
+            List.of(),List.of(),Set.of(0x01000000L),true,false,0,0),
+            "Out-of-aperture RESET root rejected by retained inventory");
+        reject(()->HardwareResetIndirectVbrCorrelation.page(
+            List.of(),List.of(),Set.of(0xFFFFFFFEL),true,false,
+            0,0,0,1),
+            "Even aligned 32-bit host RESET roots cannot enter MCU24 evidence");
+        check(HardwareResetIndirectVbrCorrelation.page(
+            List.of(),List.of(),Set.of(0x00FFFFFEL),true,false,
+            0,0,0,1).rows().isEmpty(),
+            "Last aligned MCU24 RESET source remains admissible");
         System.out.println("HardwareResetIndirectVbrCorrelationSelfTest PASS: assertions="+checks);
     }
 }
