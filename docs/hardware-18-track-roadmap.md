@@ -16,13 +16,16 @@ analysis provenance is still an independent requirement.
 ## GA-02/03/18 — candidate 2026-11-12: validate public one-hop CALL source coordinates
 
 The public one-hop CALL context, callee CFG, candidate and summary records
-will independently reject odd or out-of-range MC68332 source coordinates,
-malformed CFG PCs and contradictory candidate/counter shapes. Deterministic
-Java 21 adversarial regressions and the complete Java 25 Ghidra 12.1.4 PUBLIC
-build plus genuine isolated synthetic Ghidra CI must pass on the exact HEAD
-before integration. This prevents forged typed source claims; it does not
-prove CALL execution, path feasibility, MM latch, active ISR/VBR or physical
-bus mapping. GA-02/03/18 remain PARTIAL.
+independently reject odd or out-of-range MC68332 source coordinates,
+malformed CFG PCs and contradictory candidate/counter shapes. The live
+service now omits invalid/out-of-scope source sites as explicit incomplete
+coverage instead of aborting Analyze, and validates decoded successors before
+constructing a callee record. Deterministic Java 21 adversarial regressions
+and the complete Java 25 Ghidra 12.1.4 PUBLIC build plus genuine isolated
+synthetic Ghidra CI must pass on the exact HEAD before integration. This
+prevents forged typed source claims; it does not prove CALL execution, path
+feasibility, MM latch, active ISR/VBR or physical bus mapping. GA-02/03/18
+remain PARTIAL.
 
 ## GA-01/11/18 — 2026-11-12: public RESET Vector eligibility fail-closed (pending exact-SHA CI)
 
