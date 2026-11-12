@@ -1363,6 +1363,7 @@ def main():
     parser.add_argument("--expected-findings-revision", type=int, default=None)
     parser.add_argument("--output", default="")
     parser.add_argument("--input", default="")
+    parser.add_argument("--compare-input", default="", help="Newer offline source-pair checkpoint")
     parser.add_argument("--parent", default="")
     parser.add_argument("--ancestor", action="append", default=[],
                         help="Ordered oldest-to-newest local chain ancestor; repeat")
