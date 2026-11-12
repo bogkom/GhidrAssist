@@ -30,6 +30,19 @@ forged typed source claims; it does not prove CALL execution, path
 feasibility, MM latch, active ISR/VBR or physical bus mapping.
 GA-02/03/18 remain PARTIAL.
 
+## GA-02/03/18 — candidate 2026-11-12: fail-closed typed two-hop CALL evidence
+
+The public two-hop `Bridge`, `Candidate` and `Summary` records now reject
+odd or out-of-range MC68332 PCs, invalid nested-CALL/STORE coordinates,
+malformed CFG successors, impossible MMIO addresses and contradictory row
+omission counters at construction. Adversarial Java 21 regressions exercise
+those boundaries while retaining valid two-hop source candidates. This
+protects the typed boundary only; it does not prove CALL execution, branch
+feasibility, MM latch, active ISR/VBR or physical bus mapping. Exact-head
+Java 21 regressions, full Java 25 Ghidra 12.1.4 PUBLIC build and real
+synthetic Ghidra Actions remain required before integration. GA-02/03/18
+remain PARTIAL.
+
 ## GA-01/11/18 — 2026-11-12: public RESET Vector eligibility fail-closed (pending exact-SHA CI)
 
 The public sourceResetPcEligible gate now independently validates unsigned

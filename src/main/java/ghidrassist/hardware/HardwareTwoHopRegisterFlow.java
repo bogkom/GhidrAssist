@@ -41,25 +41,64 @@ public final class HardwareTwoHopRegisterFlow {
     public record Bridge(long entry,List<HardwareDataflow.Step> steps,
             long innerCallPc,Long finalTarget,boolean complete) {
         public Bridge {
-            if(entry<0 || innerCallPc<0 ||
-                    finalTarget!=null && finalTarget<0 ||
+            if(!sourcePc(entry) || !sourcePc(innerCallPc) ||
+                    innerCallPc<entry ||
+                    finalTarget!=null && (!sourcePc(finalTarget) ||
+                        finalTarget==entry) ||
                     steps==null || steps.size()>MAX_BRIDGE_STEPS ||
                     steps.stream().anyMatch(java.util.Objects::isNull))
                 throw new IllegalArgumentException("Invalid two-hop bridge");
             steps=List.copyOf(steps);
+            Set<Long> pcs=new HashSet<>();
+            for(HardwareDataflow.Step step:steps) {
+                if(!sourcePc(step.address) || !pcs.add(step.address))
+                    throw new IllegalArgumentException("Invalid bridge source PC");
+                for(Long successor:step.successors)
+                    if(successor==null || !sourcePc(successor))
+                        throw new IllegalArgumentException("Invalid bridge CFG successor");
+            }
         }
     }
     public record Candidate(long outerCaller,long outerCallPc,
             long bridgeEntry,long innerCallPc,long leafEntry,long storePc,
             Long effectiveAddress,Integer writtenWord,int bits,
             int knownEntryRegisters,int knownInnerRegisters,
-            boolean priorUnknownCall,boolean priorUnknownStore) {}
+            boolean priorUnknownCall,boolean priorUnknownStore) {
+        public Candidate {
+            if(!sourcePc(outerCaller) || !sourcePc(outerCallPc) ||
+                    !sourcePc(bridgeEntry) || !sourcePc(innerCallPc) ||
+                    !sourcePc(leafEntry) || !sourcePc(storePc) ||
+                    effectiveAddress!=null && (effectiveAddress<0 ||
+                        effectiveAddress>HardwareDataflow.MASK24) ||
+                    writtenWord!=null && (writtenWord<0 || writtenWord>0xffff) ||
+                    bits!=8 && bits!=16 && bits!=32 ||
+                    knownEntryRegisters<0 || knownEntryRegisters>
+                        HardwareCallsiteRegisterFlow.MAX_REGISTER_CELLS ||
+                    knownInnerRegisters<0 || knownInnerRegisters>
+                        HardwareCallsiteRegisterFlow.MAX_REGISTER_CELLS)
+                throw new IllegalArgumentException("Invalid two-hop source candidate");
+        }
+    }
 
     public record Summary(int sampled,int eligibleOuter,int rejectedOuter,
             int rejectedBridge,int unresolvedInner,int rejectedLeaf,
             int unknownInnerRegisters,int solverTruncated,int unknownAliases,
             int possibleStores,boolean displayTruncated,List<Candidate> rows) {
-        public Summary { rows=List.copyOf(rows); }
+        public Summary {
+            if(sampled<0 || sampled>MAX_OUTER_CALLS || eligibleOuter<0 ||
+                    rejectedOuter<0 || eligibleOuter+rejectedOuter!=sampled ||
+                    rejectedBridge<0 || rejectedBridge>eligibleOuter ||
+                    unresolvedInner<0 || unresolvedInner>eligibleOuter ||
+                    rejectedLeaf<0 || rejectedLeaf>eligibleOuter ||
+                    unknownInnerRegisters<0 || unknownInnerRegisters>eligibleOuter ||
+                    solverTruncated<0 || solverTruncated>eligibleOuter ||
+                    unknownAliases<0 || possibleStores<0 || rows==null ||
+                    rows.size()>MAX_ROWS || possibleStores<rows.size() ||
+                    displayTruncated!=(possibleStores>rows.size()) ||
+                    rows.stream().anyMatch(java.util.Objects::isNull))
+                throw new IllegalArgumentException("Invalid two-hop source summary");
+            rows=List.copyOf(rows);
+        }
         private static String hex(long x){
             return String.format(Locale.ROOT,"0x%08X",x);
         }
