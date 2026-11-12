@@ -17,7 +17,7 @@ analysis provenance is still an independent requirement.
 
 PR [#320](https://github.com/bogkom/GhidrAssist/pull/320) candidate
 `8749575205b4c839a5738475b2685e78a0879900` passed **56/56 exact-head
-GitHub Actions** and merged as `<MERGE_SHA_PENDING>`. Public one-hop CALL
+GitHub Actions** and is ready for integration. Public one-hop CALL
 context, callee CFG, candidate and summary records reject odd/out-of-range
 MC68332 source coordinates, malformed CFG PCs and contradictory candidate
 or counter shapes. The live service omits invalid/out-of-scope CALL sites as
