@@ -280,6 +280,43 @@ public final class HardwareCallsiteRegisterFlowSelfTest {
             !HardwareDataflow.mayTouchTrackedAddress(0xfffffeL,0,Set.of(0L)),
             "byte overlap uses known widths only and never invents unknown width");
 
+        // Public source records must not mint CALL/STORE evidence from
+        // unaligned or foreign-width instruction coordinates.
+        rejects(()->new HardwareCallsiteRegisterFlow.Call(
+            0x100,0x103,0x640L,Map.of(),false),
+            "odd CALL PC cannot be represented as verified CPU32 source");
+        rejects(()->new HardwareCallsiteRegisterFlow.Call(
+            0x1000000L,0x1000002L,0x640L,Map.of(),false),
+            "25-bit caller source cannot enter the MC68332 lane");
+        rejects(()->new HardwareCallsiteRegisterFlow.Call(
+            0x100,0x104,0x641L,Map.of(),false),
+            "odd direct callee is not an exact CPU32 function entry");
+        rejects(()->new HardwareCallsiteRegisterFlow.Callee(
+            0x641,callee(0x640),true),
+            "odd callee entry cannot authenticate another body");
+        rejects(()->new HardwareCallsiteRegisterFlow.Callee(
+            0x640,List.of(new HardwareDataflow.Step(
+                0x1000000L,OTHER,null,0,0,null,0,List.of(),"RTS")),false),
+            "foreign-width callee instruction cannot enter source inventory");
+        rejects(()->new HardwareCallsiteRegisterFlow.Callee(
+            0x640,List.of(new HardwareDataflow.Step(
+                0x640,OTHER,null,0,0,null,0,List.of(0x643L),"NOP")),false),
+            "odd CFG successor cannot be published as an instruction PC");
+        rejects(()->new HardwareCallsiteRegisterFlow.Candidate(
+            0x600,0x60c,0x640,0x640,OTHER,simcr,0x40ca,16,
+            false,false,2),
+            "non-STORE operation cannot be constructed as MMIO candidate");
+        rejects(()->new HardwareCallsiteRegisterFlow.Candidate(
+            0x600,0x60c,0x640,0x641,STORE_INDIRECT,simcr,0x40ca,16,
+            false,false,2),
+            "odd STORE PC cannot be constructed as source evidence");
+        rejects(()->new HardwareCallsiteRegisterFlow.Summary(
+            1,1,0,0,0,0,0,0,0,false,List.of(a)),
+            "summary cannot claim fewer possible stores than retained rows");
+        rejects(()->new HardwareCallsiteRegisterFlow.Summary(
+            -1,0,0,0,0,0,0,0,0,false,List.of()),
+            "negative public source counters cannot be published");
+
         System.out.println("HardwareCallsiteRegisterFlowSelfTest PASS: assertions="+assertions);
     }
 }
