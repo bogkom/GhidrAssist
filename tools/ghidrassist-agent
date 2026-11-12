@@ -135,7 +135,11 @@ def _source_pairs_metadata(page):
               "profile", "total_pairs", "indirect_sources",
               "movec_sources", "omitted_indirect", "omitted_movec",
               "reset_root_recognized", "reset_graph_incomplete",
-              "observed_inventory_incomplete", "stage_epoch")
+              "observed_inventory_incomplete", "stage_epoch",
+              "functions_with_both_sources", "indirect_only_functions",
+              "movec_only_functions", "indirect_only_sites",
+              "movec_only_sites", "reset_visited_functions_with_both",
+              "coverage_incomplete")
     identity = tuple(page[key] for key in fields)
     if (page["schema"] != 1 or page["profile"] != "MC68332_USER_SELECTED"
             or type(page["revision"]) != int or page["revision"] < 0
@@ -155,6 +159,23 @@ def _source_pairs_metadata(page):
                    ("reset_root_recognized", "reset_graph_incomplete",
                     "observed_inventory_incomplete"))):
         raise ValueError("Invalid bounded source inventory metadata")
+    coverage = ("functions_with_both_sources", "indirect_only_functions",
+                "movec_only_functions", "indirect_only_sites",
+                "movec_only_sites", "reset_visited_functions_with_both")
+    if (any(type(page[k]) != int or page[k] < 0 for k in coverage)
+            or type(page["coverage_incomplete"]) != bool
+            or page["functions_with_both_sources"] > min(
+                page["indirect_sources"], page["movec_sources"])
+            or page["indirect_only_functions"] > page["indirect_only_sites"]
+            or page["movec_only_functions"] > page["movec_only_sites"]
+            or page["indirect_only_sites"] > page["indirect_sources"]
+            or page["movec_only_sites"] > page["movec_sources"]
+            or page["reset_visited_functions_with_both"] >
+               page["functions_with_both_sources"]
+            or page["coverage_incomplete"] != (
+                page["observed_inventory_incomplete"]
+                or not page["reset_root_recognized"])):
+        raise ValueError("Contradictory unmatched source coverage")
     return identity
 
 
@@ -203,6 +224,8 @@ def capture_source_pairs_checkpoint(session, output, page_size=32):
         keys.append((row["function"], row["indirectPc"], row["vbrPc"]))
     if len(set(keys)) != len(keys) or keys != sorted(keys):
         raise ValueError("Duplicate or unsorted source evidence")
+    if len({row["function"] for row in rows}) != first["functions_with_both_sources"]:
+        raise ValueError("Source pair function coverage mismatch")
     # Source completeness is a bounded observation, not firmware execution.
     sha=expected[3]
     valid_import=len(sha)==64 and all(c in "0123456789abcdefABCDEF" for c in sha)
@@ -219,6 +242,11 @@ def capture_source_pairs_checkpoint(session, output, page_size=32):
         "reset_graph_incomplete": expected[11],
         "observed_inventory_incomplete": expected[12],
         "stage_epoch": expected[13],
+        **{key: first[key] for key in (
+            "functions_with_both_sources", "indirect_only_functions",
+            "movec_only_functions", "indirect_only_sites",
+            "movec_only_sites", "reset_visited_functions_with_both",
+            "coverage_incomplete")},
         "collected_all_observed_pairs": True,
         "bounded_source_complete": complete, "rows": rows,
         "notice": "STATIC SOURCE-ONLY: not executable CALL, MM/VBR, ISR, Apply or cross-revision resume",
@@ -276,6 +304,11 @@ def verify_source_pairs_checkpoint(source):
         "reset_graph_incomplete":p["reset_graph_incomplete"],
         "observed_inventory_incomplete":p["observed_inventory_incomplete"],
         "stage_epoch":p["stage_epoch"],
+        **{key:p[key] for key in (
+            "functions_with_both_sources", "indirect_only_functions",
+            "movec_only_functions", "indirect_only_sites",
+            "movec_only_sites", "reset_visited_functions_with_both",
+            "coverage_incomplete")},
     }
     values=_source_pairs_metadata(metadata)
     rows=p["rows"]
@@ -293,6 +326,11 @@ def verify_source_pairs_checkpoint(source):
         keys.append((row["function"],row["indirectPc"],row["vbrPc"]))
     if len(set(keys))!=len(keys) or keys!=sorted(keys):
         raise ValueError("Invalid source pair ordering")
+    # The saved full pair set must agree with its independent function
+    # coverage, without interpreting absent matches as absent hardware effects.
+    observed_both=len({row["function"] for row in rows})
+    if observed_both!=p["functions_with_both_sources"]:
+        raise ValueError("Source pair function coverage mismatch")
     sha=values[3]
     valid_import=len(sha)==64 and all(c in "0123456789abcdefABCDEF" for c in sha)
     eligible=bool(rows and valid_import and not values[12] and values[8]==0 and values[9]==0
