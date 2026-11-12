@@ -30,18 +30,19 @@ forged typed source claims; it does not prove CALL execution, path
 feasibility, MM latch, active ISR/VBR or physical bus mapping.
 GA-02/03/18 remain PARTIAL.
 
-## GA-02/03/18 — candidate 2026-11-12: fail-closed typed two-hop CALL evidence
+## GA-02/03/18 — 2026-11-12: typed two-hop CALL evidence gate integrated
 
-The public two-hop `Bridge`, `Candidate` and `Summary` records now reject
-odd or out-of-range MC68332 PCs, invalid nested-CALL/STORE coordinates,
-malformed CFG successors, impossible MMIO addresses and contradictory row
-omission counters at construction. Adversarial Java 21 regressions exercise
-those boundaries while retaining valid two-hop source candidates. This
-protects the typed boundary only; it does not prove CALL execution, branch
-feasibility, MM latch, active ISR/VBR or physical bus mapping. Exact-head
-Java 21 regressions, full Java 25 Ghidra 12.1.4 PUBLIC build and real
-synthetic Ghidra Actions remain required before integration. GA-02/03/18
-remain PARTIAL.
+PR [#321](https://github.com/bogkom/GhidrAssist/pull/321) was squash-merged
+as `83456deefc7ea1fa7af39cd418a2d65ffbd152eb` from exact tested head
+`9318768798366636136cac8f4bd728592a27e4ef`. GitHub Actions passed
+`27/27` on that head, including Java 21 one-hop/two-hop regressions, the
+full Java 25 Ghidra 12.1.4 PUBLIC extension build, and genuine isolated
+synthetic Ghidra tests. Public `Bridge`, `Candidate` and `Summary`
+records reject invalid MC68332 source PCs, nested CALL/STORE coordinates,
+CFG successors, MMIO addresses, register counts and contradictory omission
+counters. This hardens typed evidence only; it does not prove CALL execution,
+branch feasibility, MM latch, active ISR/VBR or physical bus mapping.
+GA-02/03/18 remain PARTIAL.
 
 ## GA-01/11/18 — 2026-11-12: public RESET Vector eligibility fail-closed (pending exact-SHA CI)
 
