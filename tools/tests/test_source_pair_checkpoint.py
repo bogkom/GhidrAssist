@@ -476,5 +476,85 @@ class SourceCheckpoint(unittest.TestCase):
                     agent.check_source_pairs_resume_preflight({},out,1)
 
 
+    def test_offline_compare_added_removed_changed_and_no_rpc(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            old = Path(tmp) / "old.json"
+            new = Path(tmp) / "new.json"
+            with patch.object(agent, "rpc", side_effect=self.fake_rpc):
+                agent.capture_source_pairs_checkpoint({}, old, 1)
+
+            def changed_rpc(session, method, params):
+                reply = page(params["offset"], params["limit"],
+                             generation="synthetic-run-B", revision=8)
+                for row in reply["source_pairs"]["rows"]:
+                    if row["function"] == 0x130:
+                        row["indirectTarget"] = 0x1a0
+                return reply
+
+            with patch.object(agent, "rpc", side_effect=changed_rpc):
+                agent.capture_source_pairs_checkpoint({}, new, 1)
+            with patch.object(agent, "rpc", side_effect=AssertionError("offline only")):
+                result = agent.compare_source_pairs_checkpoints(old, new, 0, 1)
+                terminal = agent.compare_source_pairs_checkpoints(old, new, 1, 1)
+            self.assertTrue(result["offline"])
+            self.assertTrue(result["read_only"])
+            self.assertFalse(result["resume_authorized"])
+            self.assertFalse(result["apply_authorized"])
+            self.assertEqual(result["total_changes"], 1)
+            self.assertEqual(result["changes"][0]["kind"], "CHANGED")
+            self.assertEqual(result["changes"][0]["before"]["indirectTarget"], 0x180)
+            self.assertEqual(result["changes"][0]["after"]["indirectTarget"], 0x1a0)
+            self.assertFalse(result["has_more"])
+            self.assertEqual(terminal["changes"], [])
+            self.assertFalse(result["coverage_changed"])
+
+    def test_offline_compare_rejects_tamper_wrong_import_and_bad_page(self):
+        import hashlib
+        with tempfile.TemporaryDirectory() as tmp:
+            old = Path(tmp) / "old.json"
+            new = Path(tmp) / "new.json"
+            with patch.object(agent, "rpc", side_effect=self.fake_rpc):
+                agent.capture_source_pairs_checkpoint({}, old, 2)
+                agent.capture_source_pairs_checkpoint({}, new, 2)
+            for offset, limit in ((True, 1), (-1, 1), (0, 0), (0, 33)):
+                with self.subTest(offset=offset, limit=limit):
+                    with self.assertRaises(ValueError):
+                        agent.compare_source_pairs_checkpoints(old, new, offset, limit)
+            envelope = json.loads(new.read_text())
+            envelope["payload"]["rows"][0]["indirectTarget"] = 0x1a0
+            new.write_text(json.dumps(envelope))
+            with self.assertRaisesRegex(ValueError, "SHA-256"):
+                agent.compare_source_pairs_checkpoints(old, new)
+            envelope["payload"]["import_sha256"] = "b" * 64
+            canonical = json.dumps(envelope["payload"], sort_keys=True,
+                                   separators=(",", ":"), ensure_ascii=False).encode()
+            envelope["payload_sha256"] = hashlib.sha256(canonical).hexdigest()
+            new.write_text(json.dumps(envelope))
+            with self.assertRaisesRegex(ValueError, "identical import"):
+                agent.compare_source_pairs_checkpoints(old, new)
+
+    def test_offline_compare_refuses_legacy_coverage(self):
+        import hashlib
+        with tempfile.TemporaryDirectory() as tmp:
+            old = Path(tmp) / "old.json"
+            new = Path(tmp) / "new.json"
+            with patch.object(agent, "rpc", side_effect=self.fake_rpc):
+                agent.capture_source_pairs_checkpoint({}, old, 2)
+                agent.capture_source_pairs_checkpoint({}, new, 2)
+            envelope = json.loads(old.read_text())
+            for key in ("functions_with_both_sources", "indirect_only_functions",
+                        "movec_only_functions", "indirect_only_sites",
+                        "movec_only_sites", "reset_visited_functions_with_both",
+                        "coverage_incomplete"):
+                envelope["payload"].pop(key)
+            raw = json.dumps(envelope["payload"], sort_keys=True,
+                             separators=(",", ":"), ensure_ascii=False).encode()
+            envelope["payload_sha256"] = hashlib.sha256(raw).hexdigest()
+            old.write_text(json.dumps(envelope))
+            with self.assertRaisesRegex(ValueError, "explicit coverage"):
+                agent.compare_source_pairs_checkpoints(old, new)
+
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
