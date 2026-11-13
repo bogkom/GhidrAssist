@@ -592,7 +592,7 @@ class SourceCheckpoint(unittest.TestCase):
             def changed(_session, _method, params):
                 reply = page(params["offset"], params["limit"],
                              generation="synthetic-run-B", revision=8,
-                             omitted=1, incomplete=True)
+                             omitted=1, incomplete=False)
                 data = reply["source_pairs"]
                 data["stage_epoch"] = 3
                 data["reset_graph_incomplete"] = True
