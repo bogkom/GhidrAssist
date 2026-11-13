@@ -1,3 +1,7 @@
+## GA-01/11 — 2026-11-13: PR #328 integrated checkpoint
+
+PR [#328](https://github.com/bogkom/GhidrAssist/pull/328) merged into `master` at `435e98483356774296a3a83035c95a7b9bda2c02` from exact tested head `bdf08f4ea3a0c11b739241d2e98233eaa05131fb`. GitHub Actions reported 26/26 completed SUCCESS on that head, including the Java 21 vector/RESET source regressions, extension integration build, and isolated synthetic Ghidra workflows. No unresolved inline review threads were present. Full bounded STORE and MOVEC/VBR candidate slot totals now cover recognized exact-entry vectors beyond the displayed 64-row cap, reusing per-handler static audits and excluding interior pointers. The report still cannot establish executed ISR, active VBR or runtime memory mapping. GA-01 and GA-11 remain PARTIAL pending their remaining formal criteria; this checkpoint closes only the full-inventory effect-count subpackage.
+
 ## GA-01/11 — 2026-11-13: full-vector effects regression checkpoint
 
 PR #328 now includes Java 21 source-level positive/negative fixtures for
