@@ -539,6 +539,10 @@ public final class HardwareVectorResetCorrelationSelfTest {
             aliases.interiorPointers(),aliases.displayTruncated(),aliases.rows(),
             aliases.distinctExactHandlers(),aliases.handlerAliasSlots(),5,0),
             "full effect counts cannot exceed exact vector slots");
+        bad(()->new HardwareVectorResetCorrelation.Summary(
+            false,0,true,false,2,2,2,0,0,false,
+            java.util.Arrays.asList(firstShared,null),1,1,1,1),
+            "full-inventory constructor rejects null row without NPE");
         System.out.println("HardwareVectorResetCorrelationSelfTest PASS: assertions="+assertions);
     }
 }
