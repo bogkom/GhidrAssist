@@ -1,3 +1,7 @@
+## GA-01/11 — 2026-11-13: full-vector static STORE/VBR evidence candidate
+
+Branch `work/ga01-11-full-vector-effects-20261113` audits the entire bounded set of up to 254 recognized vector targets, not only the first 64 displayed rows. Exact-entry handlers share a revision-local memoized four-hop/100-node read-only call-effects audit. Full STORE and MOVEC/VBR candidate slot counts include repeated vector aliases but exclude interior pointers. Legacy caller-created summaries report full effect totals as UNKNOWN; candidate counts are static and neither absence nor presence establishes ISR execution or active VBR. Acceptance requires Java 21 source regressions, Java 25 Ghidra 12.1.4 PUBLIC build, isolated synthetic Ghidra evidence, review and exact-SHA CI before merge. GA-01/11 remain PARTIAL.
+
 ## GA-01/11 — 2026-11-13: full bounded vector alias totals (candidate)
 
 Branch `work/ga01-11-full-vector-alias-totals-20261113` extends the vector/RESET report with full-inventory
