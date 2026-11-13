@@ -168,6 +168,18 @@ public final class HardwareVectorResetCorrelation {
                     "Displayed row evidence exceeds full-vector inventory");
             rows = List.copyOf(rows);
         }
+        /** Distinct exact-entry handlers among displayed rows only. */
+        public long displayedDistinctExactHandlers() {
+            return rows.stream()
+                .filter(r -> r.relation()!=Relation.INTERIOR_FUNCTION_POINTER_NOT_ENTRY)
+                .map(Row::functionEntry).distinct().count();
+        }
+        /** Additional vector slots sharing displayed exact-entry handlers. */
+        public long displayedHandlerAliasSlots() {
+            return rows.stream()
+                .filter(r -> r.relation()!=Relation.INTERIOR_FUNCTION_POINTER_NOT_ENTRY)
+                .count() - displayedDistinctExactHandlers();
+        }
         public long displayedStoreCandidates() {
             return rows.stream().filter(r->r.relation()!=
                 Relation.INTERIOR_FUNCTION_POINTER_NOT_ENTRY &&
@@ -203,6 +215,10 @@ public final class HardwareVectorResetCorrelation {
                .append(interiorPointers)
                .append("; displayed rows: ").append(rows.size())
                .append("; omitted rows: ").append(recognizedTargets-rows.size())
+               .append("; DISPLAYED-ONLY distinct exact handlers: ")
+               .append(displayedDistinctExactHandlers())
+               .append("; DISPLAYED-ONLY repeated exact-handler slots: ")
+               .append(displayedHandlerAliasSlots())
                .append("; DISPLAYED-ONLY STORE candidate vector rows: ")
                .append(displayedStoreCandidates())
                .append("; DISPLAYED-ONLY MOVEC/VBR candidate vector rows: ")
