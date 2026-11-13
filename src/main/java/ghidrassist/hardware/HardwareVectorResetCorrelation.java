@@ -270,7 +270,8 @@ public final class HardwareVectorResetCorrelation {
                    .append(row.frontierPath()).append(" |\n");
             }
             if (displayTruncated)
-                out.append("- Rows truncated by display cap; numeric totals cover ")
+                out.append("- Rows truncated by display cap; displayed-only handler counts ")
+                   .append("may omit aliases beyond the display cap; numeric totals cover ")
                    .append("all recognized vector-function pointers.\n");
             return out.append("\n").toString();
         }
