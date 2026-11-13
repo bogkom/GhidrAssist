@@ -425,8 +425,12 @@ public final class HardwareVectorResetCorrelation {
                 resetVisited.size()>HardwareCallEffects.MAX_SOURCE_FUNCTIONS ||
                 graph.size()>HardwareCallEffects.MAX_SOURCE_FUNCTIONS)
             throw new IllegalArgumentException("Invalid bounded vector/reset correlation input");
+        // RESET membership is a source-coordinate claim. Reject values that
+        // cannot name an aligned CPU32 function entry instead of silently
+        // treating them as unrelated to every recognized vector handler.
+        // Do not impose MC68332's narrower 24-bit aperture on generic CPU32.
         for(Long id:resetVisited)
-            if(id==null || id<0)
+            if(id==null || id<0 || id>0xffffffffL || (id&1)!=0)
                 throw new IllegalArgumentException("Invalid RESET source entry");
         for(Target target:resolvedVectors)
             if(target==null)
