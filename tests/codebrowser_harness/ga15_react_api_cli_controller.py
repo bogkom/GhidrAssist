@@ -610,6 +610,36 @@ def main():
     assert source_match["resume_authorized"] is False,source_match
     assert source_match["apply_authorized"] is False,source_match
     assert source_match["tool_execution_authorized"] is False,source_match
+    # GA-12/18: compare the historical checkpoint to a fresh inventory
+    # through the production CLI and real authenticated CodeBrowser server.
+    # The same-generation baseline must be an empty delta, not an inferred
+    # proof of runtime execution or completeness.
+    live_delta=command(args.session,"source-pairs-compare-live",
+                       "--input",source_checkpoint,"--source-limit",1,
+                       "--page-size",1)
+    assert live_delta["offline"] is False,live_delta
+    assert live_delta["live_read_only"] is True,live_delta
+    assert live_delta["read_only"] is True,live_delta
+    assert live_delta["resume_authorized"] is False,live_delta
+    assert live_delta["apply_authorized"] is False,live_delta
+    assert live_delta["same_import"] is True,live_delta
+    assert live_delta["total_changes"]==0,live_delta
+    assert live_delta["changes"]==[],live_delta
+    assert live_delta["coverage_changed"] is False,live_delta
+    # A SHA-consistent historical checkpoint for another firmware must
+    # fail even when its rows happen to match the live inventory.
+    wrong_import=out/"ga12-wrong-import-source-pairs.json"
+    other=json.loads(source_checkpoint.read_text())
+    other["payload"]["import_sha256"]=(
+        "f"*64 if other["payload"]["import_sha256"]!="f"*64 else "e"*64)
+    canonical=json.dumps(other["payload"],sort_keys=True,
+                         separators=(",",":"),ensure_ascii=False).encode()
+    other["payload_sha256"]=hashlib.sha256(canonical).hexdigest()
+    wrong_import.write_text(json.dumps(other))
+    command(args.session,"source-pairs-compare-live",
+            "--input",wrong_import,"--source-limit",1,"--page-size",1,
+            success=False)
+    wrong_import.unlink()
     # A well-formed, SHA-recomputed but different generation is not bound
     # to the current Program and must fail at the real RPC boundary.
     forged_source=out/"ga12-forged-generation.json"
@@ -639,6 +669,8 @@ def main():
         "real_cli_completed":True,"source_program":"synthetic-mmio.bin",
         "source_revision_unchanged":result["revision_unchanged"],
         "real_source_pairs_live_rebind_cli":True,
+        "real_source_pairs_compare_live_cli":True,
+        "real_source_pairs_compare_live_wrong_import_denied":True,
         "real_source_pairs_forged_generation_denied":True,
         "program_revision":evidence["programRevision"],
         "stale_run_and_revision_denied":True,
