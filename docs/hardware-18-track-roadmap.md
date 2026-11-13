@@ -1,3 +1,18 @@
+## GA-12/18 — 2026-11-13: observation provenance delta integrated
+
+PR [#325](https://github.com/bogkom/GhidrAssist/pull/325) was integrated as
+[`336570bdf88abc8357ecc615336dcb1a29248e7d`](https://github.com/bogkom/GhidrAssist/commit/336570bdf88abc8357ecc615336dcb1a29248e7d)
+from tested candidate `79ad14598a58f1732b4ee701f621ba9bc18748b0`.
+The read-only source-pair comparator now distinguishes observation provenance
+changes (omitted sources, RESET status, stage epoch and incomplete coverage)
+from pair-row and numeric coverage deltas. The corrected regression separates
+provenance-only changes from coverage-incomplete transitions. Previously
+reported exact-head checks: 6/6 GitHub Actions SUCCESS, including extension
+build and isolated Ghidra/ReAct; these are CI evidence, not firmware execution.
+This integration does not authorize Resume/Apply, prove MM/VBR/ISR activation,
+or complete GA-12/18. Next acceptance should target independent cross-function
+RESET/CALL/VBR evidence rather than additional metadata-only deltas.
+
 ## GA-12/18 — 2026-11-13: observation provenance delta acceptance in progress
 
 PR #325 extends read-only offline/live source-pair comparison with
