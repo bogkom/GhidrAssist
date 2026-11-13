@@ -582,6 +582,57 @@ class SourceCheckpoint(unittest.TestCase):
             self.assertFalse(result["resume_authorized"])
             self.assertFalse(result["apply_authorized"])
 
+    def test_observation_provenance_delta_without_pair_or_coverage_change(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            old = Path(tmp) / "old.json"
+            new = Path(tmp) / "new.json"
+            with patch.object(agent, "rpc", side_effect=self.fake_rpc):
+                agent.capture_source_pairs_checkpoint({}, old, 1)
+
+            def changed(_session, _method, params):
+                reply = page(params["offset"], params["limit"],
+                             generation="synthetic-run-B", revision=8,
+                             omitted=1, incomplete=True)
+                data = reply["source_pairs"]
+                data["stage_epoch"] = 3
+                data["reset_graph_incomplete"] = True
+                return reply
+
+            with patch.object(agent, "rpc", side_effect=changed):
+                agent.capture_source_pairs_checkpoint({}, new, 1)
+            first = agent.compare_source_pairs_checkpoints(old, new, 0, 1)
+            last = agent.compare_source_pairs_checkpoints(old, new, 2, 1)
+            self.assertEqual(first["total_changes"], 0)
+            self.assertFalse(first["coverage_changed"])
+            self.assertTrue(first["observation_changed"])
+            self.assertTrue(first["evidence_changed"])
+            self.assertEqual(first["observation_changes"],
+                             last["observation_changes"])
+            self.assertEqual(first["observation_changes"]["omitted_indirect"],
+                             {"before": 0, "after": 1})
+            self.assertEqual(first["observation_changes"]["stage_epoch"],
+                             {"before": 2, "after": 3})
+            self.assertEqual(first["observation_changes"]["reset_graph_incomplete"],
+                             {"before": False, "after": True})
+            self.assertEqual(first["observation_changes"]["bounded_source_complete"],
+                             {"before": True, "after": False})
+            self.assertTrue(first["source_inventory_incomplete"])
+            self.assertFalse(first["resume_authorized"])
+            self.assertFalse(first["apply_authorized"])
+
+    def test_identical_observations_have_no_delta(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            old = Path(tmp) / "old.json"
+            new = Path(tmp) / "new.json"
+            with patch.object(agent, "rpc", side_effect=self.fake_rpc):
+                agent.capture_source_pairs_checkpoint({}, old, 2)
+                agent.capture_source_pairs_checkpoint({}, new, 2)
+            result = agent.compare_source_pairs_checkpoints(old, new)
+            self.assertFalse(result["evidence_changed"])
+            self.assertFalse(result["observation_changed"])
+            self.assertEqual(result["observation_changes"], {})
+            self.assertEqual(result["total_changes"], 0)
+
     def test_offline_compare_rejects_tamper_wrong_import_and_bad_page(self):
         import hashlib
         with tempfile.TemporaryDirectory() as tmp:
