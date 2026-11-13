@@ -212,6 +212,57 @@ public final class HardwareVectorResetCorrelationSelfTest {
         check(unknownCall.rows().get(0).memoryStoreEffect().equals("UNKNOWN") &&
             unknownCall.rows().get(0).flowUncertain(),
             "missing call graph node never proves no side effects");
+        // Full uncertainty counts are independent of display clipping. A
+        // candidate effect and unknown effect are mutually exclusive per slot.
+        var unknownTargets = List.of(
+            new HardwareVectorResetCorrelation.Target(40,0x500,0x500,true),
+            new HardwareVectorResetCorrelation.Target(41,0x500,0x500,true),
+            new HardwareVectorResetCorrelation.Target(42,0x130,0x130,true),
+            new HardwareVectorResetCorrelation.Target(43,0x220,0x220,true),
+            new HardwareVectorResetCorrelation.Target(44,0x222,0x220,false));
+        var unknownFull = HardwareVectorResetCorrelation.inspect(
+            true,false,Set.of(0x100L),unknownTargets,graph,1);
+        var unknownUnclipped = HardwareVectorResetCorrelation.inspect(
+            true,false,Set.of(0x100L),unknownTargets,graph,32);
+        check(unknownFull.displayTruncated() &&
+            unknownFull.fullStoreUnknownSlots()==2 &&
+            unknownFull.fullVbrUnknownSlots()==2 &&
+            unknownFull.fullStoreCandidateSlots()==1 &&
+            unknownFull.fullVbrCandidateSlots()==1 &&
+            unknownFull.fullStoreUnknownSlots()==unknownUnclipped.fullStoreUnknownSlots() &&
+            unknownFull.fullVbrUnknownSlots()==unknownUnclipped.fullVbrUnknownSlots() &&
+            unknownFull.markdown().contains("FULL STORE unknown-evidence slots: 2") &&
+            unknownFull.markdown().contains("FULL MOVEC/VBR unknown-evidence slots: 2"),
+            "unknown full inventory counts hidden aliases, excludes interiors and stays clipped-invariant");
+        check(unknownFull.fullStoreCandidateSlots()+unknownFull.fullStoreUnknownSlots()
+                <=unknownFull.exactEntries() &&
+            unknownFull.fullVbrCandidateSlots()+unknownFull.fullVbrUnknownSlots()
+                <=unknownFull.exactEntries(),
+            "candidate and unknown slot classes are disjoint");
+        bad(() -> new HardwareVectorResetCorrelation.Summary(
+                unknownFull.relocatedSource(),unknownFull.tableAddress(),
+                unknownFull.resetRootRecognized(),unknownFull.resetGraphIncomplete(),
+                unknownFull.recognizedTargets(),unknownFull.exactEntries(),
+                unknownFull.sharedResetSubset(),unknownFull.outsideObservedSubset(),
+                unknownFull.interiorPointers(),unknownFull.displayTruncated(),
+                unknownFull.rows(),unknownFull.distinctExactHandlers(),
+                unknownFull.handlerAliasSlots(),unknownFull.fullStoreCandidateSlots(),
+                unknownFull.fullVbrCandidateSlots(),unknownFull.exactEntries(),
+                unknownFull.fullVbrUnknownSlots()),
+            "forged overlapping candidate and unknown counts rejected");
+        var legacyCoverage = new HardwareVectorResetCorrelation.Summary(
+            unknownFull.relocatedSource(),unknownFull.tableAddress(),
+            unknownFull.resetRootRecognized(),unknownFull.resetGraphIncomplete(),
+            unknownFull.recognizedTargets(),unknownFull.exactEntries(),
+            unknownFull.sharedResetSubset(),unknownFull.outsideObservedSubset(),
+            unknownFull.interiorPointers(),unknownFull.displayTruncated(),
+            unknownFull.rows(),unknownFull.distinctExactHandlers(),
+            unknownFull.handlerAliasSlots(),unknownFull.fullStoreCandidateSlots(),
+            unknownFull.fullVbrCandidateSlots());
+        check(legacyCoverage.fullStoreUnknownSlots()==-1 &&
+            legacyCoverage.fullVbrUnknownSlots()==-1 &&
+            legacyCoverage.markdown().contains("FULL STORE unknown-evidence slots: UNKNOWN"),
+            "old 15-argument summaries do not fabricate complete unknown coverage");
         bad(() -> HardwareVectorResetCorrelation.inspect(true, false, Set.of(),
                 List.of(targets.get(0), targets.get(0)), graph, 32),
             "duplicate vector slots rejected");
