@@ -157,6 +157,7 @@ public final class HardwareVectorResetCorrelation {
                     !resetRootRecognized &&
                         (sharedResetSubset!=0 || outsideObservedSubset!=0) ||
                     rows.size()>64 || rows.size()>recognizedTargets ||
+                    rows.stream().anyMatch(java.util.Objects::isNull) ||
                     distinctExactHandlers<0 || distinctExactHandlers>exactEntries ||
                     handlerAliasSlots<0 || distinctExactHandlers+handlerAliasSlots!=exactEntries ||
                     fullStoreCandidateSlots < -1 || fullVbrCandidateSlots < -1 ||
