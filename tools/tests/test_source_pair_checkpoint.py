@@ -620,6 +620,31 @@ class SourceCheckpoint(unittest.TestCase):
             self.assertFalse(first["resume_authorized"])
             self.assertFalse(first["apply_authorized"])
 
+    def test_coverage_incompleteness_is_both_coverage_and_observation_delta(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            old = Path(tmp) / "old.json"
+            new = Path(tmp) / "new.json"
+            with patch.object(agent, "rpc", side_effect=self.fake_rpc):
+                agent.capture_source_pairs_checkpoint({}, old, 2)
+
+            def changed(_session, _method, params):
+                return page(params["offset"], params["limit"],
+                            generation="synthetic-run-C", revision=9,
+                            incomplete=True)
+
+            with patch.object(agent, "rpc", side_effect=changed):
+                agent.capture_source_pairs_checkpoint({}, new, 2)
+            result = agent.compare_source_pairs_checkpoints(old, new)
+            self.assertEqual(result["total_changes"], 0)
+            self.assertTrue(result["coverage_changed"])
+            self.assertEqual(result["coverage_delta"]["functions_with_both_sources"], 0)
+            self.assertTrue(result["observation_changed"])
+            self.assertEqual(result["observation_changes"]["coverage_incomplete"],
+                             {"before": False, "after": True})
+            self.assertTrue(result["evidence_changed"])
+            self.assertFalse(result["resume_authorized"])
+            self.assertFalse(result["apply_authorized"])
+
     def test_identical_observations_have_no_delta(self):
         with tempfile.TemporaryDirectory() as tmp:
             old = Path(tmp) / "old.json"
