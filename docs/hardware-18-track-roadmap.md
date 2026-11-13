@@ -1,3 +1,16 @@
+## GA-01/11 — 2026-11-13: RESET source membership coordinate gate (candidate)
+
+The read-only vector/RESET correlation now rejects negative, odd, null and
+out-of-unsigned-32-bit RESET visited-function coordinates before comparing
+vector slots. A generic CPU32 aligned high address remains valid; the selected
+MC68332 24-bit constraint is not incorrectly imposed on this generic source
+report. Java 21 source regressions include adversarial coordinates and a
+positive high-address control. This is only input-evidence validation: source
+membership does not establish executed RESET, reachable branch feasibility,
+active VBR/ISR or a physical memory map. Exact-head Java 21, Java 25 full
+Ghidra 12.1.4 PUBLIC build, isolated synthetic Ghidra and review are required
+before merge. GA-01/11 remain PARTIAL.
+
 ## GA-01/11 — 2026-11-13: PR #328 integrated checkpoint
 
 PR [#328](https://github.com/bogkom/GhidrAssist/pull/328) merged into `master` at `435e98483356774296a3a83035c95a7b9bda2c02` from exact tested head `bdf08f4ea3a0c11b739241d2e98233eaa05131fb`. GitHub Actions reported 26/26 completed SUCCESS on that head, including the Java 21 vector/RESET source regressions, extension integration build, and isolated synthetic Ghidra workflows. No unresolved inline review threads were present. Full bounded STORE and MOVEC/VBR candidate slot totals now cover recognized exact-entry vectors beyond the displayed 64-row cap, reusing per-handler static audits and excluding interior pointers. The report still cannot establish executed ISR, active VBR or runtime memory mapping. GA-01 and GA-11 remain PARTIAL pending their remaining formal criteria; this checkpoint closes only the full-inventory effect-count subpackage.

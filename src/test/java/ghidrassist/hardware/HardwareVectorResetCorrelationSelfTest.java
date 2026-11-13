@@ -543,6 +543,27 @@ public final class HardwareVectorResetCorrelationSelfTest {
             false,0,true,false,2,2,2,0,0,false,
             java.util.Arrays.asList(firstShared,null),1,1,1,1),
             "full-inventory constructor rejects null row without NPE");
+        // Public RESET membership must not accept forged, unaligned or
+        // out-of-range source PCs even when no vector slot matches them.
+        for(long invalidResetPc : new long[]{-2L, 0x101L, 0x100000000L,
+                Long.MAX_VALUE}) {
+            bad(()->HardwareVectorResetCorrelation.inspect(
+                    true,false,Set.of(invalidResetPc),targets,graph,4),
+                "invalid RESET source coordinate rejected before correlation");
+        }
+        bad(()->HardwareVectorResetCorrelation.inspect(
+                true,false,java.util.Collections.singleton(null),targets,graph,4),
+            "null RESET source coordinate rejected");
+        // Generic CPU32 may legitimately use aligned 32-bit addresses above
+        // the selected MC68332 24-bit aperture.
+        var wideReset=HardwareVectorResetCorrelation.inspect(
+            true,false,Set.of(0xff000000L),
+            List.of(new HardwareVectorResetCorrelation.Target(
+                60,0xff000000L,0xff000000L,true)),List.of(),1);
+        check(wideReset.sharedResetSubset()==1 &&
+            wideReset.rows().get(0).relation()==
+                HardwareVectorResetCorrelation.Relation.IN_RESET_STATIC_CALL_SUBSET,
+            "generic CPU32 aligned wide RESET membership retained");
         System.out.println("HardwareVectorResetCorrelationSelfTest PASS: assertions="+assertions);
     }
 }
