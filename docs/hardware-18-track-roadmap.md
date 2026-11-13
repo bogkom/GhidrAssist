@@ -1,3 +1,16 @@
+## GA-01/11 — 2026-11-13: full bounded vector alias totals (candidate)
+
+Branch `work/ga01-11-full-vector-alias-totals-20261113` extends the vector/RESET report with full-inventory
+`distinctExactHandlers` and `handlerAliasSlots` across all recognized
+exact-entry pointers (up to 254), independently of the 64-row display cap.
+Interior pointers are excluded from handler identities. Existing displayed-only
+STORE/MOVEC counts and source paths remain explicitly display-limited; no
+new transitive effects are inferred for omitted rows. A standalone source
+regression checks truncation invariance, interior pointers, and contradictory
+summary totals. CI Java 21, Java 25 Ghidra 12.1.4, isolated Ghidra and
+review are required before merge. Static candidate counts are not runtime
+ISR execution or active VBR evidence. GA-01/11 remain PARTIAL.
+
 ## GA-12/18 — 2026-11-13: observation provenance delta integrated
 
 PR [#325](https://github.com/bogkom/GhidrAssist/pull/325) was integrated as
