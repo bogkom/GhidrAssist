@@ -5065,3 +5065,17 @@ build and isolated synthetic Ghidra workflows. Follow-up commits
 legacy input to canonical validation and extend negative regression
 to both constructor forms. New head still requires exact-SHA Java21,
 Java25 build, isolated Ghidra, review and merge. GA-01/11 PARTIAL.
+
+## GA-01/11 — 2026-11-13: PR #327 integrated checkpoint
+
+PR #327 merged to `master` at `078f1e55753310dc2cffcf93eaa7733cf8bb9eb2`.
+Exact tested head: `883e59326ee5aeb31b847a099fe013cceb787562`;
+26/26 GitHub Actions workflow runs completed SUCCESS, including
+Java21 vector/RESET source regression, extension integration build,
+and isolated synthetic Ghidra workflows. No unresolved inline review
+threads; PR was mergeable and up to date with `master` (behind 0).
+The integrated behavior counts full-inventory exact-entry ISR handler
+aliases independently of displayed-row cap, excludes interior pointers,
+and retains displayed-only STORE/VBR witnesses. These remain static
+source observations, not proof of active ISR/VBR or execution.
+GA-01/11 remain PARTIAL pending the other formal roadmap criteria.
