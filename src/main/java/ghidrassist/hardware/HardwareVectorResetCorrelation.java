@@ -112,11 +112,24 @@ public final class HardwareVectorResetCorrelation {
             this(relocatedSource,tableAddress,resetRootRecognized,resetGraphIncomplete,
                 recognizedTargets,exactEntries,sharedResetSubset,outsideObservedSubset,
                 interiorPointers,displayTruncated,rows,
-                (int)rows.stream().filter(r->r.relation()!=Relation.INTERIOR_FUNCTION_POINTER_NOT_ENTRY)
-                    .map(Row::functionEntry).distinct().count(),
-                (int)rows.stream().filter(r->r.relation()!=Relation.INTERIOR_FUNCTION_POINTER_NOT_ENTRY).count()-
-                    (int)rows.stream().filter(r->r.relation()!=Relation.INTERIOR_FUNCTION_POINTER_NOT_ENTRY)
-                    .map(Row::functionEntry).distinct().count());
+                legacyDistinctHandlers(rows),
+                legacyAliasSlots(rows));
+        }
+        // Invalid legacy inventories are passed to the canonical validator,
+        // which reports IllegalArgumentException rather than leaking an NPE.
+        private static int legacyDistinctHandlers(List<Row> rows) {
+            if (rows == null || rows.stream().anyMatch(java.util.Objects::isNull))
+                return 0;
+            return (int) rows.stream()
+                .filter(r -> r.relation() != Relation.INTERIOR_FUNCTION_POINTER_NOT_ENTRY)
+                .map(Row::functionEntry).distinct().count();
+        }
+        private static int legacyAliasSlots(List<Row> rows) {
+            if (rows == null || rows.stream().anyMatch(java.util.Objects::isNull))
+                return 0;
+            return (int) rows.stream()
+                .filter(r -> r.relation() != Relation.INTERIOR_FUNCTION_POINTER_NOT_ENTRY)
+                .count() - legacyDistinctHandlers(rows);
         }
         public Summary {
             if(tableAddress<0 || (tableAddress&3)!=0 ||
