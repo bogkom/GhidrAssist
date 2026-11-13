@@ -170,6 +170,8 @@ jobs:
               "real_http_bearer_401","real_cli_in_progress",
               "real_cli_completed","source_revision_unchanged",
               "real_source_pairs_live_rebind_cli",
+              "real_source_pairs_compare_live_cli",
+              "real_source_pairs_compare_live_wrong_import_denied",
               "real_source_pairs_forged_generation_denied",
               "stale_run_and_revision_denied","checkpoint_no_overwrite",
               "offline_no_session_verify_and_read","tampered_offline_denied",
