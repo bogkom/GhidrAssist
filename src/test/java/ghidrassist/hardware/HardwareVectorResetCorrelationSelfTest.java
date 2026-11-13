@@ -482,6 +482,67 @@ public final class HardwareVectorResetCorrelationSelfTest {
                 "UNKNOWN","UNKNOWN",true,null,"NONE","NONE","NONE");}
         catch(IllegalArgumentException expected){invalidWitness=true;}
         check(invalidWitness,"null typed source-cell is not a valid vector report");
+        // Full-inventory STORE/VBR evidence must be independent of row display.
+        check(report.fullStoreCandidateSlots()==2 &&
+            report.fullVbrCandidateSlots()==1 &&
+            report.markdown().contains("FULL STORE candidate vector slots: 2") &&
+            report.markdown().contains("FULL MOVEC/VBR candidate vector slots: 1"),
+            "complete inventory totals are computed from every exact handler");
+        check(aliases.fullStoreCandidateSlots()==3 &&
+            aliases.fullVbrCandidateSlots()==3 &&
+            clippedAliases.fullStoreCandidateSlots()==3 &&
+            clippedAliases.fullVbrCandidateSlots()==3 &&
+            partiallyShownAliases.fullStoreCandidateSlots()==3 &&
+            partiallyShownAliases.fullVbrCandidateSlots()==3,
+            "hidden vector aliases retain full STORE/VBR candidate counts");
+        check(interiorOnly.fullStoreCandidateSlots()==0 &&
+            interiorOnly.fullVbrCandidateSlots()==0 &&
+            interiorOnly.rows().get(0).memoryStoreEffect().equals("UNKNOWN"),
+            "interior pointer cannot borrow effects from containing function");
+        check(displayCap.fullStoreCandidateSlots()==1 &&
+            displayCap.fullVbrCandidateSlots()==1 &&
+            displayCap.displayedStoreCandidates()==1,
+            "omitted unresolved exact handler contributes no fabricated candidate");
+        var fullZero=HardwareVectorResetCorrelation.inspect(
+            true,false,Set.of(0x100L),
+            List.of(new HardwareVectorResetCorrelation.Target(
+                60,0x220L,0x220L,true)),graph,1);
+        check(fullZero.fullStoreCandidateSlots()==0 &&
+            fullZero.fullVbrCandidateSlots()==0 &&
+            fullZero.rows().get(0).memoryStoreEffect()
+                .equals("NOT_OBSERVED_IN_BOUNDED_GRAPH"),
+            "known bounded graph without STORE is not a positive candidate");
+        var legacyEffects=new HardwareVectorResetCorrelation.Summary(
+            aliases.relocatedSource(),aliases.tableAddress(),
+            aliases.resetRootRecognized(),aliases.resetGraphIncomplete(),
+            aliases.recognizedTargets(),aliases.exactEntries(),
+            aliases.sharedResetSubset(),aliases.outsideObservedSubset(),
+            aliases.interiorPointers(),aliases.displayTruncated(),aliases.rows(),
+            aliases.distinctExactHandlers(),aliases.handlerAliasSlots());
+        check(legacyEffects.fullStoreCandidateSlots()==-1 &&
+            legacyEffects.fullVbrCandidateSlots()==-1 &&
+            legacyEffects.markdown().contains("UNKNOWN (legacy summary)"),
+            "legacy report cannot pretend hidden effects were audited");
+        bad(()->new HardwareVectorResetCorrelation.Summary(
+            aliases.relocatedSource(),aliases.tableAddress(),
+            aliases.resetRootRecognized(),aliases.resetGraphIncomplete(),
+            aliases.recognizedTargets(),aliases.exactEntries(),
+            aliases.sharedResetSubset(),aliases.outsideObservedSubset(),
+            aliases.interiorPointers(),aliases.displayTruncated(),aliases.rows(),
+            aliases.distinctExactHandlers(),aliases.handlerAliasSlots(),0,0),
+            "forged full totals below displayed positive effects rejected");
+        bad(()->new HardwareVectorResetCorrelation.Summary(
+            aliases.relocatedSource(),aliases.tableAddress(),
+            aliases.resetRootRecognized(),aliases.resetGraphIncomplete(),
+            aliases.recognizedTargets(),aliases.exactEntries(),
+            aliases.sharedResetSubset(),aliases.outsideObservedSubset(),
+            aliases.interiorPointers(),aliases.displayTruncated(),aliases.rows(),
+            aliases.distinctExactHandlers(),aliases.handlerAliasSlots(),5,0),
+            "full effect counts cannot exceed exact vector slots");
+        bad(()->new HardwareVectorResetCorrelation.Summary(
+            false,0,true,false,2,2,2,0,0,false,
+            java.util.Arrays.asList(firstShared,null),1,1,1,1),
+            "full-inventory constructor rejects null row without NPE");
         System.out.println("HardwareVectorResetCorrelationSelfTest PASS: assertions="+assertions);
     }
 }
