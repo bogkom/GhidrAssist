@@ -507,6 +507,13 @@ class SourceCheckpoint(unittest.TestCase):
             self.assertFalse(result["has_more"])
             self.assertEqual(terminal["changes"], [])
             self.assertFalse(result["coverage_changed"])
+            self.assertEqual(result["change_counts"],
+                             {"ADDED": 0, "REMOVED": 0, "CHANGED": 1})
+            self.assertEqual(result["uncertainty_changes"],
+                             {"became_uncertain": 0, "became_certain": 0})
+            self.assertTrue(all(value == 0 for value in
+                                result["coverage_delta"].values()))
+            self.assertEqual(result["change_counts"], terminal["change_counts"])
 
     def test_offline_compare_added_removed_and_bounded_pagination(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -534,6 +541,46 @@ class SourceCheckpoint(unittest.TestCase):
                              ["REMOVED", "ADDED"])
             self.assertEqual(first["older_revision"], 7)
             self.assertEqual(first["newer_revision"], 8)
+            self.assertEqual(first["change_counts"],
+                             {"ADDED": 1, "REMOVED": 1, "CHANGED": 0})
+            self.assertEqual(first["change_counts"], second["change_counts"])
+            self.assertEqual(first["coverage_delta"], second["coverage_delta"])
+
+    def test_compare_reports_uncertainty_and_unpaired_coverage_separately(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            old = Path(tmp) / "old.json"
+            new = Path(tmp) / "new.json"
+            with patch.object(agent, "rpc", side_effect=self.fake_rpc):
+                agent.capture_source_pairs_checkpoint({}, old, 2)
+
+            def changed(_session, _method, params):
+                reply = page(params["offset"], params["limit"],
+                             generation="synthetic-run-B", revision=8)
+                data = reply["source_pairs"]
+                data["indirect_sources"] = 3
+                data["indirect_only_functions"] = 1
+                data["indirect_only_sites"] = 1
+                data["coverage_incomplete"] = True
+                data["observed_inventory_incomplete"] = True
+                for row in data["rows"]:
+                    if row["function"] == 0x130:
+                        row["uncertain"] = True
+                return reply
+
+            with patch.object(agent, "rpc", side_effect=changed):
+                agent.capture_source_pairs_checkpoint({}, new, 2)
+            result = agent.compare_source_pairs_checkpoints(old, new, 0, 1)
+            self.assertEqual(result["total_changes"], 1)
+            self.assertEqual(result["change_counts"],
+                             {"ADDED": 0, "REMOVED": 0, "CHANGED": 1})
+            self.assertEqual(result["uncertainty_changes"],
+                             {"became_uncertain": 1, "became_certain": 0})
+            self.assertEqual(result["coverage_delta"]["indirect_only_sites"], 1)
+            self.assertEqual(result["coverage_delta"]["indirect_only_functions"], 1)
+            self.assertTrue(result["coverage_changed"])
+            self.assertTrue(result["source_inventory_incomplete"])
+            self.assertFalse(result["resume_authorized"])
+            self.assertFalse(result["apply_authorized"])
 
     def test_offline_compare_rejects_tamper_wrong_import_and_bad_page(self):
         import hashlib

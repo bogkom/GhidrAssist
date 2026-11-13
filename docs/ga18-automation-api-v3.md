@@ -750,3 +750,27 @@ This is a synthetic test lifecycle fix, not independent evidence of
 successful decompilation, real MCU execution, VBR/ISR activity or a
 production Ghidra project. No local Wyse/Precision/Supervisor worker
 is started.
+
+## GA-12/18 — complete source-pair delta summaries (2026-11-13)
+
+The read-only `source-pairs-compare` and `source-pairs-compare-live`
+commands now publish a whole-inventory `change_counts` object
+(`ADDED`, `REMOVED`, `CHANGED`) on **every** paginated response,
+independent of the current `offset` and `limit`. The
+`uncertainty_changes` object counts only existing pair rows whose
+`uncertain` flag changed (`became_uncertain`, `became_certain`).
+New and removed rows are not interpreted as uncertainty transitions.
+
+`coverage_delta` publishes signed differences for six numeric coverage
+counters, including unpaired indirect/MOVEC source sites; the old and
+new coverage objects and their incompleteness flags remain available.
+Thus an unchanged pair list does **not** imply unchanged source coverage.
+Counts are derived from the two fully hash-verified, matching-import/profile
+inventories before pagination, not from displayed rows. The live command
+uses the same comparison contract after a bounded, revision/generation-fenced
+fresh read and discards its temporary checkpoint. No operation grants
+Resume, Review, Apply, executed-CALL, active MM/VBR/ISR or physical bus
+authority. Deterministic regressions cover pagination, uncertainty
+transitions and unpaired coverage changes; exact-head Java21/Java25 and
+isolated real-Ghidra Actions are required before integration.
+
