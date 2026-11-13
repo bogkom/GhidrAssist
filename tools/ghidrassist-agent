@@ -464,6 +464,33 @@ def compare_source_pairs_checkpoints(older, newer, offset=0, limit=32):
     }
 
 
+
+def compare_source_pairs_with_live(session, historical, offset=0, limit=32,
+                                   page_size=32):
+    """Compare historical evidence with a newly captured live inventory.
+
+    A private temporary checkpoint is used only for reuse of the verified
+    capture/compare contracts. It is deleted before returning; no Program
+    changes, Analyze, Resume, Review or Apply are performed.
+    """
+    if type(page_size) is not int or not 1 <= page_size <= 32:
+        raise ValueError("Invalid live source page size")
+    # Refuse a forged or legacy baseline before contacting live Ghidra.
+    baseline = verify_source_pairs_checkpoint(historical)
+    if not baseline["coverage_available"]:
+        raise ValueError("Legacy source inventory cannot be compared to live evidence")
+    with tempfile.TemporaryDirectory(prefix="ghidrassist-live-source-") as tmp:
+        live_file = Path(tmp) / "live.json"
+        capture_source_pairs_checkpoint(session, live_file, page_size)
+        result = compare_source_pairs_checkpoints(
+            historical, live_file, offset, limit)
+    result["offline"] = False
+    result["live_read_only"] = True
+    result["notice"] = ("Historical vs freshly captured static source evidence; "
+                        "not execution, active MM/VBR/ISR, Resume or Apply")
+    return result
+
+
 def check_source_pairs_resume_preflight(session, source, page_size=32):
     """Read-only live rebind of historical static evidence; never restore execution."""
     if type(page_size) is not int or not 1 <= page_size <= 32:
@@ -1353,7 +1380,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--session", default=os.environ.get(
         "GHIDRASSIST_AGENT_SESSION", str(Path.home() / ".local/state/ghidrassist-agent/session.json")))
-    parser.add_argument("action", choices=("status", "snapshot", "analyze", "task", "mmio", "review-preview", "profile-select", "function", "xrefs", "function-xrefs-body", "decompile", "decompile-status", "bundle", "paths", "listing", "listing-range", "goto", "tab-select", "table-select", "program-open", "review-prepare", "review-apply", "review-undo", "cancel", "report", "export", "agentic-findings", "agentic-checkpoint", "agentic-verify", "agentic-read", "agentic-resume-check", "agentic-review-draft", "agentic-lineage-verify", "agentic-lineage-chain-verify", "agentic-binding-create", "source-pairs", "source-pairs-checkpoint", "source-pairs-verify", "source-pairs-read", "source-pairs-compare", "source-pairs-resume-check", "report-checkpoint", "report-checkpoint-verify", "report-set-checkpoint", "report-set-verify"))
+    parser.add_argument("action", choices=("status", "snapshot", "analyze", "task", "mmio", "review-preview", "profile-select", "function", "xrefs", "function-xrefs-body", "decompile", "decompile-status", "bundle", "paths", "listing", "listing-range", "goto", "tab-select", "table-select", "program-open", "review-prepare", "review-apply", "review-undo", "cancel", "report", "export", "agentic-findings", "agentic-checkpoint", "agentic-verify", "agentic-read", "agentic-resume-check", "agentic-review-draft", "agentic-lineage-verify", "agentic-lineage-chain-verify", "agentic-binding-create", "source-pairs", "source-pairs-checkpoint", "source-pairs-verify", "source-pairs-read", "source-pairs-compare", "source-pairs-compare-live", "source-pairs-resume-check", "report-checkpoint", "report-checkpoint-verify", "report-set-checkpoint", "report-set-verify"))
     parser.add_argument("address", nargs="?")
     parser.add_argument("--filter", default="")
     parser.add_argument("--row", type=int, default=None)
@@ -1448,6 +1475,18 @@ def main():
             return 0
         except (OSError,ValueError,KeyError,TypeError,UnicodeError) as error:
             print("Offline source comparison refused: "+str(error),file=sys.stderr)
+            return 1
+    if args.action=="source-pairs-compare-live":
+        if not args.input:
+            parser.error("source-pairs-compare-live requires --input")
+        try:
+            session=load_session(args.session)
+            print(json.dumps(compare_source_pairs_with_live(
+                session,args.input,args.offset,args.source_limit,args.page_size),
+                indent=2,ensure_ascii=False))
+            return 0
+        except (OSError,ValueError,KeyError,TypeError,UnicodeError,HTTPError) as error:
+            print("Live source comparison refused: "+str(error),file=sys.stderr)
             return 1
     if args.action=="source-pairs-resume-check":
         if not args.input:
