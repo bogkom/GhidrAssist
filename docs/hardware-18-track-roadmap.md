@@ -1,3 +1,16 @@
+## GA-01/11 — 2026-11-13: full bounded vector alias totals (candidate)
+
+Branch `work/ga01-11-full-vector-alias-totals-20261113` extends the vector/RESET report with full-inventory
+`distinctExactHandlers` and `handlerAliasSlots` across all recognized
+exact-entry pointers (up to 254), independently of the 64-row display cap.
+Interior pointers are excluded from handler identities. Existing displayed-only
+STORE/MOVEC counts and source paths remain explicitly display-limited; no
+new transitive effects are inferred for omitted rows. A standalone source
+regression checks truncation invariance, interior pointers, and contradictory
+summary totals. CI Java 21, Java 25 Ghidra 12.1.4, isolated Ghidra and
+review are required before merge. Static candidate counts are not runtime
+ISR execution or active VBR evidence. GA-01/11 remain PARTIAL.
+
 ## GA-12/18 — 2026-11-13: observation provenance delta integrated
 
 PR [#325](https://github.com/bogkom/GhidrAssist/pull/325) was integrated as
@@ -5032,3 +5045,23 @@ Java25 full Ghidra 12.1.4 PUBLIC build, and isolated synthetic Ghidra
 verification on the exact PR SHA; review and merge only after PASS.
 This is static source evidence, not active VBR, ISR execution, latched MM,
 or physical CS mapping.
+
+## GA-01/11 — 2026-11-13: full-inventory alias totals, CI regression follow-up
+
+PR #327 adds bounded full-inventory `distinctExactHandlers` and
+`handlerAliasSlots` independently of the displayed row cap. Exact-entry
+aliases are counted by function entry, while interior pointers remain
+excluded. STORE/VBR source witnesses and effect summaries remain per
+displayed slot; neither alias counts nor RESET reachability prove runtime
+ISR execution or active VBR.
+
+At head `8ca71a634ae27c72bfc42c20fe527811a678d73c`,
+GitHub Actions run 43438678777 failed Java21 source regression with an
+NPE in the legacy Summary constructor for a null inventory. Other 25
+reported workflows completed successfully, including the extension
+build and isolated synthetic Ghidra workflows. Follow-up commits
+`1bc8e62492d698f5046381b2d3d9c359ad6e18d0` and
+`ab1d9774162c1ce93921005726292a3127d599d1` route invalid
+legacy input to canonical validation and extend negative regression
+to both constructor forms. New head still requires exact-SHA Java21,
+Java25 build, isolated Ghidra, review and merge. GA-01/11 PARTIAL.

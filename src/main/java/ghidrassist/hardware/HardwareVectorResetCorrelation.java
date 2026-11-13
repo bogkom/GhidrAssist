@@ -103,7 +103,34 @@ public final class HardwareVectorResetCorrelation {
                           int recognizedTargets, int exactEntries,
                           int sharedResetSubset, int outsideObservedSubset,
                           int interiorPointers, boolean displayTruncated,
-                          List<Row> rows) {
+                          List<Row> rows, int distinctExactHandlers, int handlerAliasSlots) {
+        /** Legacy displayed-only constructor; full totals must be supplied by inspectSource. */
+        public Summary(boolean relocatedSource,long tableAddress,boolean resetRootRecognized,
+                boolean resetGraphIncomplete,int recognizedTargets,int exactEntries,
+                int sharedResetSubset,int outsideObservedSubset,int interiorPointers,
+                boolean displayTruncated,List<Row> rows) {
+            this(relocatedSource,tableAddress,resetRootRecognized,resetGraphIncomplete,
+                recognizedTargets,exactEntries,sharedResetSubset,outsideObservedSubset,
+                interiorPointers,displayTruncated,rows,
+                legacyDistinctHandlers(rows),
+                legacyAliasSlots(rows));
+        }
+        // Invalid legacy inventories are passed to the canonical validator,
+        // which reports IllegalArgumentException rather than leaking an NPE.
+        private static int legacyDistinctHandlers(List<Row> rows) {
+            if (rows == null || rows.stream().anyMatch(java.util.Objects::isNull))
+                return 0;
+            return (int) rows.stream()
+                .filter(r -> r.relation() != Relation.INTERIOR_FUNCTION_POINTER_NOT_ENTRY)
+                .map(Row::functionEntry).distinct().count();
+        }
+        private static int legacyAliasSlots(List<Row> rows) {
+            if (rows == null || rows.stream().anyMatch(java.util.Objects::isNull))
+                return 0;
+            return (int) rows.stream()
+                .filter(r -> r.relation() != Relation.INTERIOR_FUNCTION_POINTER_NOT_ENTRY)
+                .count() - legacyDistinctHandlers(rows);
+        }
         public Summary {
             if(tableAddress<0 || (tableAddress&3)!=0 ||
                     relocatedSource && tableAddress>0xffffffL-1023L ||
@@ -118,6 +145,8 @@ public final class HardwareVectorResetCorrelation {
                     !resetRootRecognized &&
                         (sharedResetSubset!=0 || outsideObservedSubset!=0) ||
                     rows.size()>64 || rows.size()>recognizedTargets ||
+                    distinctExactHandlers<0 || distinctExactHandlers>exactEntries ||
+                    handlerAliasSlots<0 || distinctExactHandlers+handlerAliasSlots!=exactEntries ||
                     recognizedTargets>0 && rows.isEmpty() ||
                     displayTruncated!=(rows.size()<recognizedTargets) ||
                     rows.stream().anyMatch(java.util.Objects::isNull))
@@ -162,6 +191,7 @@ public final class HardwareVectorResetCorrelation {
                 }
             }
             if(shownExact>exactEntries || shownInterior>interiorPointers ||
+                    byHandler.size()>distinctExactHandlers ||
                     shownShared>sharedResetSubset ||
                     shownOutside>outsideObservedSubset)
                 throw new IllegalArgumentException(
@@ -215,6 +245,8 @@ public final class HardwareVectorResetCorrelation {
                .append(interiorPointers)
                .append("; displayed rows: ").append(rows.size())
                .append("; omitted rows: ").append(recognizedTargets-rows.size())
+               .append("; FULL distinct exact handlers: ").append(distinctExactHandlers)
+               .append("; FULL repeated exact-handler slots: ").append(handlerAliasSlots)
                .append("; DISPLAYED-ONLY distinct exact handlers: ")
                .append(displayedDistinctExactHandlers())
                .append("; DISPLAYED-ONLY repeated exact-handler slots: ")
@@ -381,6 +413,7 @@ public final class HardwareVectorResetCorrelation {
                 throw new IllegalArgumentException("Duplicate or null vector target");
         }
         int exact = 0, shared = 0, outside = 0, interior = 0;
+        Set<Long> fullExactHandlers = new HashSet<>();
         // Multiple vector slots may point to the same exact handler. The
         // transitive STORE/VBR effect is read-only and depends on the target,
         // not on the candidate vector number. Cache only in this call.
@@ -394,6 +427,7 @@ public final class HardwareVectorResetCorrelation {
                 relation = Relation.INTERIOR_FUNCTION_POINTER_NOT_ENTRY;
             } else {
                 exact++;
+                fullExactHandlers.add(target.functionEntry());
                 if (!resetRootRecognized) {
                     relation = Relation.RESET_ROOT_UNKNOWN;
                 } else if (resetVisited.contains(target.functionEntry())) {
@@ -430,6 +464,7 @@ public final class HardwareVectorResetCorrelation {
         }
         return new Summary(relocatedSource,sourceBase,
             resetRootRecognized,resetGraphIncomplete,sorted.size(), exact,
-            shared, outside, interior,rows.size() < sorted.size(), rows);
+            shared, outside, interior,rows.size() < sorted.size(), rows,
+            fullExactHandlers.size(), exact-fullExactHandlers.size());
     }
 }

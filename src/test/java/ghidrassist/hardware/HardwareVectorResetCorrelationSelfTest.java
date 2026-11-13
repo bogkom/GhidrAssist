@@ -443,6 +443,14 @@ public final class HardwareVectorResetCorrelationSelfTest {
                 false,0,true,false,4,3,1,2,1,false,null),
             "null vector source inventory rejected without NPE");
         bad(()->new HardwareVectorResetCorrelation.Summary(
+                false,0,true,false,4,3,1,2,1,false,null,0,3),
+            "canonical null inventory also rejects with IllegalArgumentException");
+        bad(()->new HardwareVectorResetCorrelation.Summary(
+                false,0,true,false,4,3,1,2,1,false,
+                java.util.Arrays.asList(report.rows().get(0),null,
+                    report.rows().get(2),report.rows().get(3)),2,1),
+            "canonical null row rejects without accepting forged totals");
+        bad(()->new HardwareVectorResetCorrelation.Summary(
                 false,0,true,false,4,3,1,2,1,false,
                 java.util.Arrays.asList(report.rows().get(0),null,
                     report.rows().get(2),report.rows().get(3))),
