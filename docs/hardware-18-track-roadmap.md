@@ -1,3 +1,16 @@
+## GA-01/11 — 2026-11-13: full-vector effects regression checkpoint
+
+PR #328 now includes Java 21 source-level positive/negative fixtures for
+full STORE and MOVEC/VBR candidate counts, clipped alias inventories,
+interior pointers, bounded no-candidate graphs, legacy UNKNOWN totals,
+forged totals and null-row refusal. Exact-entry aliases are counted per
+vector slot while their static call-effects audit is memoized per handler.
+Displayed source witness paths remain capped; full numeric counts are not
+per-vector execution evidence. Commit `035f99cc342e4bfb36b0187c55cda0a011a3ac37`
+is an unverified candidate: exact-head Java 21, Java 25 Ghidra 12.1.4
+PUBLIC build, isolated Ghidra CI and review are still required before
+merge. GA-01/11 remain PARTIAL.
+
 ## GA-01/11 — 2026-11-13: full-vector static STORE/VBR evidence candidate
 
 Branch `work/ga01-11-full-vector-effects-20261113` audits the entire bounded set of up to 254 recognized vector targets, not only the first 64 displayed rows. Exact-entry handlers share a revision-local memoized four-hop/100-node read-only call-effects audit. Full STORE and MOVEC/VBR candidate slot counts include repeated vector aliases but exclude interior pointers. Legacy caller-created summaries report full effect totals as UNKNOWN; candidate counts are static and neither absence nor presence establishes ISR execution or active VBR. Acceptance requires Java 21 source regressions, Java 25 Ghidra 12.1.4 PUBLIC build, isolated synthetic Ghidra evidence, review and exact-SHA CI before merge. GA-01/11 remain PARTIAL.
