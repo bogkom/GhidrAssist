@@ -5016,3 +5016,19 @@ Poprawny JSR (A0) nadal ma precyzyjny byte-proven target,
 a nieznany JSR (A1) pozostaje INCOMPLETE. Wymagane
 pełne GitHub Actions na dokładnym SHA, bez lokalnych
 testów Wyse/Precision, zmian Apply ani twierdzeń o runtime.
+
+## GA-01/11 — 2026-11-13: vector slot aliases versus distinct handlers (candidate)
+
+A single exact-entry function may be referenced by several exception vector
+slots. The read-only vector/RESET report now explicitly distinguishes
+**displayed** distinct exact-entry handlers from additional displayed slots
+aliasing those handlers. Existing vector-slot totals, STORE/VBR MAY evidence,
+and source witnesses remain per slot, not independent execution observations.
+Interior pointers are excluded from exact-handler alias counts. The display
+limit (64 rows) is explicit: neither new count claims full-inventory coverage.
+Java21 source regression covers unique, triply aliased, truncated and
+interior-only fixtures. Required next gates: Java21 source regression,
+Java25 full Ghidra 12.1.4 PUBLIC build, and isolated synthetic Ghidra
+verification on the exact PR SHA; review and merge only after PASS.
+This is static source evidence, not active VBR, ISR execution, latched MM,
+or physical CS mapping.

@@ -98,6 +98,49 @@ public final class HardwareVectorResetCorrelationSelfTest {
             md.contains("Vector table input: image-zero bytes ONLY") &&
             md.contains("| Vector | Image-zero pointer |"),
             "legacy image-zero inventory must retain its actual source label");
+        check(report.displayedDistinctExactHandlers()==3 &&
+            report.displayedHandlerAliasSlots()==0 &&
+            md.contains("DISPLAYED-ONLY distinct exact handlers: 3") &&
+            md.contains("DISPLAYED-ONLY repeated exact-handler slots: 0"),
+            "single-slot exact handlers do not invent vector aliases");
+        var aliasedTargets = List.of(
+            new HardwareVectorResetCorrelation.Target(26,0x130,0x130,true),
+            new HardwareVectorResetCorrelation.Target(27,0x130,0x130,true),
+            new HardwareVectorResetCorrelation.Target(28,0x130,0x130,true),
+            new HardwareVectorResetCorrelation.Target(32,0x220,0x220,true),
+            new HardwareVectorResetCorrelation.Target(33,0x222,0x220,false));
+        var aliases = HardwareVectorResetCorrelation.inspect(
+            true,false,reset.visitedEntries(),aliasedTargets,graph,32);
+        check(aliases.recognizedTargets()==5 && aliases.exactEntries()==4 &&
+            aliases.displayedDistinctExactHandlers()==2 &&
+            aliases.displayedHandlerAliasSlots()==2 &&
+            aliases.displayedStoreCandidates()==3 &&
+            aliases.markdown().contains("repeated exact-handler slots: 2"),
+            "three vector slots share one handler but retain independent slots");
+        var clippedAliases = HardwareVectorResetCorrelation.inspect(
+            true,false,reset.visitedEntries(),aliasedTargets,graph,1);
+        check(clippedAliases.displayTruncated() &&
+            clippedAliases.recognizedTargets()==5 &&
+            clippedAliases.displayedDistinctExactHandlers()==1 &&
+            clippedAliases.displayedHandlerAliasSlots()==0 &&
+            clippedAliases.markdown().contains("may omit aliases beyond the display cap"),
+            "truncated alias summary must not claim complete inventory");
+        var partiallyShownAliases = HardwareVectorResetCorrelation.inspect(
+            true,false,reset.visitedEntries(),aliasedTargets,graph,2);
+        check(partiallyShownAliases.displayTruncated() &&
+            partiallyShownAliases.displayedDistinctExactHandlers()==1 &&
+            partiallyShownAliases.displayedHandlerAliasSlots()==1 &&
+            partiallyShownAliases.exactEntries()==4 &&
+            partiallyShownAliases.markdown().contains(
+                "may omit aliases beyond the display cap"),
+            "two visible aliases remain display-only despite hidden exact entries");
+        var interiorOnly = HardwareVectorResetCorrelation.inspect(
+            true,false,reset.visitedEntries(),
+            List.of(new HardwareVectorResetCorrelation.Target(33,0x222,0x220,false)),
+            graph,32);
+        check(interiorOnly.displayedDistinctExactHandlers()==0 &&
+            interiorOnly.displayedHandlerAliasSlots()==0,
+            "interior pointers are not counted as exact handler aliases");
         var relocated = HardwareVectorResetCorrelation.inspectRelocated(
             0x800L,true,true,reset.visitedEntries(),targets,graph,32);
         String relocatedText=relocated.markdown();
