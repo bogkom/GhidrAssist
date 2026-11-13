@@ -583,5 +583,73 @@ class SourceCheckpoint(unittest.TestCase):
 
 
 
+    def test_live_compare_detects_changed_evidence_without_persistent_snapshot(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            old = Path(tmp) / "historical.json"
+            with patch.object(agent, "rpc", side_effect=self.fake_rpc):
+                agent.capture_source_pairs_checkpoint({}, old, 1)
+            original_files = set(Path(tmp).iterdir())
+            def live(_session, method, params):
+                self.assertEqual(method, "hardware.source_pairs.page")
+                reply = page(params["offset"], params["limit"],
+                             generation="synthetic-run-B", revision=8)
+                for row in reply["source_pairs"]["rows"]:
+                    if row["function"] == 0x130:
+                        row["indirectTarget"] = 0x1a0
+                return reply
+            with patch.object(agent, "rpc", side_effect=live):
+                result = agent.compare_source_pairs_with_live({}, old, 0, 1, 1)
+            self.assertFalse(result["offline"])
+            self.assertTrue(result["live_read_only"])
+            self.assertFalse(result["resume_authorized"])
+            self.assertFalse(result["apply_authorized"])
+            self.assertEqual(result["total_changes"], 1)
+            self.assertEqual(result["changes"][0]["kind"], "CHANGED")
+            self.assertEqual(result["older_generation"], "synthetic-run-A")
+            self.assertEqual(result["newer_generation"], "synthetic-run-B")
+            self.assertEqual(set(Path(tmp).iterdir()), original_files)
+
+    def test_live_compare_refuses_changed_firmware_and_generation_race(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            old = Path(tmp) / "historical.json"
+            with patch.object(agent, "rpc", side_effect=self.fake_rpc):
+                agent.capture_source_pairs_checkpoint({}, old, 2)
+            for fault in ("import", "generation", "cursor"):
+                def live(_session, method, params):
+                    reply = page(params["offset"], params["limit"],
+                                 generation="synthetic-run-B", revision=8)
+                    if fault == "import":
+                        reply["source_pairs"]["import_sha256"] = "b" * 64
+                    if fault == "generation" and params["offset"] == 2:
+                        reply["source_pairs"]["generation"] = "synthetic-run-C"
+                    if fault == "cursor" and params["offset"] == 2:
+                        reply["source_pairs"]["next_offset"] = 1
+                    return reply
+                with self.subTest(fault=fault):
+                    with patch.object(agent, "rpc", side_effect=live):
+                        with self.assertRaises(ValueError):
+                            agent.compare_source_pairs_with_live({}, old, 0, 1, 2)
+
+    def test_live_compare_refuses_invalid_input_before_rpc(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            old = Path(tmp) / "historical.json"
+            with patch.object(agent, "rpc", side_effect=self.fake_rpc):
+                agent.capture_source_pairs_checkpoint({}, old, 2)
+            for offset, limit, size in ((-1, 1, 2), (0, 33, 2),
+                                        (0, 1, 0), (0, 1, True)):
+                with self.subTest(offset=offset, limit=limit, size=size):
+                    with patch.object(agent, "rpc", side_effect=AssertionError("no RPC")):
+                        with self.assertRaises(ValueError):
+                            agent.compare_source_pairs_with_live(
+                                {}, old, offset, limit, size)
+            envelope = json.loads(old.read_text())
+            envelope["payload"]["rows"][0]["uncertain"] = True
+            old.write_text(json.dumps(envelope))
+            with patch.object(agent, "rpc", side_effect=AssertionError("no RPC")):
+                with self.assertRaisesRegex(ValueError, "SHA-256"):
+                    agent.compare_source_pairs_with_live({}, old)
+
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
