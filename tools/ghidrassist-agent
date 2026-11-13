@@ -442,8 +442,29 @@ def compare_source_pairs_checkpoints(older, newer, offset=0, limit=32):
         })
     start = min(offset, len(changes))
     end = min(start + limit, len(changes))
-    # Identical rows do not prove that unpaired sources were unchanged.
-    coverage_changed = left["source_coverage"] != right["source_coverage"]
+    # Whole-inventory summaries are stable across comparison pages.
+    counts = {kind: sum(change["kind"] == kind for change in changes)
+              for kind in ("ADDED", "REMOVED", "CHANGED")}
+    uncertainty_changes = {
+        "became_uncertain": sum(
+            c["kind"] == "CHANGED" and
+            not c["before"]["uncertain"] and c["after"]["uncertain"]
+            for c in changes),
+        "became_certain": sum(
+            c["kind"] == "CHANGED" and
+            c["before"]["uncertain"] and not c["after"]["uncertain"]
+            for c in changes),
+    }
+    # Pair-row deltas cannot account for unpaired source sites.
+    before_coverage = left["source_coverage"]
+    after_coverage = right["source_coverage"]
+    coverage_delta = {
+        key: after_coverage[key] - before_coverage[key]
+        for key in ("functions_with_both_sources", "indirect_only_functions",
+                    "movec_only_functions", "indirect_only_sites",
+                    "movec_only_sites", "reset_visited_functions_with_both")
+    }
+    coverage_changed = before_coverage != after_coverage
     incomplete = (not left["bounded_source_complete"]
                   or not right["bounded_source_complete"])
     return {
@@ -455,6 +476,9 @@ def compare_source_pairs_checkpoints(older, newer, offset=0, limit=32):
         "older_revision": a["program_revision"],
         "newer_revision": b["program_revision"],
         "coverage_changed": coverage_changed,
+        "coverage_delta": coverage_delta,
+        "change_counts": counts,
+        "uncertainty_changes": uncertainty_changes,
         "source_inventory_incomplete": incomplete,
         "source_coverage_before": left["source_coverage"],
         "source_coverage_after": right["source_coverage"],
