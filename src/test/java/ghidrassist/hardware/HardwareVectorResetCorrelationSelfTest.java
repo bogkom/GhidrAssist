@@ -125,6 +125,15 @@ public final class HardwareVectorResetCorrelationSelfTest {
             clippedAliases.displayedHandlerAliasSlots()==0 &&
             clippedAliases.markdown().contains("may omit aliases beyond the display cap"),
             "truncated alias summary must not claim complete inventory");
+        var partiallyShownAliases = HardwareVectorResetCorrelation.inspect(
+            true,false,reset.visitedEntries(),aliasedTargets,graph,2);
+        check(partiallyShownAliases.displayTruncated() &&
+            partiallyShownAliases.displayedDistinctExactHandlers()==1 &&
+            partiallyShownAliases.displayedHandlerAliasSlots()==1 &&
+            partiallyShownAliases.exactEntries()==4 &&
+            partiallyShownAliases.markdown().contains(
+                "may omit aliases beyond the display cap"),
+            "two visible aliases remain display-only despite hidden exact entries");
         var interiorOnly = HardwareVectorResetCorrelation.inspect(
             true,false,reset.visitedEntries(),
             List.of(new HardwareVectorResetCorrelation.Target(33,0x222,0x220,false)),
