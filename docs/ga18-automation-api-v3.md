@@ -751,6 +751,22 @@ successful decompilation, real MCU execution, VBR/ISR activity or a
 production Ghidra project. No local Wyse/Precision/Supervisor worker
 is started.
 
+## GA-12/18 — observation provenance delta alongside source-pair comparison (2026-11-13)
+
+Offline and live read-only source-pair comparisons now expose
+`observation_changed`, `observation_changes` (field -> before/after)
+and `evidence_changed`. The observation delta includes source and omitted
+counts, RESET recognition/incompleteness, observed-inventory and coverage
+incompleteness, stage epoch, and bounded completeness. This prevents an
+unchanged pair list and unchanged six numeric coverage counters from being
+misread as an unchanged *observation* when the analysis epoch, omissions or
+uncertainty boundary moved. These are whole-inventory, page-invariant values;
+the existing pair delta and signed coverage delta remain separate.
+No changed flag proves runtime execution, stable MCU state, or permission to
+Resume/Review/Apply. Positive and negative deterministic regressions cover
+observation-only changes, no-change and pagination; exact-SHA Actions and
+isolated synthetic Ghidra remain merge gates.
+
 ## GA-12/18 — complete source-pair delta summaries (2026-11-13)
 
 The read-only `source-pairs-compare` and `source-pairs-compare-live`
