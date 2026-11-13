@@ -475,6 +475,9 @@ def compare_source_pairs_with_live(session, historical, offset=0, limit=32,
     """
     if type(page_size) is not int or not 1 <= page_size <= 32:
         raise ValueError("Invalid live source page size")
+    if (type(offset) is not int or type(limit) is not int
+            or not 0 <= offset <= 1000000 or not 1 <= limit <= 32):
+        raise ValueError("Invalid live source comparison page")
     # Refuse a forged or legacy baseline before contacting live Ghidra.
     baseline = verify_source_pairs_checkpoint(historical)
     if not baseline["coverage_available"]:
