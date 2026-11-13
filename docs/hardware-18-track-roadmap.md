@@ -1,3 +1,19 @@
+## GA-12/18 — 2026-11-13: observation provenance delta acceptance in progress
+
+PR #325 extends read-only offline/live source-pair comparison with
+page-invariant observation changes (omissions, RESET recognition and
+incompleteness, stage epoch, bounded completeness), separate from pair-row
+changes and six numeric coverage counters. Exact-head CI on
+`58368e4f70fb83c66cf011249f0ea638e5b1f0f0` found a deterministic
+test-fixture error: `incomplete=True` changed the coverage-incomplete
+boolean, contradicting a test expecting unchanged coverage. The fixture
+was corrected to isolate omitted-source and RESET/stage transitions, and
+a separate positive regression now explicitly verifies the coverage-
+incomplete transition. Final exact-head Actions, Java 21/25, genuine
+isolated Ghidra, review and merge remain required; no PASS is inferred
+from the prior failing SHA. GA-12/18 remain PARTIAL. No runtime
+execution, MM/VBR/ISR activation or Apply authority is claimed.
+
 ## GA-12/18 — 2026-11-12: integrated read-only live rebind of source-pair checkpoints
 
 PR [#319](https://github.com/bogkom/GhidrAssist/pull/319) was squash-merged

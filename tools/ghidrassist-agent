@@ -465,6 +465,19 @@ def compare_source_pairs_checkpoints(older, newer, offset=0, limit=32):
                     "movec_only_sites", "reset_visited_functions_with_both")
     }
     coverage_changed = before_coverage != after_coverage
+    # Pair identities and six coverage counters alone cannot establish that
+    # the source observation was unchanged. Publish the provenance/omission
+    # transitions separately, even when no pair rows changed.
+    observation_fields = (
+        "indirect_sources", "movec_sources", "omitted_indirect",
+        "omitted_movec", "reset_root_recognized", "reset_graph_incomplete",
+        "observed_inventory_incomplete", "coverage_incomplete",
+        "stage_epoch", "bounded_source_complete")
+    observations = {
+        field: {"before": a[field], "after": b[field]}
+        for field in observation_fields if a[field] != b[field]
+    }
+    observation_changed = bool(observations)
     incomplete = (not left["bounded_source_complete"]
                   or not right["bounded_source_complete"])
     return {
@@ -476,6 +489,9 @@ def compare_source_pairs_checkpoints(older, newer, offset=0, limit=32):
         "older_revision": a["program_revision"],
         "newer_revision": b["program_revision"],
         "coverage_changed": coverage_changed,
+        "observation_changed": observation_changed,
+        "observation_changes": observations,
+        "evidence_changed": bool(changes) or coverage_changed or observation_changed,
         "coverage_delta": coverage_delta,
         "change_counts": counts,
         "uncertainty_changes": uncertainty_changes,
