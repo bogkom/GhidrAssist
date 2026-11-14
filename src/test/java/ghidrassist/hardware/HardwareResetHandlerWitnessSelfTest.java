@@ -30,8 +30,8 @@ public final class HardwareResetHandlerWitnessSelfTest {
         check(a.rows().get(2).status()==
             HardwareResetHandlerWitness.Status.INTERIOR_NOT_ENTRY &&
             a.rows().get(3).status()==
-            HardwareResetHandlerWitness.Status.NOT_OBSERVED_WITHIN_BOUND,
-            "interior pointer and outside complete graph");
+            HardwareResetHandlerWitness.Status.UNKNOWN_HANDLER_NOT_IN_GRAPH,
+            "interior pointer and handler absent from complete graph");
         check(a.markdown().contains("STATIC ONLY") &&
             a.markdown().contains("0x00000100 -> 0x00000130 -> 0x00000190"),
             "source evidence and execution disclaimer");
@@ -65,8 +65,14 @@ public final class HardwareResetHandlerWitnessSelfTest {
             List.of(n(0x100L,0x130L),n(0x130L,0x100L)),targets);
         check(!cycle.incomplete() && cycle.frontiers().isEmpty() &&
             cycle.rows().get(0).status()==
+                HardwareResetHandlerWitness.Status.UNKNOWN_HANDLER_NOT_IN_GRAPH,
+            "cycle does not manufacture an unknown frontier or handler inventory");
+        var disconnected=HardwareResetHandlerWitness.inspect(0x100,false,
+            List.of(n(0x100L,0x130L),n(0x130L),n(0x300L)),targets);
+        check(!disconnected.incomplete() &&
+            disconnected.rows().get(3).status()==
                 HardwareResetHandlerWitness.Status.NOT_OBSERVED_WITHIN_BOUND,
-            "cycle does not manufacture an unknown frontier");
+            "recognized disconnected handler is a bounded negative, not absent evidence");
         var deep=new java.util.ArrayList<HardwareCallEffects.FunctionNode>();
         for(int i=0;i<10;i++)
             deep.add(n(0x100L+i*2L,0x102L+i*2L));
