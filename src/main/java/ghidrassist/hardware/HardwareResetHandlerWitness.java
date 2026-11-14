@@ -110,7 +110,7 @@ public final class HardwareResetHandlerWitness {
             var node=nodes.get(s.id());
             inspected++;
             if(node.unresolvedFlow())incomplete=true;
-            for(long next:node.directCallees()) {
+            for(long next:node.directCallees().stream().sorted().toList()) {
                 if(seen.contains(next))continue;
                 if(s.depth()>=MAX_DEPTH || seen.size()>=MAX_NODES ||
                         !nodes.containsKey(next)) {
