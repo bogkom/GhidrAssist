@@ -1,3 +1,14 @@
+## GA-01/02/03/11 — 2026-11-14: bounded decoded-site canonicalization (candidate)
+
+PR #336 now sorts all decoded STORE/MOVEC site candidates before applying the
+5000-site evidence cap. Previously, an incomplete inventory retained whichever
+sites happened to arrive first from Listing traversal; it could therefore
+expose different truncated evidence for the same source set. Regression cases
+cover reversed input and a high-PC-first traversal. Omitted evidence still
+marks the inventory incomplete and blocks RESET witness correlation. This is
+source-level work only; exact-head Actions and isolated Ghidra positive/negative
+decoder validation remain necessary before merge or formal acceptance.
+
 ## GA-01/02/03/11 — 2026-11-14: decoded-site integration follow-up (candidate)
 
 PR #336 now exposes a read-only Ghidra Program-to-RESET-witness correlation
