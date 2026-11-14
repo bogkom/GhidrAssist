@@ -39,6 +39,18 @@ public final class HardwareDecodedEffectSitesSelfTest {
         reject(()->HardwareDecodedEffectSites.collect(java.util.Arrays.asList((HardwareDecodedEffectSites.Decoded)null),false));
         reject(()->new HardwareDecodedEffectSites.Decoded(0x100,0x101,true,false));
         reject(()->HardwareDecodedEffectSites.collect(decoded,true).correlate(witness,graph));
+        var reversed=new java.util.ArrayList<>(decoded);
+        java.util.Collections.reverse(reversed);
+        check(HardwareDecodedEffectSites.collect(reversed,false).sites().equals(result.sites()),
+                "source ordering must not change site identity");
+        var overLimit=new java.util.ArrayList<HardwareDecodedEffectSites.Decoded>();
+        for(int i=0;i<HardwareResetEffectSites.MAX_SITES+1;i++)
+            overLimit.add(new HardwareDecodedEffectSites.Decoded(0x100,0x100+2L*i,true,false));
+        var truncated=HardwareDecodedEffectSites.collect(overLimit,false);
+        check(truncated.incomplete() && truncated.omitted()==1 &&
+                truncated.sites().size()==HardwareResetEffectSites.MAX_SITES,
+                "bounded extraction must preserve omission evidence");
+        reject(()->truncated.correlate(witness,graph));
         try {result.sites().clear();throw new AssertionError("mutable sites");}
         catch(UnsupportedOperationException expected) {}
         System.out.println("DECODED_EFFECT_SITES_SOURCE_PASS");
