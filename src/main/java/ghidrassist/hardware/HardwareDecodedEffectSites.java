@@ -41,28 +41,26 @@ public final class HardwareDecodedEffectSites {
     }
     public static Result collect(List<Decoded> decoded, boolean sourceIncomplete) {
         if(decoded==null)throw new IllegalArgumentException("Missing decoded source");
-        List<HardwareResetEffectSites.Site> out=new ArrayList<>();
+        // Canonicalize before applying the cap: input traversal order must not
+        // decide which evidence survives a bounded, incomplete inventory.
+        List<HardwareResetEffectSites.Site> candidates=new ArrayList<>();
         Set<Long> coordinates=new HashSet<>();
-        int omitted=0;
         for(Decoded d:decoded) {
             if(d==null || !coordinates.add(d.instructionPc()))
                 throw new IllegalArgumentException("Null/duplicate decoded instruction PC");
-            if(d.pcodeMemoryStore()) {
-                if(out.size()<HardwareResetEffectSites.MAX_SITES)
-                    out.add(new HardwareResetEffectSites.Site(d.functionEntry(),
-                        d.instructionPc(),HardwareResetEffectSites.Kind.MEMORY_STORE));
-                else omitted++;
-            }
-            if(d.movecToVbr()) {
-                if(out.size()<HardwareResetEffectSites.MAX_SITES)
-                    out.add(new HardwareResetEffectSites.Site(d.functionEntry(),
-                        d.instructionPc(),HardwareResetEffectSites.Kind.MOVEC_VBR));
-                else omitted++;
-            }
+            if(d.pcodeMemoryStore())
+                candidates.add(new HardwareResetEffectSites.Site(d.functionEntry(),
+                    d.instructionPc(),HardwareResetEffectSites.Kind.MEMORY_STORE));
+            if(d.movecToVbr())
+                candidates.add(new HardwareResetEffectSites.Site(d.functionEntry(),
+                    d.instructionPc(),HardwareResetEffectSites.Kind.MOVEC_VBR));
         }
-        out.sort(Comparator.comparingLong((HardwareResetEffectSites.Site s)->s.functionEntry())
+        candidates.sort(Comparator.comparingLong((HardwareResetEffectSites.Site site)->site.functionEntry())
                 .thenComparingLong(HardwareResetEffectSites.Site::instructionPc)
                 .thenComparing(HardwareResetEffectSites.Site::kind));
+        int retained=Math.min(candidates.size(),HardwareResetEffectSites.MAX_SITES);
+        int omitted=candidates.size()-retained;
+        List<HardwareResetEffectSites.Site> out=new ArrayList<>(candidates.subList(0,retained));
         return new Result(out,sourceIncomplete || omitted>0,omitted,decoded.size());
     }
 }
