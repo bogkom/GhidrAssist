@@ -6,20 +6,24 @@ on:
     paths:
       - 'src/main/java/ghidrassist/hardware/HardwareVectorResetCorrelation.java'
       - 'src/main/java/ghidrassist/hardware/HardwareResetHandlerWitness.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareResetEffectSites.java'
       - 'src/main/java/ghidrassist/hardware/HardwareResetFlow.java'
       - 'src/main/java/ghidrassist/hardware/HardwareCallEffects.java'
       - 'src/test/java/ghidrassist/hardware/HardwareVectorResetCorrelationSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/HardwareResetHandlerWitnessSelfTest.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareResetEffectSitesSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/HardwareCallEffectsSelfTest.java'
       - '.github/workflows/hardware-vector-reset-correlation.yml'
   pull_request:
     paths:
       - 'src/main/java/ghidrassist/hardware/HardwareVectorResetCorrelation.java'
       - 'src/main/java/ghidrassist/hardware/HardwareResetHandlerWitness.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareResetEffectSites.java'
       - 'src/main/java/ghidrassist/hardware/HardwareResetFlow.java'
       - 'src/main/java/ghidrassist/hardware/HardwareCallEffects.java'
       - 'src/test/java/ghidrassist/hardware/HardwareVectorResetCorrelationSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/HardwareResetHandlerWitnessSelfTest.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareResetEffectSitesSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/HardwareCallEffectsSelfTest.java'
       - '.github/workflows/hardware-vector-reset-correlation.yml'
 
@@ -44,10 +48,16 @@ jobs:
             src/main/java/ghidrassist/hardware/HardwareResetFlow.java \
             src/main/java/ghidrassist/hardware/HardwareVectorResetCorrelation.java \
             src/main/java/ghidrassist/hardware/HardwareResetHandlerWitness.java \
+            src/main/java/ghidrassist/hardware/HardwareResetEffectSites.java \
             src/test/java/ghidrassist/hardware/HardwareVectorResetCorrelationSelfTest.java \
             src/test/java/ghidrassist/hardware/HardwareResetHandlerWitnessSelfTest.java \
+            src/test/java/ghidrassist/hardware/HardwareResetEffectSitesSelfTest.java \
             src/test/java/ghidrassist/hardware/HardwareCallEffectsSelfTest.java
           java -ea -cp "$RUNNER_TEMP/vector-reset-tests" \
             ghidrassist.hardware.HardwareVectorResetCorrelationSelfTest
           java -ea -cp "$RUNNER_TEMP/vector-reset-tests" \
             ghidrassist.hardware.HardwareCallEffectsSelfTest
+          java -ea -cp "$RUNNER_TEMP/vector-reset-tests" \
+            ghidrassist.hardware.HardwareResetHandlerWitnessSelfTest
+          java -ea -cp "$RUNNER_TEMP/vector-reset-tests" \
+            ghidrassist.hardware.HardwareResetEffectSitesSelfTest
