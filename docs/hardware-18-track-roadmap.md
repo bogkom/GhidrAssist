@@ -1,4 +1,8 @@
-## GA-01/02/03/11 — 2026-11-14: RESET instruction-site source join (candidate)
+## GA-01/02/03/11 — 2026-11-14: PR #335 integrated
+
+PR [#335](https://github.com/bogkom/GhidrAssist/pull/335) merged from exact tested head `04390ee9f6a3e0818a17730da2f9e86e495fa504` as squash `62d971e2f0ab700ba2058b123d1f56329e922297`. The 25 PR-triggered workflow runs reported completed SUCCESS, including Java 21 vector-source regression, extension integration build and isolated synthetic Ghidra workflows. Reviewed four-file patch, no unresolved inline threads, branch was 5 commits ahead and 0 behind `master`. Integration provides bounded static instruction-PC site join to RESET CALL witness chains; source instruction PCs are externally supplied, not independently decoded by this feature. Static reachability is not runtime execution or active VBR/ISR. GA-01/02/03/11 remain PARTIAL; next functional gate: independently extract typed STORE/MOVEC instruction sites from Ghidra and connect to the join, with negative evidence and exact-SHA isolated Ghidra tests.
+
+## GA-01/02/03/11 — 2026-11-14: RESET instruction-site source join (historical candidate)
 
 Branch `work/ga01-11-reset-site-provenance-20261114` adds a read-only, bounded
 join of separately observed even instruction PCs (STORE versus MOVEC/VBR)
