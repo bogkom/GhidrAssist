@@ -615,6 +615,7 @@ public final class HardwareVectorResetCorrelationSelfTest {
             wideReset.rows().get(0).relation()==
                 HardwareVectorResetCorrelation.Relation.IN_RESET_STATIC_CALL_SUBSET,
             "generic CPU32 aligned wide RESET membership retained");
+        HardwareResetHandlerWitnessSelfTest.main(new String[0]);
         System.out.println("HardwareVectorResetCorrelationSelfTest PASS: assertions="+assertions);
     }
 }
