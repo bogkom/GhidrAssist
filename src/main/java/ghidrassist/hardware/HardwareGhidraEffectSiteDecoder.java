@@ -37,12 +37,13 @@ public final class HardwareGhidraEffectSiteDecoder {
         if(program==null)throw new IllegalArgumentException("Missing program");
         List<HardwareDecodedEffectSites.Decoded> decoded=new ArrayList<>();
         boolean incomplete=false;
+        int inspectedInstructions=0;
         // Overlapping function bodies may expose the same instruction twice.
         // A PC must have one owning function or the source inventory is ambiguous.
         Set<Long> seenPcs=new HashSet<>();
         var functions=program.getFunctionManager().getFunctions(true);
         while(functions.hasNext()) {
-            if(decoded.size()>=MAX_DECODED_INSTRUCTIONS) {
+            if(inspectedInstructions>=MAX_DECODED_INSTRUCTIONS) {
                 incomplete=true;
                 break;
             }
@@ -60,6 +61,7 @@ public final class HardwareGhidraEffectSiteDecoder {
                     break;
                 }
                 Instruction instruction=instructions.next();
+                inspectedInstructions++;
                 long pc=instruction.getAddress().getOffset();
                 if(pc<entry || pc>0xffffffffL || (pc&1)!=0 || !seenPcs.add(pc)) {
                     incomplete=true;
