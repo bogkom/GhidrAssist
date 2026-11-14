@@ -38,6 +38,17 @@ public final class HardwareResetHandlerWitnessSelfTest {
         var reversed=HardwareResetHandlerWitness.inspect(0x100,false,
             List.of(graph.get(3),graph.get(2),graph.get(1),graph.get(0)),targets);
         check(a.equals(reversed),"node ordering deterministic");
+        var shuffledEdges=HardwareResetHandlerWitness.inspect(0x100,false,
+            List.of(n(0x100L,0x160L,0x130L),n(0x130L,0x190L),
+                n(0x160L,0x190L),n(0x190L)),targets);
+        check(a.equals(shuffledEdges),
+            "CALL edge insertion order must not change shortest witness");
+        var competing=HardwareResetHandlerWitness.inspect(0x100,false,
+            List.of(n(0x100L,0x160L,0x130L),
+                n(0x130L,0x190L),n(0x160L,0x190L),n(0x190L)),targets);
+        check(competing.rows().get(0).chain().equals(
+            List.of(0x100L,0x130L,0x190L)),
+            "equal-length paths use canonical function-entry tie-break");
         var missing=HardwareResetHandlerWitness.inspect(0x500,false,graph,targets);
         check(missing.missingRoot() && missing.incomplete() &&
             missing.rows().get(0).status()==
