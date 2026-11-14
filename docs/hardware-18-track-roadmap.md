@@ -1,3 +1,7 @@
+## GA-01/02/03/11 — 2026-11-14: decoder ownership and bounded-work follow-up (PR #336)
+
+On the existing PR #336 branch, the Ghidra Listing decoder now rejects ambiguous instruction-PC ownership across overlapping function bodies, rejects malformed MOVEC operand counts, and counts *all inspected instructions* against its 200,000-instruction work budget, including malformed/skipped records. Rejected or ambiguous evidence marks the scan incomplete; the downstream RESET-site join refuses incomplete scans. These are static read-only safeguards, not a proof of executed instructions, active VBR/ISR, SIMCR/MM state, or physical mapping. The previous head `38ee399a166c26629de52b2d2af8a23027e833e0` has 25/25 PR workflow SUCCESS; those results do not transfer to the new head. **Candidate only:** exact-new-head Java 21/25 Actions, independent synthetic Ghidra positive/negative STORE/MOVEC decoder evidence, review and merge are still required. GA-01/02/03/11 remain PARTIAL.
+
 ## GA-01/02/03/11 — 2026-11-14: fail-closed decoded operand evidence (candidate)
 
 PR #336 now treats a null p-code operation as incomplete source evidence, and
