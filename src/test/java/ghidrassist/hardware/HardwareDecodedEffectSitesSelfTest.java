@@ -37,6 +37,12 @@ public final class HardwareDecodedEffectSitesSelfTest {
         reject(()->HardwareDecodedEffectSites.collect(
                 List.of(decoded.get(0),decoded.get(0)),false));
         reject(()->HardwareDecodedEffectSites.collect(java.util.Arrays.asList((HardwareDecodedEffectSites.Decoded)null),false));
+        reject(()->HardwareDecodedEffectSites.collect(List.of(
+                new HardwareDecodedEffectSites.Decoded(0x100,0x160,true,false),
+                new HardwareDecodedEffectSites.Decoded(0x130,0x160,false,true)),false));
+        var unknownSource=HardwareDecodedEffectSites.collect(decoded,true);
+        check(unknownSource.incomplete() && unknownSource.sites().equals(result.sites()),
+                "unknown decoder evidence must preserve observed sites without granting correlation");
         reject(()->new HardwareDecodedEffectSites.Decoded(0x100,0x101,true,false));
         reject(()->HardwareDecodedEffectSites.collect(decoded,true).correlate(witness,graph));
         var reversed=new java.util.ArrayList<>(decoded);
