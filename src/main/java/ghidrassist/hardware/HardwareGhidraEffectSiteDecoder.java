@@ -8,7 +8,6 @@ import ghidra.program.model.lang.Register;
 import ghidra.program.model.pcode.PcodeOp;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -87,24 +86,26 @@ public final class HardwareGhidraEffectSiteDecoder {
                 try {
                 if("MOVEC".equalsIgnoreCase(instruction.getMnemonicString())) {
                     int count=instruction.getNumOperands();
-                    if(count!=2) {
-                        incomplete=true;
-                    } else {
-                        Object[] destination=instruction.getOpObjects(count-1);
-                        if(destination==null || destination.length==0) {
-                            incomplete=true;
-                        } else {
-                            boolean foundRegister=false;
-                            for(Object object:destination) {
-                                if(object instanceof Register register) {
-                                    foundRegister=true;
-                                    if("VBR".equals(register.getName().toUpperCase(Locale.ROOT)))
-                                        vbr=true;
-                                }
-                            }
-                            if(!foundRegister) incomplete=true;
+                    List<String> sourceNames=new ArrayList<>();
+                    List<String> destinationNames=new ArrayList<>();
+                    boolean sourceOther=false, destinationOther=false;
+                    if(count==2) {
+                        Object[] source=instruction.getOpObjects(0);
+                        Object[] destination=instruction.getOpObjects(1);
+                        if(source!=null) for(Object obj:source) {
+                            if(obj instanceof Register reg) sourceNames.add(reg.getName());
+                            else sourceOther=true;
+                        }
+                        if(destination!=null) for(Object obj:destination) {
+                            if(obj instanceof Register reg) destinationNames.add(reg.getName());
+                            else destinationOther=true;
                         }
                     }
+                    var verdict=HardwareMovecDirectionEvidence.classify(true,count,
+                            sourceNames,destinationNames,sourceOther,destinationOther);
+                    if(verdict==HardwareMovecDirectionEvidence.Verdict.UNKNOWN)
+                        incomplete=true;
+                    vbr=verdict==HardwareMovecDirectionEvidence.Verdict.TO_VBR;
                 }
                 } catch(RuntimeException ex) {
                     // A failed operand decode is UNKNOWN, never a proven non-VBR MOVEC.
