@@ -1,3 +1,17 @@
+## GA-01/02/03/11 — 2026-11-14: decoded-site integration follow-up (candidate)
+
+PR #336 now exposes a read-only Ghidra Program-to-RESET-witness correlation
+entry point, using the independently decoded instruction PCs and the existing
+bounded fail-closed source join. The Listing traversal stops once the decode
+budget is exhausted rather than continuing across further functions.
+Additional Java 21 regressions verify order independence and the 5000-site
+limit: omitted sites make the inventory incomplete and prohibit correlation.
+These changes do not independently verify Ghidra's MOVEC operand ordering or
+p-code STORE interpretation. Exact-head Java 21 and Java 25 CI, a real
+isolated synthetic Ghidra positive/negative decoder fixture, review and
+merge remain mandatory. No runtime execution, active VBR/ISR or physical
+mapping is inferred.
+
 ## GA-01/02/03/11 — 2026-11-14: independently decoded instruction-site inventory (candidate)
 
 Branch `work/ga01-11-ghidra-decoded-sites-20261114` introduces a read-only
