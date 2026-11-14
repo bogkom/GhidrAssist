@@ -104,7 +104,19 @@ public final class HardwareVectorResetCorrelation {
                           int sharedResetSubset, int outsideObservedSubset,
                           int interiorPointers, boolean displayTruncated,
                           List<Row> rows, int distinctExactHandlers, int handlerAliasSlots,
-                          int fullStoreCandidateSlots, int fullVbrCandidateSlots) {
+                          int fullStoreCandidateSlots, int fullVbrCandidateSlots,
+                          int fullStoreUnknownSlots, int fullVbrUnknownSlots) {
+        /** Previous full-candidate summary did not inventory unknown slots. */
+        public Summary(boolean relocatedSource,long tableAddress,boolean resetRootRecognized,
+                boolean resetGraphIncomplete,int recognizedTargets,int exactEntries,
+                int sharedResetSubset,int outsideObservedSubset,int interiorPointers,
+                boolean displayTruncated,List<Row> rows,int distinctExactHandlers,
+                int handlerAliasSlots,int fullStoreCandidateSlots,int fullVbrCandidateSlots) {
+            this(relocatedSource,tableAddress,resetRootRecognized,resetGraphIncomplete,
+                recognizedTargets,exactEntries,sharedResetSubset,outsideObservedSubset,
+                interiorPointers,displayTruncated,rows,distinctExactHandlers,
+                handlerAliasSlots,fullStoreCandidateSlots,fullVbrCandidateSlots,-1,-1);
+        }
         /** Legacy summary: omitted-row effect totals are unknown, not zero. */
         public Summary(boolean relocatedSource,long tableAddress,boolean resetRootRecognized,
                 boolean resetGraphIncomplete,int recognizedTargets,int exactEntries,
@@ -114,7 +126,7 @@ public final class HardwareVectorResetCorrelation {
             this(relocatedSource,tableAddress,resetRootRecognized,resetGraphIncomplete,
                 recognizedTargets,exactEntries,sharedResetSubset,outsideObservedSubset,
                 interiorPointers,displayTruncated,rows,distinctExactHandlers,
-                handlerAliasSlots,-1,-1);
+                handlerAliasSlots,-1,-1,-1,-1);
         }
         /** Legacy displayed-only constructor; full totals must be supplied by inspectSource. */
         public Summary(boolean relocatedSource,long tableAddress,boolean resetRootRecognized,
@@ -125,7 +137,7 @@ public final class HardwareVectorResetCorrelation {
                 recognizedTargets,exactEntries,sharedResetSubset,outsideObservedSubset,
                 interiorPointers,displayTruncated,rows,
                 legacyDistinctHandlers(rows),
-                legacyAliasSlots(rows),-1,-1);
+                legacyAliasSlots(rows),-1,-1,-1,-1);
         }
         // Invalid legacy inventories are passed to the canonical validator,
         // which reports IllegalArgumentException rather than leaking an NPE.
@@ -162,6 +174,20 @@ public final class HardwareVectorResetCorrelation {
                     handlerAliasSlots<0 || distinctExactHandlers+handlerAliasSlots!=exactEntries ||
                     fullStoreCandidateSlots < -1 || fullVbrCandidateSlots < -1 ||
                     fullStoreCandidateSlots > exactEntries || fullVbrCandidateSlots > exactEntries ||
+                    fullStoreUnknownSlots < -1 || fullVbrUnknownSlots < -1 ||
+                    fullStoreUnknownSlots > exactEntries || fullVbrUnknownSlots > exactEntries ||
+                    (fullStoreUnknownSlots >= 0 && fullStoreCandidateSlots < 0) ||
+                    (fullVbrUnknownSlots >= 0 && fullVbrCandidateSlots < 0) ||
+                    (fullStoreUnknownSlots >= 0 &&
+                        fullStoreUnknownSlots + fullStoreCandidateSlots > exactEntries) ||
+                    (fullVbrUnknownSlots >= 0 &&
+                        fullVbrUnknownSlots + fullVbrCandidateSlots > exactEntries) ||
+                    (fullStoreUnknownSlots >= 0 && fullStoreUnknownSlots <
+                        rows.stream().filter(r->r.relation()!=Relation.INTERIOR_FUNCTION_POINTER_NOT_ENTRY &&
+                            r.memoryStoreEffect().equals("UNKNOWN")).count()) ||
+                    (fullVbrUnknownSlots >= 0 && fullVbrUnknownSlots <
+                        rows.stream().filter(r->r.relation()!=Relation.INTERIOR_FUNCTION_POINTER_NOT_ENTRY &&
+                            r.vbrEffect().equals("UNKNOWN")).count()) ||
                     (fullStoreCandidateSlots >= 0 && fullStoreCandidateSlots <
                         rows.stream().filter(r->r.relation()!=Relation.INTERIOR_FUNCTION_POINTER_NOT_ENTRY &&
                             r.memoryStoreEffect().equals("STATIC_CANDIDATE")).count()) ||
@@ -280,6 +306,10 @@ public final class HardwareVectorResetCorrelation {
                .append(fullStoreCandidateSlots < 0 ? "UNKNOWN (legacy summary)" : fullStoreCandidateSlots)
                .append("; FULL MOVEC/VBR candidate vector slots: ")
                .append(fullVbrCandidateSlots < 0 ? "UNKNOWN (legacy summary)" : fullVbrCandidateSlots)
+               .append("; FULL STORE unknown-evidence slots: ")
+               .append(fullStoreUnknownSlots < 0 ? "UNKNOWN (legacy summary)" : fullStoreUnknownSlots)
+               .append("; FULL MOVEC/VBR unknown-evidence slots: ")
+               .append(fullVbrUnknownSlots < 0 ? "UNKNOWN (legacy summary)" : fullVbrUnknownSlots)
                .append(".\n")
                .append("- Transitive memory STORE means any P-code STORE in a ")
                .append("bounded candidate call subtree, not necessarily MMIO. ")
@@ -443,7 +473,7 @@ public final class HardwareVectorResetCorrelation {
                 throw new IllegalArgumentException("Duplicate or null vector target");
         }
         int exact = 0, shared = 0, outside = 0, interior = 0;
-        int fullStore = 0, fullVbr = 0;
+        int fullStore = 0, fullVbr = 0, fullStoreUnknown = 0, fullVbrUnknown = 0;
         Set<Long> fullExactHandlers = new HashSet<>();
         // Multiple vector slots may point to the same exact handler. The
         // transitive STORE/VBR effect is read-only and depends on the target,
@@ -476,6 +506,12 @@ public final class HardwareVectorResetCorrelation {
                     entry->HardwareCallEffects.inspect(entry,graph,4,100));
                 if(detail.summary().possibleMemoryStore()) fullStore++;
                 if(detail.summary().possibleVbrWrite()) fullVbr++;
+                if(!detail.summary().possibleMemoryStore() &&
+                        (detail.summary().unresolved() || detail.summary().truncated()))
+                    fullStoreUnknown++;
+                if(!detail.summary().possibleVbrWrite() &&
+                        (detail.summary().unresolved() || detail.summary().truncated()))
+                    fullVbrUnknown++;
             }
             if (rows.size() < maxRows) {
                 HardwareCallEffects.Summary effects=detail==null?
@@ -497,6 +533,7 @@ public final class HardwareVectorResetCorrelation {
         return new Summary(relocatedSource,sourceBase,
             resetRootRecognized,resetGraphIncomplete,sorted.size(), exact,
             shared, outside, interior,rows.size() < sorted.size(), rows,
-            fullExactHandlers.size(), exact-fullExactHandlers.size(),fullStore,fullVbr);
+            fullExactHandlers.size(), exact-fullExactHandlers.size(),fullStore,fullVbr,
+            fullStoreUnknown,fullVbrUnknown);
     }
 }

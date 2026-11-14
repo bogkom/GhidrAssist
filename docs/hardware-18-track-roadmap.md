@@ -1,3 +1,26 @@
+## GA-01/11 — 2026-11-14: full-inventory effect uncertainty (candidate)
+
+Branch `work/ga01-11-full-effect-uncertainty-20261114` extends the bounded read-only vector/RESET inventory
+with separate FULL unknown-evidence STORE and MOVEC/VBR slot counts, independent
+of the 64-row display cap. Exact-entry aliases contribute one slot each while
+sharing a handler audit; interior pointers never contribute to effect counts.
+An unknown slot means a missing/unresolved or truncated static call subtree
+without a positive candidate, not proof that the ISR has no effect. A positive
+candidate and unknown slot are disjoint for each effect class. Legacy summary
+constructors preserve UNKNOWN (-1) for uncomputed totals rather than guessing.
+Java 21 regressions cover clipped aliases, positive and negative effects,
+interior pointers, forged overlapping counts and legacy summaries. Exact SHA
+Java 21, Java 25 Ghidra 12.1.4 PUBLIC build, isolated synthetic Ghidra and
+review remain required; no PASS is claimed here. GA-01/11 remain PARTIAL.
+
+## GA-01/11 — 2026-11-13: PR #329 integrated checkpoint
+
+PR [#329](https://github.com/bogkom/GhidrAssist/pull/329) was merged at
+`4865e1b8c21ffd6eeb3b3f346da171717c26faf2` from tested candidate
+`16b0b8383e6e19d3fb6886f30759b69bc822b7f9` (26/26 GitHub Actions
+SUCCESS). This closes only the RESET source-coordinate validation subpackage,
+not the formal RESET/CALL/VBR/ISR criteria. GA-01/11 remain PARTIAL.
+
 ## GA-01/11 — 2026-11-13: RESET source membership coordinate gate (candidate)
 
 The read-only vector/RESET correlation now rejects negative, odd, null and
