@@ -1,3 +1,65 @@
+## GA-01/02/03/11 — 2026-11-14: MOVEC operand-direction evidence (PR #336 candidate)
+
+The Listing adapter now inspects **both** Ghidra-decoded MOVEC operands instead of inferring a VBR write from the last operand alone. A unique register source and unique VBR destination yield a static TO_VBR source candidate; VBR as source with another register destination is NOT_TO_VBR. Missing/multiple/non-register operands, invalid operand count and identical register operands are UNKNOWN and mark the scan incomplete, refusing the downstream RESET/CALL join. A separate pure Java 21 regression exercises positive, negative and ambiguous cases. This does **not** independently validate CPU32 Ghidra's actual operand order: the isolated genuine synthetic Ghidra 12.1.4 PUBLIC MOVEC-to/from-VBR and STORE fixture is still mandatory. Exact-head Java 21/25 CI, review and integration remain pending; GA-01/02/03/11 remain PARTIAL. Neither a decoded MOVEC nor a reachable CALL path proves active VBR/ISR or runtime execution.
+
+## GA-01/02/03/11 — 2026-11-14: decoder ownership and bounded-work follow-up (PR #336)
+
+On the existing PR #336 branch, the Ghidra Listing decoder now rejects ambiguous instruction-PC ownership across overlapping function bodies, rejects malformed MOVEC operand counts, and counts *all inspected instructions* against its 200,000-instruction work budget, including malformed/skipped records. Rejected or ambiguous evidence marks the scan incomplete; the downstream RESET-site join refuses incomplete scans. These are static read-only safeguards, not a proof of executed instructions, active VBR/ISR, SIMCR/MM state, or physical mapping. The previous head `38ee399a166c26629de52b2d2af8a23027e833e0` has 25/25 PR workflow SUCCESS; those results do not transfer to the new head. **Candidate only:** exact-new-head Java 21/25 Actions, independent synthetic Ghidra positive/negative STORE/MOVEC decoder evidence, review and merge are still required. GA-01/02/03/11 remain PARTIAL.
+
+## GA-01/02/03/11 — 2026-11-14: fail-closed decoded operand evidence (candidate)
+
+PR #336 now treats a null p-code operation as incomplete source evidence, and
+MOVEC without a decoded destination register as incomplete rather than a
+negative VBR finding. These cases must not silently produce a complete
+RESET/CALL correlation. The operand-order assumption remains unverified until
+an isolated CPU32 Ghidra fixture checks MOVEC-to-VBR and MOVEC-from-VBR
+alongside memory STORE and register-only negatives. The change is a candidate,
+not a claim of runtime execution, active VBR/ISR or formal GA acceptance.
+
+## GA-01/02/03/11 — 2026-11-14: bounded decoded-site canonicalization (candidate)
+
+PR #336 now sorts all decoded STORE/MOVEC site candidates before applying the
+5000-site evidence cap. Previously, an incomplete inventory retained whichever
+sites happened to arrive first from Listing traversal; it could therefore
+expose different truncated evidence for the same source set. Regression cases
+cover reversed input and a high-PC-first traversal. Omitted evidence still
+marks the inventory incomplete and blocks RESET witness correlation. This is
+source-level work only; exact-head Actions and isolated Ghidra positive/negative
+decoder validation remain necessary before merge or formal acceptance.
+
+## GA-01/02/03/11 — 2026-11-14: decoded-site integration follow-up (candidate)
+
+PR #336 now exposes a read-only Ghidra Program-to-RESET-witness correlation
+entry point, using the independently decoded instruction PCs and the existing
+bounded fail-closed source join. The Listing traversal stops once the decode
+budget is exhausted rather than continuing across further functions.
+Additional Java 21 regressions verify order independence and the 5000-site
+limit: omitted sites make the inventory incomplete and prohibit correlation.
+These changes do not independently verify Ghidra's MOVEC operand ordering or
+p-code STORE interpretation. Exact-head Java 21 and Java 25 CI, a real
+isolated synthetic Ghidra positive/negative decoder fixture, review and
+merge remain mandatory. No runtime execution, active VBR/ISR or physical
+mapping is inferred.
+
+## GA-01/02/03/11 — 2026-11-14: independently decoded instruction-site inventory (candidate)
+
+Branch `work/ga01-11-ghidra-decoded-sites-20261114` introduces a read-only
+Ghidra Listing adapter that walks recognized functions, obtains actual
+instruction PCs, classifies memory writes using p-code STORE and MOVEC-to-VBR
+only when the decoded destination register is VBR. A separate Java 21
+bounded source inventory sorts sites deterministically and refuses duplicate
+PCs, invalid coordinates and incomplete/omitted decoding before joining
+to RESET CALL witnesses. Source regressions cover STORE, MOVEC, dual-effect,
+ordering, missing source evidence, invalid PC, duplicate and immutability.
+The extraction is static: decoded STORE is not executed STORE, MOVEC-to-VBR
+is not active VBR or ISR, and no physical mapping is inferred.
+
+**Candidate, not accepted:** exact-head Java 21 Actions, Java 25 full
+Ghidra 12.1.4 PUBLIC build, real isolated synthetic Ghidra decoder fixture,
+review and merge are required. A Ghidra fixture must independently verify
+both positive p-code STORE and MOVEC/VBR and negative register-only/non-VBR
+instructions. The adapter does not claim formal GA-01/02/03/11 completion.
+
 ## GA-01/02/03/11 — 2026-11-14: PR #335 integrated
 
 PR [#335](https://github.com/bogkom/GhidrAssist/pull/335) merged from exact tested head `04390ee9f6a3e0818a17730da2f9e86e495fa504` as squash `62d971e2f0ab700ba2058b123d1f56329e922297`. The 25 PR-triggered workflow runs reported completed SUCCESS, including Java 21 vector-source regression, extension integration build and isolated synthetic Ghidra workflows. Reviewed four-file patch, no unresolved inline threads, branch was 5 commits ahead and 0 behind `master`. Integration provides bounded static instruction-PC site join to RESET CALL witness chains; source instruction PCs are externally supplied, not independently decoded by this feature. Static reachability is not runtime execution or active VBR/ISR. GA-01/02/03/11 remain PARTIAL; next functional gate: independently extract typed STORE/MOVEC instruction sites from Ghidra and connect to the join, with negative evidence and exact-SHA isolated Ghidra tests.
@@ -5229,3 +5291,17 @@ PR #331 was squash-merged into `master` at `70adc36a4b629702da0e8a32d516307b7094
 ## GA-01/02/03/11 — 2026-11-14: PR #333 integrated handler-inventory uncertainty
 
 PR #333 was squash-merged into `master` at `b7d09d169aae3caf3c8c25bf16538ef256b00729` from exact tested head `6a6cd15c6b97aa4c803c6b3267b5999112cab9e9`. All 26 reported pull-request GitHub Actions workflows completed SUCCESS, including the Java 21 static vector/RESET regression, Java 25 extension build and isolated synthetic Ghidra workflows. Branch was behind `master` by zero commits, mergeable, and had no unresolved inline review threads. The read-only RESET-to-handler correlation now distinguishes exact handlers absent from the recognized function graph (`UNKNOWN_HANDLER_NOT_IN_GRAPH`) from known but disconnected handlers (`NOT_OBSERVED_WITHIN_BOUND`); incomplete CALL surveys remain `UNKNOWN_FRONTIER`, interior pointers remain refused. This is a bounded static observation, not evidence of execution or active VBR/ISR. GA-01/02/03/11 remain PARTIAL; further formal criteria and independent acceptance evidence are required.
+
+
+## GA-01/02/03/11 — 2026-11-14: decoder bounded-scan follow-up (PR #336)
+
+The Ghidra Listing adapter now enforces its 200,000-instruction budget against
+**all inspected instructions**, including discarded or ambiguous records,
+instead of only retained decoded records. MOVEC operand-decoding exceptions
+mark the scan incomplete rather than escaping as an unclassified failure.
+Source regression adds overlapping-owner coordinate conflicts and preserves
+observed sites under incomplete input without allowing RESET correlation.
+These are candidate changes, not a Ghidra decoder PASS: exact-head Java 21,
+Java 25 full build, and genuine isolated CPU32 Ghidra positive/negative
+STORE and MOVEC-to/from-VBR fixtures remain required before review/merge.
+Static reachability and decoded instructions do not prove execution or active ISR.
