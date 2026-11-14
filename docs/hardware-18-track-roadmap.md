@@ -1,3 +1,7 @@
+## GA-01/11 — 2026-11-14: PR #330 integrated checkpoint
+
+PR [#330](https://github.com/bogkom/GhidrAssist/pull/330) was merged at `ad6339d3966b043a2028a25bb488c2b1dd3bf1d1` from exact candidate `03b934dd5a545f12a361ad36976a28935f938634`. The integrated read-only report distinguishes full-inventory static STORE and MOVEC/VBR candidate slots from unknown-evidence slots, including alias multiplicity and omission beyond the 64-row display cap. The candidate section below is historical pre-merge evidence; it does not override this integration record. Earlier run reported 26/26 successful Actions for the candidate; independently verified workflow/job evidence must remain attached to that SHA for formal acceptance. GA-01/11 remain PARTIAL: no proof of RESET execution, active VBR or executed ISR. Next functional package: source-linked RESET-to-handler call-path witnesses with explicit missing-target/frontier uncertainty, positive and negative isolated Ghidra fixtures, and exact-head Java 21/25/Actions review.
+
 ## GA-01/11 — 2026-11-14: full-inventory effect uncertainty (candidate)
 
 Branch `work/ga01-11-full-effect-uncertainty-20261114` extends the bounded read-only vector/RESET inventory
