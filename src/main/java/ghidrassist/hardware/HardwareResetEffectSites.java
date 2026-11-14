@@ -81,6 +81,8 @@ public final class HardwareResetEffectSites {
             put(stores,chain,witness.resetEntry());
         for(var chain:witness.vbrWriteSources())
             put(vbr,chain,witness.resetEntry());
+        if(sites.stream().anyMatch(s->s==null))
+            throw new IllegalArgumentException("Null effect site");
         Set<Site> unique=new HashSet<>();
         List<Row> rows=new ArrayList<>();
         for(Site site:sites.stream().sorted(Comparator
