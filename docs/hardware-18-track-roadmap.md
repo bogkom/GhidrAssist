@@ -1,3 +1,13 @@
+## GA-01/02/03/11 — 2026-11-14: fail-closed decoded operand evidence (candidate)
+
+PR #336 now treats a null p-code operation as incomplete source evidence, and
+MOVEC without a decoded destination register as incomplete rather than a
+negative VBR finding. These cases must not silently produce a complete
+RESET/CALL correlation. The operand-order assumption remains unverified until
+an isolated CPU32 Ghidra fixture checks MOVEC-to-VBR and MOVEC-from-VBR
+alongside memory STORE and register-only negatives. The change is a candidate,
+not a claim of runtime execution, active VBR/ISR or formal GA acceptance.
+
 ## GA-01/02/03/11 — 2026-11-14: bounded decoded-site canonicalization (candidate)
 
 PR #336 now sorts all decoded STORE/MOVEC site candidates before applying the
