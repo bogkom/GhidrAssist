@@ -84,6 +84,7 @@ public final class HardwareGhidraEffectSiteDecoder {
                     incomplete=true;
                 }
                 boolean vbr=false;
+                try {
                 if("MOVEC".equalsIgnoreCase(instruction.getMnemonicString())) {
                     int count=instruction.getNumOperands();
                     if(count!=2) {
@@ -104,6 +105,11 @@ public final class HardwareGhidraEffectSiteDecoder {
                             if(!foundRegister) incomplete=true;
                         }
                     }
+                }
+                } catch(RuntimeException ex) {
+                    // A failed operand decode is UNKNOWN, never a proven non-VBR MOVEC.
+                    incomplete=true;
+                    vbr=false;
                 }
                 decoded.add(new HardwareDecodedEffectSites.Decoded(entry,pc,store,vbr));
             }
