@@ -445,6 +445,19 @@ public final class HardwareVectorResetCorrelation {
             resetGraphIncomplete,resetVisited,resolvedVectors,graph,maxRows);
     }
 
+    /**
+     * Source-linked RESET-to-handler direct-CALL evidence. Unlike the
+     * membership-only summary, this exposes shortest observed chains and
+     * explicit uninspected frontiers; it never proves execution.
+     */
+    public static HardwareResetHandlerWitness.Report inspectResetCallWitnesses(
+            long resetEntry, boolean resetGraphIncomplete,
+            Collection<HardwareCallEffects.FunctionNode> graph,
+            List<Target> resolvedVectors) {
+        return HardwareResetHandlerWitness.inspect(resetEntry,resetGraphIncomplete,
+            graph,resolvedVectors);
+    }
+
     private static Summary inspectSource(boolean relocatedSource,long sourceBase,
             boolean resetRootRecognized,boolean resetGraphIncomplete,
             Set<Long> resetVisited,List<Target> resolvedVectors,

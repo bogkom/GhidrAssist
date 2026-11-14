@@ -1,3 +1,25 @@
+## GA-01/02/03/11 — 2026-11-14: exact-head CI diagnosis and deterministic witness follow-up
+
+On candidate `0fc7c9181b0c7cd444958f8c3983eb3633548448`, GitHub Actions returned 22 successful and 4 failed workflows (26 total). Three Java 21 source jobs fail because their explicit `javac` source lists omit the newly required `HardwareResetHandlerWitness.java`; the vector correlation self-test also requires `HardwareResetHandlerWitnessSelfTest.java`. The fourth failure is a Java 25 Ghidra integration job at `buildModuleHelp`, requiring separate diagnosis. The extension integration build succeeded, but the candidate is **not accepted**. Existing workflows must include the new sources before review/merge; no prior PASS may be carried forward to the changed SHA.
+
+Follow-up commits canonicalize direct CALL edge traversal by ascending function entry, so convergent equal-length shortest witnesses do not depend on input CALL ordering, and add adversarial source regressions for reordered edges and aliases. These are unverified source changes until exact-head Actions rerun. No runtime RESET, active VBR/ISR, or physical memory mapping is asserted. GA-01/02/03/11 remain PARTIAL.
+
+## GA-01/02/03/11 — 2026-11-14: source-linked RESET-to-handler CALL witnesses (candidate)
+
+Branch `work/ga01-11-reset-handler-witness-20261114` adds a read-only bounded BFS from a known RESET function entry
+(maximum 8 CALL edges / 100 recognized function nodes). The new
+`HardwareVectorResetCorrelation.inspectResetCallWitnesses` API returns
+deterministic shortest direct-CALL function-entry chains for exact vector
+handlers, preserves alias slots, excludes interior pointers, and distinguishes
+a missing RESET root, uninspected CALL frontiers and targets not observed in
+a complete bounded survey. The report explicitly labels static candidates:
+reachable CFG does not mean executed ISR, and a MOVEC/VBR source does not
+establish an active VBR. Positive/negative Java 21 source regressions cover
+convergence, aliases, missing root/target, interior pointers, ordering and
+invalid inputs. This is a candidate, NOT a formal PASS. Exact-head Java 21,
+Java 25 full Ghidra 12.1.4 PUBLIC build, isolated synthetic Ghidra evidence,
+review and merge remain required. GA-01/02/03/11 stay PARTIAL.
+
 ## GA-01/11 — 2026-11-14: PR #330 integrated checkpoint
 
 PR [#330](https://github.com/bogkom/GhidrAssist/pull/330) was merged at `ad6339d3966b043a2028a25bb488c2b1dd3bf1d1` from exact candidate `03b934dd5a545f12a361ad36976a28935f938634`. The integrated read-only report distinguishes full-inventory static STORE and MOVEC/VBR candidate slots from unknown-evidence slots, including alias multiplicity and omission beyond the 64-row display cap. The candidate section below is historical pre-merge evidence; it does not override this integration record. Earlier run reported 26/26 successful Actions for the candidate; independently verified workflow/job evidence must remain attached to that SHA for formal acceptance. GA-01/11 remain PARTIAL: no proof of RESET execution, active VBR or executed ISR. Next functional package: source-linked RESET-to-handler call-path witnesses with explicit missing-target/frontier uncertainty, positive and negative isolated Ghidra fixtures, and exact-head Java 21/25/Actions review.

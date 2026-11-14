@@ -37,6 +37,7 @@ jobs:
             src/main/java/ghidrassist/hardware/HardwareCallEffects.java \
             src/main/java/ghidrassist/hardware/HardwareResetFlow.java \
             src/main/java/ghidrassist/hardware/HardwareVectorResetCorrelation.java \
+            src/main/java/ghidrassist/hardware/HardwareResetHandlerWitness.java \
             src/main/java/ghidrassist/hardware/HardwareInterproceduralMmEffects.java \
             src/test/java/ghidrassist/hardware/HardwareDirectCallGateSelfTest.java
           java -cp "$RUNNER_TEMP/direct-call-gate" \

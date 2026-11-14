@@ -6,6 +6,7 @@ on:
       - 'src/main/java/ghidrassist/hardware/HardwareVectorMmMayCorrelation.java'
       - 'src/main/java/ghidrassist/hardware/HardwareInterproceduralMmEffects.java'
       - 'src/main/java/ghidrassist/hardware/HardwareVectorResetCorrelation.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareResetHandlerWitness.java'
       - 'src/main/java/ghidrassist/hardware/GhidraInterruptVectorService.java'
       - 'src/main/java/ghidrassist/hardware/GhidraHardwareFlowService.java'
       - 'src/test/java/ghidrassist/hardware/HardwareVectorMmMayCorrelationSelfTest.java'
@@ -16,6 +17,7 @@ on:
       - 'src/main/java/ghidrassist/hardware/HardwareVectorMmMayCorrelation.java'
       - 'src/main/java/ghidrassist/hardware/HardwareInterproceduralMmEffects.java'
       - 'src/main/java/ghidrassist/hardware/HardwareVectorResetCorrelation.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareResetHandlerWitness.java'
       - 'src/main/java/ghidrassist/hardware/GhidraInterruptVectorService.java'
       - 'src/main/java/ghidrassist/hardware/GhidraHardwareFlowService.java'
       - 'src/test/java/ghidrassist/hardware/HardwareVectorMmMayCorrelationSelfTest.java'
@@ -42,6 +44,7 @@ jobs:
           javac --release 21 -d "$RUNNER_TEMP/vector-mm" \
             src/main/java/ghidrassist/hardware/HardwareCallEffects.java \
             src/main/java/ghidrassist/hardware/HardwareVectorResetCorrelation.java \
+            src/main/java/ghidrassist/hardware/HardwareResetHandlerWitness.java \
             src/main/java/ghidrassist/hardware/HardwareInterproceduralMmEffects.java \
             src/main/java/ghidrassist/hardware/HardwareVectorMmMayCorrelation.java \
             src/test/java/ghidrassist/hardware/HardwareVectorMmMayCorrelationSelfTest.java
