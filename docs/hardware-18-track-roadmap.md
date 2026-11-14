@@ -5287,3 +5287,17 @@ PR #331 was squash-merged into `master` at `70adc36a4b629702da0e8a32d516307b7094
 ## GA-01/02/03/11 — 2026-11-14: PR #333 integrated handler-inventory uncertainty
 
 PR #333 was squash-merged into `master` at `b7d09d169aae3caf3c8c25bf16538ef256b00729` from exact tested head `6a6cd15c6b97aa4c803c6b3267b5999112cab9e9`. All 26 reported pull-request GitHub Actions workflows completed SUCCESS, including the Java 21 static vector/RESET regression, Java 25 extension build and isolated synthetic Ghidra workflows. Branch was behind `master` by zero commits, mergeable, and had no unresolved inline review threads. The read-only RESET-to-handler correlation now distinguishes exact handlers absent from the recognized function graph (`UNKNOWN_HANDLER_NOT_IN_GRAPH`) from known but disconnected handlers (`NOT_OBSERVED_WITHIN_BOUND`); incomplete CALL surveys remain `UNKNOWN_FRONTIER`, interior pointers remain refused. This is a bounded static observation, not evidence of execution or active VBR/ISR. GA-01/02/03/11 remain PARTIAL; further formal criteria and independent acceptance evidence are required.
+
+
+## GA-01/02/03/11 — 2026-11-14: decoder bounded-scan follow-up (PR #336)
+
+The Ghidra Listing adapter now enforces its 200,000-instruction budget against
+**all inspected instructions**, including discarded or ambiguous records,
+instead of only retained decoded records. MOVEC operand-decoding exceptions
+mark the scan incomplete rather than escaping as an unclassified failure.
+Source regression adds overlapping-owner coordinate conflicts and preserves
+observed sites under incomplete input without allowing RESET correlation.
+These are candidate changes, not a Ghidra decoder PASS: exact-head Java 21,
+Java 25 full build, and genuine isolated CPU32 Ghidra positive/negative
+STORE and MOVEC-to/from-VBR fixtures remain required before review/merge.
+Static reachability and decoded instructions do not prove execution or active ISR.
