@@ -49,6 +49,28 @@ public final class HardwareResetHandlerWitnessSelfTest {
             frontier.rows().get(3).status()==
                 HardwareResetHandlerWitness.Status.UNKNOWN_FRONTIER,
             "missing CALL target propagates uncertainty");
+        // A known cycle is not an uninspected frontier; a depth cutoff is.
+        var cycle=HardwareResetHandlerWitness.inspect(0x100,false,
+            List.of(n(0x100L,0x130L),n(0x130L,0x100L)),targets);
+        check(!cycle.incomplete() && cycle.frontiers().isEmpty() &&
+            cycle.rows().get(0).status()==
+                HardwareResetHandlerWitness.Status.NOT_OBSERVED_WITHIN_BOUND,
+            "cycle does not manufacture an unknown frontier");
+        var deep=new java.util.ArrayList<HardwareCallEffects.FunctionNode>();
+        for(int i=0;i<10;i++)
+            deep.add(n(0x100L+i*2L,0x102L+i*2L));
+        var depth=HardwareResetHandlerWitness.inspect(0x100,false,deep,
+            List.of(new HardwareVectorResetCorrelation.Target(
+                50,0x112L,0x112L,true)));
+        check(depth.incomplete() && depth.inspected()==9 &&
+            depth.rows().get(0).status()==
+                HardwareResetHandlerWitness.Status.UNKNOWN_FRONTIER &&
+            depth.frontiers().get(0).size()==10,
+            "depth cutoff preserves uninspected next edge");
+        var unresolved=HardwareResetHandlerWitness.inspect(0x100,true,graph,targets);
+        check(unresolved.incomplete() && unresolved.rows().get(3).status()==
+            HardwareResetHandlerWitness.Status.UNKNOWN_FRONTIER,
+            "upstream incomplete RESET cannot prove negative reachability");
         bad(()->HardwareResetHandlerWitness.inspect(0x101,false,graph,targets));
         bad(()->HardwareResetHandlerWitness.inspect(0x100,false,
             List.of(n(0x100L),n(0x100L)),targets));
