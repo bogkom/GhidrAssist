@@ -33,21 +33,33 @@ public final class HardwareResetHandlerWitness {
     }
     public record Report(long resetEntry, boolean incomplete, boolean missingRoot,
             int inspected, List<Row> rows, List<List<Long>> frontiers,
-            List<List<Long>> unresolvedCallSources) {
+            List<List<Long>> unresolvedCallSources,
+            List<List<Long>> memoryStoreSources, List<List<Long>> vbrWriteSources) {
         public Report {
             if(resetEntry<0 || resetEntry>0xffffffffL || inspected<0 ||
-                    inspected>MAX_NODES || rows==null || frontiers==null || unresolvedCallSources==null)
+                    inspected>MAX_NODES || rows==null || frontiers==null || unresolvedCallSources==null ||
+                    memoryStoreSources==null || vbrWriteSources==null)
                 throw new IllegalArgumentException("Invalid RESET report");
             rows=List.copyOf(rows);
             frontiers=frontiers.stream().map(List::copyOf).toList();
             unresolvedCallSources=unresolvedCallSources.stream().map(List::copyOf).toList();
+            memoryStoreSources=memoryStoreSources.stream().map(List::copyOf).toList();
+            vbrWriteSources=vbrWriteSources.stream().map(List::copyOf).toList();
             if(frontiers.stream().anyMatch(p->p.isEmpty()) ||
-                    unresolvedCallSources.stream().anyMatch(p->p.isEmpty()))
+                    unresolvedCallSources.stream().anyMatch(p->p.isEmpty()) ||
+                    memoryStoreSources.stream().anyMatch(p->p.isEmpty()) ||
+                    vbrWriteSources.stream().anyMatch(p->p.isEmpty()))
                 throw new IllegalArgumentException("Empty source chain");
         }
         public Report(long resetEntry, boolean incomplete, boolean missingRoot,
+                int inspected, List<Row> rows, List<List<Long>> frontiers,
+                List<List<Long>> unresolvedCallSources) {
+            this(resetEntry,incomplete,missingRoot,inspected,rows,frontiers,
+                unresolvedCallSources,List.of(),List.of());
+        }
+        public Report(long resetEntry, boolean incomplete, boolean missingRoot,
                 int inspected, List<Row> rows, List<List<Long>> frontiers) {
-            this(resetEntry,incomplete,missingRoot,inspected,rows,frontiers,List.of());
+            this(resetEntry,incomplete,missingRoot,inspected,rows,frontiers,List.of(),List.of(),List.of());
         }
         public String markdown() {
             StringBuilder b=new StringBuilder("## RESET to ISR-handler static CALL witnesses\n\n");
@@ -69,6 +81,10 @@ public final class HardwareResetHandlerWitness {
                 b.append("- NOT INSPECTED frontier: ").append(render(f)).append("\n");
             for(List<Long> source:unresolvedCallSources)
                 b.append("- UNRESOLVED CALL source: ").append(render(source)).append("\n");
+            for(List<Long> source:memoryStoreSources)
+                b.append("- POSSIBLE STORE source: ").append(render(source)).append("\n");
+            for(List<Long> source:vbrWriteSources)
+                b.append("- POSSIBLE MOVEC/VBR source: ").append(render(source)).append("\n");
             return b.toString();
         }
     }
@@ -111,6 +127,8 @@ public final class HardwareResetHandlerWitness {
         ArrayDeque<Step> q=new ArrayDeque<>();
         List<List<Long>> frontiers=new ArrayList<>();
         List<List<Long>> unresolvedCallSources=new ArrayList<>();
+        List<List<Long>> memoryStoreSources=new ArrayList<>();
+        List<List<Long>> vbrWriteSources=new ArrayList<>();
         boolean missingRoot=!nodes.containsKey(resetEntry);
         boolean incomplete=resetGraphIncomplete || missingRoot;
         if(!missingRoot) {
@@ -122,6 +140,8 @@ public final class HardwareResetHandlerWitness {
             Step s=q.removeFirst();
             var node=nodes.get(s.id());
             inspected++;
+            if(node.memoryStore())memoryStoreSources.add(path(parents,s.id()));
+            if(node.vbrWrite())vbrWriteSources.add(path(parents,s.id()));
             if(node.unresolvedFlow()) {
                 incomplete=true;
                 unresolvedCallSources.add(path(parents,s.id()));
@@ -158,6 +178,7 @@ public final class HardwareResetHandlerWitness {
             else status=Status.NOT_OBSERVED_WITHIN_BOUND;
             rows.add(new Row(t.vectorNumber(),t.functionEntry(),status,chain));
         }
-        return new Report(resetEntry,incomplete,missingRoot,inspected,rows,frontiers,unresolvedCallSources);
+        return new Report(resetEntry,incomplete,missingRoot,inspected,rows,frontiers,
+            unresolvedCallSources,memoryStoreSources,vbrWriteSources);
     }
 }
