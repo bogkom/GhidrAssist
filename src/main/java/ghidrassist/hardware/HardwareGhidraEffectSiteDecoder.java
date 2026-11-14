@@ -9,6 +9,8 @@ import ghidra.program.model.pcode.PcodeOp;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * Read-only adapter: obtains instruction PCs and typed effects from Ghidra's
@@ -35,6 +37,9 @@ public final class HardwareGhidraEffectSiteDecoder {
         if(program==null)throw new IllegalArgumentException("Missing program");
         List<HardwareDecodedEffectSites.Decoded> decoded=new ArrayList<>();
         boolean incomplete=false;
+        // Overlapping function bodies may expose the same instruction twice.
+        // A PC must have one owning function or the source inventory is ambiguous.
+        Set<Long> seenPcs=new HashSet<>();
         var functions=program.getFunctionManager().getFunctions(true);
         while(functions.hasNext()) {
             if(decoded.size()>=MAX_DECODED_INSTRUCTIONS) {
@@ -56,7 +61,7 @@ public final class HardwareGhidraEffectSiteDecoder {
                 }
                 Instruction instruction=instructions.next();
                 long pc=instruction.getAddress().getOffset();
-                if(pc<entry || pc>0xffffffffL || (pc&1)!=0) {
+                if(pc<entry || pc>0xffffffffL || (pc&1)!=0 || !seenPcs.add(pc)) {
                     incomplete=true;
                     continue;
                 }
@@ -79,7 +84,7 @@ public final class HardwareGhidraEffectSiteDecoder {
                 boolean vbr=false;
                 if("MOVEC".equalsIgnoreCase(instruction.getMnemonicString())) {
                     int count=instruction.getNumOperands();
-                    if(count<2) {
+                    if(count!=2) {
                         incomplete=true;
                     } else {
                         Object[] destination=instruction.getOpObjects(count-1);
