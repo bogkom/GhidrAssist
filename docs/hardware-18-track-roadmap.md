@@ -1,3 +1,18 @@
+## GA-01/02/03/11 — 2026-11-14: RESET-to-STORE/VBR source chains (candidate)
+
+Branch `work/ga01-11-reset-effect-source-chains-20261114` extends the existing
+bounded, read-only RESET direct-CALL witness with **separate inspected-function
+chains** to source nodes containing possible memory STORE and MOVEC/VBR writes.
+The chains reuse deterministic BFS parents and preserve independent STORE/VBR
+classification, immutable evidence, alias handling and missing/unknown frontier
+reporting. Positive and negative Java 21 source fixtures exercise distinct
+effect nodes, graph ordering, absent effects and immutable paths. This is a
+candidate, not a formal PASS: exact-head Java 21, Java 25 full Ghidra 12.1.4
+PUBLIC build, genuine isolated synthetic Ghidra, review and integration remain
+required. The evidence does **not** establish that a CALL, STORE, MOVEC or ISR
+executed, that VBR was active, or that SIMCR/MM or physical mapping changed.
+GA-01/02/03/11 remain PARTIAL.
+
 ## GA-01/02/03/11 — 2026-11-14: handler inventory negative-evidence candidate
 
 Branch `work/ga01-11-handler-inventory-uncertainty-20261114` distinguishes an exact-entry vector handler absent from the supplied recognized function inventory (`UNKNOWN_HANDLER_NOT_IN_GRAPH`) from a handler recognized in that inventory but disconnected from a complete bounded RESET direct-CALL traversal (`NOT_OBSERVED_WITHIN_BOUND`). Incomplete traversal continues to take precedence (`UNKNOWN_FRONTIER`), while missing RESET and interior pointers retain their own statuses. This prevents reporting a missing analyzed function as a negative reachability finding. Positive/negative Java 21 source fixtures cover missing handlers, known disconnected handlers, cycles, and incomplete frontiers. Candidate only: exact-head Java 21, Java 25 Ghidra 12.1.4 PUBLIC build, isolated synthetic Ghidra, review and merge remain required. No execution, active VBR/ISR, or physical mapping is inferred. GA-01/02/03/11 remain PARTIAL.
