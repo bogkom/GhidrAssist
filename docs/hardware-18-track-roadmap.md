@@ -1,3 +1,22 @@
+## GA-01/02/03/11 — 2026-11-14: independently decoded instruction-site inventory (candidate)
+
+Branch `work/ga01-11-ghidra-decoded-sites-20261114` introduces a read-only
+Ghidra Listing adapter that walks recognized functions, obtains actual
+instruction PCs, classifies memory writes using p-code STORE and MOVEC-to-VBR
+only when the decoded destination register is VBR. A separate Java 21
+bounded source inventory sorts sites deterministically and refuses duplicate
+PCs, invalid coordinates and incomplete/omitted decoding before joining
+to RESET CALL witnesses. Source regressions cover STORE, MOVEC, dual-effect,
+ordering, missing source evidence, invalid PC, duplicate and immutability.
+The extraction is static: decoded STORE is not executed STORE, MOVEC-to-VBR
+is not active VBR or ISR, and no physical mapping is inferred.
+
+**Candidate, not accepted:** exact-head Java 21 Actions, Java 25 full
+Ghidra 12.1.4 PUBLIC build, real isolated synthetic Ghidra decoder fixture,
+review and merge are required. A Ghidra fixture must independently verify
+both positive p-code STORE and MOVEC/VBR and negative register-only/non-VBR
+instructions. The adapter does not claim formal GA-01/02/03/11 completion.
+
 ## GA-01/02/03/11 — 2026-11-14: PR #335 integrated
 
 PR [#335](https://github.com/bogkom/GhidrAssist/pull/335) merged from exact tested head `04390ee9f6a3e0818a17730da2f9e86e495fa504` as squash `62d971e2f0ab700ba2058b123d1f56329e922297`. The 25 PR-triggered workflow runs reported completed SUCCESS, including Java 21 vector-source regression, extension integration build and isolated synthetic Ghidra workflows. Reviewed four-file patch, no unresolved inline threads, branch was 5 commits ahead and 0 behind `master`. Integration provides bounded static instruction-PC site join to RESET CALL witness chains; source instruction PCs are externally supplied, not independently decoded by this feature. Static reachability is not runtime execution or active VBR/ISR. GA-01/02/03/11 remain PARTIAL; next functional gate: independently extract typed STORE/MOVEC instruction sites from Ghidra and connect to the join, with negative evidence and exact-SHA isolated Ghidra tests.
