@@ -103,6 +103,27 @@ public final class HardwareResetHandlerWitnessSelfTest {
         check(unknown.markdown().contains("UNRESOLVED CALL source: 0x00000100 -> 0x00000130") &&
             !a.markdown().contains("UNRESOLVED CALL source:"),
             "unknown sources are explicit and absent in complete graph");
+        // Independent positive source effects: paths identify inspected function
+        // nodes only; they do not imply that either instruction executed.
+        var effectGraph=List.of(
+            n(0x100L,0x130L,0x160L),
+            new HardwareCallEffects.FunctionNode(0x130L,true,false,false,List.of()),
+            new HardwareCallEffects.FunctionNode(0x160L,false,true,false,List.of()));
+        var effects=HardwareResetHandlerWitness.inspect(0x100,false,effectGraph,targets);
+        check(effects.memoryStoreSources().equals(List.of(List.of(0x100L,0x130L))) &&
+            effects.vbrWriteSources().equals(List.of(List.of(0x100L,0x160L))) &&
+            effects.markdown().contains("POSSIBLE STORE source: 0x00000100 -> 0x00000130") &&
+            effects.markdown().contains("POSSIBLE MOVEC/VBR source: 0x00000100 -> 0x00000160"),
+            "independent static STORE and VBR source provenance");
+        var reversedEffects=HardwareResetHandlerWitness.inspect(0x100,false,
+            List.of(effectGraph.get(2),effectGraph.get(1),effectGraph.get(0)),targets);
+        check(effects.equals(reversedEffects),"effect sources invariant under graph order");
+        check(a.memoryStoreSources().isEmpty() && a.vbrWriteSources().isEmpty() &&
+            unknown.memoryStoreSources().isEmpty() && unknown.vbrWriteSources().isEmpty(),
+            "negative controls: no invented STORE or VBR evidence");
+        try {effects.vbrWriteSources().get(0).add(0x180L);
+            throw new AssertionError("Mutable effect provenance");
+        } catch(UnsupportedOperationException expected) {}
         var immutable=unknown.unresolvedCallSources();
         try { immutable.add(List.of(0x100L)); throw new AssertionError("Mutable provenance"); }
         catch(UnsupportedOperationException expected) {}
