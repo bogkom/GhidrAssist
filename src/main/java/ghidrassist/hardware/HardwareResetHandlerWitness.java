@@ -32,13 +32,22 @@ public final class HardwareResetHandlerWitness {
         }
     }
     public record Report(long resetEntry, boolean incomplete, boolean missingRoot,
-            int inspected, List<Row> rows, List<List<Long>> frontiers) {
+            int inspected, List<Row> rows, List<List<Long>> frontiers,
+            List<List<Long>> unresolvedCallSources) {
         public Report {
             if(resetEntry<0 || resetEntry>0xffffffffL || inspected<0 ||
-                    inspected>MAX_NODES || rows==null || frontiers==null)
+                    inspected>MAX_NODES || rows==null || frontiers==null || unresolvedCallSources==null)
                 throw new IllegalArgumentException("Invalid RESET report");
             rows=List.copyOf(rows);
             frontiers=frontiers.stream().map(List::copyOf).toList();
+            unresolvedCallSources=unresolvedCallSources.stream().map(List::copyOf).toList();
+            if(frontiers.stream().anyMatch(p->p.isEmpty()) ||
+                    unresolvedCallSources.stream().anyMatch(p->p.isEmpty()))
+                throw new IllegalArgumentException("Empty source chain");
+        }
+        public Report(long resetEntry, boolean incomplete, boolean missingRoot,
+                int inspected, List<Row> rows, List<List<Long>> frontiers) {
+            this(resetEntry,incomplete,missingRoot,inspected,rows,frontiers,List.of());
         }
         public String markdown() {
             StringBuilder b=new StringBuilder("## RESET to ISR-handler static CALL witnesses\n\n");
@@ -46,6 +55,7 @@ public final class HardwareResetHandlerWitness {
                 .append("; inspected ").append(inspected)
                 .append("; incomplete ").append(incomplete)
                 .append("; missing root ").append(missingRoot)
+                .append("; unresolved CALL source nodes ").append(unresolvedCallSources.size())
                 .append("; uninspected frontiers ").append(frontiers.size())
                 .append(". STATIC ONLY: no executed path, active VBR, IRQ or physical mapping is established.\n\n");
             b.append("| Vector | Handler | Status | Direct CALL function-entry chain |\n")
@@ -57,6 +67,8 @@ public final class HardwareResetHandlerWitness {
             }
             for(List<Long> f:frontiers)
                 b.append("- NOT INSPECTED frontier: ").append(render(f)).append("\n");
+            for(List<Long> source:unresolvedCallSources)
+                b.append("- UNRESOLVED CALL source: ").append(render(source)).append("\n");
             return b.toString();
         }
     }
@@ -98,6 +110,7 @@ public final class HardwareResetHandlerWitness {
         Set<Long> seen=new HashSet<>();
         ArrayDeque<Step> q=new ArrayDeque<>();
         List<List<Long>> frontiers=new ArrayList<>();
+        List<List<Long>> unresolvedCallSources=new ArrayList<>();
         boolean missingRoot=!nodes.containsKey(resetEntry);
         boolean incomplete=resetGraphIncomplete || missingRoot;
         if(!missingRoot) {
@@ -109,7 +122,10 @@ public final class HardwareResetHandlerWitness {
             Step s=q.removeFirst();
             var node=nodes.get(s.id());
             inspected++;
-            if(node.unresolvedFlow())incomplete=true;
+            if(node.unresolvedFlow()) {
+                incomplete=true;
+                unresolvedCallSources.add(path(parents,s.id()));
+            }
             for(long next:node.directCallees().stream().sorted().toList()) {
                 if(seen.contains(next))continue;
                 if(s.depth()>=MAX_DEPTH || seen.size()>=MAX_NODES ||
@@ -140,6 +156,6 @@ public final class HardwareResetHandlerWitness {
                 Status.NOT_OBSERVED_WITHIN_BOUND;
             rows.add(new Row(t.vectorNumber(),t.functionEntry(),status,chain));
         }
-        return new Report(resetEntry,incomplete,missingRoot,inspected,rows,frontiers);
+        return new Report(resetEntry,incomplete,missingRoot,inspected,rows,frontiers,unresolvedCallSources);
     }
 }
