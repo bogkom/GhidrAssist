@@ -19,7 +19,7 @@ public final class HardwareResetHandlerWitness {
     public static final int MAX_DEPTH=8, MAX_NODES=100;
 
     public enum Status { OBSERVED_STATIC_PATH, NOT_OBSERVED_WITHIN_BOUND,
-        UNKNOWN_RESET_ROOT, UNKNOWN_FRONTIER, INTERIOR_NOT_ENTRY }
+        UNKNOWN_RESET_ROOT, UNKNOWN_FRONTIER, UNKNOWN_HANDLER_NOT_IN_GRAPH, INTERIOR_NOT_ENTRY }
     public record Row(int vector, long handler, Status status, List<Long> chain) {
         public Row {
             if(vector<2 || vector>255 || handler<0 || handler>0xffffffffL ||
@@ -152,8 +152,10 @@ public final class HardwareResetHandlerWitness {
             else if(seen.contains(t.functionEntry())) {
                 status=Status.OBSERVED_STATIC_PATH;
                 chain=path(parents,t.functionEntry());
-            } else status=incomplete?Status.UNKNOWN_FRONTIER:
-                Status.NOT_OBSERVED_WITHIN_BOUND;
+            } else if(incomplete)status=Status.UNKNOWN_FRONTIER;
+            else if(!nodes.containsKey(t.functionEntry()))
+                status=Status.UNKNOWN_HANDLER_NOT_IN_GRAPH;
+            else status=Status.NOT_OBSERVED_WITHIN_BOUND;
             rows.add(new Row(t.vectorNumber(),t.functionEntry(),status,chain));
         }
         return new Report(resetEntry,incomplete,missingRoot,inspected,rows,frontiers,unresolvedCallSources);
