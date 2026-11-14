@@ -19,12 +19,28 @@ public final class HardwareGhidraEffectSiteDecoder {
     private HardwareGhidraEffectSiteDecoder() {}
     public static final int MAX_DECODED_INSTRUCTIONS=200_000;
 
+    /**
+     * Join instruction sites decoded from this Program with independently
+     * supplied RESET/CALL witnesses. Incomplete Listing scans fail closed.
+     * The caller must derive witnesses and function inventory from the same
+     * immutable Program snapshot; this method never performs Apply.
+     */
+    public static HardwareResetEffectSites.Report correlate(Program program,
+            HardwareResetHandlerWitness.Report witness,
+            List<HardwareCallEffects.FunctionNode> functions) {
+        return decode(program).correlate(witness, functions);
+    }
+
     public static HardwareDecodedEffectSites.Result decode(Program program) {
         if(program==null)throw new IllegalArgumentException("Missing program");
         List<HardwareDecodedEffectSites.Decoded> decoded=new ArrayList<>();
         boolean incomplete=false;
         var functions=program.getFunctionManager().getFunctions(true);
         while(functions.hasNext()) {
+            if(decoded.size()>=MAX_DECODED_INSTRUCTIONS) {
+                incomplete=true;
+                break;
+            }
             Function function=functions.next();
             long entry=function.getEntryPoint().getOffset();
             if(entry<0 || entry>0xffffffffL || (entry&1)!=0) {
