@@ -51,6 +51,19 @@ public final class HardwareDecodedEffectSitesSelfTest {
                 truncated.sites().size()==HardwareResetEffectSites.MAX_SITES,
                 "bounded extraction must preserve omission evidence");
         reject(()->truncated.correlate(witness,graph));
+        var reversedOverLimit=new java.util.ArrayList<>(overLimit);
+        java.util.Collections.reverse(reversedOverLimit);
+        var reverseTruncated=HardwareDecodedEffectSites.collect(reversedOverLimit,false);
+        check(reverseTruncated.sites().equals(truncated.sites()) &&
+                reverseTruncated.omitted()==truncated.omitted(),
+                "bounded selection must not depend on Listing traversal order");
+        var highPcFirst=new java.util.ArrayList<HardwareDecodedEffectSites.Decoded>();
+        highPcFirst.add(new HardwareDecodedEffectSites.Decoded(0x100,
+                0x100+2L*HardwareResetEffectSites.MAX_SITES,true,false));
+        highPcFirst.addAll(overLimit.subList(0,HardwareResetEffectSites.MAX_SITES));
+        check(HardwareDecodedEffectSites.collect(highPcFirst,false).sites().equals(truncated.sites()),
+                "late lower PCs must survive canonical bounded selection");
+
         try {result.sites().clear();throw new AssertionError("mutable sites");}
         catch(UnsupportedOperationException expected) {}
         System.out.println("DECODED_EFFECT_SITES_SOURCE_PASS");
