@@ -5136,3 +5136,7 @@ aliases independently of displayed-row cap, excludes interior pointers,
 and retains displayed-only STORE/VBR witnesses. These remain static
 source observations, not proof of active ISR/VBR or execution.
 GA-01/11 remain PARTIAL pending the other formal roadmap criteria.
+
+## GA-01/11 — 2026-11-14: PR #330 integrated full-inventory uncertainty
+
+PR #330 merged into `master` at `ad6339d3966b043a2028a25bb488c2b1dd3bf1d1` from exact head `03b934dd5a545f12a361ad36976a28935f938634`. All 26 GitHub Actions workflow runs on that head completed SUCCESS, including Java21 vector/RESET source regression, Java25 extension integration build and isolated synthetic Ghidra workflows. Review threads: zero; branch behind master: zero; mergeability confirmed before squash. Full-inventory STORE and MOVEC/VBR UNKNOWN counts now complement full-inventory candidate counts independently of the 64-row display cap. Shared exact handlers reuse static analysis but each vector slot counts independently; interior pointers do not count as exact-entry effects. Legacy summary counts remain UNKNOWN rather than invented zeros. These are bounded static source claims only, not executed ISR, active VBR, latched MM, or physical CS mapping. GA-01/11 remain PARTIAL pending other formal criteria.
