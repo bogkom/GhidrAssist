@@ -36,7 +36,7 @@ public final class HardwareDecodedEffectSitesSelfTest {
         check(report.markdown().contains("STATIC ONLY"),"static caveat");
         reject(()->HardwareDecodedEffectSites.collect(
                 List.of(decoded.get(0),decoded.get(0)),false));
-        reject(()->HardwareDecodedEffectSites.collect(List.of((HardwareDecodedEffectSites.Decoded)null),false));
+        reject(()->HardwareDecodedEffectSites.collect(java.util.Arrays.asList((HardwareDecodedEffectSites.Decoded)null),false));
         reject(()->new HardwareDecodedEffectSites.Decoded(0x100,0x101,true,false));
         reject(()->HardwareDecodedEffectSites.collect(decoded,true).correlate(witness,graph));
         try {result.sites().clear();throw new AssertionError("mutable sites");}
