@@ -67,8 +67,11 @@ public final class HardwareGhidraEffectSiteDecoder {
                         incomplete=true;
                     } else {
                         for(PcodeOp op:pcode)
-                            if(op!=null && op.getOpcode()==PcodeOp.STORE)
+                            if(op==null) {
+                                incomplete=true;
+                            } else if(op.getOpcode()==PcodeOp.STORE) {
                                 store=true;
+                            }
                     }
                 } catch(RuntimeException ex) {
                     incomplete=true;
@@ -80,11 +83,19 @@ public final class HardwareGhidraEffectSiteDecoder {
                         incomplete=true;
                     } else {
                         Object[] destination=instruction.getOpObjects(count-1);
-                        if(destination!=null)
-                            for(Object object:destination)
-                                if(object instanceof Register register &&
-                                        "VBR".equals(register.getName().toUpperCase(Locale.ROOT)))
-                                    vbr=true;
+                        if(destination==null || destination.length==0) {
+                            incomplete=true;
+                        } else {
+                            boolean foundRegister=false;
+                            for(Object object:destination) {
+                                if(object instanceof Register register) {
+                                    foundRegister=true;
+                                    if("VBR".equals(register.getName().toUpperCase(Locale.ROOT)))
+                                        vbr=true;
+                                }
+                            }
+                            if(!foundRegister) incomplete=true;
+                        }
                     }
                 }
                 decoded.add(new HardwareDecodedEffectSites.Decoded(entry,pc,store,vbr));
