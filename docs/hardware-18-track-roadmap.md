@@ -1,3 +1,9 @@
+## GA-01/02/03/11 — 2026-11-14: exact-head CI diagnosis and deterministic witness follow-up
+
+On candidate `0fc7c9181b0c7cd444958f8c3983eb3633548448`, GitHub Actions returned 22 successful and 4 failed workflows (26 total). Three Java 21 source jobs fail because their explicit `javac` source lists omit the newly required `HardwareResetHandlerWitness.java`; the vector correlation self-test also requires `HardwareResetHandlerWitnessSelfTest.java`. The fourth failure is a Java 25 Ghidra integration job at `buildModuleHelp`, requiring separate diagnosis. The extension integration build succeeded, but the candidate is **not accepted**. Existing workflows must include the new sources before review/merge; no prior PASS may be carried forward to the changed SHA.
+
+Follow-up commits canonicalize direct CALL edge traversal by ascending function entry, so convergent equal-length shortest witnesses do not depend on input CALL ordering, and add adversarial source regressions for reordered edges and aliases. These are unverified source changes until exact-head Actions rerun. No runtime RESET, active VBR/ISR, or physical memory mapping is asserted. GA-01/02/03/11 remain PARTIAL.
+
 ## GA-01/02/03/11 — 2026-11-14: source-linked RESET-to-handler CALL witnesses (candidate)
 
 Branch `work/ga01-11-reset-handler-witness-20261114` adds a read-only bounded BFS from a known RESET function entry
