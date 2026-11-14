@@ -98,7 +98,8 @@ public final class HardwareResetHandlerWitnessSelfTest {
             !a.markdown().contains("UNRESOLVED CALL source:"),
             "unknown sources are explicit and absent in complete graph");
         var immutable=unknown.unresolvedCallSources();
-        bad(()->immutable.add(List.of(0x100L)));
+        try { immutable.add(List.of(0x100L)); throw new AssertionError("Mutable provenance"); }
+        catch(UnsupportedOperationException expected) {}
         bad(()->new HardwareResetHandlerWitness.Report(0x100,false,false,0,
             List.of(),List.of(),List.of(List.of())));
         bad(()->HardwareResetHandlerWitness.inspect(0x101,false,graph,targets));
