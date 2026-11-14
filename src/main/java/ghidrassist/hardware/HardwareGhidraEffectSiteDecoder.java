@@ -56,7 +56,7 @@ public final class HardwareGhidraEffectSiteDecoder {
             InstructionIterator instructions=program.getListing()
                     .getInstructions(function.getBody(),true);
             while(instructions.hasNext()) {
-                if(decoded.size()>=MAX_DECODED_INSTRUCTIONS) {
+                if(inspectedInstructions>=MAX_DECODED_INSTRUCTIONS) {
                     incomplete=true;
                     break;
                 }
