@@ -1,3 +1,7 @@
+## GA-01/02/03/11 — 2026-11-14: PR #334 integrated
+
+PR [#334](https://github.com/bogkom/GhidrAssist/pull/334) merged from exact head `5004679ed10a4e68c5b614bd03f837d3dfcb04ee` at squash SHA `afe2ed68c85b47d346e74746ec38beb60a0d2e4f`. All 26 PR-triggered GitHub Actions workflow runs on that exact head completed SUCCESS, including extension integration and isolated synthetic Ghidra workflows. Reviewed read-only deterministic RESET-to-inspected-function STORE and MOVEC/VBR source paths, independent positive/negative source tests and immutable paths; no unresolved inline review threads. These are static candidate-function paths, not proof of executed STORE, active VBR/ISR, SIMCR/MM state or physical mapping. GA-01/02/03/11 remain PARTIAL pending site-level correlation and formal criteria. Historical candidate below retained for traceability.
+
 ## GA-01/02/03/11 — 2026-11-14: RESET-to-STORE/VBR source chains (candidate)
 
 Branch `work/ga01-11-reset-effect-source-chains-20261114` extends the existing
