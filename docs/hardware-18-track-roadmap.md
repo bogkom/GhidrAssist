@@ -1,3 +1,21 @@
+## GA-01/02/03/11 — 2026-11-14: RESET instruction-site source join (candidate)
+
+Branch `work/ga01-11-reset-site-provenance-20261114` adds a read-only, bounded
+join of separately observed even instruction PCs (STORE versus MOVEC/VBR)
+with exact-function-entry RESET direct-CALL chains. It refuses contradictory
+node effect classification, duplicate/null sites, invalid coordinates and
+mutable output. Disconnected known functions are NOT_OBSERVED only when
+the RESET traversal is complete; incomplete frontiers remain UNKNOWN.
+Unknown function inventory is reported independently. Java 21 source
+regressions include positive, negative, reordered, incomplete and malformed
+fixtures; the existing vector workflow now compiles and executes both
+RESET witness and site regression classes. **Candidate, not accepted**:
+exact-head Java 21 CI, Java 25 Ghidra 12.1.4 PUBLIC build, isolated synthetic
+Ghidra acceptance, review and integration are pending. Input sites must
+come from an independently authenticated instruction decoder; the join
+alone does not extract source PCs or establish execution, active VBR/ISR,
+SIMCR/MM latch or physical mapping. GA-01/02/03/11 remain PARTIAL.
+
 ## GA-01/02/03/11 — 2026-11-14: PR #334 integrated
 
 PR [#334](https://github.com/bogkom/GhidrAssist/pull/334) merged from exact head `5004679ed10a4e68c5b614bd03f837d3dfcb04ee` at squash SHA `afe2ed68c85b47d346e74746ec38beb60a0d2e4f`. All 26 PR-triggered GitHub Actions workflow runs on that exact head completed SUCCESS, including extension integration and isolated synthetic Ghidra workflows. Reviewed read-only deterministic RESET-to-inspected-function STORE and MOVEC/VBR source paths, independent positive/negative source tests and immutable paths; no unresolved inline review threads. These are static candidate-function paths, not proof of executed STORE, active VBR/ISR, SIMCR/MM state or physical mapping. GA-01/02/03/11 remain PARTIAL pending site-level correlation and formal criteria. Historical candidate below retained for traceability.
