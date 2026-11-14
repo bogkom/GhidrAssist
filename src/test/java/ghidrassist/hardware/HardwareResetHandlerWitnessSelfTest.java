@@ -82,6 +82,25 @@ public final class HardwareResetHandlerWitnessSelfTest {
         check(unresolved.incomplete() && unresolved.rows().get(3).status()==
             HardwareResetHandlerWitness.Status.UNKNOWN_FRONTIER,
             "upstream incomplete RESET cannot prove negative reachability");
+        // Unknown indirect flow is attributable to the exact inspected source,
+        // not to a guessed target or to a runtime ISR execution.
+        var unknownGraph=List.of(
+            new HardwareCallEffects.FunctionNode(0x100L,false,false,true,List.of(0x130L)),
+            new HardwareCallEffects.FunctionNode(0x130L,false,false,true,List.of()));
+        var unknown=HardwareResetHandlerWitness.inspect(0x100,false,unknownGraph,targets);
+        check(unknown.incomplete() && unknown.frontiers().isEmpty() &&
+            unknown.unresolvedCallSources().equals(List.of(
+                List.of(0x100L),List.of(0x100L,0x130L))) &&
+            unknown.rows().get(3).status()==
+                HardwareResetHandlerWitness.Status.UNKNOWN_FRONTIER,
+            "unresolved CALL source provenance survives even without missing edges");
+        check(unknown.markdown().contains("UNRESOLVED CALL source: 0x00000100 -> 0x00000130") &&
+            !a.markdown().contains("UNRESOLVED CALL source:"),
+            "unknown sources are explicit and absent in complete graph");
+        var immutable=unknown.unresolvedCallSources();
+        bad(()->immutable.add(List.of(0x100L)));
+        bad(()->new HardwareResetHandlerWitness.Report(0x100,false,false,0,
+            List.of(),List.of(),List.of(List.of())));
         bad(()->HardwareResetHandlerWitness.inspect(0x101,false,graph,targets));
         bad(()->HardwareResetHandlerWitness.inspect(0x100,false,
             List.of(n(0x100L),n(0x100L)),targets));
