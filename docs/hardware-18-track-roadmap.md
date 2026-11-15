@@ -1,3 +1,7 @@
+## GA-01/11 — 2026-11-16: headless evidence ordering gate (PR #336 candidate)
+
+The isolated runner now requires the fixture-preparer PASS to precede the verifier PASS in the same process output. A negative mock regression rejects reversed order; fixture documentation records the contract. This is a source-only candidate, **not** genuine Ghidra execution evidence. Java 21/25 exact-head checks, isolated Ghidra 12.1.4 PUBLIC execution, extension provenance and review are still mandatory; GA-01/02/03/11 remain PARTIAL.
+
 ## GA-01/11 — 2026-11-15: pinned headless Ghidra release preflight (PR #336 candidate)
 
 The isolated CPU32 runner now rejects absent or mismatched `Ghidra/application.properties` metadata before launching: exact `application.version=12.1.4` and `application.release.name=PUBLIC` are required. Mock-launcher regression covers valid and invalid release metadata; this is not a genuine Ghidra PASS or extension binary provenance attestation. Exact-head Java 21/25 CI, installed-extension verification, real isolated Ghidra run, review and integration remain mandatory. GA-01/02/03/11 remain PARTIAL.
