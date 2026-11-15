@@ -127,6 +127,6 @@ public class GA18VerifyDecodedEffectSites extends GhidraScript {
         require(withoutEffects.incomplete(), "cleared STORE must keep inventory incomplete");
         require(withoutEffects.sites().isEmpty(),
                 "stale STORE/MOVEC evidence survived clearing both positive instructions");
-        println("GA18_DECODED_SITES_GHIDRA_PASS sites=2 positive=2 negative=3");
+        // Fourth negative: a raw program with no recognized function must not\n        // be certified as having no STORE or MOVEC source sites.\n        require(currentProgram.getFunctionManager().removeFunction(only.getEntryPoint()),\n                "fourth negative failed to remove fixture function");\n        HardwareDecodedEffectSites.Result noFunctions = HardwareGhidraEffectSiteDecoder.decode(currentProgram);\n        require(noFunctions.incomplete() && noFunctions.sites().isEmpty(),\n                "empty function inventory must remain UNKNOWN");\n        println("GA18_DECODED_SITES_GHIDRA_PASS sites=2 positive=2 negative=4");
     }
 }
