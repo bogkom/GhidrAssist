@@ -11,6 +11,9 @@ import ghidra.program.model.pcode.PcodeOp;
 import ghidrassist.hardware.HardwareDecodedEffectSites;
 import ghidrassist.hardware.HardwareGhidraEffectSiteDecoder;
 import java.util.List;
+import ghidra.program.model.listing.Function;
+import ghidra.program.model.listing.FunctionIterator;
+import java.util.Arrays;
 
 public class GA18VerifyDecodedEffectSites extends GhidraScript {
     private static void require(boolean condition, String message) {
@@ -44,6 +47,21 @@ public class GA18VerifyDecodedEffectSites extends GhidraScript {
         require(currentProgram != null, "no program");
         require(currentProgram.getLanguageID().toString().startsWith("68000:BE:32:CPU32"),
                 "fixture requires CPU32 language");
+        // Fail closed on a wrong import base, mutated input or extra functions.
+        byte[] expected = new byte[] {(byte)0x33,(byte)0xfc,0x40,(byte)0xca,0x00,(byte)0xff,(byte)0xfa,0x00,0x4e,0x7b,0x08,0x01,0x4e,0x7a,0x08,0x01,0x70,0x01};
+        byte[] actual = new byte[expected.length];
+        int read = currentProgram.getMemory().getBytes(
+                currentProgram.getAddressFactory().getDefaultAddressSpace().getAddress(0x100), actual);
+        require(read == expected.length && Arrays.equals(actual, expected), "fixture bytes/base mismatch");
+        FunctionIterator functions = currentProgram.getFunctionManager().getFunctions(true);
+        require(functions.hasNext(), "missing fixture function");
+        Function only = functions.next();
+        require(only.getEntryPoint().getOffset() == 0x100, "wrong fixture function entry");
+        require(!functions.hasNext(), "unexpected additional function");
+        for (long pc : new long[] {0x100, 0x108, 0x10c, 0x110}) {
+            require(only.getBody().contains(currentProgram.getAddressFactory()
+                    .getDefaultAddressSpace().getAddress(pc)), "function body omits " + Long.toHexString(pc));
+        }
         // Raw bytes at 0x100:
         // 33 fc 40 ca 00 ff fa 00  MOVE.W #0x40ca,($00fffa00).L
         // 4e 7b 08 01              MOVEC D0,VBR
