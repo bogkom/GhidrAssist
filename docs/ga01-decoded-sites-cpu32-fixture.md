@@ -23,7 +23,7 @@ Expected instruction PCs: `0x100` MOVE.W immediate-to-memory (p-code STORE), `0x
 
 Before checking decoder output, the verifier also reads all 18 bytes back from Ghidra memory, requires an exact match to the immutable fixture, and requires exactly one function with entry `0x100` whose body contains all four instruction PCs. A wrong load base, modified bytes, missing function or extra function is a hard failure, not an inconclusive PASS. These guards prevent accidental acceptance of a different imported program.
 
-The test fails if Ghidra decodes the bytes or operand direction differently, if p-code STORE is absent, if the function inventory is incomplete, or if the production decoder misclassifies either negative control. A test failure is evidence to investigate, **not** permission to weaken the assertions.
+After verifying the positive fixture, the verifier clears the final MOVEQ instruction **only in the disposable program** and reruns the production decoder. It requires `incomplete=true` for the now-undefined two bytes while retaining independently observed STORE evidence. This tests the negative-evidence boundary: a function containing undefined/data bytes cannot be reported as a complete source-site inventory. The final PASS marker is emitted only after both phases succeed.\n\nThe test fails if Ghidra decodes the bytes or operand direction differently, if p-code STORE is absent, if the function inventory is incomplete, or if the production decoder misclassifies either negative control. A test failure is evidence to investigate, **not** permission to weaken the assertions.
 
 ## Evidence required before integration
 
