@@ -117,6 +117,16 @@ public class GA18VerifyDecodedEffectSites extends GhidraScript {
                 "second negative lost STORE evidence");
         require(withoutMovec.sites().stream().noneMatch(s -> s.instructionPc() == 0x108),
                 "cleared MOVEC was still reported as decoded");
-        println("GA18_DECODED_SITES_GHIDRA_PASS sites=2 positive=2 negative=2");
+        // Third negative: removing the remaining STORE must not leave a
+        // cached source site after a fresh read-only Listing scan.
+        var storePc = currentProgram.getAddressFactory().getDefaultAddressSpace().getAddress(0x100);
+        currentProgram.getListing().clearCodeUnits(storePc, storePc.add(7), false);
+        require(currentProgram.getListing().getInstructionAt(storePc) == null,
+                "third negative control did not clear STORE");
+        HardwareDecodedEffectSites.Result withoutEffects = HardwareGhidraEffectSiteDecoder.decode(currentProgram);
+        require(withoutEffects.incomplete(), "cleared STORE must keep inventory incomplete");
+        require(withoutEffects.sites().isEmpty(),
+                "stale STORE/MOVEC evidence survived clearing both positive instructions");
+        println("GA18_DECODED_SITES_GHIDRA_PASS sites=2 positive=2 negative=3");
     }
 }
