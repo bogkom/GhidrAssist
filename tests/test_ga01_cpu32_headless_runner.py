@@ -15,7 +15,7 @@ SHA = "a" * 40
 
 
 class HeadlessRunnerContract(unittest.TestCase):
-    def invoke(self, stdout, exit_code=0):
+    def invoke(self, stdout, exit_code=0, delay=0, timeout=600):
         with tempfile.TemporaryDirectory() as directory:
             home = Path(directory)
             binary = home / "support" / "analyzeHeadless"
@@ -27,7 +27,7 @@ class HeadlessRunnerContract(unittest.TestCase):
             binary.chmod(0o755)
             return subprocess.run(
                 [sys.executable, str(RUNNER), "--ghidra-home", str(home),
-                 "--source-sha", SHA], capture_output=True, text=True)
+                 "--source-sha", SHA, "--timeout-seconds", str(timeout)],\n                capture_output=True, text=True)
 
     def test_both_markers(self):
         result = self.invoke("GA18_PREPARE_DECODED_SITES_PASS\nGA18_DECODED_SITES_GHIDRA_PASS")
@@ -35,7 +35,7 @@ class HeadlessRunnerContract(unittest.TestCase):
         self.assertIn("GA01_CPU32_HEADLESS_PASS", result.stdout)
         self.assertIn("FIXTURE_SHA256=", result.stdout)
 
-    def test_missing_preparer(self):
+    def test_timeout_rejects_even_eventual_pass(self):\n        result = self.invoke("GA18_PREPARE_DECODED_SITES_PASS\\n"\n                             "GA18_DECODED_SITES_GHIDRA_PASS", delay=2, timeout=1)\n        self.assertNotEqual(0, result.returncode)\n        self.assertIn("GA01_CPU32_HEADLESS_FAIL timeout=1", result.stdout)\n\n    def test_invalid_timeout(self):\n        self.assertNotEqual(0, self.invoke("", timeout=0).returncode)\n        self.assertNotEqual(0, self.invoke("", timeout=3601).returncode)\n\n    def test_missing_preparer(self):
         self.assertNotEqual(0, self.invoke("GA18_DECODED_SITES_GHIDRA_PASS").returncode)
 
     def test_missing_verifier(self):
