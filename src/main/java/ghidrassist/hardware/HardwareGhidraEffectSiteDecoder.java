@@ -42,6 +42,9 @@ public final class HardwareGhidraEffectSiteDecoder {
         // A PC must have one owning function or the source inventory is ambiguous.
         Set<Long> seenPcs=new HashSet<>();
         var functions=program.getFunctionManager().getFunctions(true);
+        // No recognized functions means no negative source evidence. A raw or
+        // unanalysed import must never be certified STORE/MOVEC-free.
+        if(!functions.hasNext()) incomplete=true;
         while(functions.hasNext()) {
             if(inspectedInstructions>=MAX_DECODED_INSTRUCTIONS) {
                 incomplete=true;
