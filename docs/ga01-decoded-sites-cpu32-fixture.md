@@ -39,7 +39,10 @@ With a Ghidra 12.1.4 PUBLIC installation and the extension built/installed from 
 python3 -m unittest discover -s tests -p test_ga01_cpu32_headless_runner.py
 python3 scripts/run-ga01-cpu32-headless.py \
   --ghidra-home /path/to/ghidra_12.1.4_PUBLIC \
-  --source-sha FULL_40_CHARACTER_HEAD_SHA
+  --source-sha FULL_40_CHARACTER_HEAD_SHA \
+  --timeout-seconds 600
 ```
 
 The first command tests only the launcher contract using a fake headless executable; it **does not** establish Ghidra decoding. The second creates a temporary 18-byte raw fixture and disposable project, invokes the preparer and verifier in order, and deletes the project. The runner requires both PASS markers, a zero exit code, and no reported exception/error; its final `GA01_CPU32_HEADLESS_PASS` is valid only with the genuine installed extension and matching source SHA. Save the full stdout, GitHub Actions URLs, installed extension SHA, fixture SHA-256 and exact Ghidra version for formal review. Do not run against an existing project or ECU411. If a headless import/loader flag differs, fix the launcher and rerun; never replace the actual decoder assertions with a mocked PASS.
+
+The headless subprocess has a bounded runtime (default 600 seconds; accepted range 1–3600). A timeout is a hard FAIL even if the subprocess emitted partial PASS text; the disposable project is cleaned up. Mock-launcher regression covers timeout and invalid limits but is **not** a genuine Ghidra test. The supplied `--source-sha` is an operator assertion, not independently verified by the launcher; retain the matching build/installation provenance separately.
