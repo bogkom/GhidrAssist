@@ -109,8 +109,8 @@ class HeadlessRunnerContract(unittest.TestCase):
         self.assertNotEqual(0, self.invoke(PREPARE + "\n" + VERIFY.replace("negative=4", "negative=3")).returncode)
 
     def test_missing_recovery_evidence_rejected(self):
-        self.assertNotEqual(0, self.invoke(PREPARE + '\\n' + VERIFY.replace(' recovery=1', '')).returncode)
-        self.assertNotEqual(0, self.invoke(PREPARE + '\\n' + VERIFY.replace('recovery=1', 'recovery=0')).returncode)
+        self.assertNotEqual(0, self.invoke(PREPARE + '\n' + VERIFY.replace(' recovery=1', '')).returncode)
+        self.assertNotEqual(0, self.invoke(PREPARE + '\n' + VERIFY.replace('recovery=1', 'recovery=0')).returncode)
 
     def test_missing_preparer(self):
         self.assertNotEqual(0, self.invoke(VERIFY).returncode)
