@@ -1,3 +1,7 @@
+## GA-01/11 — 2026-11-15: full Listing recovery acceptance (PR #336 candidate)
+
+The disposable CPU32 verifier now checks both transitions: clearing decoded source instructions makes evidence incomplete, partial restoration retains independent STORE/MOVEC sites but remains incomplete, and restoration of the final MOVEQ must return to complete coverage with exactly two source sites. The fourth negative (remove sole function) still follows the full recovery. Updated marker: `GA18_DECODED_SITES_GHIDRA_PASS sites=2 positive=2 negative=4 recovery=2`. Source SHA, Java 21 regression, Java 25 build and genuine Ghidra 12.1.4 PUBLIC execution on the exact head are required before acceptance; no new PASS claimed.
+
 ## GA-01/11 — 2026-11-15: decoded-site recovery after Listing edits (PR #336 candidate)
 
 The isolated synthetic CPU32 verifier now clears STORE and MOVEC source instructions, then re-disassembles both and requires both independently decoded sites to return, with the remaining undefined MOVEQ keeping the inventory incomplete. The headless runner requires `recovery=1`; source-level negative tests reject absent/false recovery markers. These are candidate source changes, **not** genuine Ghidra PASS. Exact-head Java 21, Java 25 Ghidra 12.1.4 PUBLIC build, isolated genuine headless positive/negative/recovery execution, extension provenance and review remain required. GA-01/02/03/11 remain PARTIAL; static sites do not prove execution or active MM/VBR/ISR.
