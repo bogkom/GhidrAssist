@@ -1,3 +1,7 @@
+## GA-01/11 — 2026-11-15: pinned headless Ghidra release preflight (PR #336 candidate)
+
+The isolated CPU32 runner now rejects absent or mismatched `Ghidra/application.properties` metadata before launching: exact `application.version=12.1.4` and `application.release.name=PUBLIC` are required. Mock-launcher regression covers valid and invalid release metadata; this is not a genuine Ghidra PASS or extension binary provenance attestation. Exact-head Java 21/25 CI, installed-extension verification, real isolated Ghidra run, review and integration remain mandatory. GA-01/02/03/11 remain PARTIAL.
+
 ## GA-01/11 — 2026-11-15: full Listing recovery acceptance (PR #336 candidate)
 
 The disposable CPU32 verifier now checks both transitions: clearing decoded source instructions makes evidence incomplete, partial restoration retains independent STORE/MOVEC sites but remains incomplete, and restoration of the final MOVEQ must return to complete coverage with exactly two source sites. The fourth negative (remove sole function) still follows the full recovery. Updated marker: `GA18_DECODED_SITES_GHIDRA_PASS sites=2 positive=2 negative=4 recovery=2`. Source SHA, Java 21 regression, Java 25 build and genuine Ghidra 12.1.4 PUBLIC execution on the exact head are required before acceptance; no new PASS claimed.
