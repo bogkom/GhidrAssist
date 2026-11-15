@@ -21,6 +21,8 @@ Disassemble from `0x100` through `0x111`, and create one function with entry `0x
 
 Expected instruction PCs: `0x100` MOVE.W immediate-to-memory (p-code STORE), `0x108` MOVEC D0,VBR, `0x10c` MOVEC VBR,D0, `0x110` MOVEQ #1,D0. The test **independently checks** Ghidra's p-code and both decoded MOVEC operand directions before checking the production decoder's result. It must return exactly two source sites: STORE at `0x100`, MOVEC-to-VBR at `0x108`. It must reject `0x10c` and `0x110` as effects.
 
+Before checking decoder output, the verifier also reads all 18 bytes back from Ghidra memory, requires an exact match to the immutable fixture, and requires exactly one function with entry `0x100` whose body contains all four instruction PCs. A wrong load base, modified bytes, missing function or extra function is a hard failure, not an inconclusive PASS. These guards prevent accidental acceptance of a different imported program.
+
 The test fails if Ghidra decodes the bytes or operand direction differently, if p-code STORE is absent, if the function inventory is incomplete, or if the production decoder misclassifies either negative control. A test failure is evidence to investigate, **not** permission to weaken the assertions.
 
 ## Evidence required before integration
