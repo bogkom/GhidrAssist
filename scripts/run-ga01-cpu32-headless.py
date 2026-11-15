@@ -20,12 +20,16 @@ VERIFY = "GA18_DECODED_SITES_GHIDRA_PASS"
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--ghidra-home", type=Path, required=True)
-    parser.add_argument("--timeout-seconds", type=int, default=600,\n                        help="Maximum time allowed for the isolated Ghidra process")\n    parser.add_argument("--source-sha", required=True,
+    parser.add_argument("--timeout-seconds", type=int, default=600,
+                        help="Maximum time allowed for the isolated Ghidra process")
+    parser.add_argument("--source-sha", required=True,
                         help="Full 40-character Git commit SHA of the extension and scripts")
     args = parser.parse_args()
     if len(args.source_sha) != 40 or any(c not in "0123456789abcdef" for c in args.source_sha):
         parser.error("--source-sha must be a lowercase full commit SHA")
-    if args.timeout_seconds < 1 or args.timeout_seconds > 3600:\n        parser.error("--timeout-seconds must be in 1..3600")\n    root = Path(__file__).resolve().parents[1]
+    if args.timeout_seconds < 1 or args.timeout_seconds > 3600:
+        parser.error("--timeout-seconds must be in 1..3600")
+    root = Path(__file__).resolve().parents[1]
     headless = args.ghidra_home / "support" / "analyzeHeadless"
     scripts = root / "ghidra_scripts"
     for file in (headless, scripts / "GA18PrepareDecodedEffectSites.java",
@@ -52,10 +56,22 @@ def main():
             "-deleteProject",
         ]
         print(f"SOURCE_SHA={args.source_sha} FIXTURE_SHA256={digest}", flush=True)
-        result = subprocess.run(command, cwd=work, stdout=subprocess.PIPE,
-                                stderr=subprocess.STDOUT, text=True, errors="replace")
+        try:
+            result = subprocess.run(command, cwd=work, stdout=subprocess.PIPE,
+                                    stderr=subprocess.STDOUT, text=True,
+                                    errors="replace", timeout=args.timeout_seconds)
+        except subprocess.TimeoutExpired as exc:
+            partial = exc.stdout or b""
+            if isinstance(partial, bytes):
+                partial = partial.decode("utf-8", errors="replace")
+            print(partial, end="" if partial.endswith("\n") else "\n")
+            print(f"GA01_CPU32_HEADLESS_FAIL timeout={args.timeout_seconds} "
+                  f"source={args.source_sha} fixture={digest}", flush=True)
+            return 1
         output = result.stdout
-        print(output, end="" if output.endswith("\n") else "\n")
+        print(output, end="" if output.endswith("
+") else "
+")
         # Both markers are necessary, and any failure must dominate even when
         # a stale or unrelated log line contains a PASS marker.
         failures = ("GA18_PREPARE_FAIL", "GA18_DECODED_SITES_FAIL",
