@@ -52,7 +52,11 @@ public final class HardwareGhidraEffectSiteDecoder {
                 incomplete=true;
                 continue;
             }
-            // A function body may contain undefined bytes or embedded data.\n            // Scanning only instructions must not silently certify that body\n            // as a complete negative STORE/MOVEC inventory.\n            long coveredInstructionBytes=0;\n            InstructionIterator instructions=program.getListing()
+            // A function body may contain undefined bytes or embedded data.
+            // Scanning only instructions must not silently certify that body
+            // as a complete negative STORE/MOVEC inventory.
+            long coveredInstructionBytes=0;
+            InstructionIterator instructions=program.getListing()
                     .getInstructions(function.getBody(),true);
             while(instructions.hasNext()) {
                 if(inspectedInstructions>=MAX_DECODED_INSTRUCTIONS) {
@@ -61,6 +65,7 @@ public final class HardwareGhidraEffectSiteDecoder {
                 }
                 Instruction instruction=instructions.next();
                 inspectedInstructions++;
+                coveredInstructionBytes+=instruction.getLength();
                 long pc=instruction.getAddress().getOffset();
                 if(pc<entry || pc>0xffffffffL || (pc&1)!=0 || !seenPcs.add(pc)) {
                     incomplete=true;
@@ -114,6 +119,8 @@ public final class HardwareGhidraEffectSiteDecoder {
                 }
                 decoded.add(new HardwareDecodedEffectSites.Decoded(entry,pc,store,vbr));
             }
+            if(coveredInstructionBytes!=function.getBody().getNumAddresses())
+                incomplete=true;
         }
         return HardwareDecodedEffectSites.collect(decoded,incomplete);
     }
