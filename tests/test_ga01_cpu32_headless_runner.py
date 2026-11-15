@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 RUNNER = ROOT / "scripts" / "run-ga01-cpu32-headless.py"
 SHA = subprocess.check_output(["git", "-C", str(ROOT), "rev-parse", "HEAD"], text=True).strip()
 PREPARE = "GA18_PREPARE_DECODED_SITES_PASS instructions=4 function=0x100 bytes=18"
-VERIFY = "GA18_DECODED_SITES_GHIDRA_PASS sites=2 positive=2 negative=3"
+VERIFY = "GA18_DECODED_SITES_GHIDRA_PASS sites=2 positive=2 negative=4"
 
 
 class HeadlessRunnerContract(unittest.TestCase):
@@ -95,8 +95,8 @@ class HeadlessRunnerContract(unittest.TestCase):
     def test_wrong_evidence_counts_rejected(self):
         self.assertNotEqual(0, self.invoke(PREPARE + "\n" + VERIFY.replace("sites=2", "sites=1")).returncode)
 
-    def test_old_two_negative_marker_is_not_accepted(self):
-        self.assertNotEqual(0, self.invoke(PREPARE + "\n" + VERIFY.replace("negative=3", "negative=2")).returncode)
+    def test_old_three_negative_marker_is_not_accepted(self):
+        self.assertNotEqual(0, self.invoke(PREPARE + "\n" + VERIFY.replace("negative=4", "negative=3")).returncode)
 
     def test_missing_preparer(self):
         self.assertNotEqual(0, self.invoke(VERIFY).returncode)
