@@ -20,7 +20,7 @@ class HeadlessRunnerContract(unittest.TestCase):
             home = Path(directory)
             binary = home / "support" / "analyzeHeadless"
             binary.parent.mkdir()
-            binary.write_text("#!/bin/sh\nprintf '%s\\n' " +
+            binary.write_text("#!/bin/sh\nsleep " + str(delay) + "\nprintf '%s\\n' " +
                               " ".join("'" + line.replace("'", "'\\''") + "'"
                                        for line in stdout.splitlines()) +
                               f"\nexit {exit_code}\n")
