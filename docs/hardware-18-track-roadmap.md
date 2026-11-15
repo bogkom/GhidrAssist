@@ -1,3 +1,7 @@
+## GA-01/11 — 2026-11-15: fourth negative control made executable (PR #336 candidate)
+
+Fixed a literal escaped-newline sequence that had accidentally commented out the fourth genuine Ghidra verifier phase. The verifier now actually removes the sole synthetic function and requires an incomplete, empty decoded-site inventory. Added a Python source regression that refuses the escaped-newline regression and checks the executed assertion and expected marker. This is **not** a real Ghidra PASS: exact-head Java 21/25 Actions, isolated Ghidra 12.1.4 PUBLIC execution, extension provenance and review remain required. GA-01/02/03/11 remain PARTIAL; static decoded sites are not executed effects or active VBR/ISR.
+
 ## GA-01/11 — 2026-11-15: empty Ghidra function inventory fail-closed candidate
 
 PR #336 extends the read-only decoder: a Program with zero recognized functions now yields `incomplete=true` instead of a misleading complete negative STORE/MOVEC inventory. The isolated synthetic CPU32 acceptance script removes its only function after three prior negative controls, asserts an empty site list and incomplete evidence, and requires `negative=4` in the headless marker. Runner contract and fixture documentation were updated. **Candidate only** until exact-head Java 21, Java 25 Ghidra 12.1.4 PUBLIC build, genuine synthetic Ghidra execution and review; no runtime execution or active VBR/ISR is inferred. GA-01/02/03/11 remain PARTIAL.
