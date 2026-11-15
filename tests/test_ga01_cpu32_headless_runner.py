@@ -11,7 +11,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 RUNNER = ROOT / "scripts" / "run-ga01-cpu32-headless.py"
-SHA = "a" * 40
+SHA = subprocess.check_output(["git", "-C", str(ROOT), "rev-parse", "HEAD"], text=True).strip()
 PREPARE = "GA18_PREPARE_DECODED_SITES_PASS instructions=4 function=0x100 bytes=18"
 VERIFY = "GA18_DECODED_SITES_GHIDRA_PASS sites=2 positive=2 negative=2"
 
@@ -31,6 +31,20 @@ class HeadlessRunnerContract(unittest.TestCase):
                 [sys.executable, str(RUNNER), "--ghidra-home", str(home),
                  "--source-sha", SHA, "--timeout-seconds", str(timeout)],
                 capture_output=True, text=True)
+
+    def test_rejects_wrong_source_revision(self):
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            binary = home / "support" / "analyzeHeadless"
+            binary.parent.mkdir()
+            binary.write_text("#!/bin/sh\\necho should-not-run\\n")
+            binary.chmod(0o755)
+            result = subprocess.run(
+                [sys.executable, str(RUNNER), "--ghidra-home", str(home),
+                 "--source-sha", "a" * 40], capture_output=True, text=True)
+            self.assertNotEqual(0, result.returncode)
+            self.assertNotIn("should-not-run", result.stdout)
+            self.assertIn("source SHA mismatch", result.stderr)
 
     def test_both_markers(self):
         result = self.invoke(PREPARE + "\n" + VERIFY)
