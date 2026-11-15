@@ -30,3 +30,16 @@ The test fails if Ghidra decodes the bytes or operand direction differently, if 
 Record both preparer and verifier logs from the same disposable project, source HEAD SHA, installed extension build SHA, Ghidra version and language, synthetic fixture SHA-256, Script Manager/headless log containing `GA18_DECODED_SITES_GHIDRA_PASS`, and both positive and negative assertions. Separately verify Java 21 regression and Java 25 extension build GitHub Actions **on that same HEAD**. Mark the PR accepted only after review and those controls succeed.
 
 This is a static decoded-source test: CFG reachability is not execution, decoded MOVEC is not an active VBR/ISR, and STORE is not a physical hardware write. The verifier does not perform Review/Apply or change the source firmware.
+
+## Repeatable isolated headless invocation
+
+With a Ghidra 12.1.4 PUBLIC installation and the extension built/installed from the same full source commit, run:
+
+```bash
+python3 -m unittest discover -s tests -p test_ga01_cpu32_headless_runner.py
+python3 scripts/run-ga01-cpu32-headless.py \
+  --ghidra-home /path/to/ghidra_12.1.4_PUBLIC \
+  --source-sha FULL_40_CHARACTER_HEAD_SHA
+```
+
+The first command tests only the launcher contract using a fake headless executable; it **does not** establish Ghidra decoding. The second creates a temporary 18-byte raw fixture and disposable project, invokes the preparer and verifier in order, and deletes the project. The runner requires both PASS markers, a zero exit code, and no reported exception/error; its final `GA01_CPU32_HEADLESS_PASS` is valid only with the genuine installed extension and matching source SHA. Save the full stdout, GitHub Actions URLs, installed extension SHA, fixture SHA-256 and exact Ghidra version for formal review. Do not run against an existing project or ECU411. If a headless import/loader flag differs, fix the launcher and rerun; never replace the actual decoder assertions with a mocked PASS.
