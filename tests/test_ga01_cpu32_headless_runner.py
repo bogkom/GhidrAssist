@@ -141,18 +141,24 @@ class HeadlessRunnerContract(unittest.TestCase):
         self.assertNotEqual(0, self.invoke(PREPARE + "\n" + VERIFY + "\n" + VERIFY).returncode)
 
     def test_marker_substrings_are_not_evidence(self):
-        # Ghidra logs may echo script names, assertions, or quoted text.
-        self.assertNotEqual(0, self.invoke(
-            "prefix_GA18_PREPARE_DECODED_SITES_PASS\\n"
-            "GA18_DECODED_SITES_GHIDRA_PASS"))
-        self.assertNotEqual(0, self.invoke(
-            "GA18_PREPARE_DECODED_SITES_PASS\\n"
-            "GA18_DECODED_SITES_GHIDRA_PASS_suffix"))
+        # Near-valid full evidence must fail even with a zero process exit.
+        for output in ("prefix_" + PREPARE + "\n" + VERIFY,
+                       PREPARE + "\n" + VERIFY + "_suffix",
+                       PREPARE + "\n" + "prefix_" + VERIFY):
+            with self.subTest(output=output):
+                result = self.invoke(output)
+                self.assertNotEqual(0, result.returncode)
+                self.assertIn("GA01_CPU32_HEADLESS_FAIL", result.stdout)
 
     def test_embedded_duplicate_marker_is_not_evidence(self):
-        self.assertNotEqual(0, self.invoke(
-            "GA18_PREPARE_DECODED_SITES_PASS\\n"
-            "GA18_DECODED_SITES_GHIDRA_PASS GA18_DECODED_SITES_GHIDRA_PASS"))
+        result = self.invoke(PREPARE + "\n" + VERIFY + " " + VERIFY)
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("GA01_CPU32_HEADLESS_FAIL", result.stdout)
+
+    def test_failure_after_valid_evidence_dominates(self):
+        result = self.invoke(PREPARE + "\n" + VERIFY + "\nERROR: Ghidra verifier failed")
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("GA01_CPU32_HEADLESS_FAIL", result.stdout)
 
     def test_failure_dominates_pass(self):
         self.assertNotEqual(0, self.invoke(PREPARE + "\n" + VERIFY + "\nGA18_DECODED_SITES_FAIL").returncode)
