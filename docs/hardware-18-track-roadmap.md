@@ -5325,3 +5325,18 @@ These are candidate changes, not a Ghidra decoder PASS: exact-head Java 21,
 Java 25 full build, and genuine isolated CPU32 Ghidra positive/negative
 STORE and MOVEC-to/from-VBR fixtures remain required before review/merge.
 Static reachability and decoded instructions do not prove execution or active ISR.
+
+
+## GA-01/02/03/11 — 2026-11-15: PR #336 headless launcher execution gate
+
+The isolated CPU32 headless runner now uses a real subprocess deadline
+(default 600 seconds, accepted range 1..3600) and fails closed on timeout,
+including partial output that contains PASS markers. Its Python source is
+parseable; previously literal backslash-n sequences in argument declarations
+prevented startup and the timeout argument was not passed to subprocess.
+The vector/RESET Actions workflow now includes `py_compile` and the
+launcher contract suite (mock headless positive and negative cases), with
+path triggers for the launcher and its tests. This suite does **not** prove
+Ghidra CPU32 decoding. Required next: exact-head Actions Java21, Java25
+extension build and actual isolated Ghidra 12.1.4 PUBLIC decoder execution,
+then review/merge. No runtime ISR, latched MM or physical mapping inferred.
