@@ -111,8 +111,25 @@ class HeadlessRunnerContract(unittest.TestCase):
         self.assertNotEqual(0, self.invoke(PREPARE + "\n" + VERIFY.replace("negative=4", "negative=3")).returncode)
 
     def test_missing_recovery_evidence_rejected(self):
-        self.assertNotEqual(0, self.invoke(PREPARE + '\n' + VERIFY.replace(' recovery=1', '')).returncode)
-        self.assertNotEqual(0, self.invoke(PREPARE + '\n' + VERIFY.replace('recovery=1', 'recovery=0')).returncode)
+        self.assertNotEqual(0, self.invoke(PREPARE + '\n' + VERIFY.replace(' recovery=2', '')).returncode)
+        self.assertNotEqual(0, self.invoke(PREPARE + '\n' + VERIFY.replace('recovery=2', 'recovery=0')).returncode)
+
+    def test_missing_recovery_count_is_rejected(self):
+        self.assertNotEqual(0, self.invoke(PREPARE + "\\n" +
+            VERIFY.replace(" recovery=2", "")).returncode)
+
+    def test_wrong_positive_and_negative_counts_rejected(self):
+        for old, new in (("positive=2", "positive=1"),
+                         ("negative=4", "negative=5"),
+                         ("recovery=2", "recovery=3")):
+            with self.subTest(field=old):
+                self.assertNotEqual(0, self.invoke(PREPARE + "\\n" +
+                    VERIFY.replace(old, new)).returncode)
+
+    def test_success_requires_zero_exit_even_with_valid_counts(self):
+        result = self.invoke(PREPARE + "\\n" + VERIFY, exit_code=1)
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("GA01_CPU32_HEADLESS_FAIL", result.stdout)
 
     def test_missing_preparer(self):
         self.assertNotEqual(0, self.invoke(VERIFY).returncode)
