@@ -20,6 +20,7 @@ on:
       - 'src/test/java/ghidrassist/hardware/HardwareCallEffectsSelfTest.java'
       - 'ghidra_scripts/GA18VerifyDecodedEffectSites.java'
       - 'docs/ga01-decoded-sites-cpu32-fixture.md'
+      - 'scripts/create-ga01-cpu32-decoder-fixture.py'
       - '.github/workflows/hardware-vector-reset-correlation.yml'
   pull_request:
     paths:
@@ -39,6 +40,7 @@ on:
       - 'src/test/java/ghidrassist/hardware/HardwareCallEffectsSelfTest.java'
       - 'ghidra_scripts/GA18VerifyDecodedEffectSites.java'
       - 'docs/ga01-decoded-sites-cpu32-fixture.md'
+      - 'scripts/create-ga01-cpu32-decoder-fixture.py'
       - '.github/workflows/hardware-vector-reset-correlation.yml'
 
 jobs:
@@ -52,6 +54,26 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
+      - name: Verify reproducible CPU32 synthetic fixture and no-overwrite guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          fixture="$RUNNER_TEMP/ga01-cpu32-decoder.bin"
+          python3 scripts/create-ga01-cpu32-decoder-fixture.py "$fixture"
+          python3 - "$fixture" <<'PY'
+          import hashlib, pathlib, sys
+          from importlib.machinery import SourceFileLoader
+          generator = SourceFileLoader("ga01_fixture", "scripts/create-ga01-cpu32-decoder-fixture.py").load_module()
+          actual = pathlib.Path(sys.argv[1]).read_bytes()
+          generator.verify(actual)
+          assert hashlib.sha256(actual).hexdigest() == hashlib.sha256(generator.PAYLOAD).hexdigest()
+          print("GA18_CPU32_FIXTURE_BYTES_PASS")
+          PY
+          if python3 scripts/create-ga01-cpu32-decoder-fixture.py "$fixture"; then
+            echo "FAIL: fixture generator overwrote existing file" >&2
+            exit 1
+          fi
+          echo "GA18_CPU32_FIXTURE_NO_OVERWRITE_PASS"
       - name: Compile and test pure-Java bounded graph/vector evidence
         shell: bash
         run: |
