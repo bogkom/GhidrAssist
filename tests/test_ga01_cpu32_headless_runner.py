@@ -12,6 +12,8 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 RUNNER = ROOT / "scripts" / "run-ga01-cpu32-headless.py"
 SHA = "a" * 40
+PREPARE = "GA18_PREPARE_DECODED_SITES_PASS instructions=4 function=0x100 bytes=18"
+VERIFY = "GA18_DECODED_SITES_GHIDRA_PASS sites=2 positive=2 negative=2"
 
 
 class HeadlessRunnerContract(unittest.TestCase):
@@ -31,7 +33,7 @@ class HeadlessRunnerContract(unittest.TestCase):
                 capture_output=True, text=True)
 
     def test_both_markers(self):
-        result = self.invoke("GA18_PREPARE_DECODED_SITES_PASS\nGA18_DECODED_SITES_GHIDRA_PASS")
+        result = self.invoke(PREPARE + "\n" + VERIFY)
         self.assertEqual(0, result.returncode, result.stdout + result.stderr)
         self.assertIn("GA01_CPU32_HEADLESS_PASS", result.stdout)
         self.assertIn("FIXTURE_SHA256=", result.stdout)
@@ -46,8 +48,8 @@ class HeadlessRunnerContract(unittest.TestCase):
             binary.write_text(
                 "#!/bin/sh\n"
                 "printf '%s\n' \"$@\"\n"
-                "echo GA18_PREPARE_DECODED_SITES_PASS\n"
-                "echo GA18_DECODED_SITES_GHIDRA_PASS\n"
+                "echo "+PREPARE+"\n"
+                "echo "+VERIFY+"\n"
             )
             binary.chmod(0o755)
             result = subprocess.run(
@@ -65,8 +67,7 @@ class HeadlessRunnerContract(unittest.TestCase):
                             args.index("GA18VerifyDecodedEffectSites.java"))
 
     def test_timeout_rejects_even_eventual_pass(self):
-        result = self.invoke("GA18_PREPARE_DECODED_SITES_PASS\n"
-                             "GA18_DECODED_SITES_GHIDRA_PASS", delay=2, timeout=1)
+        result = self.invoke(PREPARE + "\n" + VERIFY, delay=2, timeout=1)
         self.assertNotEqual(0, result.returncode)
         self.assertIn("GA01_CPU32_HEADLESS_FAIL timeout=1", result.stdout)
 
@@ -74,16 +75,20 @@ class HeadlessRunnerContract(unittest.TestCase):
         self.assertNotEqual(0, self.invoke("", timeout=0).returncode)
         self.assertNotEqual(0, self.invoke("", timeout=3601).returncode)
 
+    def test_bare_markers_do_not_count_as_real_script_evidence(self):
+        self.assertNotEqual(0, self.invoke("GA18_PREPARE_DECODED_SITES_PASS\nGA18_DECODED_SITES_GHIDRA_PASS").returncode)
+
+    def test_wrong_evidence_counts_rejected(self):
+        self.assertNotEqual(0, self.invoke(PREPARE + "\n" + VERIFY.replace("sites=2", "sites=1")).returncode)
+
     def test_missing_preparer(self):
-        self.assertNotEqual(0, self.invoke("GA18_DECODED_SITES_GHIDRA_PASS").returncode)
+        self.assertNotEqual(0, self.invoke(VERIFY).returncode)
 
     def test_missing_verifier(self):
-        self.assertNotEqual(0, self.invoke("GA18_PREPARE_DECODED_SITES_PASS").returncode)
+        self.assertNotEqual(0, self.invoke(PREPARE).returncode)
 
     def test_duplicate_marker(self):
-        self.assertNotEqual(0, self.invoke("GA18_PREPARE_DECODED_SITES_PASS\n"
-                                          "GA18_DECODED_SITES_GHIDRA_PASS\n"
-                                          "GA18_DECODED_SITES_GHIDRA_PASS").returncode)
+        self.assertNotEqual(0, self.invoke(PREPARE + "\n" + VERIFY + "\n" + VERIFY).returncode)
 
     def test_marker_substrings_are_not_evidence(self):
         # Ghidra logs may echo script names, assertions, or quoted text.
@@ -100,13 +105,10 @@ class HeadlessRunnerContract(unittest.TestCase):
             "GA18_DECODED_SITES_GHIDRA_PASS GA18_DECODED_SITES_GHIDRA_PASS"))
 
     def test_failure_dominates_pass(self):
-        self.assertNotEqual(0, self.invoke("GA18_PREPARE_DECODED_SITES_PASS\n"
-                                          "GA18_DECODED_SITES_GHIDRA_PASS\n"
-                                          "GA18_DECODED_SITES_FAIL").returncode)
+        self.assertNotEqual(0, self.invoke(PREPARE + "\n" + VERIFY + "\nGA18_DECODED_SITES_FAIL").returncode)
 
     def test_nonzero_exit_dominates_pass(self):
-        self.assertNotEqual(0, self.invoke("GA18_PREPARE_DECODED_SITES_PASS\n"
-                                          "GA18_DECODED_SITES_GHIDRA_PASS", 2).returncode)
+        self.assertNotEqual(0, self.invoke(PREPARE + "\n" + VERIFY, 2).returncode)
 
 
 if __name__ == "__main__":
