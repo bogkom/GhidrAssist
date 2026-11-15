@@ -73,9 +73,7 @@ def main():
                   f"source={args.source_sha} fixture={digest}", flush=True)
             return 1
         output = result.stdout
-        print(output, end="" if output.endswith("
-") else "
-")
+        print(output, end="" if output.endswith("\n") else "\n")
         # Both markers are necessary, and any failure must dominate even when
         # a stale or unrelated log line contains a PASS marker.
         failures = ("GA18_PREPARE_FAIL", "GA18_DECODED_SITES_FAIL",
