@@ -5431,3 +5431,7 @@ not CPU32 decoder behavior. Commit `914724971ca55c19dd70e46a0b4b1e720d87c0f6`
 is a candidate checkpoint, not a PASS claim. Exact-head Java21/Java25 Actions,
 genuine isolated Ghidra CPU32 execution, installed extension provenance and
 review are still required before integration. GA-01/02/03/11 remain PARTIAL.
+
+#### GA-01/11 PR #336 evidence-contract checkpoint — 2026-11-15
+
+On `work/ga01-11-ghidra-decoded-sites-20261114`, repaired the mock headless launcher regression so mutated evidence counts and nonzero exit are checked against real newline-separated full PASS lines, rather than accidental literal `\\n` strings. Added near-valid full-marker and post-PASS failure negative cases; synchronized CPU32 fixture documentation with `negative=4 recovery=2`. These are **unverified source changes** until exact-head Actions execute. Java 21 regression, Java 25 extension build, genuine isolated Ghidra 12.1.4 PUBLIC positive/negative/recovery run, installed artifact provenance, review and merge remain required. No formal GA-01/02/03/11 status change.
