@@ -103,6 +103,20 @@ public class GA18VerifyDecodedEffectSites extends GhidraScript {
         require(partial.incomplete(), "undefined function bytes must be UNKNOWN, not complete");
         require(partial.sites().stream().anyMatch(s -> s.instructionPc() == 0x100),
                 "negative control lost independently decoded STORE evidence");
+        // Second negative: removing a positive MOVEC must not manufacture
+        // a complete negative VBR inventory. The STORE remains independently
+        // observed even when the function body is only partially decoded.
+        var movecPc = currentProgram.getAddressFactory().getDefaultAddressSpace().getAddress(0x108);
+        currentProgram.getListing().clearCodeUnits(movecPc, movecPc.add(3), false);
+        require(currentProgram.getListing().getInstructionAt(movecPc) == null,
+                "second negative control did not clear MOVEC");
+        HardwareDecodedEffectSites.Result withoutMovec = HardwareGhidraEffectSiteDecoder.decode(currentProgram);
+        require(withoutMovec.incomplete(), "missing MOVEC must produce incomplete evidence");
+        require(withoutMovec.sites().stream().anyMatch(s -> s.instructionPc() == 0x100 &&
+                s.kind() == ghidrassist.hardware.HardwareResetEffectSites.Kind.MEMORY_STORE),
+                "second negative lost STORE evidence");
+        require(withoutMovec.sites().stream().noneMatch(s -> s.instructionPc() == 0x108),
+                "cleared MOVEC was still reported as decoded");
         println("GA18_DECODED_SITES_GHIDRA_PASS sites=2 positive=2 negative=2");
     }
 }
