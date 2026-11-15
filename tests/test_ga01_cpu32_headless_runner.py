@@ -95,6 +95,14 @@ class HeadlessRunnerContract(unittest.TestCase):
     def test_wrong_evidence_counts_rejected(self):
         self.assertNotEqual(0, self.invoke(PREPARE + "\n" + VERIFY.replace("sites=2", "sites=1")).returncode)
 
+    def test_real_verifier_executes_all_four_negative_controls(self):
+        # Static source guard only: this does not substitute for a Ghidra run.
+        source = (ROOT / "ghidra_scripts" / "GA18VerifyDecodedEffectSites.java").read_text()
+        self.assertNotIn(r"\n        require(", source)
+        self.assertIn("removeFunction(only.getEntryPoint())", source)
+        self.assertIn("noFunctions.incomplete() && noFunctions.sites().isEmpty()", source)
+        self.assertIn('negative=4', source)
+
     def test_old_three_negative_marker_is_not_accepted(self):
         self.assertNotEqual(0, self.invoke(PREPARE + "\n" + VERIFY.replace("negative=4", "negative=3")).returncode)
 
