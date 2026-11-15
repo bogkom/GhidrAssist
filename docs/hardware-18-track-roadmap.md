@@ -5378,3 +5378,7 @@ not certify the subsequent candidate commits. On this new candidate,
 exact-head Actions, actual isolated CPU32 STORE/MOVEC Ghidra execution,
 extension artifact provenance and review are still required. No formal
 GA-01/02/03/11 completion or integration claimed.
+
+## GA-01/11 — 2026-11-15: incomplete p-code and instruction-boundary evidence (PR #336)
+
+The read-only Listing decoder now refuses a complete negative STORE inventory when Ghidra supplies an empty p-code array, and marks instructions spanning outside their owning function body as incomplete. This preserves independently observed effects without treating missing decoding as proof of absence. The CPU32 fixture guidance was updated; no actual Ghidra result is inferred from these source changes. At the prior head `4c0a85b762bc824ec401268399dabcb12057f2ee`, GitHub reported SUCCESS for the vector/RESET regression and extension integration build; these results do not cover this new HEAD. Still required: Java 21/25 checks on exact final SHA, genuine isolated CPU32 STORE/MOVEC test, installed-extension provenance, review and integration. GA-01/02/03/11 remain PARTIAL.
