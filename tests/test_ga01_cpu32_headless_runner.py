@@ -87,7 +87,7 @@ class HeadlessRunnerContract(unittest.TestCase):
         self.assertIn("GA01_CPU32_HEADLESS_PASS", result.stdout)
         self.assertIn("FIXTURE_SHA256=", result.stdout)
 
-    def test_headless_invocation_disables_autoanalysis(self):
+    def test_verifier_must_follow_preparer(self):\n        result = self.invoke(VERIFY + "\\n" + PREPARE)\n        self.assertNotEqual(0, result.returncode)\n        self.assertIn("GA01_CPU32_HEADLESS_FAIL", result.stdout)\n\n    def test_headless_invocation_disables_autoanalysis(self):
         # The real preparer rejects any pre-existing disassembly or function.
         # Inspect argv from the fake executable, not merely its PASS markers.
         with tempfile.TemporaryDirectory() as directory:
