@@ -52,7 +52,7 @@ public final class HardwareGhidraEffectSiteDecoder {
                 incomplete=true;
                 continue;
             }
-            InstructionIterator instructions=program.getListing()
+            // A function body may contain undefined bytes or embedded data.\n            // Scanning only instructions must not silently certify that body\n            // as a complete negative STORE/MOVEC inventory.\n            long coveredInstructionBytes=0;\n            InstructionIterator instructions=program.getListing()
                     .getInstructions(function.getBody(),true);
             while(instructions.hasNext()) {
                 if(inspectedInstructions>=MAX_DECODED_INSTRUCTIONS) {
