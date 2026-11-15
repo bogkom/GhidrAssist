@@ -93,6 +93,16 @@ public class GA18VerifyDecodedEffectSites extends GhidraScript {
                 "missing MOVEC-to-VBR site");
         require(sites.stream().noneMatch(s -> s.instructionPc() == 0x10c || s.instructionPc() == 0x110),
                 "negative MOVEC-from-VBR/register-only site included");
-        // Negative control on this disposable program: an undefined instruction\n        // inside an otherwise recognized function is not a complete scan.\n        var negativePc = currentProgram.getAddressFactory().getDefaultAddressSpace().getAddress(0x110);\n        currentProgram.getListing().clearCodeUnits(negativePc, negativePc.add(1), false);\n        require(currentProgram.getListing().getInstructionAt(negativePc) == null,\n                "negative control did not clear instruction");\n        HardwareDecodedEffectSites.Result partial = HardwareGhidraEffectSiteDecoder.decode(currentProgram);\n        require(partial.incomplete(), "undefined function bytes must be UNKNOWN, not complete");\n        require(partial.sites().stream().anyMatch(s -> s.instructionPc() == 0x100),\n                "negative control lost independently decoded STORE evidence");\n        println("GA18_DECODED_SITES_GHIDRA_PASS sites=2 positive=2 negative=2");
+        // Negative control on this disposable program: an undefined instruction
+        // inside an otherwise recognized function is not a complete scan.
+        var negativePc = currentProgram.getAddressFactory().getDefaultAddressSpace().getAddress(0x110);
+        currentProgram.getListing().clearCodeUnits(negativePc, negativePc.add(1), false);
+        require(currentProgram.getListing().getInstructionAt(negativePc) == null,
+                "negative control did not clear instruction");
+        HardwareDecodedEffectSites.Result partial = HardwareGhidraEffectSiteDecoder.decode(currentProgram);
+        require(partial.incomplete(), "undefined function bytes must be UNKNOWN, not complete");
+        require(partial.sites().stream().anyMatch(s -> s.instructionPc() == 0x100),
+                "negative control lost independently decoded STORE evidence");
+        println("GA18_DECODED_SITES_GHIDRA_PASS sites=2 positive=2 negative=2");
     }
 }
