@@ -5344,3 +5344,18 @@ path triggers for the launcher and its tests. This suite does **not** prove
 Ghidra CPU32 decoding. Required next: exact-head Actions Java21, Java25
 extension build and actual isolated Ghidra 12.1.4 PUBLIC decoder execution,
 then review/merge. No runtime ISR, latched MM or physical mapping inferred.
+
+
+## GA-01/02/03/11 — 2026-11-15: structured decoder evidence correction (PR #336)
+
+Corrected a blocking mismatch: both actual Ghidra scripts emit PASS followed by
+structured counts, while the headless runner previously required a bare PASS
+line. The runner now accepts exactly one complete preparer line
+(`instructions=4 function=0x100 bytes=18`) and one complete verifier line
+(`sites=2 positive=2 negative=2`), and rejects bare markers or wrong counts.
+Updated mock-headless regression and acceptance instructions. This is a
+source-level repair, **not** evidence that genuine Ghidra decoding passed.
+The current candidate requires exact-HEAD Java 21 Actions, Java 25 extension
+build, real isolated Ghidra 12.1.4 PUBLIC positive/negative run and review
+before integration. Static decode is not execution, active MM/VBR/ISR or
+physical hardware mapping.
