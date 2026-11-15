@@ -21,6 +21,8 @@ on:
       - 'ghidra_scripts/GA18VerifyDecodedEffectSites.java'
       - 'docs/ga01-decoded-sites-cpu32-fixture.md'
       - 'scripts/create-ga01-cpu32-decoder-fixture.py'
+      - 'scripts/run-ga01-cpu32-headless.py'
+      - 'tests/test_ga01_cpu32_headless_runner.py'
       - '.github/workflows/hardware-vector-reset-correlation.yml'
   pull_request:
     paths:
@@ -41,6 +43,8 @@ on:
       - 'ghidra_scripts/GA18VerifyDecodedEffectSites.java'
       - 'docs/ga01-decoded-sites-cpu32-fixture.md'
       - 'scripts/create-ga01-cpu32-decoder-fixture.py'
+      - 'scripts/run-ga01-cpu32-headless.py'
+      - 'tests/test_ga01_cpu32_headless_runner.py'
       - '.github/workflows/hardware-vector-reset-correlation.yml'
 
 jobs:
@@ -74,6 +78,12 @@ jobs:
             exit 1
           fi
           echo "GA18_CPU32_FIXTURE_NO_OVERWRITE_PASS"
+      - name: Verify isolated CPU32 headless runner contract (mock only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/run-ga01-cpu32-headless.py
+          python3 -m unittest discover -s tests -p 'test_ga01_cpu32_headless_runner.py' -v
       - name: Compile and test pure-Java bounded graph/vector evidence
         shell: bash
         run: |
