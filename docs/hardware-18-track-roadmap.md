@@ -5359,3 +5359,22 @@ The current candidate requires exact-HEAD Java 21 Actions, Java 25 extension
 build, real isolated Ghidra 12.1.4 PUBLIC positive/negative run and review
 before integration. Static decode is not execution, active MM/VBR/ISR or
 physical hardware mapping.
+
+## GA-01/02/03/11 — 2026-11-15: exact-checkout provenance gate (PR #336)
+
+The isolated CPU32 headless launcher now verifies its requested 40-character
+source SHA against the Git checkout HEAD and refuses modified tracked files or
+unverifiable checkout metadata **before** launching the disposable Ghidra
+process. The launcher regression derives the expected SHA from its own checkout
+and adds a negative mismatched-SHA refusal. This does not verify the installed
+extension artifact: its build/installation provenance remains a separate
+formal acceptance requirement.
+
+On prior candidate SHA `fd5bb323d793cd7af925e953f6c1a2e9a0e8df5e`,
+GitHub reported SUCCESS for vector/RESET Java 21 source regressions and
+Hardware Analysis extension integration build, but the independent
+GA-02/03 scaled-index CPU32 workflow reported FAILURE. These outcomes do
+not certify the subsequent candidate commits. On this new candidate,
+exact-head Actions, actual isolated CPU32 STORE/MOVEC Ghidra execution,
+extension artifact provenance and review are still required. No formal
+GA-01/02/03/11 completion or integration claimed.
