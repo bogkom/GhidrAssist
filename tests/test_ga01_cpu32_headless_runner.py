@@ -85,6 +85,20 @@ class HeadlessRunnerContract(unittest.TestCase):
                                           "GA18_DECODED_SITES_GHIDRA_PASS\n"
                                           "GA18_DECODED_SITES_GHIDRA_PASS").returncode)
 
+    def test_marker_substrings_are_not_evidence(self):
+        # Ghidra logs may echo script names, assertions, or quoted text.
+        self.assertNotEqual(0, self.invoke(
+            "prefix_GA18_PREPARE_DECODED_SITES_PASS\\n"
+            "GA18_DECODED_SITES_GHIDRA_PASS"))
+        self.assertNotEqual(0, self.invoke(
+            "GA18_PREPARE_DECODED_SITES_PASS\\n"
+            "GA18_DECODED_SITES_GHIDRA_PASS_suffix"))
+
+    def test_embedded_duplicate_marker_is_not_evidence(self):
+        self.assertNotEqual(0, self.invoke(
+            "GA18_PREPARE_DECODED_SITES_PASS\\n"
+            "GA18_DECODED_SITES_GHIDRA_PASS GA18_DECODED_SITES_GHIDRA_PASS"))
+
     def test_failure_dominates_pass(self):
         self.assertNotEqual(0, self.invoke("GA18_PREPARE_DECODED_SITES_PASS\n"
                                           "GA18_DECODED_SITES_GHIDRA_PASS\n"
