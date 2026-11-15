@@ -54,3 +54,8 @@ The headless subprocess has a bounded runtime (default 600 seconds; accepted ran
 An instruction with no p-code operations is **UNKNOWN**, not proof that no STORE occurred. An instruction whose address range crosses its owning function body likewise makes the scan incomplete. Coverage uses distinct decoded addresses rather than summing instruction lengths, so overlapping decoded instructions cannot mask undefined gaps; overlap makes the inventory incomplete. Independently decoded source sites may remain visible, but incomplete inventories must not be promoted to complete negative evidence or a verified RESET correlation. These are read-only static safeguards; the actual CPU32 headless positive/negative fixture and installed-extension provenance remain required for formal acceptance.
 
 The fourth negative control deletes the sole synthetic function after clearing effect instructions. An empty recognized-function inventory is **UNKNOWN/incomplete**, not proof of no STORE/MOVEC. The `negative=4` marker is required for this acceptance revision. This remains static Listing evidence only.
+
+
+### Recovery acceptance (PR #336 candidate)
+
+After clearing both positive source instructions, the verifier re-disassembles STORE at 0x100 and MOVEC-to-VBR at 0x108 in the same disposable program. It requires both sites to reappear without spurious MOVEC-from-VBR or MOVEQ sites, while the undefined MOVEQ still forces `incomplete=true`. The final marker is `GA18_DECODED_SITES_GHIDRA_PASS sites=2 positive=2 negative=4 recovery=1`. Mock launcher checks are source-level only; genuine Ghidra 12.1.4 PUBLIC execution and exact-head Java 21/25 CI remain required.
