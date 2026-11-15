@@ -43,6 +43,20 @@ def main():
         parser.error("cannot verify checkout provenance with git")
     if revision != args.source_sha or dirty:
         parser.error("source SHA mismatch or modified tracked checkout")
+    # Reject a different Ghidra release before importing the fixture.
+    properties = args.ghidra_home / "Ghidra" / "application.properties"
+    try:
+        metadata = {}
+        for line in properties.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if line and not line.startswith(("#", "!")) and "=" in line:
+                key, value = line.split("=", 1)
+                metadata[key.strip()] = value.strip()
+    except OSError:
+        parser.error(f"missing Ghidra release metadata: {properties}")
+    if (metadata.get("application.version") != "12.1.4"
+            or metadata.get("application.release.name") != "PUBLIC"):
+        parser.error("requires Ghidra 12.1.4 PUBLIC application.properties")
     headless = args.ghidra_home / "support" / "analyzeHeadless"
     scripts = root / "ghidra_scripts"
     for file in (headless, scripts / "GA18PrepareDecodedEffectSites.java",
