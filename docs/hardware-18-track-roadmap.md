@@ -5417,3 +5417,17 @@ before merge: Java21 source regressions, Java25 extension build, genuine
 isolated Ghidra 12.1.4 PUBLIC preparer/verifier on the exact PR SHA, artifact
 provenance, review. No execution, active MM/VBR/ISR, or physical CS mapping
 is inferred. GA-01/02/03/11 remain PARTIAL.
+
+
+## GA-01/11 — 2026-11-15: recovery-marker regression correction (PR #336)
+
+The mock-headless regression previously attempted to remove `recovery=1`
+from an expected `recovery=2` marker, leaving the marker unchanged and
+allowing that negative test to pass without exercising the intended rejection.
+The source test now mutates the actual `recovery=2` evidence and checks
+missing, zero and excessive recovery counts, as well as incorrect positive
+and negative totals and nonzero subprocess exit. This repairs **test coverage**,
+not CPU32 decoder behavior. Commit `914724971ca55c19dd70e46a0b4b1e720d87c0f6`
+is a candidate checkpoint, not a PASS claim. Exact-head Java21/Java25 Actions,
+genuine isolated Ghidra CPU32 execution, installed extension provenance and
+review are still required before integration. GA-01/02/03/11 remain PARTIAL.
