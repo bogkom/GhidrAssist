@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 RUNNER = ROOT / "scripts" / "run-ga01-cpu32-headless.py"
 SHA = subprocess.check_output(["git", "-C", str(ROOT), "rev-parse", "HEAD"], text=True).strip()
 PREPARE = "GA18_PREPARE_DECODED_SITES_PASS instructions=4 function=0x100 bytes=18"
-VERIFY = "GA18_DECODED_SITES_GHIDRA_PASS sites=2 positive=2 negative=4"
+VERIFY = "GA18_DECODED_SITES_GHIDRA_PASS sites=2 positive=2 negative=4 recovery=1"
 
 
 class HeadlessRunnerContract(unittest.TestCase):
@@ -101,10 +101,16 @@ class HeadlessRunnerContract(unittest.TestCase):
         self.assertNotIn(r"\n        require(", source)
         self.assertIn("removeFunction(only.getEntryPoint())", source)
         self.assertIn("noFunctions.incomplete() && noFunctions.sites().isEmpty()", source)
-        self.assertIn('negative=4', source)
+        self.assertIn('negative=4 recovery=1', source)
+        self.assertIn('recovered.sites().size() == 2', source)
+        self.assertIn('recovery must not hide undefined MOVEQ', source)
 
     def test_old_three_negative_marker_is_not_accepted(self):
         self.assertNotEqual(0, self.invoke(PREPARE + "\n" + VERIFY.replace("negative=4", "negative=3")).returncode)
+
+    def test_missing_recovery_evidence_rejected(self):
+        self.assertNotEqual(0, self.invoke(PREPARE + '\\n' + VERIFY.replace(' recovery=1', '')).returncode)
+        self.assertNotEqual(0, self.invoke(PREPARE + '\\n' + VERIFY.replace('recovery=1', 'recovery=0')).returncode)
 
     def test_missing_preparer(self):
         self.assertNotEqual(0, self.invoke(VERIFY).returncode)
