@@ -5386,3 +5386,18 @@ GA-01/02/03/11 completion or integration claimed.
 ## GA-01/11 — 2026-11-15: incomplete p-code and instruction-boundary evidence (PR #336)
 
 The read-only Listing decoder now refuses a complete negative STORE inventory when Ghidra supplies an empty p-code array, and marks instructions spanning outside their owning function body as incomplete. This preserves independently observed effects without treating missing decoding as proof of absence. The CPU32 fixture guidance was updated; no actual Ghidra result is inferred from these source changes. At the prior head `4c0a85b762bc824ec401268399dabcb12057f2ee`, GitHub reported SUCCESS for the vector/RESET regression and extension integration build; these results do not cover this new HEAD. Still required: Java 21/25 checks on exact final SHA, genuine isolated CPU32 STORE/MOVEC test, installed-extension provenance, review and integration. GA-01/02/03/11 remain PARTIAL.
+
+
+## GA-01/11 — 2026-11-15: decoded-site stale-evidence negative control (candidate)
+
+PR #336 extends the isolated genuine CPU32 Ghidra verifier with a third
+negative phase: after clearing MOVEQ and MOVEC-to-VBR, clearing the remaining
+STORE must yield an empty decoded effect inventory and `incomplete=true`.
+This guards against stale positive evidence after Listing mutations in a
+disposable synthetic program. The headless launcher now requires
+`negative=3`, and its mock-only regression rejects the previous `negative=2`
+marker. These edits are **not** evidence of a genuine Ghidra PASS. Required
+before merge: Java21 source regressions, Java25 extension build, genuine
+isolated Ghidra 12.1.4 PUBLIC preparer/verifier on the exact PR SHA, artifact
+provenance, review. No execution, active MM/VBR/ISR, or physical CS mapping
+is inferred. GA-01/02/03/11 remain PARTIAL.
