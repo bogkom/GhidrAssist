@@ -36,6 +36,34 @@ class HeadlessRunnerContract(unittest.TestCase):
         self.assertIn("GA01_CPU32_HEADLESS_PASS", result.stdout)
         self.assertIn("FIXTURE_SHA256=", result.stdout)
 
+    def test_headless_invocation_disables_autoanalysis(self):
+        # The real preparer rejects any pre-existing disassembly or function.
+        # Inspect argv from the fake executable, not merely its PASS markers.
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            binary = home / "support" / "analyzeHeadless"
+            binary.parent.mkdir()
+            binary.write_text(
+                "#!/bin/sh\\n"
+                "printf '%s\\n' \"$@\"\\n"
+                "echo GA18_PREPARE_DECODED_SITES_PASS\\n"
+                "echo GA18_DECODED_SITES_GHIDRA_PASS\\n"
+            )
+            binary.chmod(0o755)
+            result = subprocess.run(
+                [sys.executable, str(RUNNER), "--ghidra-home", str(home),
+                 "--source-sha", SHA], capture_output=True, text=True)
+            self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+            args = result.stdout.splitlines()
+            self.assertIn("-noanalysis", args)
+            self.assertIn("-loader", args)
+            self.assertIn("BinaryLoader", args)
+            self.assertIn("-loader-baseAddr", args)
+            self.assertIn("0x100", args)
+            self.assertIn("68000:BE:32:CPU32", args)
+            self.assertLess(args.index("GA18PrepareDecodedEffectSites.java"),
+                            args.index("GA18VerifyDecodedEffectSites.java"))
+
     def test_timeout_rejects_even_eventual_pass(self):
         result = self.invoke("GA18_PREPARE_DECODED_SITES_PASS\n"
                              "GA18_DECODED_SITES_GHIDRA_PASS", delay=2, timeout=1)
