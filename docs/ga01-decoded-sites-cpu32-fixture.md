@@ -67,3 +67,7 @@ After the partial recovery of STORE and MOVEC, the verifier now re-disassembles 
 ### Evidence-contract regression repair (2026-11-15)
 
 The mocked launcher tests now pass actual newline-separated full preparer/verifier evidence to the subprocess, including count mutations, nonzero exit, near-matching markers and a failure after valid evidence. Previously several negative cases passed merely because their fake output contained a literal `\\n` rather than two log lines. This change strengthens **source-level** negative tests only; it does not prove real Ghidra execution, extension provenance or formal GA-01/11 acceptance. Re-run exact-HEAD Java 21 and Java 25 checks before merge.
+
+### Pinned Ghidra release preflight
+
+Before starting the disposable headless process, the runner reads `Ghidra/application.properties` and requires `application.version=12.1.4` and `application.release.name=PUBLIC`. Missing metadata, an older version, or another release name fails before import. Mock-launcher regression covers these cases, but does not attest installed extension provenance or replace real Ghidra execution.
