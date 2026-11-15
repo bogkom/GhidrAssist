@@ -59,3 +59,7 @@ The fourth negative control deletes the sole synthetic function after clearing e
 ### Recovery acceptance (PR #336 candidate)
 
 After clearing both positive source instructions, the verifier re-disassembles STORE at 0x100 and MOVEC-to-VBR at 0x108 in the same disposable program. It requires both sites to reappear without spurious MOVEC-from-VBR or MOVEQ sites, while the undefined MOVEQ still forces `incomplete=true`. The final marker is `GA18_DECODED_SITES_GHIDRA_PASS sites=2 positive=2 negative=4 recovery=1`. Mock launcher checks are source-level only; genuine Ghidra 12.1.4 PUBLIC execution and exact-head Java 21/25 CI remain required.
+
+### Full Listing round-trip (candidate)
+
+After the partial recovery of STORE and MOVEC, the verifier now re-disassembles the final MOVEQ and requires the decoder to return to **complete** coverage (`incomplete=false`, `omitted=0`) with exactly the original two effect sites. It then deletes the only function and checks the fourth negative gate. The evidence marker is now `GA18_DECODED_SITES_GHIDRA_PASS sites=2 positive=2 negative=4 recovery=2`. This is an unexecuted acceptance candidate until verified on real isolated Ghidra 12.1.4 PUBLIC; mocked runner assertions are not a substitute.
