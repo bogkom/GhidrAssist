@@ -20,12 +20,12 @@ VERIFY = "GA18_DECODED_SITES_GHIDRA_PASS"
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--ghidra-home", type=Path, required=True)
-    parser.add_argument("--source-sha", required=True,
+    parser.add_argument("--timeout-seconds", type=int, default=600,\n                        help="Maximum time allowed for the isolated Ghidra process")\n    parser.add_argument("--source-sha", required=True,
                         help="Full 40-character Git commit SHA of the extension and scripts")
     args = parser.parse_args()
     if len(args.source_sha) != 40 or any(c not in "0123456789abcdef" for c in args.source_sha):
         parser.error("--source-sha must be a lowercase full commit SHA")
-    root = Path(__file__).resolve().parents[1]
+    if args.timeout_seconds < 1 or args.timeout_seconds > 3600:\n        parser.error("--timeout-seconds must be in 1..3600")\n    root = Path(__file__).resolve().parents[1]
     headless = args.ghidra_home / "support" / "analyzeHeadless"
     scripts = root / "ghidra_scripts"
     for file in (headless, scripts / "GA18PrepareDecodedEffectSites.java",
