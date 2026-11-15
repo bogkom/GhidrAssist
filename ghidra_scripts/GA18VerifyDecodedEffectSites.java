@@ -142,6 +142,23 @@ public class GA18VerifyDecodedEffectSites extends GhidraScript {
                 "recovery must independently rediscover STORE and MOVEC-to-VBR");
         require(recovered.sites().stream().noneMatch(s -> s.instructionPc() == 0x10c ||
                 s.instructionPc() == 0x110), "recovery introduced false positive");
+        // Full round-trip: restore the last undefined MOVEQ as well. A fresh
+        // Listing scan must now become complete again, with precisely the same
+        // two effect sites and no stale uncertainty from the negative phases.
+        require(disassemble(negativePc), "full recovery MOVEQ disassembly failed");
+        require(at(0x110, "MOVEQ") != null, "full recovery missing MOVEQ");
+        HardwareDecodedEffectSites.Result completeAgain =
+                HardwareGhidraEffectSiteDecoder.decode(currentProgram);
+        require(!completeAgain.incomplete() && completeAgain.omitted() == 0,
+                "full recovery must restore complete decoded coverage");
+        require(completeAgain.sites().size() == 2 &&
+                completeAgain.sites().stream().anyMatch(s -> s.instructionPc() == 0x100 &&
+                    s.kind() == ghidrassist.hardware.HardwareResetEffectSites.Kind.MEMORY_STORE) &&
+                completeAgain.sites().stream().anyMatch(s -> s.instructionPc() == 0x108 &&
+                    s.kind() == ghidrassist.hardware.HardwareResetEffectSites.Kind.MOVEC_VBR) &&
+                completeAgain.sites().stream().noneMatch(s -> s.instructionPc() == 0x10c ||
+                    s.instructionPc() == 0x110),
+                "full recovery changed independent source-site evidence");
         // Fourth negative: a raw program with no recognized function must not
         // be certified as having no STORE or MOVEC source sites.
         require(currentProgram.getFunctionManager().removeFunction(only.getEntryPoint()),
@@ -149,6 +166,6 @@ public class GA18VerifyDecodedEffectSites extends GhidraScript {
         HardwareDecodedEffectSites.Result noFunctions = HardwareGhidraEffectSiteDecoder.decode(currentProgram);
         require(noFunctions.incomplete() && noFunctions.sites().isEmpty(),
                 "empty function inventory must remain UNKNOWN");
-        println("GA18_DECODED_SITES_GHIDRA_PASS sites=2 positive=2 negative=4 recovery=1");
+        println("GA18_DECODED_SITES_GHIDRA_PASS sites=2 positive=2 negative=4 recovery=2");
     }
 }
