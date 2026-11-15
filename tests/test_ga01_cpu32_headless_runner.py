@@ -22,6 +22,9 @@ class HeadlessRunnerContract(unittest.TestCase):
             home = Path(directory)
             binary = home / "support" / "analyzeHeadless"
             binary.parent.mkdir()
+            props = home / "Ghidra" / "application.properties"
+            props.parent.mkdir(parents=True)
+            props.write_text("application.version=12.1.4\napplication.release.name=PUBLIC\n")
             binary.write_text("#!/bin/sh\nsleep " + str(delay) + "\nprintf '%s\\n' " +
                               " ".join("'" + line.replace("'", "'\\''") + "'"
                                        for line in stdout.splitlines()) +
@@ -37,6 +40,9 @@ class HeadlessRunnerContract(unittest.TestCase):
             home = Path(directory)
             binary = home / "support" / "analyzeHeadless"
             binary.parent.mkdir()
+            props = home / "Ghidra" / "application.properties"
+            props.parent.mkdir(parents=True)
+            props.write_text("application.version=12.1.4\napplication.release.name=PUBLIC\n")
             binary.write_text("#!/bin/sh\\necho should-not-run\\n")
             binary.chmod(0o755)
             result = subprocess.run(
@@ -45,6 +51,35 @@ class HeadlessRunnerContract(unittest.TestCase):
             self.assertNotEqual(0, result.returncode)
             self.assertNotIn("should-not-run", result.stdout)
             self.assertIn("source SHA mismatch", result.stderr)
+
+    def test_wrong_ghidra_release_rejected_before_launch(self):
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            binary = home / "support" / "analyzeHeadless"
+            binary.parent.mkdir()
+            binary.write_text("#!/bin/sh\necho should-not-run\n")
+            binary.chmod(0o755)
+            props = home / "Ghidra" / "application.properties"
+            props.parent.mkdir(parents=True)
+            for metadata in (
+                "application.version=12.1.3\napplication.release.name=PUBLIC\n",
+                "application.version=12.1.4\napplication.release.name=PRIVATE\n",
+                "application.version=12.1.4\n",
+            ):
+                with self.subTest(metadata=metadata):
+                    props.write_text(metadata)
+                    result = subprocess.run(
+                        [sys.executable, str(RUNNER), "--ghidra-home", str(home),
+                         "--source-sha", SHA], capture_output=True, text=True)
+                    self.assertNotEqual(0, result.returncode)
+                    self.assertNotIn("should-not-run", result.stdout)
+                    self.assertIn("requires Ghidra 12.1.4 PUBLIC", result.stderr)
+            props.unlink()
+            result = subprocess.run(
+                [sys.executable, str(RUNNER), "--ghidra-home", str(home),
+                 "--source-sha", SHA], capture_output=True, text=True)
+            self.assertNotEqual(0, result.returncode)
+            self.assertIn("missing Ghidra release metadata", result.stderr)
 
     def test_both_markers(self):
         result = self.invoke(PREPARE + "\n" + VERIFY)
@@ -59,6 +94,9 @@ class HeadlessRunnerContract(unittest.TestCase):
             home = Path(directory)
             binary = home / "support" / "analyzeHeadless"
             binary.parent.mkdir()
+            props = home / "Ghidra" / "application.properties"
+            props.parent.mkdir(parents=True)
+            props.write_text("application.version=12.1.4\napplication.release.name=PUBLIC\n")
             binary.write_text(
                 "#!/bin/sh\n"
                 "printf '%s\n' \"$@\"\n"
