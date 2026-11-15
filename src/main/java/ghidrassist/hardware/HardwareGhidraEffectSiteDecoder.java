@@ -5,6 +5,7 @@ import ghidra.program.model.listing.Instruction;
 import ghidra.program.model.listing.InstructionIterator;
 import ghidra.program.model.listing.Program;
 import ghidra.program.model.lang.Register;
+import ghidra.program.model.address.AddressSet;
 import ghidra.program.model.pcode.PcodeOp;
 import java.util.ArrayList;
 import java.util.List;
@@ -55,7 +56,7 @@ public final class HardwareGhidraEffectSiteDecoder {
             // A function body may contain undefined bytes or embedded data.
             // Scanning only instructions must not silently certify that body
             // as a complete negative STORE/MOVEC inventory.
-            long coveredInstructionBytes=0;
+            AddressSet coveredInstructionAddresses=new AddressSet();
             InstructionIterator instructions=program.getListing()
                     .getInstructions(function.getBody(),true);
             while(instructions.hasNext()) {
@@ -65,7 +66,13 @@ public final class HardwareGhidraEffectSiteDecoder {
                 }
                 Instruction instruction=instructions.next();
                 inspectedInstructions++;
-                coveredInstructionBytes+=instruction.getLength();
+                // Count distinct decoded addresses, not summed instruction lengths:
+                // overlapping instructions can otherwise mask undefined gaps.
+                long before=coveredInstructionAddresses.getNumAddresses();
+                coveredInstructionAddresses.addRange(
+                        instruction.getMinAddress(), instruction.getMaxAddress());
+                if(coveredInstructionAddresses.getNumAddresses()-before
+                        != instruction.getLength()) incomplete=true;
                 // An instruction crossing the function boundary cannot certify
                 // the bytes of this function as a complete source inventory.
                 if(!function.getBody().contains(instruction.getMinAddress(),
@@ -123,7 +130,8 @@ public final class HardwareGhidraEffectSiteDecoder {
                 }
                 decoded.add(new HardwareDecodedEffectSites.Decoded(entry,pc,store,vbr));
             }
-            if(coveredInstructionBytes!=function.getBody().getNumAddresses())
+            if(coveredInstructionAddresses.getNumAddresses()
+                    !=function.getBody().getNumAddresses())
                 incomplete=true;
         }
         return HardwareDecodedEffectSites.collect(decoded,incomplete);
