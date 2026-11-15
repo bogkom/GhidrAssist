@@ -93,7 +93,7 @@ def main():
         prepare_lines = [line.strip() for line in output.splitlines()
                          if re.fullmatch(r"GA18_PREPARE_DECODED_SITES_PASS instructions=4 function=0x100 bytes=18", line.strip())]
         verify_lines = [line.strip() for line in output.splitlines()
-                        if re.fullmatch(r"GA18_DECODED_SITES_GHIDRA_PASS sites=2 positive=2 negative=3", line.strip())]
+                        if re.fullmatch(r"GA18_DECODED_SITES_GHIDRA_PASS sites=2 positive=2 negative=4", line.strip())]
         passed = (result.returncode == 0 and len(prepare_lines) == 1
                   and len(verify_lines) == 1
                   and not any(token in output for token in failures))
