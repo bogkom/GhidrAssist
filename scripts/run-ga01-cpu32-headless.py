@@ -50,6 +50,9 @@ def main():
             "-loader", "BinaryLoader",
             "-loader-baseAddr", "0x100",
             "-processor", "68000:BE:32:CPU32",
+            # Headless auto-analysis runs before post-scripts by default. The
+            # preparer must see raw bytes, not auto-created instructions.
+            "-noanalysis",
             "-scriptPath", str(scripts),
             "-postScript", "GA18PrepareDecodedEffectSites.java",
             "-postScript", "GA18VerifyDecodedEffectSites.java",
