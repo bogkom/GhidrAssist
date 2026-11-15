@@ -44,10 +44,10 @@ class HeadlessRunnerContract(unittest.TestCase):
             binary = home / "support" / "analyzeHeadless"
             binary.parent.mkdir()
             binary.write_text(
-                "#!/bin/sh\\n"
-                "printf '%s\\n' \"$@\"\\n"
-                "echo GA18_PREPARE_DECODED_SITES_PASS\\n"
-                "echo GA18_DECODED_SITES_GHIDRA_PASS\\n"
+                "#!/bin/sh\n"
+                "printf '%s\n' \"$@\"\n"
+                "echo GA18_PREPARE_DECODED_SITES_PASS\n"
+                "echo GA18_DECODED_SITES_GHIDRA_PASS\n"
             )
             binary.chmod(0o755)
             result = subprocess.run(
