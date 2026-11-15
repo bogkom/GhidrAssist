@@ -4,7 +4,14 @@ This fixture is a **real Ghidra 12.1.4 PUBLIC** acceptance test, not a pure Java
 
 ## Prepare (disposable project only)
 
-Create a new isolated project with CPU32 language `68000:BE:32:CPU32`. Import an 18-byte **raw binary** at address `0x00000100` (not the production ECU411 firmware), using this exact hex payload:
+Generate the immutable synthetic input in an empty disposable directory using
+`python3 scripts/create-ga01-cpu32-decoder-fixture.py /tmp/ga01-cpu32-decoder.bin`.
+The generator uses exclusive creation and refuses to overwrite any existing file.
+Record the printed SHA-256 and independently verify it using
+`sha256sum /tmp/ga01-cpu32-decoder.bin`. The generator only checks bytes and
+instruction offsets; **it does not run Ghidra or prove CPU32 decoding**.
+
+Create a new isolated project with CPU32 language `68000:BE:32:CPU32`. Import the generated 18-byte **raw binary** at address `0x00000100` (not the production ECU411 firmware), using this exact hex payload:
 
 ```text
 33 fc 40 ca 00 ff fa 00 4e 7b 08 01 4e 7a 08 01 70 01
