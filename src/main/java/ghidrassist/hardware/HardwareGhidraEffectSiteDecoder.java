@@ -66,6 +66,10 @@ public final class HardwareGhidraEffectSiteDecoder {
                 Instruction instruction=instructions.next();
                 inspectedInstructions++;
                 coveredInstructionBytes+=instruction.getLength();
+                // An instruction crossing the function boundary cannot certify
+                // the bytes of this function as a complete source inventory.
+                if(!function.getBody().contains(instruction.getMinAddress(),
+                        instruction.getMaxAddress())) incomplete=true;
                 long pc=instruction.getAddress().getOffset();
                 if(pc<entry || pc>0xffffffffL || (pc&1)!=0 || !seenPcs.add(pc)) {
                     incomplete=true;
@@ -74,7 +78,7 @@ public final class HardwareGhidraEffectSiteDecoder {
                 boolean store=false;
                 try {
                     PcodeOp[] pcode=instruction.getPcode();
-                    if(pcode==null) {
+                    if(pcode==null || pcode.length==0) {
                         incomplete=true;
                     } else {
                         for(PcodeOp op:pcode)
