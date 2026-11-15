@@ -79,8 +79,8 @@ def main():
         # a stale or unrelated log line contains a PASS marker.
         failures = ("GA18_PREPARE_FAIL", "GA18_DECODED_SITES_FAIL",
                     "ERROR", "Exception", "AssertionError")
-        passed = (result.returncode == 0 and output.count(PREPARE) == 1
-                  and output.count(VERIFY) == 1
+        passed = (result.returncode == 0 and sum(line.strip() == PREPARE for line in output.splitlines()) == 1
+                  and sum(line.strip() == VERIFY for line in output.splitlines()) == 1
                   and not any(token in output for token in failures))
         print(f"GA01_CPU32_HEADLESS_{'PASS' if passed else 'FAIL'} "
               f"exit={result.returncode} source={args.source_sha} fixture={digest}",
