@@ -127,6 +127,21 @@ public class GA18VerifyDecodedEffectSites extends GhidraScript {
         require(withoutEffects.incomplete(), "cleared STORE must keep inventory incomplete");
         require(withoutEffects.sites().isEmpty(),
                 "stale STORE/MOVEC evidence survived clearing both positive instructions");
+        // Recovery control: re-disassembly of the two source instructions must
+        // restore both independent sites, but the still-undefined MOVEQ must
+        // keep the overall inventory incomplete. No cached negative result.
+        require(disassemble(storePc), "recovery STORE disassembly failed");
+        require(disassemble(movecPc), "recovery MOVEC disassembly failed");
+        HardwareDecodedEffectSites.Result recovered = HardwareGhidraEffectSiteDecoder.decode(currentProgram);
+        require(recovered.incomplete(), "recovery must not hide undefined MOVEQ");
+        require(recovered.sites().size() == 2 &&
+                recovered.sites().stream().anyMatch(s -> s.instructionPc() == 0x100 &&
+                    s.kind() == ghidrassist.hardware.HardwareResetEffectSites.Kind.MEMORY_STORE) &&
+                recovered.sites().stream().anyMatch(s -> s.instructionPc() == 0x108 &&
+                    s.kind() == ghidrassist.hardware.HardwareResetEffectSites.Kind.MOVEC_VBR),
+                "recovery must independently rediscover STORE and MOVEC-to-VBR");
+        require(recovered.sites().stream().noneMatch(s -> s.instructionPc() == 0x10c ||
+                s.instructionPc() == 0x110), "recovery introduced false positive");
         // Fourth negative: a raw program with no recognized function must not
         // be certified as having no STORE or MOVEC source sites.
         require(currentProgram.getFunctionManager().removeFunction(only.getEntryPoint()),
@@ -134,6 +149,6 @@ public class GA18VerifyDecodedEffectSites extends GhidraScript {
         HardwareDecodedEffectSites.Result noFunctions = HardwareGhidraEffectSiteDecoder.decode(currentProgram);
         require(noFunctions.incomplete() && noFunctions.sites().isEmpty(),
                 "empty function inventory must remain UNKNOWN");
-        println("GA18_DECODED_SITES_GHIDRA_PASS sites=2 positive=2 negative=4");
+        println("GA18_DECODED_SITES_GHIDRA_PASS sites=2 positive=2 negative=4 recovery=1");
     }
 }
