@@ -7,6 +7,7 @@ same commit. Never points at an existing project or ECU411.
 import argparse
 import hashlib
 import os
+import re
 from pathlib import Path
 import subprocess
 import sys
@@ -79,8 +80,12 @@ def main():
         # a stale or unrelated log line contains a PASS marker.
         failures = ("GA18_PREPARE_FAIL", "GA18_DECODED_SITES_FAIL",
                     "ERROR", "Exception", "AssertionError")
-        passed = (result.returncode == 0 and sum(line.strip() == PREPARE for line in output.splitlines()) == 1
-                  and sum(line.strip() == VERIFY for line in output.splitlines()) == 1
+        prepare_lines = [line.strip() for line in output.splitlines()
+                         if re.fullmatch(r"GA18_PREPARE_DECODED_SITES_PASS instructions=4 function=0x100 bytes=18", line.strip())]
+        verify_lines = [line.strip() for line in output.splitlines()
+                        if re.fullmatch(r"GA18_DECODED_SITES_GHIDRA_PASS sites=2 positive=2 negative=2", line.strip())]
+        passed = (result.returncode == 0 and len(prepare_lines) == 1
+                  and len(verify_lines) == 1
                   and not any(token in output for token in failures))
         print(f"GA01_CPU32_HEADLESS_{'PASS' if passed else 'FAIL'} "
               f"exit={result.returncode} source={args.source_sha} fixture={digest}",
