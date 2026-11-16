@@ -30,10 +30,11 @@ class HeadlessRunnerContract(unittest.TestCase):
                                        for line in stdout.splitlines()) +
                               f"\nexit {exit_code}\n")
             binary.chmod(0o755)
-            return subprocess.run(
-                [sys.executable, str(RUNNER), "--ghidra-home", str(home),
-                 "--source-sha", SHA, "--timeout-seconds", str(timeout)],
-                capture_output=True, text=True)
+            command = [sys.executable, str(RUNNER), "--ghidra-home", str(home),
+                       "--source-sha", SHA, "--timeout-seconds", str(timeout)]
+            if evidence_log is not None:
+                command.extend(["--evidence-log", str(evidence_log)])
+            return subprocess.run(command, capture_output=True, text=True)
 
     def test_rejects_wrong_source_revision(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -86,14 +87,14 @@ class HeadlessRunnerContract(unittest.TestCase):
             log = Path(directory) / "evidence.log"
             # invoke() owns a separate disposable fake Ghidra installation.
             # The log destination must survive that cleanup.
-            result = self.invoke(PREPARE + "\\n" + VERIFY, evidence_log=log)
+            result = self.invoke(PREPARE + "\n" + VERIFY, evidence_log=log)
             self.assertEqual(0, result.returncode, result.stdout + result.stderr)
             saved = log.read_text()
             self.assertIn(PREPARE, saved)
             self.assertIn(VERIFY, saved)
             self.assertIn("GA01_CPU32_HEADLESS_PASS", saved)
             previous = saved
-            second = self.invoke(PREPARE + "\\n" + VERIFY, evidence_log=log)
+            second = self.invoke(PREPARE + "\n" + VERIFY, evidence_log=log)
             self.assertNotEqual(0, second.returncode)
             self.assertEqual(previous, log.read_text())
 
