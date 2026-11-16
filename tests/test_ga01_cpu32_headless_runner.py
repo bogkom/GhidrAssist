@@ -246,6 +246,17 @@ class HeadlessRunnerContract(unittest.TestCase):
         self.assertIn("op.getOutput().getAddress().getAddressSpace().isMemorySpace()", source)
         self.assertIn('require(hasStore(store), "positive p-code memory write not decoded")', source)
 
+    def test_direct_memory_copy_rejects_malformed_pcode(self):
+        # Source contract only; genuine Ghidra remains the acceptance gate.
+        decoder = (ROOT / "src/main/java/ghidrassist/hardware" /
+                   "HardwareGhidraEffectSiteDecoder.java").read_text()
+        self.assertIn("output.getAddress().getAddressSpace().isMemorySpace()", decoder)
+        self.assertIn("inputs.length!=1", decoder)
+        self.assertIn("inputs[0].getSize()!=width", decoder)
+        self.assertIn("(width!=1 && width!=2 && width!=4)", decoder)
+        self.assertIn("incomplete=true;", decoder)
+        self.assertIn("else\n                                        store=true;", decoder)
+
     def test_old_three_negative_marker_is_not_accepted(self):
         self.assertNotEqual(0, self.invoke(PREPARE + "\n" + VERIFY.replace("negative=4", "negative=3")).returncode)
 
