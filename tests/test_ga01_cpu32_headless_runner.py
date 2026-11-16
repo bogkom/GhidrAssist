@@ -17,7 +17,7 @@ VERIFY = "GA18_DECODED_SITES_GHIDRA_PASS sites=2 positive=2 negative=4 recovery=
 
 
 class HeadlessRunnerContract(unittest.TestCase):
-    def invoke(self, stdout, exit_code=0, delay=0, timeout=600):
+    def invoke(self, stdout, exit_code=0, delay=0, timeout=600, evidence_log=None):
         with tempfile.TemporaryDirectory() as directory:
             home = Path(directory)
             binary = home / "support" / "analyzeHeadless"
@@ -80,6 +80,22 @@ class HeadlessRunnerContract(unittest.TestCase):
                  "--source-sha", SHA], capture_output=True, text=True)
             self.assertNotEqual(0, result.returncode)
             self.assertIn("missing Ghidra release metadata", result.stderr)
+
+    def test_exclusive_evidence_log_contains_verdict_and_rejects_overwrite(self):
+        with tempfile.TemporaryDirectory() as directory:
+            log = Path(directory) / "evidence.log"
+            # invoke() owns a separate disposable fake Ghidra installation.
+            # The log destination must survive that cleanup.
+            result = self.invoke(PREPARE + "\\n" + VERIFY, evidence_log=log)
+            self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+            saved = log.read_text()
+            self.assertIn(PREPARE, saved)
+            self.assertIn(VERIFY, saved)
+            self.assertIn("GA01_CPU32_HEADLESS_PASS", saved)
+            previous = saved
+            second = self.invoke(PREPARE + "\\n" + VERIFY, evidence_log=log)
+            self.assertNotEqual(0, second.returncode)
+            self.assertEqual(previous, log.read_text())
 
     def test_both_markers(self):
         result = self.invoke(PREPARE + "\n" + VERIFY)
