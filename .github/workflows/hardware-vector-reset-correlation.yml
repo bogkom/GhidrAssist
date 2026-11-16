@@ -149,6 +149,10 @@ jobs:
               print('GHIDRA_RELEASE_URL=' + asset['browser_download_url'], file=env)
               print('GHIDRA_RELEASE_ASSET=' + asset['name'], file=env)
           PY
+      - name: Download and unpack verified Ghidra release candidate
+        shell: bash
+        run: |
+          set -euo pipefail
           curl --fail --location --retry 3 --output "$RUNNER_TEMP/ghidra.zip" "$GHIDRA_RELEASE_URL"
           sha256sum "$RUNNER_TEMP/ghidra.zip" | tee "$RUNNER_TEMP/ghidra-release.sha256"
           unzip -q "$RUNNER_TEMP/ghidra.zip" -d "$RUNNER_TEMP"
