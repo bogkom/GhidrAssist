@@ -41,7 +41,13 @@ public class GA18VerifyDecodedEffectSites extends GhidraScript {
                     op.getOutput().getAddress() != null &&
                     op.getOutput().getAddress().getAddressSpace().isMemorySpace() &&
                     op.getOutput().getOffset() == 0x00fffa00L &&
-                    op.getOutput().getSize() == 2) return true;
+                    op.getOutput().getSize() == 2) {
+                // The acceptance witness must obey the same COPY contract
+                // as the production decoder, not just match an address.
+                var inputs = op.getInputs();
+                if (inputs != null && inputs.length == 1 && inputs[0] != null &&
+                        inputs[0].getSize() == op.getOutput().getSize()) return true;
+            }
         }
         return false;
     }
