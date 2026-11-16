@@ -112,7 +112,19 @@ class HeadlessRunnerContract(unittest.TestCase):
     def test_ordering_guard_is_executed_not_escaped(self):
         source = RUNNER.read_text()
         self.assertNotIn(r"\n        lines = [line.strip()", source)
-        self.assertIn("and lines.index(prepare_lines[0]) < lines.index(verify_lines[0])", source)
+        self.assertIn("and prepare_lines[0] < verify_lines[0]", source)
+
+    def test_real_ghidra_log_envelopes_and_conflicts(self):
+        prepare = "INFO  GA18PrepareDecodedEffectSites.java> " + PREPARE + " (GhidraScript)"
+        verify = "INFO  GA18VerifyDecodedEffectSites.java> " + VERIFY + " (GhidraScript)"
+        accepted = self.invoke(prepare + "\n" + verify)
+        self.assertEqual(0, accepted.returncode, accepted.stdout + accepted.stderr)
+        for output in (verify + "\n" + prepare,
+                       prepare + "\n" + verify + "\n" + VERIFY,
+                       prepare + "\n" + "INFO  Other.java> " + VERIFY + " (GhidraScript)",
+                       prepare + "\n" + verify.replace("recovery=2", "recovery=1")):
+            with self.subTest(output=output):
+                self.assertNotEqual(0, self.invoke(output).returncode)
 
     def test_duplicate_preparer_is_rejected(self):
         result = self.invoke(PREPARE + "\n" + PREPARE + "\n" + VERIFY)
