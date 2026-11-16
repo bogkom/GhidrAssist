@@ -233,6 +233,16 @@ class HeadlessRunnerContract(unittest.TestCase):
         self.assertIn('full recovery must restore complete decoded coverage', source)
         self.assertIn('recovery must not hide undefined MOVEQ', source)
 
+    def test_genuine_failure_keeps_pcode_output_space_witness(self):
+        # Source guard only; the genuine Ghidra workflow must provide the witness.
+        source = (ROOT / "ghidra_scripts" / "GA18VerifyDecodedEffectSites.java").read_text()
+        self.assertIn("GA18_CPU32_STORE_DIAGNOSTIC", source)
+        self.assertIn("op.getOutput()", source)
+        self.assertIn("outputSpace=", source)
+        self.assertIn("outputOffset=0x", source)
+        self.assertIn("outputSize=", source)
+        self.assertIn('require(hasStore(store), "positive p-code STORE not decoded")', source)
+
     def test_old_three_negative_marker_is_not_accepted(self):
         self.assertNotEqual(0, self.invoke(PREPARE + "\n" + VERIFY.replace("negative=4", "negative=3")).returncode)
 
