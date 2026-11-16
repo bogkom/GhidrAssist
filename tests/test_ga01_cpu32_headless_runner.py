@@ -150,6 +150,28 @@ class HeadlessRunnerContract(unittest.TestCase):
             self.assertLess(args.index("GA18PrepareDecodedEffectSites.java"),
                             args.index("GA18VerifyDecodedEffectSites.java"))
 
+    def test_launch_error_persists_failure_verdict(self):
+        # Executable exists but its interpreter does not: subprocess.run raises OSError.
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory) / "ghidra"
+            binary = home / "support" / "analyzeHeadless"
+            binary.parent.mkdir(parents=True)
+            props = home / "Ghidra" / "application.properties"
+            props.parent.mkdir(parents=True)
+            props.write_text("application.version=12.1.4\\napplication.release.name=PUBLIC\\n")
+            binary.write_text("#!/no/such/ga01-interpreter\\n")
+            binary.chmod(0o755)
+            log = Path(directory) / "launch-evidence.log"
+            result = subprocess.run(
+                [sys.executable, str(RUNNER), "--ghidra-home", str(home),
+                 "--source-sha", SHA, "--evidence-log", str(log)],
+                capture_output=True, text=True)
+            self.assertNotEqual(0, result.returncode)
+            saved = log.read_text()
+            self.assertIn("SOURCE_SHA=" + SHA, saved)
+            self.assertIn("GA01_CPU32_HEADLESS_FAIL launch_error=", saved)
+            self.assertNotIn("GA01_CPU32_HEADLESS_PASS", saved)
+
     def test_timeout_rejects_even_eventual_pass(self):
         result = self.invoke(PREPARE + "\n" + VERIFY, delay=2, timeout=1)
         self.assertNotEqual(0, result.returncode)
