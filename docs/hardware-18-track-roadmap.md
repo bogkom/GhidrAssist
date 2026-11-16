@@ -1,3 +1,7 @@
+## GA-01/11 — 2026-11-16: CPU32 acceptance witness matches decoder COPY shape (PR #336)
+
+The genuine CPU32 verifier now requires a single non-null input with matching width for direct-memory COPY, aligning its positive witness with the production Listing decoder. Source-contract regression checks the same predicate. This prevents a malformed memory COPY from passing the fixture while the production decoder correctly reports UNKNOWN. These changes are **unverified candidates** until exact-head Java 21/25 Actions and genuine isolated Ghidra 12.1.4 PUBLIC positive/negative/recovery checks complete. Extension provenance and review remain mandatory; GA-01/02/03/11 remain PARTIAL. Static p-code evidence does not establish execution or active MM/VBR/ISR.
+
 ## GA-01/11 — 2026-11-16: malformed direct-memory COPY uncertainty (PR #336)
 
 The Listing adapter now accepts CPU32 direct-memory p-code COPY as a write only when it has exactly one non-null input whose width equals a 1/2/4-byte memory output. Malformed COPY is UNKNOWN (incomplete), never a proven write or a clean negative. A Java 21 source-contract regression checks the guard. Commits `01fbfb99f56ed85444895e1e3738d5e5397731ee` and `e4b7f93ca01e65e5a743526ca520a39301c18808` are **unverified candidates**; actual CPU32 SLEIGH input widths must be checked in isolated Ghidra 12.1.4 PUBLIC before accepting this constraint. Exact-head Java 21/25 Actions, genuine positive/negative/recovery fixture, extension provenance and review remain required. GA-01/02/03/11 remain PARTIAL.
