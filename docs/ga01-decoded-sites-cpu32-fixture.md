@@ -98,3 +98,10 @@ mock-launcher cases verify exclusive evidence files for a nonzero process exit
 and timeout. These are **unexecuted source-level test changes**, not a real
 Ghidra decoder PASS; exact-head CI and genuine Ghidra acceptance are still
 required.
+
+
+### Genuine CPU32 Actions acceptance candidate (2026-11-16)
+
+The GA-01/02/03/11 workflow now contains a **separate** `genuine-cpu32-headless` job. Unlike the Java 21 and mock-launcher job, this job obtains the official 12.1.4 PUBLIC archive, records its SHA-256, builds the extension from the exact checkout with Java 25, records the extension ZIP SHA-256, installs the ZIP in a disposable Ghidra installation, and runs the real CPU32 preparer and verifier using the isolated headless runner. It uploads the persisted Ghidra evidence log and hashes even if the run fails. A successful source regression job **does not** substitute for this job.
+
+This is a **CI implementation candidate**, not a claim that genuine Ghidra passed. Inspect the job log and uploaded artifact on the **exact commit**; require the structured preparer, verifier, and final headless PASS markers and verify that the loaded extension is the freshly built artifact. If Ghidra does not discover the extension after ZIP extraction, treat the run as FAIL and correct installation rather than weakening assertions. A passing CI job alone does not establish executed firmware effects or active MM/VBR/ISR.
