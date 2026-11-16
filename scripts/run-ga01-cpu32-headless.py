@@ -123,18 +123,24 @@ def main():
         # a stale or unrelated log line contains a PASS marker.
         failures = ("GA18_PREPARE_FAIL", "GA18_DECODED_SITES_FAIL",
                     "ERROR", "Exception", "AssertionError")
-        prepare_lines = [line.strip() for line in output.splitlines()
-                         if re.fullmatch(r"GA18_PREPARE_DECODED_SITES_PASS instructions=4 function=0x100 bytes=18", line.strip())]
-        verify_lines = [line.strip() for line in output.splitlines()
-                        if re.fullmatch(r"GA18_DECODED_SITES_GHIDRA_PASS sites=2 positive=2 negative=4 recovery=2", line.strip())]
-        # Reject conflicting structured evidence even if a valid marker is also
-        # present. A second, mismatched phase cannot be silently ignored.
+        # GhidraScript emits markers inside an INFO-prefixed log record.
+        # Accept only the known GhidraScript envelope or a bare marker from
+        # contract tests; never accept arbitrary text preceding a marker.
+        envelope = r"(?:INFO  [^\\n]*?\\.java> )?"
+        prepare_pattern = re.compile(envelope +
+            r"GA18_PREPARE_DECODED_SITES_PASS instructions=4 function=0x100 bytes=18(?: \\(GhidraScript\\))?")
+        verify_pattern = re.compile(envelope +
+            r"GA18_DECODED_SITES_GHIDRA_PASS sites=2 positive=2 negative=4 recovery=2(?: \\(GhidraScript\\))?")
         lines = [line.strip() for line in output.splitlines()]
-        evidence_lines = [line for line in lines if
-                          line.startswith(PREPARE) or line.startswith(VERIFY)]
+        prepare_lines = [i for i, line in enumerate(lines)
+                         if prepare_pattern.fullmatch(line)]
+        verify_lines = [i for i, line in enumerate(lines)
+                        if verify_pattern.fullmatch(line)]
+        evidence_lines = [i for i, line in enumerate(lines)
+                          if PREPARE in line or VERIFY in line]
         ordered = (len(prepare_lines) == 1 and len(verify_lines) == 1
                    and len(evidence_lines) == 2
-                   and lines.index(prepare_lines[0]) < lines.index(verify_lines[0]))
+                   and prepare_lines[0] < verify_lines[0])
         passed = (result.returncode == 0 and ordered
                   and not any(token in output for token in failures))
         record(f"GA01_CPU32_HEADLESS_{'PASS' if passed else 'FAIL'} "
