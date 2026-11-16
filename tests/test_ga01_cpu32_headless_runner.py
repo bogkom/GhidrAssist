@@ -94,10 +94,13 @@ class HeadlessRunnerContract(unittest.TestCase):
 
     def test_ordering_guard_is_executed_not_escaped(self):
         source = RUNNER.read_text()
-        tests = Path(__file__).read_text()
         self.assertNotIn(r"\n        lines = [line.strip()", source)
-        self.assertNotIn(r"\n        result = self.invoke(VERIFY", tests)
         self.assertIn("and lines.index(prepare_lines[0]) < lines.index(verify_lines[0])", source)
+
+    def test_duplicate_preparer_is_rejected(self):
+        result = self.invoke(PREPARE + "\n" + PREPARE + "\n" + VERIFY)
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("GA01_CPU32_HEADLESS_FAIL", result.stdout)
 
     def test_headless_invocation_disables_autoanalysis(self):
         # The real preparer rejects any pre-existing disassembly or function.
