@@ -71,6 +71,16 @@ public class GA18VerifyDecodedEffectSites extends GhidraScript {
         Instruction toVbr = at(0x108, "MOVEC");
         Instruction fromVbr = at(0x10c, "MOVEC");
         Instruction registerOnly = at(0x110, "MOVEQ");
+        // Preserve the real CPU32 p-code witness on failure. Do not turn a
+        // missing STORE into a PASS by assuming a memory operand is a write.
+        if (!hasStore(store)) {
+            StringBuilder witness = new StringBuilder();
+            for (PcodeOp op : store.getPcode()) {
+                witness.append(op == null ? "null" : op.toString()).append("; ");
+            }
+            println("GA18_CPU32_STORE_DIAGNOSTIC pc=0x100 mnemonic=" +
+                    store.getMnemonicString() + " pcode=" + witness);
+        }
         require(hasStore(store), "positive p-code STORE not decoded");
         require(!hasStore(toVbr) && !hasStore(fromVbr) && !hasStore(registerOnly),
                 "negative p-code STORE control failed");
