@@ -113,6 +113,10 @@ def main():
             record(f"GA01_CPU32_HEADLESS_FAIL timeout={args.timeout_seconds} "
                    f"source={args.source_sha} fixture={digest}")
             return 1
+        except OSError as exc:
+            record(f"GA01_CPU32_HEADLESS_FAIL launch_error={type(exc).__name__} "
+                   f"source={args.source_sha} fixture={digest}")
+            return 1
         output = result.stdout
         record(output.rstrip("\n"))
         # Both markers are necessary, and any failure must dominate even when
