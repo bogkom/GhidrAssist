@@ -241,7 +241,10 @@ class HeadlessRunnerContract(unittest.TestCase):
         self.assertIn("outputSpace=", source)
         self.assertIn("outputOffset=0x", source)
         self.assertIn("outputSize=", source)
-        self.assertIn('require(hasStore(store), "positive p-code STORE not decoded")', source)
+        self.assertIn("op.getOutput().getOffset() == 0x00fffa00L", source)
+        self.assertIn("op.getOutput().getSize() == 2", source)
+        self.assertIn("op.getOutput().getAddress().getAddressSpace().isMemorySpace()", source)
+        self.assertIn('require(hasStore(store), "positive p-code memory write not decoded")', source)
 
     def test_old_three_negative_marker_is_not_accepted(self):
         self.assertNotEqual(0, self.invoke(PREPARE + "\n" + VERIFY.replace("negative=4", "negative=3")).returncode)
