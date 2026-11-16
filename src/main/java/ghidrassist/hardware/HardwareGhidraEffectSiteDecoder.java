@@ -105,8 +105,20 @@ public final class HardwareGhidraEffectSiteDecoder {
                                 // not memory effects (e.g. MOVEQ and flags).
                                 Varnode output=op.getOutput();
                                 if(output!=null && output.getAddress()!=null &&
-                                        output.getAddress().getAddressSpace().isMemorySpace())
-                                    store=true;
+                                        output.getAddress().getAddressSpace().isMemorySpace()) {
+                                    // A memory-space COPY is a direct write only
+                                    // with a well-formed value and a CPU32-sized
+                                    // destination. Invalid p-code is UNKNOWN,
+                                    // not a confirmed memory effect.
+                                    Varnode[] inputs=op.getInputs();
+                                    int width=output.getSize();
+                                    if(inputs==null || inputs.length!=1 ||
+                                            inputs[0]==null || inputs[0].getSize()!=width ||
+                                            (width!=1 && width!=2 && width!=4))
+                                        incomplete=true;
+                                    else
+                                        store=true;
+                                }
                             }
                     }
                 } catch(RuntimeException ex) {
