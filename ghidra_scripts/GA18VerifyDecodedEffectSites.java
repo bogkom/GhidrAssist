@@ -35,9 +35,13 @@ public class GA18VerifyDecodedEffectSites extends GhidraScript {
             if (op.getOpcode() == PcodeOp.STORE) return true;
             // Observed in genuine Ghidra 12.1.4 CPU32: direct absolute
             // MOVE.W emits COPY with a RAM output rather than STORE.
+            // Require the exact fixture destination and width; an unrelated
+            // memory COPY must not satisfy this positive witness.
             if (op.getOpcode() == PcodeOp.COPY && op.getOutput() != null &&
                     op.getOutput().getAddress() != null &&
-                    op.getOutput().getAddress().getAddressSpace().isMemorySpace()) return true;
+                    op.getOutput().getAddress().getAddressSpace().isMemorySpace() &&
+                    op.getOutput().getOffset() == 0x00fffa00L &&
+                    op.getOutput().getSize() == 2) return true;
         }
         return false;
     }
