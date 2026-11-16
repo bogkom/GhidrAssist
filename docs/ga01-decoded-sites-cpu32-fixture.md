@@ -58,7 +58,7 @@ The fourth negative control deletes the sole synthetic function after clearing e
 
 ### Recovery acceptance (PR #336 candidate)
 
-After clearing both positive source instructions, the verifier re-disassembles STORE at 0x100 and MOVEC-to-VBR at 0x108 in the same disposable program. It requires both sites to reappear without spurious MOVEC-from-VBR or MOVEQ sites, while the undefined MOVEQ still forces `incomplete=true`. The final marker is `GA18_DECODED_SITES_GHIDRA_PASS sites=2 positive=2 negative=4 recovery=1`. Mock launcher checks are source-level only; genuine Ghidra 12.1.4 PUBLIC execution and exact-head Java 21/25 CI remain required.
+After clearing both positive source instructions, the verifier re-disassembles STORE at 0x100 and MOVEC-to-VBR at 0x108 in the same disposable program. It requires both sites to reappear without spurious MOVEC-from-VBR or MOVEQ sites, while the undefined MOVEQ still forces `incomplete=true`. This is the **intermediate** recovery checkpoint, not a standalone PASS marker. The only final accepted marker, emitted after the complete round-trip below, is `GA18_DECODED_SITES_GHIDRA_PASS sites=2 positive=2 negative=4 recovery=2`. Mock launcher checks are source-level only; genuine Ghidra 12.1.4 PUBLIC execution and exact-head Java 21/25 CI remain required.
 
 ### Full Listing round-trip (candidate)
 
@@ -71,7 +71,8 @@ The mocked launcher tests now pass actual newline-separated full preparer/verifi
 ### Pinned Ghidra release preflight
 
 Before starting the disposable headless process, the runner reads `Ghidra/application.properties` and requires `application.version=12.1.4` and `application.release.name=PUBLIC`. Missing metadata, an older version, or another release name fails before import. Mock-launcher regression covers these cases, but does not attest installed extension provenance or replace real Ghidra execution.
-\nThe runner also rejects an out-of-order verifier PASS preceding the preparer PASS; this is a mock-runner contract check, not proof of a real Ghidra execution.\n
+The runner also rejects an out-of-order verifier PASS preceding the preparer PASS; this is a mock-runner contract check, not proof of a real Ghidra execution.
+
 ### Contradictory evidence lines
 
 The runner fails closed if stdout contains any additional line beginning with either structured preparer/verifier marker, even if one valid marker of each kind also appears. The mock launcher regression checks contradictory preparer instruction counts and verifier recovery/negative counts. This is a source-level contract test only; genuine isolated Ghidra execution and installed-extension provenance remain required.
