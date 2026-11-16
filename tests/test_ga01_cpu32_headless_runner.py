@@ -158,8 +158,8 @@ class HeadlessRunnerContract(unittest.TestCase):
             binary.parent.mkdir(parents=True)
             props = home / "Ghidra" / "application.properties"
             props.parent.mkdir(parents=True)
-            props.write_text("application.version=12.1.4\\napplication.release.name=PUBLIC\\n")
-            binary.write_text("#!/no/such/ga01-interpreter\\n")
+            props.write_text("application.version=12.1.4\napplication.release.name=PUBLIC\n")
+            binary.write_text("#!/no/such/ga01-interpreter\n")
             binary.chmod(0o755)
             log = Path(directory) / "launch-evidence.log"
             result = subprocess.run(
