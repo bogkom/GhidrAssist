@@ -108,12 +108,15 @@ def main():
                          if re.fullmatch(r"GA18_PREPARE_DECODED_SITES_PASS instructions=4 function=0x100 bytes=18", line.strip())]
         verify_lines = [line.strip() for line in output.splitlines()
                         if re.fullmatch(r"GA18_DECODED_SITES_GHIDRA_PASS sites=2 positive=2 negative=4 recovery=2", line.strip())]
-        # A verifier marker preceding fixture preparation cannot attest this run.
+        # Reject conflicting structured evidence even if a valid marker is also
+        # present. A second, mismatched phase cannot be silently ignored.
         lines = [line.strip() for line in output.splitlines()]
+        evidence_lines = [line for line in lines if
+                          line.startswith(PREPARE) or line.startswith(VERIFY)]
         ordered = (len(prepare_lines) == 1 and len(verify_lines) == 1
+                   and len(evidence_lines) == 2
                    and lines.index(prepare_lines[0]) < lines.index(verify_lines[0]))
         passed = (result.returncode == 0 and ordered
-                  and len(verify_lines) == 1
                   and not any(token in output for token in failures))
         print(f"GA01_CPU32_HEADLESS_{'PASS' if passed else 'FAIL'} "
               f"exit={result.returncode} source={args.source_sha} fixture={digest}",
