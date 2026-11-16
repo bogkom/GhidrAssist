@@ -1,3 +1,7 @@
+## GA-01/11 — 2026-11-16: persistent isolated CPU32 evidence artifact (PR #336 candidate)
+
+The disposable headless runner now accepts an optional exclusive `--evidence-log` path and preserves the complete combined Ghidra output and final verdict outside its temporary project. A mock-launcher regression checks persisted PASS evidence and refuses overwriting an existing log. The acceptance document now consistently requires final `negative=4 recovery=2`, rather than treating intermediate recovery=1 as final. Commits through `b78a67324c96b2a1e7ae22d997726075610a80c8` are **unverified candidates**: no Java 21/25 or genuine Ghidra PASS is claimed. Extension artifact provenance, exact-head Actions, isolated Ghidra 12.1.4 PUBLIC execution and review remain mandatory. GA-01/02/03/11 remain PARTIAL.
+
 ## GA-01/11 — 2026-11-16: conflicting headless evidence rejected (PR #336 candidate)
 
 The isolated runner now rejects additional contradictory preparer/verifier evidence lines even when one valid line of each type exists. A source-level mock-launcher negative regression checks both phases and differing counts. This is not real Ghidra evidence or formal acceptance. Exact-HEAD Java 21/25, genuine isolated Ghidra 12.1.4 PUBLIC CPU32 execution, extension provenance and review remain required; GA-01/02/03/11 stay PARTIAL.
