@@ -134,10 +134,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 - <<'PY'
+          GH_TOKEN="${{ github.token }}" python3 - <<'PY'
           import json, os, urllib.request
           api = 'https://api.github.com/repos/NationalSecurityAgency/ghidra/releases?per_page=100'
-          request = urllib.request.Request(api, headers={'Accept':'application/vnd.github+json','User-Agent':'GhidrAssist-CI'})
+          token = os.environ.get('GH_TOKEN')
+          if not token:
+              raise SystemExit('Missing GitHub Actions token for authenticated release lookup')
+          request = urllib.request.Request(api, headers={'Accept':'application/vnd.github+json','User-Agent':'GhidrAssist-CI', 'Authorization':'Bearer ' + token, 'X-GitHub-Api-Version':'2022-11-28'})
           with urllib.request.urlopen(request, timeout=40) as response:
               releases = json.load(response)
           matches = [(release, asset) for release in releases for asset in release.get('assets', [])
