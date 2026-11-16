@@ -81,3 +81,7 @@ The runner fails closed if stdout contains any additional line beginning with ei
 ### Persisted evidence (candidate)
 
 The optional `--evidence-log` writes the complete merged headless output and final PASS/FAIL verdict to an **exclusively created** file outside the disposable project. Existing files are never overwritten; preserve the original log and independently record its SHA-256 alongside the source/extension artifact hashes. This improves reviewability but does not attest extension provenance or substitute for a genuine Ghidra execution. The mock regression verifies preservation and overwrite refusal.
+
+### Headless launch failure evidence
+
+If the installed `analyzeHeadless` executable exists but cannot be started (for example, a missing interpreter), the runner now emits `GA01_CPU32_HEADLESS_FAIL launch_error=...` to the exclusive evidence log and exits nonzero instead of producing an unclassified traceback. The launcher contract includes a synthetic missing-interpreter regression. This does not establish actual CPU32 decoder acceptance; real Ghidra and exact-source extension provenance remain outstanding.
