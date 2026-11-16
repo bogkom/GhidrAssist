@@ -23,6 +23,8 @@ def main():
     parser.add_argument("--ghidra-home", type=Path, required=True)
     parser.add_argument("--timeout-seconds", type=int, default=600,
                         help="Maximum time allowed for the isolated Ghidra process")
+    parser.add_argument("--evidence-log", type=Path,
+                        help="Exclusive path to preserve the full Ghidra output and verdict")
     parser.add_argument("--source-sha", required=True,
                         help="Full 40-character Git commit SHA of the extension and scripts")
     args = parser.parse_args()
@@ -85,7 +87,20 @@ def main():
             "-postScript", "GA18VerifyDecodedEffectSites.java",
             "-deleteProject",
         ]
-        print(f"SOURCE_SHA={args.source_sha} FIXTURE_SHA256={digest}", flush=True)
+        # Preserve the original output even though the disposable project is deleted.
+        # Refuse to overwrite an earlier acceptance artifact.
+        evidence = None
+        if args.evidence_log is not None:
+            try:
+                evidence = args.evidence_log.open("x", encoding="utf-8")
+            except OSError as exc:
+                parser.error(f"cannot create exclusive evidence log: {exc}")
+        def record(message):
+            print(message, flush=True)
+            if evidence is not None:
+                evidence.write(message + "\n")
+                evidence.flush()
+        record(f"SOURCE_SHA={args.source_sha} FIXTURE_SHA256={digest}")
         try:
             result = subprocess.run(command, cwd=work, stdout=subprocess.PIPE,
                                     stderr=subprocess.STDOUT, text=True,
@@ -94,12 +109,12 @@ def main():
             partial = exc.stdout or b""
             if isinstance(partial, bytes):
                 partial = partial.decode("utf-8", errors="replace")
-            print(partial, end="" if partial.endswith("\n") else "\n")
-            print(f"GA01_CPU32_HEADLESS_FAIL timeout={args.timeout_seconds} "
-                  f"source={args.source_sha} fixture={digest}", flush=True)
+            record(partial.rstrip("\n"))
+            record(f"GA01_CPU32_HEADLESS_FAIL timeout={args.timeout_seconds} "
+                   f"source={args.source_sha} fixture={digest}")
             return 1
         output = result.stdout
-        print(output, end="" if output.endswith("\n") else "\n")
+        record(output.rstrip("\n"))
         # Both markers are necessary, and any failure must dominate even when
         # a stale or unrelated log line contains a PASS marker.
         failures = ("GA18_PREPARE_FAIL", "GA18_DECODED_SITES_FAIL",
@@ -118,9 +133,8 @@ def main():
                    and lines.index(prepare_lines[0]) < lines.index(verify_lines[0]))
         passed = (result.returncode == 0 and ordered
                   and not any(token in output for token in failures))
-        print(f"GA01_CPU32_HEADLESS_{'PASS' if passed else 'FAIL'} "
-              f"exit={result.returncode} source={args.source_sha} fixture={digest}",
-              flush=True)
+        record(f"GA01_CPU32_HEADLESS_{'PASS' if passed else 'FAIL'} "
+               f"exit={result.returncode} source={args.source_sha} fixture={digest}")
         return 0 if passed else 1
 
 
