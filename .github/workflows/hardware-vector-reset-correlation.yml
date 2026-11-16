@@ -118,3 +118,71 @@ jobs:
 
           java -ea -cp "$RUNNER_TEMP/vector-reset-tests" \
             ghidrassist.hardware.HardwareMovecDirectionEvidenceSelfTest
+
+  genuine-cpu32-headless:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Fetch pinned official Ghidra 12.1.4 PUBLIC release
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, urllib.request
+          api = 'https://api.github.com/repos/NationalSecurityAgency/ghidra/releases?per_page=100'
+          request = urllib.request.Request(api, headers={'Accept':'application/vnd.github+json','User-Agent':'GhidrAssist-CI'})
+          with urllib.request.urlopen(request, timeout=40) as response:
+              releases = json.load(response)
+          matches = [(release, asset) for release in releases for asset in release.get('assets', [])
+                     if asset['name'].startswith('ghidra_12.1.4_PUBLIC_') and asset['name'].endswith('.zip')]
+          if len(matches) != 1:
+              raise SystemExit(f'Expected one official Ghidra 12.1.4 PUBLIC asset, found {len(matches)}')
+          asset = matches[0][1]
+          with open(os.environ['GITHUB_ENV'], 'a') as env:
+              print('GHIDRA_RELEASE_URL=' + asset['browser_download_url'], file=env)
+              print('GHIDRA_RELEASE_ASSET=' + asset['name'], file=env)
+          PY
+          curl --fail --location --retry 3 --output "$RUNNER_TEMP/ghidra.zip" "$GHIDRA_RELEASE_URL"
+          sha256sum "$RUNNER_TEMP/ghidra.zip" | tee "$RUNNER_TEMP/ghidra-release.sha256"
+          unzip -q "$RUNNER_TEMP/ghidra.zip" -d "$RUNNER_TEMP"
+          ghidra_home="$(find "$RUNNER_TEMP" -maxdepth 1 -type d -name 'ghidra_12.1.4_PUBLIC*' -print -quit)"
+          test -n "$ghidra_home"
+          echo "GHIDRA_INSTALL_DIR=$ghidra_home" >> "$GITHUB_ENV"
+      - name: Build and install extension from exact checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$GHIDRA_INSTALL_DIR/support/gradle/gradlew" --no-daemon buildExtension
+          mapfile -t zips < <(find dist -maxdepth 1 -name '*.zip' -type f)
+          test "${#zips[@]}" -eq 1
+          sha256sum "${zips[0]}" | tee "$RUNNER_TEMP/extension.sha256"
+          mkdir -p "$GHIDRA_INSTALL_DIR/Ghidra/Extensions/Ghidra"
+          unzip -q "${zips[0]}" -d "$GHIDRA_INSTALL_DIR/Ghidra/Extensions/Ghidra"
+      - name: Execute genuine isolated CPU32 STORE MOVEC and negative recovery controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/run-ga01-cpu32-headless.py \
+            --ghidra-home "$GHIDRA_INSTALL_DIR" \
+            --source-sha "$GITHUB_SHA" \
+            --timeout-seconds 900 \
+            --evidence-log "$RUNNER_TEMP/ga01-cpu32-evidence.log"
+          sha256sum "$RUNNER_TEMP/ga01-cpu32-evidence.log" | tee "$RUNNER_TEMP/ga01-cpu32-evidence.sha256"
+      - name: Preserve genuine Ghidra evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ga01-cpu32-genuine-ghidra-evidence
+          path: |
+            ${{ runner.temp }}/ga01-cpu32-evidence.log
+            ${{ runner.temp }}/ga01-cpu32-evidence.sha256
+            ${{ runner.temp }}/extension.sha256
+            ${{ runner.temp }}/ghidra-release.sha256
+          if-no-files-found: warn
