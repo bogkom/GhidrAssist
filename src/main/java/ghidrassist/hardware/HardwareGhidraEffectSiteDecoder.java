@@ -7,6 +7,7 @@ import ghidra.program.model.listing.Program;
 import ghidra.program.model.lang.Register;
 import ghidra.program.model.address.AddressSet;
 import ghidra.program.model.pcode.PcodeOp;
+import ghidra.program.model.pcode.Varnode;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.HashSet;
@@ -96,6 +97,16 @@ public final class HardwareGhidraEffectSiteDecoder {
                                 incomplete=true;
                             } else if(op.getOpcode()==PcodeOp.STORE) {
                                 store=true;
+                            } else if(op.getOpcode()==PcodeOp.COPY) {
+                                // CPU32's Ghidra SLEIGH emits direct absolute
+                                // memory writes as COPY with a RAM output,
+                                // not necessarily as an explicit STORE op.
+                                // Register and unique-space COPY outputs are
+                                // not memory effects (e.g. MOVEQ and flags).
+                                Varnode output=op.getOutput();
+                                if(output!=null && output.getAddress()!=null &&
+                                        output.getAddress().getAddressSpace().isMemorySpace())
+                                    store=true;
                             }
                     }
                 } catch(RuntimeException ex) {
