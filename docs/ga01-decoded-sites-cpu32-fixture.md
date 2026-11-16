@@ -85,3 +85,16 @@ The optional `--evidence-log` writes the complete merged headless output and fin
 ### Headless launch failure evidence
 
 If the installed `analyzeHeadless` executable exists but cannot be started (for example, a missing interpreter), the runner now emits `GA01_CPU32_HEADLESS_FAIL launch_error=...` to the exclusive evidence log and exits nonzero instead of producing an unclassified traceback. The launcher contract includes a synthetic missing-interpreter regression. This does not establish actual CPU32 decoder acceptance; real Ghidra and exact-source extension provenance remain outstanding.
+
+### Launch-error regression correction (2026-11-16)
+
+The missing-interpreter regression now writes **real newline-separated**
+`application.properties` metadata and a real shebang newline. Its previous
+literal backslash-n bytes caused the release preflight to fail before the
+intended `subprocess.run` launch-error path, while the test attempted to read
+an evidence file that had never been created. The regression now reaches the
+launch-error branch and asserts a persisted classified FAIL. Additional
+mock-launcher cases verify exclusive evidence files for a nonzero process exit
+and timeout. These are **unexecuted source-level test changes**, not a real
+Ghidra decoder PASS; exact-head CI and genuine Ghidra acceptance are still
+required.
