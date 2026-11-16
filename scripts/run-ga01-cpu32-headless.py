@@ -108,7 +108,11 @@ def main():
                          if re.fullmatch(r"GA18_PREPARE_DECODED_SITES_PASS instructions=4 function=0x100 bytes=18", line.strip())]
         verify_lines = [line.strip() for line in output.splitlines()
                         if re.fullmatch(r"GA18_DECODED_SITES_GHIDRA_PASS sites=2 positive=2 negative=4 recovery=2", line.strip())]
-        # A verifier marker preceding fixture preparation cannot attest this run.\n        lines = [line.strip() for line in output.splitlines()]\n        ordered = (len(prepare_lines) == 1 and len(verify_lines) == 1\n                   and lines.index(prepare_lines[0]) < lines.index(verify_lines[0]))\n        passed = (result.returncode == 0 and ordered
+        # A verifier marker preceding fixture preparation cannot attest this run.
+        lines = [line.strip() for line in output.splitlines()]
+        ordered = (len(prepare_lines) == 1 and len(verify_lines) == 1
+                   and lines.index(prepare_lines[0]) < lines.index(verify_lines[0]))
+        passed = (result.returncode == 0 and ordered
                   and len(verify_lines) == 1
                   and not any(token in output for token in failures))
         print(f"GA01_CPU32_HEADLESS_{'PASS' if passed else 'FAIL'} "
