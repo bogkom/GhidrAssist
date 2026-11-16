@@ -42,7 +42,8 @@ python3 -m unittest discover -s tests -p test_ga01_cpu32_headless_runner.py
 python3 scripts/run-ga01-cpu32-headless.py \
   --ghidra-home /path/to/ghidra_12.1.4_PUBLIC \
   --source-sha FULL_40_CHARACTER_HEAD_SHA \
-  --timeout-seconds 600
+  --timeout-seconds 600 \
+  --evidence-log /path/to/new/ga01-cpu32-evidence.log
 ```
 
 The first command tests only the launcher contract using a fake headless executable; it **does not** establish Ghidra decoding. The second creates a temporary 18-byte raw fixture and disposable project, disables automatic headless analysis with `-noanalysis` so the preparer sees the untouched raw binary, invokes the preparer and verifier in order, and deletes the project. The source-level launcher regression checks the actual command arguments and script order. The runner requires the **exact structured evidence lines** `GA18_PREPARE_DECODED_SITES_PASS instructions=4 function=0x100 bytes=18` and `GA18_DECODED_SITES_GHIDRA_PASS sites=2 positive=2 negative=4 recovery=2`, each exactly once (bare PASS tokens and mismatched counts are rejected), a zero exit code, and no reported exception/error; its final `GA01_CPU32_HEADLESS_PASS` is valid only with the genuine installed extension and matching source SHA. Save the full stdout, GitHub Actions URLs, installed extension SHA, fixture SHA-256 and exact Ghidra version for formal review. Do not run against an existing project or ECU411. If a headless import/loader flag differs, fix the launcher and rerun; never replace the actual decoder assertions with a mocked PASS.
@@ -76,3 +77,7 @@ The runner also rejects an out-of-order verifier PASS preceding the preparer PAS
 ### Contradictory evidence lines
 
 The runner fails closed if stdout contains any additional line beginning with either structured preparer/verifier marker, even if one valid marker of each kind also appears. The mock launcher regression checks contradictory preparer instruction counts and verifier recovery/negative counts. This is a source-level contract test only; genuine isolated Ghidra execution and installed-extension provenance remain required.
+
+### Persisted evidence (candidate)
+
+The optional `--evidence-log` writes the complete merged headless output and final PASS/FAIL verdict to an **exclusively created** file outside the disposable project. Existing files are never overwritten; preserve the original log and independently record its SHA-256 alongside the source/extension artifact hashes. This improves reviewability but does not attest extension provenance or substitute for a genuine Ghidra execution. The mock regression verifies preservation and overwrite refusal.
