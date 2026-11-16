@@ -1,3 +1,159 @@
+## GA-01/11 — 2026-11-16: authenticated genuine Ghidra release lookup (PR #336)
+
+At exact head `28194752d5a6bc89156ffccc6bbed853dd557091`, [Actions run 43924692648](https://github.com/bogkom/GhidrAssist/actions/runs/43924692648) reported source-level Java 21 SUCCESS, but the genuine CPU32 job failed **before Ghidra download**: anonymous GitHub release API lookup returned HTTP 403 rate limit exceeded. This is infrastructure failure, not a decoder failure or CPU32 acceptance evidence. The existing workflow now uses the scoped `github.token` to authenticate the official NSA release metadata lookup while retaining exact 12.1.4 PUBLIC asset filtering; the source regression checks the authentication contract. Candidate commits `59de947efa307498f1d125f789205e71dee9f049` and `05d8030812b4596ae37cf64de16ffac588b4a0c2` require exact-head Actions and genuine isolated CPU32 positive/negative/recovery evidence before review or merge. No formal GA-01/02/03/11 PASS is claimed; static source evidence cannot prove executed writes, active MM/VBR/ISR or physical mapping.
+
+## GA-01/11 — 2026-11-16: CPU32 acceptance witness matches decoder COPY shape (PR #336)
+
+The genuine CPU32 verifier now requires a single non-null input with matching width for direct-memory COPY, aligning its positive witness with the production Listing decoder. Source-contract regression checks the same predicate. This prevents a malformed memory COPY from passing the fixture while the production decoder correctly reports UNKNOWN. These changes are **unverified candidates** until exact-head Java 21/25 Actions and genuine isolated Ghidra 12.1.4 PUBLIC positive/negative/recovery checks complete. Extension provenance and review remain mandatory; GA-01/02/03/11 remain PARTIAL. Static p-code evidence does not establish execution or active MM/VBR/ISR.
+
+## GA-01/11 — 2026-11-16: malformed direct-memory COPY uncertainty (PR #336)
+
+The Listing adapter now accepts CPU32 direct-memory p-code COPY as a write only when it has exactly one non-null input whose width equals a 1/2/4-byte memory output. Malformed COPY is UNKNOWN (incomplete), never a proven write or a clean negative. A Java 21 source-contract regression checks the guard. Commits `01fbfb99f56ed85444895e1e3738d5e5397731ee` and `e4b7f93ca01e65e5a743526ca520a39301c18808` are **unverified candidates**; actual CPU32 SLEIGH input widths must be checked in isolated Ghidra 12.1.4 PUBLIC before accepting this constraint. Exact-head Java 21/25 Actions, genuine positive/negative/recovery fixture, extension provenance and review remain required. GA-01/02/03/11 remain PARTIAL.
+
+## GA-01/11 — 2026-11-16: CPU32 direct-memory COPY fixture contract (PR #336)
+
+The genuine synthetic verifier now accepts a CPU32 p-code `COPY` witness only when its output is a memory-space word at the fixture's exact `0x00FFFA00` destination; arbitrary RAM `COPY` operations cannot satisfy the positive MOVE.W control. `STORE` remains an independently recognized p-code form. The Java 21 source regression now checks the target/width guard and matches the verifier's actual failure message, fixing a stale assertion that would otherwise fail CI. Candidate commits `c51caec02a072684b48609112d6e9e6403a77b07` and `8b3d56c6572c04cc0e864519037ca010c854c77c` are **not tested** at this checkpoint. Exact-head Java 21, Java 25 build, genuine Ghidra CPU32 positive/negative/recovery evidence, extension provenance and review are required before merge. GA-01/02/03/11 remain PARTIAL. Static source evidence is not executed MMIO, active VBR/ISR or physical mapping.
+
+## GA-01/11 — 2026-11-16: genuine CPU32 failure witness expansion (PR #336)
+
+Exact-head `d7c884a5086dfab96239a852c1b904014f699608` workflow run [43846767418](https://github.com/bogkom/GhidrAssist/actions/runs/43846767418) had source regression SUCCESS and genuine isolated CPU32 headless FAILURE. No genuine STORE acceptance is claimed. The verifier now records each p-code operation's mnemonic and output varnode address space, offset and size when the required STORE is absent; the source regression requires these diagnostics while preserving the fail-closed assertion. This distinguishes a potential direct memory-space COPY from an actual STORE without prematurely treating either as proven write evidence. Next: inspect the new genuine Ghidra log at the updated SHA, determine CPU32 semantics, implement and verify a bounded write-site classification with negative controls, then review and merge. GA-01/02/03/11 remain PARTIAL.
+
+## GA-01/02/03/11 — 2026-11-16: genuine CPU32 acceptance CI candidate (PR #336)
+
+The existing GA-01/02/03/11 workflow now includes an independent genuine Ghidra 12.1.4 PUBLIC headless job. It downloads the official release, builds the extension with Java 25 from the same checkout, installs the build in a disposable installation, runs the real CPU32 preparer/verifier and preserves the full evidence plus release/extension hashes. This closes the previous **workflow coverage gap**, not the formal acceptance requirement: the new job has not yet been observed to PASS, and extension loading/provenance must be checked in its actual logs. Java 21 source tests and mock-launcher tests remain separate. PR #336 is still a candidate; no merge or GA-01/02/03/11 formal PASS is claimed. Static Listing/CFG evidence never establishes executed writes, active SIMCR/MM, VBR/ISR or physical chip-select mapping.
+
+## GA-01/02/03/11 — 2026-11-16: launch-error regression reaches intended failure path (PR #336 candidate)
+
+Corrected a test fixture that encoded literal `\\n` in both `application.properties` and the fake executable shebang. Previously the release preflight rejected malformed metadata before the test could reach the intended missing-interpreter `OSError` and persisted FAIL verdict. The test now supplies valid release metadata and an actual invalid interpreter, with additional persisted-artifact checks for nonzero exit and timeout. Commits `85a6c3e`, `bb3e0f5` and fixture documentation are **unverified source changes**; no Java 21/25, genuine isolated Ghidra 12.1.4 PUBLIC run or formal GA acceptance is claimed. PR #336 remains a candidate; extension provenance, exact-head CI, genuine STORE/MOVEC positive/negative/recovery evidence and review remain required. GA-01/02/03/11 remain PARTIAL.
+
+## GA-01/02/03/11 — 2026-11-16: PR #336 headless launch failure checkpoint
+
+On the existing PR #336 branch, the isolated CPU32 runner now records a classified `GA01_CPU32_HEADLESS_FAIL launch_error=...` verdict in the exclusive evidence artifact if the headless executable cannot start, rather than losing the failure to an uncaught OSError. A missing-interpreter negative regression and fixture documentation were added. This is source-level evidence only; exact-head Java 21/25 Actions, real isolated Ghidra 12.1.4 PUBLIC STORE/MOVEC execution, installed-extension provenance, review and integration remain required. GA-01/02/03/11 remain PARTIAL. No static source evidence proves execution or active VBR/ISR.\n\n## GA-01/11 — 2026-11-16: persistent isolated CPU32 evidence artifact (PR #336 candidate)
+
+The disposable headless runner now accepts an optional exclusive `--evidence-log` path and preserves the complete combined Ghidra output and final verdict outside its temporary project. A mock-launcher regression checks persisted PASS evidence and refuses overwriting an existing log. The acceptance document now consistently requires final `negative=4 recovery=2`, rather than treating intermediate recovery=1 as final. Commits through `b78a67324c96b2a1e7ae22d997726075610a80c8` are **unverified candidates**: no Java 21/25 or genuine Ghidra PASS is claimed. Extension artifact provenance, exact-head Actions, isolated Ghidra 12.1.4 PUBLIC execution and review remain mandatory. GA-01/02/03/11 remain PARTIAL.
+
+## GA-01/11 — 2026-11-16: conflicting headless evidence rejected (PR #336 candidate)
+
+The isolated runner now rejects additional contradictory preparer/verifier evidence lines even when one valid line of each type exists. A source-level mock-launcher negative regression checks both phases and differing counts. This is not real Ghidra evidence or formal acceptance. Exact-HEAD Java 21/25, genuine isolated Ghidra 12.1.4 PUBLIC CPU32 execution, extension provenance and review remain required; GA-01/02/03/11 stay PARTIAL.
+
+## GA-01/11 — 2026-11-16: executable headless evidence-ordering regression (PR #336 candidate)
+
+Fixed literal escaped `\\n` sequences in both `scripts/run-ga01-cpu32-headless.py` and `tests/test_ga01_cpu32_headless_runner.py`: they previously commented out the ordering gate and its reversed-order negative test. The runner now executes the exact preparer-before-verifier assertion; the regression actually invokes reversed output and adds a source guard against reintroducing escaped comments. Commits `f37ce21b7ba9db923fabcda1d11ef25e883e0bd7`, `25d0cc9ff97e721fe30b7a69915bfa76b98b3add`. This is a **candidate source fix**, not a genuine Ghidra PASS. Exact-head Java 21/25 CI, isolated Ghidra 12.1.4 PUBLIC positive/negative/recovery execution, extension provenance and review are mandatory before merge. GA-01/02/03/11 remain PARTIAL.
+
+## GA-01/11 — 2026-11-16: headless evidence ordering gate (PR #336 candidate)
+
+The isolated runner now requires the fixture-preparer PASS to precede the verifier PASS in the same process output. A negative mock regression rejects reversed order; fixture documentation records the contract. This is a source-only candidate, **not** genuine Ghidra execution evidence. Java 21/25 exact-head checks, isolated Ghidra 12.1.4 PUBLIC execution, extension provenance and review are still mandatory; GA-01/02/03/11 remain PARTIAL.
+
+## GA-01/11 — 2026-11-15: pinned headless Ghidra release preflight (PR #336 candidate)
+
+The isolated CPU32 runner now rejects absent or mismatched `Ghidra/application.properties` metadata before launching: exact `application.version=12.1.4` and `application.release.name=PUBLIC` are required. Mock-launcher regression covers valid and invalid release metadata; this is not a genuine Ghidra PASS or extension binary provenance attestation. Exact-head Java 21/25 CI, installed-extension verification, real isolated Ghidra run, review and integration remain mandatory. GA-01/02/03/11 remain PARTIAL.
+
+## GA-01/11 — 2026-11-15: full Listing recovery acceptance (PR #336 candidate)
+
+The disposable CPU32 verifier now checks both transitions: clearing decoded source instructions makes evidence incomplete, partial restoration retains independent STORE/MOVEC sites but remains incomplete, and restoration of the final MOVEQ must return to complete coverage with exactly two source sites. The fourth negative (remove sole function) still follows the full recovery. Updated marker: `GA18_DECODED_SITES_GHIDRA_PASS sites=2 positive=2 negative=4 recovery=2`. Source SHA, Java 21 regression, Java 25 build and genuine Ghidra 12.1.4 PUBLIC execution on the exact head are required before acceptance; no new PASS claimed.
+
+## GA-01/11 — 2026-11-15: decoded-site recovery after Listing edits (PR #336 candidate)
+
+The isolated synthetic CPU32 verifier now clears STORE and MOVEC source instructions, then re-disassembles both and requires both independently decoded sites to return, with the remaining undefined MOVEQ keeping the inventory incomplete. The headless runner requires `recovery=1`; source-level negative tests reject absent/false recovery markers. These are candidate source changes, **not** genuine Ghidra PASS. Exact-head Java 21, Java 25 Ghidra 12.1.4 PUBLIC build, isolated genuine headless positive/negative/recovery execution, extension provenance and review remain required. GA-01/02/03/11 remain PARTIAL; static sites do not prove execution or active MM/VBR/ISR.
+
+## GA-01/11 — 2026-11-15: fourth negative control made executable (PR #336 candidate)
+
+Fixed a literal escaped-newline sequence that had accidentally commented out the fourth genuine Ghidra verifier phase. The verifier now actually removes the sole synthetic function and requires an incomplete, empty decoded-site inventory. Added a Python source regression that refuses the escaped-newline regression and checks the executed assertion and expected marker. This is **not** a real Ghidra PASS: exact-head Java 21/25 Actions, isolated Ghidra 12.1.4 PUBLIC execution, extension provenance and review remain required. GA-01/02/03/11 remain PARTIAL; static decoded sites are not executed effects or active VBR/ISR.
+
+## GA-01/11 — 2026-11-15: empty Ghidra function inventory fail-closed candidate
+
+PR #336 extends the read-only decoder: a Program with zero recognized functions now yields `incomplete=true` instead of a misleading complete negative STORE/MOVEC inventory. The isolated synthetic CPU32 acceptance script removes its only function after three prior negative controls, asserts an empty site list and incomplete evidence, and requires `negative=4` in the headless marker. Runner contract and fixture documentation were updated. **Candidate only** until exact-head Java 21, Java 25 Ghidra 12.1.4 PUBLIC build, genuine synthetic Ghidra execution and review; no runtime execution or active VBR/ISR is inferred. GA-01/02/03/11 remain PARTIAL.
+
+## GA-01/11 — 2026-11-15: distinct decoded coverage and missing MOVEC negative gate (PR #336 candidate)
+
+The Listing decoder now counts **unique decoded address coverage** per function rather than summed instruction lengths, and rejects overlapping instructions that could otherwise conceal undefined gaps. The genuine isolated CPU32 verifier adds a second negative phase clearing MOVEC-to-VBR at 0x108: the decoder must remain incomplete, retain the independently decoded STORE at 0x100 and never report the cleared MOVEC site. This is a source/fixture change, **not a Ghidra test PASS**. Exact-head Java 21 regressions, Java 25 extension build, real isolated CPU32 positive/negative execution, installed-extension provenance and review are required before merging PR #336. GA-01/02/03/11 remain PARTIAL; static evidence does not establish execution, active MM/VBR/ISR or physical mapping.
+
+## GA-01/11 — 2026-11-15: PR #336 undefined-code completeness candidate\n\nThe Ghidra Listing adapter now compares decoded instruction-byte coverage with each function body's address count. Undefined/data bytes, partial disassembly or skipped instructions set `incomplete` rather than allowing a false complete negative inventory. The isolated CPU32 verifier adds a real-Ghidra negative phase that clears the synthetic MOVEQ instruction and requires incomplete evidence while preserving the observed STORE. Candidate commits `b3173eb` and `b0bb740`; exact-head Java 21/25 CI and genuine Ghidra execution of this phase remain **unverified**, so no formal PASS or merge is claimed. Static evidence never proves execution, active VBR/ISR, SIMCR/MM or physical mapping.\n\n## GA-01/02/03/11 — 2026-11-15: CPU32 headless raw-import gate (PR #336 candidate)
+
+The isolated CPU32 runner now supplies `-noanalysis` to prevent Ghidra headless from automatically disassembling the raw binary before `GA18PrepareDecodedEffectSites.java` checks that the program has no instructions or functions. Added a source-level launcher regression inspecting real argv, CPU32 language/base, loader, `-noanalysis`, and preparer/verifier ordering; updated fixture instructions. These are **unverified candidate changes** until exact-head Actions and genuine isolated Ghidra execution; mock launcher tests are not Ghidra evidence. Java 21 regression, Java 25 extension build, authentic STORE/MOVEC positive and negative decoder checks, review and integration remain mandatory. No runtime execution, active VBR/ISR, SIMCR/MM state or physical mapping is inferred. GA-01/02/03/11 remain PARTIAL.
+
+## GA-01/02/03/11 — 2026-11-15: bounded genuine headless acceptance (PR #336 candidate)
+
+The disposable CPU32 headless runner now bounds the Ghidra subprocess to 600 seconds by default (configurable 1–3600) and fails closed on timeout, including partial PASS output. The source-level mock-launcher regression covers timeout and invalid limits; it is **not** genuine Ghidra decoder evidence. The `--source-sha` argument is not independently attested by the runner. Formal acceptance still requires exact-HEAD Java 21/25 Actions, a real installed-extension Ghidra 12.1.4 PUBLIC positive/negative run, recorded fixture and extension provenance, review and integration. GA-01/02/03/11 remain PARTIAL; static source is not runtime execution or active MM/VBR/ISR.
+
+## GA-01/02/03/11 — 2026-11-15: isolated headless acceptance runner (PR #336 candidate)
+
+Added `scripts/run-ga01-cpu32-headless.py` to create an ephemeral raw CPU32 fixture/project and invoke the existing preparer and genuine decoder verifier in one headless Ghidra process. The runner rejects missing/duplicate PASS markers, nonzero exits and error/exception diagnostics; `tests/test_ga01_cpu32_headless_runner.py` provides six positive/negative **mock-launcher** contract cases, not Ghidra decode evidence. The acceptance procedure now distinguishes mock launcher regression from genuine Ghidra 12.1.4 PUBLIC verification. Source commits `67a76892`, `43b4c66b`, `fba403b2` are candidates only: Java 21/25 exact-head CI, actual isolated headless CPU32 execution with matching installed extension, review and merge remain required. GA-01/02/03/11 remain PARTIAL. Decoded source does not prove execution, active VBR/ISR, SIMCR/MM latch or physical mapping.
+
+## GA-01/02/03/11 — 2026-11-15: isolated Ghidra fixture bootstrap (PR #336 candidate)
+
+Added `ghidra_scripts/GA18PrepareDecodedEffectSites.java` to make the existing 18-byte CPU32 acceptance fixture reproducible inside a disposable Ghidra program. It refuses incorrect bytes, CPU language, pre-existing functions/disassembly, and incorrect instruction lengths; it disassembles the four exact boundaries and creates a bounded function for `GA18VerifyDecodedEffectSites.java`. Updated the acceptance procedure to require both logs from the same isolated program. **No real Ghidra execution is claimed.** Required: Java 21/25 exact-HEAD CI, real Ghidra preparer + verifier PASS and negative evidence, review, integration. GA-01/02/03/11 remain PARTIAL. Static decoding is not execution or active MM/VBR/ISR.
+
+## GA-01/02/03/11 — 2026-11-15: reproducible isolated CPU32 fixture input (PR #336 candidate)
+
+Added `scripts/create-ga01-cpu32-decoder-fixture.py` to generate the exact 18-byte STORE/MOVEC-to-VBR/MOVEC-from-VBR/MOVEQ test binary with exclusive file creation and printed SHA-256. Wired a separate CI step to validate byte/PC offsets and reject overwrite, and linked the generator from the genuine Ghidra acceptance procedure. The generator and CI byte assertions **do not replace** actual Ghidra 12.1.4 PUBLIC CPU32 decode verification. Commit `9573d5d05f2488d11647fd71cebc19bf411404a9` is a candidate; exact-head Actions were not available at inspection. Required: execute `GA18VerifyDecodedEffectSites.java` in isolated Ghidra with the generated binary, record fixture hash and positive/negative decoder logs, verify Java 21/25 Actions, review and merge. GA-01/02/03/11 remain PARTIAL. Static decode does not imply execution, active VBR/ISR, SIMCR/MM state or physical mapping.
+
+## GA-01/02/03/11 — 2026-11-15: real CPU32 decoded-site acceptance fixture (PR #336 candidate)
+
+Added `ghidra_scripts/GA18VerifyDecodedEffectSites.java` and `docs/ga01-decoded-sites-cpu32-fixture.md` on the existing PR branch. The verifier requires a disposable CPU32 Ghidra 12.1.4 PUBLIC program with four independently decoded instructions: immediate-to-memory MOVE.W (positive p-code STORE), MOVEC D0,VBR (positive to-VBR), MOVEC VBR,D0 (negative), and MOVEQ D0 (negative). It checks Ghidra's actual operand direction and p-code before invoking the production decoder, then demands exactly two retained sites and a complete inventory. The Java 21 workflow path filters now track these fixture files. **This is a test implementation, not a test PASS.** Required before merge: run the real isolated fixture on the exact HEAD, capture positive/negative logs and fixture hash, exact-HEAD Java 21 and Java 25 CI, review. GA-01/02/03/11 remain PARTIAL; no runtime execution, active ISR/VBR or physical mapping is inferred.
+
+## GA-01/02/03/11 — 2026-11-14: MOVEC operand-direction evidence (PR #336 candidate)
+
+The Listing adapter now inspects **both** Ghidra-decoded MOVEC operands instead of inferring a VBR write from the last operand alone. A unique register source and unique VBR destination yield a static TO_VBR source candidate; VBR as source with another register destination is NOT_TO_VBR. Missing/multiple/non-register operands, invalid operand count and identical register operands are UNKNOWN and mark the scan incomplete, refusing the downstream RESET/CALL join. A separate pure Java 21 regression exercises positive, negative and ambiguous cases. This does **not** independently validate CPU32 Ghidra's actual operand order: the isolated genuine synthetic Ghidra 12.1.4 PUBLIC MOVEC-to/from-VBR and STORE fixture is still mandatory. Exact-head Java 21/25 CI, review and integration remain pending; GA-01/02/03/11 remain PARTIAL. Neither a decoded MOVEC nor a reachable CALL path proves active VBR/ISR or runtime execution.
+
+## GA-01/02/03/11 — 2026-11-14: decoder ownership and bounded-work follow-up (PR #336)
+
+On the existing PR #336 branch, the Ghidra Listing decoder now rejects ambiguous instruction-PC ownership across overlapping function bodies, rejects malformed MOVEC operand counts, and counts *all inspected instructions* against its 200,000-instruction work budget, including malformed/skipped records. Rejected or ambiguous evidence marks the scan incomplete; the downstream RESET-site join refuses incomplete scans. These are static read-only safeguards, not a proof of executed instructions, active VBR/ISR, SIMCR/MM state, or physical mapping. The previous head `38ee399a166c26629de52b2d2af8a23027e833e0` has 25/25 PR workflow SUCCESS; those results do not transfer to the new head. **Candidate only:** exact-new-head Java 21/25 Actions, independent synthetic Ghidra positive/negative STORE/MOVEC decoder evidence, review and merge are still required. GA-01/02/03/11 remain PARTIAL.
+
+## GA-01/02/03/11 — 2026-11-14: fail-closed decoded operand evidence (candidate)
+
+PR #336 now treats a null p-code operation as incomplete source evidence, and
+MOVEC without a decoded destination register as incomplete rather than a
+negative VBR finding. These cases must not silently produce a complete
+RESET/CALL correlation. The operand-order assumption remains unverified until
+an isolated CPU32 Ghidra fixture checks MOVEC-to-VBR and MOVEC-from-VBR
+alongside memory STORE and register-only negatives. The change is a candidate,
+not a claim of runtime execution, active VBR/ISR or formal GA acceptance.
+
+## GA-01/02/03/11 — 2026-11-14: bounded decoded-site canonicalization (candidate)
+
+PR #336 now sorts all decoded STORE/MOVEC site candidates before applying the
+5000-site evidence cap. Previously, an incomplete inventory retained whichever
+sites happened to arrive first from Listing traversal; it could therefore
+expose different truncated evidence for the same source set. Regression cases
+cover reversed input and a high-PC-first traversal. Omitted evidence still
+marks the inventory incomplete and blocks RESET witness correlation. This is
+source-level work only; exact-head Actions and isolated Ghidra positive/negative
+decoder validation remain necessary before merge or formal acceptance.
+
+## GA-01/02/03/11 — 2026-11-14: decoded-site integration follow-up (candidate)
+
+PR #336 now exposes a read-only Ghidra Program-to-RESET-witness correlation
+entry point, using the independently decoded instruction PCs and the existing
+bounded fail-closed source join. The Listing traversal stops once the decode
+budget is exhausted rather than continuing across further functions.
+Additional Java 21 regressions verify order independence and the 5000-site
+limit: omitted sites make the inventory incomplete and prohibit correlation.
+These changes do not independently verify Ghidra's MOVEC operand ordering or
+p-code STORE interpretation. Exact-head Java 21 and Java 25 CI, a real
+isolated synthetic Ghidra positive/negative decoder fixture, review and
+merge remain mandatory. No runtime execution, active VBR/ISR or physical
+mapping is inferred.
+
+## GA-01/02/03/11 — 2026-11-14: independently decoded instruction-site inventory (candidate)
+
+Branch `work/ga01-11-ghidra-decoded-sites-20261114` introduces a read-only
+Ghidra Listing adapter that walks recognized functions, obtains actual
+instruction PCs, classifies memory writes using p-code STORE and MOVEC-to-VBR
+only when the decoded destination register is VBR. A separate Java 21
+bounded source inventory sorts sites deterministically and refuses duplicate
+PCs, invalid coordinates and incomplete/omitted decoding before joining
+to RESET CALL witnesses. Source regressions cover STORE, MOVEC, dual-effect,
+ordering, missing source evidence, invalid PC, duplicate and immutability.
+The extraction is static: decoded STORE is not executed STORE, MOVEC-to-VBR
+is not active VBR or ISR, and no physical mapping is inferred.
+
+**Candidate, not accepted:** exact-head Java 21 Actions, Java 25 full
+Ghidra 12.1.4 PUBLIC build, real isolated synthetic Ghidra decoder fixture,
+review and merge are required. A Ghidra fixture must independently verify
+both positive p-code STORE and MOVEC/VBR and negative register-only/non-VBR
+instructions. The adapter does not claim formal GA-01/02/03/11 completion.
+
 ## GA-01/02/03/11 — 2026-11-14: PR #335 integrated
 
 PR [#335](https://github.com/bogkom/GhidrAssist/pull/335) merged from exact tested head `04390ee9f6a3e0818a17730da2f9e86e495fa504` as squash `62d971e2f0ab700ba2058b123d1f56329e922297`. The 25 PR-triggered workflow runs reported completed SUCCESS, including Java 21 vector-source regression, extension integration build and isolated synthetic Ghidra workflows. Reviewed four-file patch, no unresolved inline threads, branch was 5 commits ahead and 0 behind `master`. Integration provides bounded static instruction-PC site join to RESET CALL witness chains; source instruction PCs are externally supplied, not independently decoded by this feature. Static reachability is not runtime execution or active VBR/ISR. GA-01/02/03/11 remain PARTIAL; next functional gate: independently extract typed STORE/MOVEC instruction sites from Ghidra and connect to the join, with negative evidence and exact-SHA isolated Ghidra tests.
@@ -5229,3 +5385,124 @@ PR #331 was squash-merged into `master` at `70adc36a4b629702da0e8a32d516307b7094
 ## GA-01/02/03/11 — 2026-11-14: PR #333 integrated handler-inventory uncertainty
 
 PR #333 was squash-merged into `master` at `b7d09d169aae3caf3c8c25bf16538ef256b00729` from exact tested head `6a6cd15c6b97aa4c803c6b3267b5999112cab9e9`. All 26 reported pull-request GitHub Actions workflows completed SUCCESS, including the Java 21 static vector/RESET regression, Java 25 extension build and isolated synthetic Ghidra workflows. Branch was behind `master` by zero commits, mergeable, and had no unresolved inline review threads. The read-only RESET-to-handler correlation now distinguishes exact handlers absent from the recognized function graph (`UNKNOWN_HANDLER_NOT_IN_GRAPH`) from known but disconnected handlers (`NOT_OBSERVED_WITHIN_BOUND`); incomplete CALL surveys remain `UNKNOWN_FRONTIER`, interior pointers remain refused. This is a bounded static observation, not evidence of execution or active VBR/ISR. GA-01/02/03/11 remain PARTIAL; further formal criteria and independent acceptance evidence are required.
+
+
+## GA-01/02/03/11 — 2026-11-14: decoder bounded-scan follow-up (PR #336)
+
+The Ghidra Listing adapter now enforces its 200,000-instruction budget against
+**all inspected instructions**, including discarded or ambiguous records,
+instead of only retained decoded records. MOVEC operand-decoding exceptions
+mark the scan incomplete rather than escaping as an unclassified failure.
+Source regression adds overlapping-owner coordinate conflicts and preserves
+observed sites under incomplete input without allowing RESET correlation.
+These are candidate changes, not a Ghidra decoder PASS: exact-head Java 21,
+Java 25 full build, and genuine isolated CPU32 Ghidra positive/negative
+STORE and MOVEC-to/from-VBR fixtures remain required before review/merge.
+Static reachability and decoded instructions do not prove execution or active ISR.
+
+
+## GA-01/02/03/11 — 2026-11-15: PR #336 headless launcher execution gate
+
+The isolated CPU32 headless runner now uses a real subprocess deadline
+(default 600 seconds, accepted range 1..3600) and fails closed on timeout,
+including partial output that contains PASS markers. Its Python source is
+parseable; previously literal backslash-n sequences in argument declarations
+prevented startup and the timeout argument was not passed to subprocess.
+The vector/RESET Actions workflow now includes `py_compile` and the
+launcher contract suite (mock headless positive and negative cases), with
+path triggers for the launcher and its tests. This suite does **not** prove
+Ghidra CPU32 decoding. Required next: exact-head Actions Java21, Java25
+extension build and actual isolated Ghidra 12.1.4 PUBLIC decoder execution,
+then review/merge. No runtime ISR, latched MM or physical mapping inferred.
+
+
+## GA-01/02/03/11 — 2026-11-15: structured decoder evidence correction (PR #336)
+
+Corrected a blocking mismatch: both actual Ghidra scripts emit PASS followed by
+structured counts, while the headless runner previously required a bare PASS
+line. The runner now accepts exactly one complete preparer line
+(`instructions=4 function=0x100 bytes=18`) and one complete verifier line
+(`sites=2 positive=2 negative=2`), and rejects bare markers or wrong counts.
+Updated mock-headless regression and acceptance instructions. This is a
+source-level repair, **not** evidence that genuine Ghidra decoding passed.
+The current candidate requires exact-HEAD Java 21 Actions, Java 25 extension
+build, real isolated Ghidra 12.1.4 PUBLIC positive/negative run and review
+before integration. Static decode is not execution, active MM/VBR/ISR or
+physical hardware mapping.
+
+## GA-01/02/03/11 — 2026-11-15: exact-checkout provenance gate (PR #336)
+
+The isolated CPU32 headless launcher now verifies its requested 40-character
+source SHA against the Git checkout HEAD and refuses modified tracked files or
+unverifiable checkout metadata **before** launching the disposable Ghidra
+process. The launcher regression derives the expected SHA from its own checkout
+and adds a negative mismatched-SHA refusal. This does not verify the installed
+extension artifact: its build/installation provenance remains a separate
+formal acceptance requirement.
+
+On prior candidate SHA `fd5bb323d793cd7af925e953f6c1a2e9a0e8df5e`,
+GitHub reported SUCCESS for vector/RESET Java 21 source regressions and
+Hardware Analysis extension integration build, but the independent
+GA-02/03 scaled-index CPU32 workflow reported FAILURE. These outcomes do
+not certify the subsequent candidate commits. On this new candidate,
+exact-head Actions, actual isolated CPU32 STORE/MOVEC Ghidra execution,
+extension artifact provenance and review are still required. No formal
+GA-01/02/03/11 completion or integration claimed.
+
+## GA-01/11 — 2026-11-15: incomplete p-code and instruction-boundary evidence (PR #336)
+
+The read-only Listing decoder now refuses a complete negative STORE inventory when Ghidra supplies an empty p-code array, and marks instructions spanning outside their owning function body as incomplete. This preserves independently observed effects without treating missing decoding as proof of absence. The CPU32 fixture guidance was updated; no actual Ghidra result is inferred from these source changes. At the prior head `4c0a85b762bc824ec401268399dabcb12057f2ee`, GitHub reported SUCCESS for the vector/RESET regression and extension integration build; these results do not cover this new HEAD. Still required: Java 21/25 checks on exact final SHA, genuine isolated CPU32 STORE/MOVEC test, installed-extension provenance, review and integration. GA-01/02/03/11 remain PARTIAL.
+
+
+## GA-01/11 — 2026-11-15: decoded-site stale-evidence negative control (candidate)
+
+PR #336 extends the isolated genuine CPU32 Ghidra verifier with a third
+negative phase: after clearing MOVEQ and MOVEC-to-VBR, clearing the remaining
+STORE must yield an empty decoded effect inventory and `incomplete=true`.
+This guards against stale positive evidence after Listing mutations in a
+disposable synthetic program. The headless launcher now requires
+`negative=3`, and its mock-only regression rejects the previous `negative=2`
+marker. These edits are **not** evidence of a genuine Ghidra PASS. Required
+before merge: Java21 source regressions, Java25 extension build, genuine
+isolated Ghidra 12.1.4 PUBLIC preparer/verifier on the exact PR SHA, artifact
+provenance, review. No execution, active MM/VBR/ISR, or physical CS mapping
+is inferred. GA-01/02/03/11 remain PARTIAL.
+
+
+## GA-01/11 — 2026-11-15: recovery-marker regression correction (PR #336)
+
+The mock-headless regression previously attempted to remove `recovery=1`
+from an expected `recovery=2` marker, leaving the marker unchanged and
+allowing that negative test to pass without exercising the intended rejection.
+The source test now mutates the actual `recovery=2` evidence and checks
+missing, zero and excessive recovery counts, as well as incorrect positive
+and negative totals and nonzero subprocess exit. This repairs **test coverage**,
+not CPU32 decoder behavior. Commit `914724971ca55c19dd70e46a0b4b1e720d87c0f6`
+is a candidate checkpoint, not a PASS claim. Exact-head Java21/Java25 Actions,
+genuine isolated Ghidra CPU32 execution, installed extension provenance and
+review are still required before integration. GA-01/02/03/11 remain PARTIAL.
+
+#### GA-01/11 PR #336 evidence-contract checkpoint — 2026-11-15
+
+On `work/ga01-11-ghidra-decoded-sites-20261114`, repaired the mock headless launcher regression so mutated evidence counts and nonzero exit are checked against real newline-separated full PASS lines, rather than accidental literal `\\n` strings. Added near-valid full-marker and post-PASS failure negative cases; synchronized CPU32 fixture documentation with `negative=4 recovery=2`. These are **unverified source changes** until exact-head Actions execute. Java 21 regression, Java 25 extension build, genuine isolated Ghidra 12.1.4 PUBLIC positive/negative/recovery run, installed artifact provenance, review and merge remain required. No formal GA-01/02/03/11 status change.
+
+
+## GA-01/11 — 2026-11-16: CI failure diagnosed and contract regression corrected (PR #336)
+
+On exact head `645b752386d4d85caf1d4f57410890ecb26b3707`, 25 of 26 PR-triggered Actions workflows succeeded; vector/RESET Java 21 source workflow run `43778000042` failed in the mock-only launcher suite (23/24 tests passed). The failing `test_ordering_guard_is_executed_not_escaped` searched the *entire test source*, thereby matching its own assertion string, rather than detecting a broken execution path. The behavioral test `test_verifier_must_follow_preparer` already rejects reversed real newline-separated markers. The follow-up removes the self-matching source assertion and adds a duplicate-preparer rejection. This is a source regression repair, **not** a genuine CPU32 Ghidra PASS. Exact new-head Java21/Java25 checks, installed-extension provenance, isolated Ghidra 12.1.4 PUBLIC STORE/MOVEC positive/negative/recovery run and review remain required. GA-01/02/03/11 remain PARTIAL.
+
+### GA-01/11 genuine CPU32 evidence checkpoint — 2026-11-16
+
+On PR #336 head `90196f3291161e4e3f6e928a175f145ec1227093`, Actions run [43837659455](https://github.com/bogkom/GhidrAssist/actions/runs/43837659455) reported Java 21 source/mock job SUCCESS but genuine Ghidra 12.1.4 PUBLIC job FAILURE. Official release download, Java 25 extension build/install and disposable CPU32 preparation succeeded; verifier failed at `positive p-code STORE not decoded` at 0x100. This is an observed **negative genuine-Ghidra result**, not an accepted decoder. Follow-up on the same PR adds a diagnostic p-code witness and corrects the launcher to parse Ghidra's actual INFO/GhidraScript-prefixed evidence lines with strict source, order and conflict checks, plus source-level positive/negative regressions. Require fresh exact-HEAD Actions and actual p-code output before deciding whether the CPU32 instruction semantics or production decoder must change. No formal GA-01/11 PASS or merge yet. Static decoded source is not execution, active MM/VBR/ISR, or physical mapping.
+
+
+### GA-01/11 — 2026-11-16: genuine CPU32 RAM-output p-code correction (PR #336)
+
+Genuine isolated Ghidra 12.1.4 PUBLIC Actions run [43854611969](https://github.com/bogkom/GhidrAssist/actions/runs/43854611969), source `1fceb383380d3a26e91c1206cf5cf103cc12bfe2`, **FAILED** at 0x100. The observed `MOVE.W #0x40ca,($00fffa00).L` p-code uses `COPY` to a `ram` output varnode (offset `0xfffa00`, size 2), rather than an explicit `STORE`. This is a real decoded memory effect, not proof of execution or active MM. PR #336 now recognizes both explicit `STORE` and `COPY` with typed memory-space output, excluding register/unique outputs, and updates the genuine fixture's positive and negative controls. These follow-up commits are **unverified** until exact-head Java 21, Java 25 build, and genuine isolated CPU32 Ghidra workflow rerun. The four negative and two recovery phases, extension provenance and review remain required before merge. GA-01/02/03/11 remain PARTIAL.
+
+
+### GA-01/11 — 2026-11-16: genuine CPU32 PASS and extension installation provenance (PR #336)
+
+GitHub Actions [run 43934878278](https://github.com/bogkom/GhidrAssist/actions/runs/43934878278) completed both Java 21 source regression and genuine isolated Ghidra 12.1.4 PUBLIC Java 25 build/headless jobs with SUCCESS on PR merge checkout `a40e3d963d16382f93051144b9f93340228372a0` (PR head `a061a938db7b8b8a8e3f1e282cd84c3f1c3a9e8c`). Genuine script evidence: `sites=2 positive=2 negative=4 recovery=2`, and the runner emitted `GA01_CPU32_HEADLESS_PASS`. The archived evidence is [artifact 14259354480](https://github.com/bogkom/GhidrAssist/actions/runs/43934878278/artifacts/14259354480). This is a **real synthetic headless result on the PR merge checkout**, not proof of an exact PR-head run or formal GA-01/11 acceptance.
+
+Follow-up on the same PR adds an installation provenance gate comparing SHA-256 of every installed extension ZIP member against the freshly built archive and requiring at least one JAR. This new gate is unverified until its own Actions execution. A successful archive comparison proves installation bytes, **not** runtime classloader provenance. Before merge, verify new-head CI, inspect the complete PR diff and dependency checks, and preserve static-evidence limits: reachable is not executed; source SIMCR/MM or MOVEC/VBR does not prove active hardware state.

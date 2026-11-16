@@ -7,24 +7,46 @@ on:
       - 'src/main/java/ghidrassist/hardware/HardwareVectorResetCorrelation.java'
       - 'src/main/java/ghidrassist/hardware/HardwareResetHandlerWitness.java'
       - 'src/main/java/ghidrassist/hardware/HardwareResetEffectSites.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareDecodedEffectSites.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareGhidraEffectSiteDecoder.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareMovecDirectionEvidence.java'
       - 'src/main/java/ghidrassist/hardware/HardwareResetFlow.java'
       - 'src/main/java/ghidrassist/hardware/HardwareCallEffects.java'
       - 'src/test/java/ghidrassist/hardware/HardwareVectorResetCorrelationSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/HardwareResetHandlerWitnessSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/HardwareResetEffectSitesSelfTest.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareDecodedEffectSitesSelfTest.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareMovecDirectionEvidenceSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/HardwareCallEffectsSelfTest.java'
+      - 'ghidra_scripts/GA18PrepareDecodedEffectSites.java'
+      - 'ghidra_scripts/GA18VerifyDecodedEffectSites.java'
+      - 'docs/ga01-decoded-sites-cpu32-fixture.md'
+      - 'scripts/create-ga01-cpu32-decoder-fixture.py'
+      - 'scripts/run-ga01-cpu32-headless.py'
+      - 'tests/test_ga01_cpu32_headless_runner.py'
       - '.github/workflows/hardware-vector-reset-correlation.yml'
   pull_request:
     paths:
       - 'src/main/java/ghidrassist/hardware/HardwareVectorResetCorrelation.java'
       - 'src/main/java/ghidrassist/hardware/HardwareResetHandlerWitness.java'
       - 'src/main/java/ghidrassist/hardware/HardwareResetEffectSites.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareDecodedEffectSites.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareGhidraEffectSiteDecoder.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareMovecDirectionEvidence.java'
       - 'src/main/java/ghidrassist/hardware/HardwareResetFlow.java'
       - 'src/main/java/ghidrassist/hardware/HardwareCallEffects.java'
       - 'src/test/java/ghidrassist/hardware/HardwareVectorResetCorrelationSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/HardwareResetHandlerWitnessSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/HardwareResetEffectSitesSelfTest.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareDecodedEffectSitesSelfTest.java'
+      - 'src/test/java/ghidrassist/hardware/HardwareMovecDirectionEvidenceSelfTest.java'
       - 'src/test/java/ghidrassist/hardware/HardwareCallEffectsSelfTest.java'
+      - 'ghidra_scripts/GA18PrepareDecodedEffectSites.java'
+      - 'ghidra_scripts/GA18VerifyDecodedEffectSites.java'
+      - 'docs/ga01-decoded-sites-cpu32-fixture.md'
+      - 'scripts/create-ga01-cpu32-decoder-fixture.py'
+      - 'scripts/run-ga01-cpu32-headless.py'
+      - 'tests/test_ga01_cpu32_headless_runner.py'
       - '.github/workflows/hardware-vector-reset-correlation.yml'
 
 jobs:
@@ -38,6 +60,32 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
+      - name: Verify reproducible CPU32 synthetic fixture and no-overwrite guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          fixture="$RUNNER_TEMP/ga01-cpu32-decoder.bin"
+          python3 scripts/create-ga01-cpu32-decoder-fixture.py "$fixture"
+          python3 - "$fixture" <<'PY'
+          import hashlib, pathlib, sys
+          from importlib.machinery import SourceFileLoader
+          generator = SourceFileLoader("ga01_fixture", "scripts/create-ga01-cpu32-decoder-fixture.py").load_module()
+          actual = pathlib.Path(sys.argv[1]).read_bytes()
+          generator.verify(actual)
+          assert hashlib.sha256(actual).hexdigest() == hashlib.sha256(generator.PAYLOAD).hexdigest()
+          print("GA18_CPU32_FIXTURE_BYTES_PASS")
+          PY
+          if python3 scripts/create-ga01-cpu32-decoder-fixture.py "$fixture"; then
+            echo "FAIL: fixture generator overwrote existing file" >&2
+            exit 1
+          fi
+          echo "GA18_CPU32_FIXTURE_NO_OVERWRITE_PASS"
+      - name: Verify isolated CPU32 headless runner contract (mock only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/run-ga01-cpu32-headless.py
+          python3 -m unittest discover -s tests -p 'test_ga01_cpu32_headless_runner.py' -v
       - name: Compile and test pure-Java bounded graph/vector evidence
         shell: bash
         run: |
@@ -49,9 +97,13 @@ jobs:
             src/main/java/ghidrassist/hardware/HardwareVectorResetCorrelation.java \
             src/main/java/ghidrassist/hardware/HardwareResetHandlerWitness.java \
             src/main/java/ghidrassist/hardware/HardwareResetEffectSites.java \
+            src/main/java/ghidrassist/hardware/HardwareDecodedEffectSites.java \
+            src/main/java/ghidrassist/hardware/HardwareMovecDirectionEvidence.java \
             src/test/java/ghidrassist/hardware/HardwareVectorResetCorrelationSelfTest.java \
             src/test/java/ghidrassist/hardware/HardwareResetHandlerWitnessSelfTest.java \
             src/test/java/ghidrassist/hardware/HardwareResetEffectSitesSelfTest.java \
+            src/test/java/ghidrassist/hardware/HardwareDecodedEffectSitesSelfTest.java \
+            src/test/java/ghidrassist/hardware/HardwareMovecDirectionEvidenceSelfTest.java \
             src/test/java/ghidrassist/hardware/HardwareCallEffectsSelfTest.java
           java -ea -cp "$RUNNER_TEMP/vector-reset-tests" \
             ghidrassist.hardware.HardwareVectorResetCorrelationSelfTest
@@ -61,3 +113,111 @@ jobs:
             ghidrassist.hardware.HardwareResetHandlerWitnessSelfTest
           java -ea -cp "$RUNNER_TEMP/vector-reset-tests" \
             ghidrassist.hardware.HardwareResetEffectSitesSelfTest
+          java -ea -cp "$RUNNER_TEMP/vector-reset-tests" \
+            ghidrassist.hardware.HardwareDecodedEffectSitesSelfTest
+
+          java -ea -cp "$RUNNER_TEMP/vector-reset-tests" \
+            ghidrassist.hardware.HardwareMovecDirectionEvidenceSelfTest
+
+  genuine-cpu32-headless:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Fetch pinned official Ghidra 12.1.4 PUBLIC release
+        shell: bash
+        run: |
+          set -euo pipefail
+          GH_TOKEN="${{ github.token }}" python3 - <<'PY'
+          import json, os, urllib.request
+          api = 'https://api.github.com/repos/NationalSecurityAgency/ghidra/releases?per_page=100'
+          token = os.environ.get('GH_TOKEN')
+          if not token:
+              raise SystemExit('Missing GitHub Actions token for authenticated release lookup')
+          request = urllib.request.Request(api, headers={'Accept':'application/vnd.github+json','User-Agent':'GhidrAssist-CI', 'Authorization':'Bearer ' + token, 'X-GitHub-Api-Version':'2022-11-28'})
+          with urllib.request.urlopen(request, timeout=40) as response:
+              releases = json.load(response)
+          matches = [(release, asset) for release in releases for asset in release.get('assets', [])
+                     if asset['name'].startswith('ghidra_12.1.4_PUBLIC_') and asset['name'].endswith('.zip')]
+          if len(matches) != 1:
+              raise SystemExit(f'Expected one official Ghidra 12.1.4 PUBLIC asset, found {len(matches)}')
+          asset = matches[0][1]
+          with open(os.environ['GITHUB_ENV'], 'a') as env:
+              print('GHIDRA_RELEASE_URL=' + asset['browser_download_url'], file=env)
+              print('GHIDRA_RELEASE_ASSET=' + asset['name'], file=env)
+          PY
+      - name: Download and unpack verified Ghidra release candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 --output "$RUNNER_TEMP/ghidra.zip" "$GHIDRA_RELEASE_URL"
+          sha256sum "$RUNNER_TEMP/ghidra.zip" | tee "$RUNNER_TEMP/ghidra-release.sha256"
+          unzip -q "$RUNNER_TEMP/ghidra.zip" -d "$RUNNER_TEMP"
+          ghidra_home="$(find "$RUNNER_TEMP" -maxdepth 1 -type d -name 'ghidra_12.1.4_PUBLIC*' -print -quit)"
+          test -n "$ghidra_home"
+          echo "GHIDRA_INSTALL_DIR=$ghidra_home" >> "$GITHUB_ENV"
+      - name: Build and install extension from exact checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$GHIDRA_INSTALL_DIR/support/gradle/gradlew" --no-daemon buildExtension
+          mapfile -t zips < <(find dist -maxdepth 1 -name '*.zip' -type f)
+          test "${#zips[@]}" -eq 1
+          sha256sum "${zips[0]}" | tee "$RUNNER_TEMP/extension.sha256"
+          mkdir -p "$GHIDRA_INSTALL_DIR/Ghidra/Extensions/Ghidra"
+          unzip -q "${zips[0]}" -d "$GHIDRA_INSTALL_DIR/Ghidra/Extensions/Ghidra"
+          # Bind the installed extension bytes to the exact built ZIP. Merely
+          # running buildExtension does not prove what the headless process loads.
+          EXTENSION_ZIP="${zips[0]}" python3 - <<'PY'
+          import hashlib, os, pathlib, zipfile
+          archive = pathlib.Path(os.environ['EXTENSION_ZIP'])
+          target = pathlib.Path(os.environ['GHIDRA_INSTALL_DIR']) / 'Ghidra/Extensions/Ghidra'
+          checked = 0
+          jars = 0
+          with zipfile.ZipFile(archive) as source:
+              for member in source.infolist():
+                  if member.is_dir():
+                      continue
+                  relative = pathlib.PurePosixPath(member.filename)
+                  if relative.is_absolute() or '..' in relative.parts:
+                      raise SystemExit('Unsafe extension archive path')
+                  installed = target.joinpath(*relative.parts)
+                  if not installed.is_file():
+                      raise SystemExit('Missing installed extension member: ' + member.filename)
+                  expected = hashlib.sha256(source.read(member)).digest()
+                  actual = hashlib.sha256(installed.read_bytes()).digest()
+                  if actual != expected:
+                      raise SystemExit('Installed extension mismatch: ' + member.filename)
+                  checked += 1
+                  jars += member.filename.lower().endswith('.jar')
+          if not checked or not jars:
+              raise SystemExit('Extension ZIP has no installed JAR evidence')
+          print(f'GA01_EXTENSION_INSTALL_PROVENANCE_PASS members={checked} jars={jars}')
+          PY
+      - name: Execute genuine isolated CPU32 STORE MOVEC and negative recovery controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/run-ga01-cpu32-headless.py \
+            --ghidra-home "$GHIDRA_INSTALL_DIR" \
+            --source-sha "$GITHUB_SHA" \
+            --timeout-seconds 900 \
+            --evidence-log "$RUNNER_TEMP/ga01-cpu32-evidence.log"
+          sha256sum "$RUNNER_TEMP/ga01-cpu32-evidence.log" | tee "$RUNNER_TEMP/ga01-cpu32-evidence.sha256"
+      - name: Preserve genuine Ghidra evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ga01-cpu32-genuine-ghidra-evidence
+          path: |
+            ${{ runner.temp }}/ga01-cpu32-evidence.log
+            ${{ runner.temp }}/ga01-cpu32-evidence.sha256
+            ${{ runner.temp }}/extension.sha256
+            ${{ runner.temp }}/ghidra-release.sha256
+          if-no-files-found: warn
