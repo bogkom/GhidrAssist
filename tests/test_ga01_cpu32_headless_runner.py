@@ -243,6 +243,8 @@ class HeadlessRunnerContract(unittest.TestCase):
         self.assertIn("outputSize=", source)
         self.assertIn("op.getOutput().getOffset() == 0x00fffa00L", source)
         self.assertIn("op.getOutput().getSize() == 2", source)
+        self.assertIn("inputs.length == 1 && inputs[0] != null", source)
+        self.assertIn("inputs[0].getSize() == op.getOutput().getSize()", source)
         self.assertIn("op.getOutput().getAddress().getAddressSpace().isMemorySpace()", source)
         self.assertIn('require(hasStore(store), "positive p-code memory write not decoded")', source)
 
