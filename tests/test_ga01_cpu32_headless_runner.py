@@ -36,6 +36,15 @@ class HeadlessRunnerContract(unittest.TestCase):
                 command.extend(["--evidence-log", str(evidence_log)])
             return subprocess.run(command, capture_output=True, text=True)
 
+    def test_genuine_release_lookup_is_authenticated(self):
+        # This checks the CI contract only; it does not contact GitHub or run Ghidra.
+        workflow = (ROOT / ".github/workflows/hardware-vector-reset-correlation.yml").read_text()
+        self.assertIn('GH_TOKEN="${{ github.token }}" python3 - <<\'PY\'', workflow)
+        self.assertIn("'Authorization':'Bearer ' + token", workflow)
+        self.assertIn("if not token:", workflow)
+        self.assertIn("Expected one official Ghidra 12.1.4 PUBLIC asset", workflow)
+        self.assertNotIn("print(token)", workflow)
+
     def test_rejects_wrong_source_revision(self):
         with tempfile.TemporaryDirectory() as directory:
             home = Path(directory)
