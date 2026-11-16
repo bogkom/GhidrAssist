@@ -172,6 +172,28 @@ class HeadlessRunnerContract(unittest.TestCase):
             self.assertIn("GA01_CPU32_HEADLESS_FAIL launch_error=", saved)
             self.assertNotIn("GA01_CPU32_HEADLESS_PASS", saved)
 
+    def test_nonzero_exit_persists_failure_and_raw_output(self):
+        with tempfile.TemporaryDirectory() as directory:
+            log = Path(directory) / "nonzero-evidence.log"
+            result = self.invoke(PREPARE + "\n" + VERIFY, exit_code=7,
+                                 evidence_log=log)
+            self.assertNotEqual(0, result.returncode)
+            saved = log.read_text()
+            self.assertIn(PREPARE, saved)
+            self.assertIn(VERIFY, saved)
+            self.assertIn("GA01_CPU32_HEADLESS_FAIL exit=7", saved)
+            self.assertNotIn("GA01_CPU32_HEADLESS_PASS", saved)
+
+    def test_timeout_persists_partial_output_and_failure(self):
+        with tempfile.TemporaryDirectory() as directory:
+            log = Path(directory) / "timeout-evidence.log"
+            result = self.invoke(PREPARE + "\n" + VERIFY, delay=2, timeout=1,
+                                 evidence_log=log)
+            self.assertNotEqual(0, result.returncode)
+            saved = log.read_text()
+            self.assertIn("GA01_CPU32_HEADLESS_FAIL timeout=1", saved)
+            self.assertNotIn("GA01_CPU32_HEADLESS_PASS", saved)
+
     def test_timeout_rejects_even_eventual_pass(self):
         result = self.invoke(PREPARE + "\n" + VERIFY, delay=2, timeout=1)
         self.assertNotEqual(0, result.returncode)
