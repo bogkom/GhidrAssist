@@ -1,3 +1,7 @@
+## GA-01/11 — 2026-11-16: executable headless evidence-ordering regression (PR #336 candidate)
+
+Fixed literal escaped `\\n` sequences in both `scripts/run-ga01-cpu32-headless.py` and `tests/test_ga01_cpu32_headless_runner.py`: they previously commented out the ordering gate and its reversed-order negative test. The runner now executes the exact preparer-before-verifier assertion; the regression actually invokes reversed output and adds a source guard against reintroducing escaped comments. Commits `f37ce21b7ba9db923fabcda1d11ef25e883e0bd7`, `25d0cc9ff97e721fe30b7a69915bfa76b98b3add`. This is a **candidate source fix**, not a genuine Ghidra PASS. Exact-head Java 21/25 CI, isolated Ghidra 12.1.4 PUBLIC positive/negative/recovery execution, extension provenance and review are mandatory before merge. GA-01/02/03/11 remain PARTIAL.
+
 ## GA-01/11 — 2026-11-16: headless evidence ordering gate (PR #336 candidate)
 
 The isolated runner now requires the fixture-preparer PASS to precede the verifier PASS in the same process output. A negative mock regression rejects reversed order; fixture documentation records the contract. This is a source-only candidate, **not** genuine Ghidra execution evidence. Java 21/25 exact-head checks, isolated Ghidra 12.1.4 PUBLIC execution, extension provenance and review are still mandatory; GA-01/02/03/11 remain PARTIAL.
