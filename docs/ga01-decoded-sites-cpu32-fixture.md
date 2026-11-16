@@ -72,3 +72,6 @@ The mocked launcher tests now pass actual newline-separated full preparer/verifi
 
 Before starting the disposable headless process, the runner reads `Ghidra/application.properties` and requires `application.version=12.1.4` and `application.release.name=PUBLIC`. Missing metadata, an older version, or another release name fails before import. Mock-launcher regression covers these cases, but does not attest installed extension provenance or replace real Ghidra execution.
 \nThe runner also rejects an out-of-order verifier PASS preceding the preparer PASS; this is a mock-runner contract check, not proof of a real Ghidra execution.\n
+### Contradictory evidence lines
+
+The runner fails closed if stdout contains any additional line beginning with either structured preparer/verifier marker, even if one valid marker of each kind also appears. The mock launcher regression checks contradictory preparer instruction counts and verifier recovery/negative counts. This is a source-level contract test only; genuine isolated Ghidra execution and installed-extension provenance remain required.
