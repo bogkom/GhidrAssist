@@ -130,7 +130,7 @@ def main():
         verify_envelope = r"(?:INFO  GA18VerifyDecodedEffectSites\.java> )?"
         prepare_pattern = re.compile(prepare_envelope +
             r"GA18_PREPARE_DECODED_SITES_PASS instructions=4 function=0x100 bytes=18(?: \(GhidraScript\))?")
-        verify_pattern = re.compile(envelope +
+        verify_pattern = re.compile(verify_envelope +
             r"GA18_DECODED_SITES_GHIDRA_PASS sites=2 positive=2 negative=4 recovery=2(?: \(GhidraScript\))?")
         lines = [line.strip() for line in output.splitlines()]
         prepare_lines = [i for i, line in enumerate(lines)
