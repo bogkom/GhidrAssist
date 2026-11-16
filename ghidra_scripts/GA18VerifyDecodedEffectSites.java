@@ -33,6 +33,11 @@ public class GA18VerifyDecodedEffectSites extends GhidraScript {
         for (PcodeOp op : ops) {
             require(op != null, "null pcode op");
             if (op.getOpcode() == PcodeOp.STORE) return true;
+            // Observed in genuine Ghidra 12.1.4 CPU32: direct absolute
+            // MOVE.W emits COPY with a RAM output rather than STORE.
+            if (op.getOpcode() == PcodeOp.COPY && op.getOutput() != null &&
+                    op.getOutput().getAddress() != null &&
+                    op.getOutput().getAddress().getAddressSpace().isMemorySpace()) return true;
         }
         return false;
     }
@@ -71,8 +76,8 @@ public class GA18VerifyDecodedEffectSites extends GhidraScript {
         Instruction toVbr = at(0x108, "MOVEC");
         Instruction fromVbr = at(0x10c, "MOVEC");
         Instruction registerOnly = at(0x110, "MOVEQ");
-        // Preserve the real CPU32 p-code witness on failure. Do not turn a
-        // missing STORE into a PASS by assuming a memory operand is a write.
+        // Preserve the real CPU32 p-code witness on failure. Require a
+        // typed RAM output or STORE, never a mnemonic/operand guess.
         if (!hasStore(store)) {
             StringBuilder witness = new StringBuilder();
             for (PcodeOp op : store.getPcode()) {
@@ -92,7 +97,7 @@ public class GA18VerifyDecodedEffectSites extends GhidraScript {
             println("GA18_CPU32_STORE_DIAGNOSTIC pc=0x100 mnemonic=" +
                     store.getMnemonicString() + " pcode=" + witness);
         }
-        require(hasStore(store), "positive p-code STORE not decoded");
+        require(hasStore(store), "positive p-code memory write not decoded");
         require(!hasStore(toVbr) && !hasStore(fromVbr) && !hasStore(registerOnly),
                 "negative p-code STORE control failed");
         require("VBR".equalsIgnoreCase(register(toVbr, 1)) &&
