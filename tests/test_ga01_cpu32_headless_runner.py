@@ -208,6 +208,19 @@ class HeadlessRunnerContract(unittest.TestCase):
         self.assertNotEqual(0, result.returncode)
         self.assertIn("GA01_CPU32_HEADLESS_FAIL", result.stdout)
 
+    def test_conflicting_phase_evidence_is_rejected(self):
+        # A valid marker plus a contradictory phase line is not a PASS.
+        variants = (
+            PREPARE + "\\n" + PREPARE.replace("instructions=4", "instructions=3") + "\\n" + VERIFY,
+            PREPARE + "\\n" + VERIFY.replace("recovery=2", "recovery=1") + "\\n" + VERIFY,
+            PREPARE + "\\n" + VERIFY + "\\n" + VERIFY.replace("negative=4", "negative=3"),
+        )
+        for output in variants:
+            with self.subTest(output=output):
+                result = self.invoke(output)
+                self.assertNotEqual(0, result.returncode)
+                self.assertIn("GA01_CPU32_HEADLESS_FAIL", result.stdout)
+
     def test_failure_after_valid_evidence_dominates(self):
         result = self.invoke(PREPARE + "\n" + VERIFY + "\nERROR: Ghidra verifier failed")
         self.assertNotEqual(0, result.returncode)
