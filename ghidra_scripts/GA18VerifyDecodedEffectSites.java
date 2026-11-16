@@ -76,7 +76,18 @@ public class GA18VerifyDecodedEffectSites extends GhidraScript {
         if (!hasStore(store)) {
             StringBuilder witness = new StringBuilder();
             for (PcodeOp op : store.getPcode()) {
-                witness.append(op == null ? "null" : op.toString()).append("; ");
+                if (op == null) {
+                    witness.append("null; ");
+                    continue;
+                }
+                witness.append(op.getMnemonic()).append(" ").append(op.toString());
+                if (op.getOutput() != null) {
+                    var out = op.getOutput();
+                    witness.append(" outputSpace=").append(out.getAddress().getAddressSpace().getName())
+                           .append(" outputOffset=0x").append(Long.toHexString(out.getOffset()))
+                           .append(" outputSize=").append(out.getSize());
+                }
+                witness.append("; ");
             }
             println("GA18_CPU32_STORE_DIAGNOSTIC pc=0x100 mnemonic=" +
                     store.getMnemonicString() + " pcode=" + witness);
