@@ -126,11 +126,11 @@ def main():
         # GhidraScript emits markers inside an INFO-prefixed log record.
         # Accept only the known GhidraScript envelope or a bare marker from
         # contract tests; never accept arbitrary text preceding a marker.
-        envelope = r"(?:INFO  [^\\n]*?\\.java> )?"
+        envelope = r"(?:INFO  [^\n]*?\.java> )?"
         prepare_pattern = re.compile(envelope +
-            r"GA18_PREPARE_DECODED_SITES_PASS instructions=4 function=0x100 bytes=18(?: \\(GhidraScript\\))?")
+            r"GA18_PREPARE_DECODED_SITES_PASS instructions=4 function=0x100 bytes=18(?: \(GhidraScript\))?")
         verify_pattern = re.compile(envelope +
-            r"GA18_DECODED_SITES_GHIDRA_PASS sites=2 positive=2 negative=4 recovery=2(?: \\(GhidraScript\\))?")
+            r"GA18_DECODED_SITES_GHIDRA_PASS sites=2 positive=2 negative=4 recovery=2(?: \(GhidraScript\))?")
         lines = [line.strip() for line in output.splitlines()]
         prepare_lines = [i for i, line in enumerate(lines)
                          if prepare_pattern.fullmatch(line)]
