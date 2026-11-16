@@ -172,6 +172,34 @@ jobs:
           sha256sum "${zips[0]}" | tee "$RUNNER_TEMP/extension.sha256"
           mkdir -p "$GHIDRA_INSTALL_DIR/Ghidra/Extensions/Ghidra"
           unzip -q "${zips[0]}" -d "$GHIDRA_INSTALL_DIR/Ghidra/Extensions/Ghidra"
+          # Bind the installed extension bytes to the exact built ZIP. Merely
+          # running buildExtension does not prove what the headless process loads.
+          EXTENSION_ZIP="${zips[0]}" python3 - <<'PY'
+          import hashlib, os, pathlib, zipfile
+          archive = pathlib.Path(os.environ['EXTENSION_ZIP'])
+          target = pathlib.Path(os.environ['GHIDRA_INSTALL_DIR']) / 'Ghidra/Extensions/Ghidra'
+          checked = 0
+          jars = 0
+          with zipfile.ZipFile(archive) as source:
+              for member in source.infolist():
+                  if member.is_dir():
+                      continue
+                  relative = pathlib.PurePosixPath(member.filename)
+                  if relative.is_absolute() or '..' in relative.parts:
+                      raise SystemExit('Unsafe extension archive path')
+                  installed = target.joinpath(*relative.parts)
+                  if not installed.is_file():
+                      raise SystemExit('Missing installed extension member: ' + member.filename)
+                  expected = hashlib.sha256(source.read(member)).digest()
+                  actual = hashlib.sha256(installed.read_bytes()).digest()
+                  if actual != expected:
+                      raise SystemExit('Installed extension mismatch: ' + member.filename)
+                  checked += 1
+                  jars += member.filename.lower().endswith('.jar')
+          if not checked or not jars:
+              raise SystemExit('Extension ZIP has no installed JAR evidence')
+          print(f'GA01_EXTENSION_INSTALL_PROVENANCE_PASS members={checked} jars={jars}')
+          PY
       - name: Execute genuine isolated CPU32 STORE MOVEC and negative recovery controls
         shell: bash
         run: |
