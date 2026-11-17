@@ -6,6 +6,7 @@ same commit. Never points at an existing project or ECU411.
 """
 import argparse
 import hashlib
+import json
 import os
 import re
 from pathlib import Path
@@ -25,6 +26,8 @@ def main():
                         help="Maximum time allowed for the isolated Ghidra process")
     parser.add_argument("--evidence-log", type=Path,
                         help="Exclusive path to preserve the full Ghidra output and verdict")
+    parser.add_argument("--result-json", type=Path,
+                        help="Exclusive machine-readable result, including failed runs")
     parser.add_argument("--source-sha", required=True,
                         help="Full 40-character Git commit SHA of the extension and scripts")
     args = parser.parse_args()
@@ -95,6 +98,33 @@ def main():
                 evidence = args.evidence_log.open("x", encoding="utf-8")
             except OSError as exc:
                 parser.error(f"cannot create exclusive evidence log: {exc}")
+        # Reserve the result before launching Ghidra: never execute against an
+        # existing immutable checkpoint.
+        result_file = None
+        if args.result_json is not None:
+            try:
+                result_file = args.result_json.open("x", encoding="utf-8")
+            except OSError as exc:
+                if evidence is not None:
+                    evidence.close()
+                    args.evidence_log.unlink()
+                parser.error(f"cannot reserve exclusive result JSON: {exc}")
+        def verdict(passed, reason, exit_code):
+            payload = {"schema": 1, "source_sha": args.source_sha,
+                       "fixture_sha256": digest, "ghidra_version": "12.1.4 PUBLIC",
+                       "status": "PASS" if passed else "FAIL",
+                       "reason": reason, "process_exit": exit_code,
+                       "evidence_kind": "isolated_synthetic_ghidra_headless"}
+            if evidence is not None:
+                evidence.flush()
+                payload["evidence_log_sha256"] = hashlib.sha256(
+                    args.evidence_log.read_bytes()).hexdigest()
+            if result_file is not None:
+                json.dump(payload, result_file, sort_keys=True, indent=2)
+                result_file.write("\n")
+                result_file.flush()
+                result_file.close()
+            return 0 if passed else 1
         def record(message):
             print(message, flush=True)
             if evidence is not None:
@@ -112,11 +142,11 @@ def main():
             record(partial.rstrip("\n"))
             record(f"GA01_CPU32_HEADLESS_FAIL timeout={args.timeout_seconds} "
                    f"source={args.source_sha} fixture={digest}")
-            return 1
+            return verdict(False, "timeout", None)
         except OSError as exc:
             record(f"GA01_CPU32_HEADLESS_FAIL launch_error={type(exc).__name__} "
                    f"source={args.source_sha} fixture={digest}")
-            return 1
+            return verdict(False, "launch_error", None)
         output = result.stdout
         record(output.rstrip("\n"))
         # Both markers are necessary, and any failure must dominate even when
@@ -146,7 +176,7 @@ def main():
                   and not any(token in output for token in failures))
         record(f"GA01_CPU32_HEADLESS_{'PASS' if passed else 'FAIL'} "
                f"exit={result.returncode} source={args.source_sha} fixture={digest}")
-        return 0 if passed else 1
+        return verdict(passed, "verified" if passed else "invalid_evidence_or_exit", result.returncode)
 
 
 if __name__ == "__main__":

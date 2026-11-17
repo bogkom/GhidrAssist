@@ -211,8 +211,26 @@ jobs:
             --ghidra-home "$GHIDRA_INSTALL_DIR" \
             --source-sha "$GITHUB_SHA" \
             --timeout-seconds 900 \
-            --evidence-log "$RUNNER_TEMP/ga01-cpu32-evidence.log"
+            --evidence-log "$RUNNER_TEMP/ga01-cpu32-evidence.log" \
+            --result-json "$RUNNER_TEMP/ga01-cpu32-result.json"
           sha256sum "$RUNNER_TEMP/ga01-cpu32-evidence.log" | tee "$RUNNER_TEMP/ga01-cpu32-evidence.sha256"
+          python3 - <<'PY'
+          import json, os, pathlib
+          report = json.loads((pathlib.Path(os.environ["RUNNER_TEMP"]) / "ga01-cpu32-result.json").read_text())
+          assert report["schema"] == 1 and report["source_sha"] == os.environ["GITHUB_SHA"]
+          assert report["status"] == "PASS" and report["reason"] == "verified" and report["process_exit"] == 0
+          assert report["ghidra_version"] == "12.1.4 PUBLIC"
+          assert report["evidence_kind"] == "isolated_synthetic_ghidra_headless"
+          import hashlib
+          fixture = bytes.fromhex("33fc40ca00fffa004e7b08014e7a08017001")
+          assert report["fixture_sha256"] == hashlib.sha256(fixture).hexdigest()
+          assert set(report) == {"schema", "source_sha", "fixture_sha256", "ghidra_version",
+                                 "status", "reason", "process_exit", "evidence_kind",
+                                 "evidence_log_sha256"}
+          log_bytes = (pathlib.Path(os.environ["RUNNER_TEMP"]) / "ga01-cpu32-evidence.log").read_bytes()
+          assert report["evidence_log_sha256"] == hashlib.sha256(log_bytes).hexdigest()
+          print("GA12_STRUCTURED_HEADLESS_RESULT_PASS")
+          PY
       - name: Verify runtime decoder class came from exact installed extension
         shell: bash
         run: |
@@ -248,6 +266,7 @@ jobs:
         with:
           name: ga01-cpu32-genuine-ghidra-evidence
           path: |
+            ${{ runner.temp }}/ga01-cpu32-result.json
             ${{ runner.temp }}/ga01-cpu32-evidence.log
             ${{ runner.temp }}/ga01-cpu32-evidence.sha256
             ${{ runner.temp }}/extension.sha256
