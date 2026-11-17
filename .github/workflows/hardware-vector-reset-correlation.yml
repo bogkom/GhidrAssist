@@ -211,8 +211,18 @@ jobs:
             --ghidra-home "$GHIDRA_INSTALL_DIR" \
             --source-sha "$GITHUB_SHA" \
             --timeout-seconds 900 \
-            --evidence-log "$RUNNER_TEMP/ga01-cpu32-evidence.log"
+            --evidence-log "$RUNNER_TEMP/ga01-cpu32-evidence.log" \
+            --result-json "$RUNNER_TEMP/ga01-cpu32-result.json"
           sha256sum "$RUNNER_TEMP/ga01-cpu32-evidence.log" | tee "$RUNNER_TEMP/ga01-cpu32-evidence.sha256"
+          python3 - <<'PY'
+          import json, os, pathlib
+          report = json.loads((pathlib.Path(os.environ["RUNNER_TEMP"]) / "ga01-cpu32-result.json").read_text())
+          assert report["schema"] == 1 and report["source_sha"] == os.environ["GITHUB_SHA"]
+          assert report["status"] == "PASS" and report["reason"] == "verified" and report["process_exit"] == 0
+          assert report["ghidra_version"] == "12.1.4 PUBLIC"
+          assert report["evidence_kind"] == "isolated_synthetic_ghidra_headless"
+          print("GA12_STRUCTURED_HEADLESS_RESULT_PASS")
+          PY
       - name: Verify runtime decoder class came from exact installed extension
         shell: bash
         run: |
@@ -248,6 +258,7 @@ jobs:
         with:
           name: ga01-cpu32-genuine-ghidra-evidence
           path: |
+            ${{ runner.temp }}/ga01-cpu32-result.json
             ${{ runner.temp }}/ga01-cpu32-evidence.log
             ${{ runner.temp }}/ga01-cpu32-evidence.sha256
             ${{ runner.temp }}/extension.sha256
