@@ -40,6 +40,17 @@ class WorkflowContract(unittest.TestCase):
         self.assertEqual(re.findall(pattern, valid + "\n" + valid, re.M), [path, path])
         self.assertEqual(re.findall(pattern, "GA01_RUNTIME_DECODER_JAR=\n", re.M), [])
 
+    def test_provenance_step_is_complete_and_uploader_is_outside_python(self):
+        text = WORKFLOW.read_text()
+        step = text.split("      - name: Verify runtime decoder class came from exact installed extension", 1)[1]
+        script, uploader = step.split("      - name: Preserve genuine Ghidra evidence even on failure", 1)
+        self.assertEqual(script.count("python3 - <<'PY'"), 1)
+        self.assertEqual(script.count("\\n          PY\\n"), 1)
+        self.assertNotIn("actions/upload-artifact", script)
+        self.assertEqual(uploader.count("uses: actions/upload-artifact@v4"), 1)
+        self.assertNotIn("          PY", uploader)
+        self.assertEqual(text.count("GA01_RUNTIME_CLASS_ORIGIN_PASS"), 1)
+
     def test_runtime_provenance_and_failure_artifact(self):
         text = WORKFLOW.read_text()
         self.assertEqual(text.count("GA01_RUNTIME_CLASS_ORIGIN_PASS"), 1)
