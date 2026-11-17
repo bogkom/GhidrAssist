@@ -38,6 +38,8 @@ class WorkflowContract(unittest.TestCase):
         self.assertEqual(re.findall(pattern, valid, re.M), [path])
         self.assertEqual(re.findall(pattern, "GA18VerifyDecodedEffectSites.java> GA01_RUNTIME_DECODER_JAR=" + path, re.M), [path])
         self.assertEqual(re.findall(pattern, valid + "\n" + valid, re.M), [path, path])
+        self.assertEqual(re.findall(pattern, "INFO    GA18VerifyDecodedEffectSites.java> GA01_RUNTIME_DECODER_JAR=" + path + " (GhidraScript)", re.M), [path])
+        self.assertEqual(re.findall(pattern, "INFO  GA18VerifyDecodedEffectSites.java> GA01_RUNTIME_DECODER_JAR=" + path + " (GhidraScript) extra", re.M), [])
         self.assertEqual(re.findall(pattern, "GA18VerifyDecodedEffectSites.java> GA01_RUNTIME_DECODER_JAR=\n", re.M), [])
         self.assertEqual(re.findall(pattern, "GA01_RUNTIME_DECODER_JAR=" + path, re.M), [])
         self.assertEqual(re.findall(pattern, "INFO  Unrelated.java> GA01_RUNTIME_DECODER_JAR=" + path, re.M), [])
@@ -50,6 +52,9 @@ class WorkflowContract(unittest.TestCase):
         self.assertEqual(script.count("\n          PY\n"), 1)
         self.assertNotIn("actions/upload-artifact", script)
         self.assertEqual(uploader.count("uses: actions/upload-artifact@v4"), 1)
+        self.assertEqual(text.count("      - name: Preserve genuine Ghidra evidence even on failure"), 1)
+        self.assertNotIn("matches = re.findall", uploader)
+        self.assertNotIn("raise SystemExit", uploader)
         self.assertNotIn("          PY", uploader)
         self.assertEqual(text.count("GA01_RUNTIME_CLASS_ORIGIN_PASS"), 1)
 
