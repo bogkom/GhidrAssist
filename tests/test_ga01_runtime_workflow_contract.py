@@ -21,7 +21,7 @@ class WorkflowContract(unittest.TestCase):
                 else:
                     self.fail("Unterminated Python heredoc")
                 blocks.append("\n".join(body))
-        self.assertGreaterEqual(len(blocks), 2)
+        self.assertGreaterEqual(len(blocks), 3)
         for block in blocks:
             compile(block, "<workflow-inline-python>", "exec")
 
