@@ -155,9 +155,9 @@ class HeadlessRunnerContract(unittest.TestCase):
             binary.parent.mkdir()
             props = home / "Ghidra" / "application.properties"
             props.parent.mkdir(parents=True)
-            props.write_text("application.version=12.1.4\\napplication.release.name=PUBLIC\\n")
+            props.write_text("application.version=12.1.4\napplication.release.name=PUBLIC\n")
             sentinel = home / "launched"
-            binary.write_text("#!/bin/sh\\ntouch '" + str(sentinel) + "'\\n")
+            binary.write_text("#!/bin/sh\ntouch '" + str(sentinel) + "'\n")
             binary.chmod(0o755)
             report = home / "existing.json"
             report.write_text('{"original":true}\\n')
@@ -183,8 +183,8 @@ class HeadlessRunnerContract(unittest.TestCase):
                 binary.parent.mkdir()
                 props = home / "Ghidra" / "application.properties"
                 props.parent.mkdir(parents=True)
-                props.write_text("application.version=12.1.4\\napplication.release.name=PUBLIC\\n")
-                binary.write_text("#!/bin/sh\\nprintf '%s\\\\n' '" + PREPARE + "' '" + VERIFY + "'\\n")
+                props.write_text("application.version=12.1.4\napplication.release.name=PUBLIC\n")
+                binary.write_text("#!/bin/sh\nprintf '%s\\n' '" + PREPARE + "' '" + VERIFY + "'\n")
                 binary.chmod(0o755)
                 result = subprocess.run(
                     [sys.executable, str(RUNNER), "--ghidra-home", str(home),
