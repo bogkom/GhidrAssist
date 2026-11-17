@@ -1,3 +1,7 @@
+## GA-01/11 — 2026-11-17: restore executable runtime CodeSource gate (PR #337)
+
+The prior branch workflow contained a truncated Python regex, an artifact uploader embedded before the heredoc terminator, and duplicated trailing Python/uploader content. Commit `9273e0333e82bdeb45c3abf36f20d563b1f97e59` replaced the broken tail with one complete fail-closed runtime decoder JAR provenance check followed by one independent `if: always()` evidence upload. Commit `558f889618da37208e64ea63bc95fc482fe1826d` adds a source regression for heredoc closure and uploader placement. These are **unverified candidate changes** until exact-head Java 21, Java 25 build and genuine isolated Ghidra 12.1.4 PUBLIC execution complete. The source-level fixture and installed ZIP hash alone cannot establish the actual runtime-loaded decoder origin; GA-01/02/03/11 remain PARTIAL.
+
 ## GA-01/11 — 2026-11-16: post-merge runtime class-origin acceptance candidate
 
 PR #336 was integrated as squash `d5b0bed8bd1982ecb09f88e3caaf8524f9304184` from tested head `3143c1f9d5da83a254c6447c265f5f9527231054`. Java 21 and genuine isolated CPU32 Ghidra 12.1.4 PUBLIC checks were reported SUCCESS, including two positive sites, four negative controls and two recovery stages. The installed extension ZIP member hashes were checked, but this alone did not attest the runtime-loaded decoder class.
