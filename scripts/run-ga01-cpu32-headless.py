@@ -98,17 +98,32 @@ def main():
                 evidence = args.evidence_log.open("x", encoding="utf-8")
             except OSError as exc:
                 parser.error(f"cannot create exclusive evidence log: {exc}")
+        # Reserve the result before launching Ghidra: never execute against an
+        # existing immutable checkpoint.
+        result_file = None
+        if args.result_json is not None:
+            try:
+                result_file = args.result_json.open("x", encoding="utf-8")
+            except OSError as exc:
+                if evidence is not None:
+                    evidence.close()
+                    args.evidence_log.unlink()
+                parser.error(f"cannot reserve exclusive result JSON: {exc}")
         def verdict(passed, reason, exit_code):
             payload = {"schema": 1, "source_sha": args.source_sha,
                        "fixture_sha256": digest, "ghidra_version": "12.1.4 PUBLIC",
                        "status": "PASS" if passed else "FAIL",
                        "reason": reason, "process_exit": exit_code,
                        "evidence_kind": "isolated_synthetic_ghidra_headless"}
-            if args.result_json is not None:
-                # Exclusive create: never replace evidence from a prior run.
-                with args.result_json.open("x", encoding="utf-8") as result_file:
-                    json.dump(payload, result_file, sort_keys=True, indent=2)
-                    result_file.write("\n")
+            if evidence is not None:
+                evidence.flush()
+                payload["evidence_log_sha256"] = hashlib.sha256(
+                    args.evidence_log.read_bytes()).hexdigest()
+            if result_file is not None:
+                json.dump(payload, result_file, sort_keys=True, indent=2)
+                result_file.write("\n")
+                result_file.flush()
+                result_file.close()
             return 0 if passed else 1
         def record(message):
             print(message, flush=True)
