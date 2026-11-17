@@ -60,6 +60,16 @@ public class GA18VerifyDecodedEffectSites extends GhidraScript {
     @Override
     protected void run() throws Exception {
         require(currentProgram != null, "no program");
+        // Attest the actual loaded decoder class, not merely the installed ZIP.
+        // CI independently checks this CodeSource JAR against the extension archive.
+        var origin = HardwareGhidraEffectSiteDecoder.class.getProtectionDomain().getCodeSource();
+        require(origin != null && origin.getLocation() != null,
+                "decoder runtime CodeSource unavailable");
+        var decoderJar = java.nio.file.Path.of(origin.getLocation().toURI()).toRealPath();
+        require(java.nio.file.Files.isRegularFile(decoderJar) &&
+                decoderJar.getFileName().toString().endsWith(".jar"),
+                "decoder runtime source is not an installed JAR");
+        println("GA01_RUNTIME_DECODER_JAR=" + decoderJar);
         require(currentProgram.getLanguageID().toString().startsWith("68000:BE:32:CPU32"),
                 "fixture requires CPU32 language");
         // Fail closed on a wrong import base, mutated input or extra functions.
