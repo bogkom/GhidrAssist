@@ -58,6 +58,16 @@ class WorkflowContract(unittest.TestCase):
         self.assertNotIn("          PY", uploader)
         self.assertEqual(text.count("GA01_RUNTIME_CLASS_ORIGIN_PASS"), 1)
 
+    def test_uploader_is_final_workflow_step_without_stray_tail(self):
+        text = WORKFLOW.read_text()
+        uploader = text.split("      - name: Preserve genuine Ghidra evidence even on failure", 1)[1]
+        self.assertTrue(uploader.rstrip().endswith("if-no-files-found: warn"))
+        self.assertEqual(uploader.count("if-no-files-found: warn"), 1)
+        # An unindented Python fragment after the uploader invalidates workflow YAML.
+        self.assertTrue(all(line.startswith("          ") or not line.strip()
+                            for line in uploader.splitlines()
+                            if line.strip().startswith(("if-no-files-found:", "path:", "${{"))))
+
     def test_runtime_provenance_and_failure_artifact(self):
         text = WORKFLOW.read_text()
         self.assertEqual(text.count("GA01_RUNTIME_CLASS_ORIGIN_PASS"), 1)
