@@ -221,6 +221,9 @@ jobs:
           assert report["status"] == "PASS" and report["reason"] == "verified" and report["process_exit"] == 0
           assert report["ghidra_version"] == "12.1.4 PUBLIC"
           assert report["evidence_kind"] == "isolated_synthetic_ghidra_headless"
+          import hashlib
+          log_bytes = (pathlib.Path(os.environ["RUNNER_TEMP"]) / "ga01-cpu32-evidence.log").read_bytes()
+          assert report["evidence_log_sha256"] == hashlib.sha256(log_bytes).hexdigest()
           print("GA12_STRUCTURED_HEADLESS_RESULT_PASS")
           PY
       - name: Verify runtime decoder class came from exact installed extension
