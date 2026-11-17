@@ -222,6 +222,11 @@ jobs:
           assert report["ghidra_version"] == "12.1.4 PUBLIC"
           assert report["evidence_kind"] == "isolated_synthetic_ghidra_headless"
           import hashlib
+          fixture = bytes.fromhex("33fc40ca00fffa004e7b08014e7a08017001")
+          assert report["fixture_sha256"] == hashlib.sha256(fixture).hexdigest()
+          assert set(report) == {"schema", "source_sha", "fixture_sha256", "ghidra_version",
+                                 "status", "reason", "process_exit", "evidence_kind",
+                                 "evidence_log_sha256"}
           log_bytes = (pathlib.Path(os.environ["RUNNER_TEMP"]) / "ga01-cpu32-evidence.log").read_bytes()
           assert report["evidence_log_sha256"] == hashlib.sha256(log_bytes).hexdigest()
           print("GA12_STRUCTURED_HEADLESS_RESULT_PASS")
