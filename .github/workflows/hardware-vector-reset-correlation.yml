@@ -220,7 +220,40 @@ jobs:
           python3 - <<'PY'
           import hashlib, os, pathlib, re, zipfile
           log = (pathlib.Path(os.environ['RUNNER_TEMP']) / 'ga01-cpu32-evidence.log').read_text()
-          matches = re.findall(r'^GA01_RUNTIME_DECODER_JAR=([^\r\n]+?)(?: \(GhidraScript\))?[ \t]*$', log, re.M)
+          matches = re.findall(r'^(?:INFO  )?GA18VerifyDecodedEffectSites\.java> GA01_RUNTIME_DECODER_JAR=([^\r\n]+?)(?: \(GhidraScript\))?[ \t]*, log, re.M)
+          if len(matches) != 1:
+              raise SystemExit(f'Expected exactly one runtime CodeSource witness, got {len(matches)}')
+          loaded = pathlib.Path(matches[0]).resolve(strict=True)
+          install = (pathlib.Path(os.environ['GHIDRA_INSTALL_DIR']) /
+                     'Ghidra/Extensions/Ghidra').resolve(strict=True)
+          if not loaded.is_relative_to(install) or loaded.suffix.lower() != '.jar':
+              raise SystemExit('Runtime decoder loaded from outside installed extension')
+          archives = list(pathlib.Path('dist').glob('*.zip'))
+          if len(archives) != 1:
+              raise SystemExit('Expected exactly one extension build ZIP')
+          relative = loaded.relative_to(install).as_posix()
+          with zipfile.ZipFile(archives[0]) as source:
+              if relative not in source.namelist():
+                  raise SystemExit('Runtime decoder JAR absent from built ZIP')
+              if hashlib.sha256(loaded.read_bytes()).digest() != hashlib.sha256(source.read(relative)).digest():
+                  raise SystemExit('Runtime decoder JAR differs from built ZIP')
+          with zipfile.ZipFile(loaded) as jar:
+              if 'ghidrassist/hardware/HardwareGhidraEffectSiteDecoder.class' not in jar.namelist():
+                  raise SystemExit('Runtime JAR does not contain production decoder')
+          print('GA01_RUNTIME_CLASS_ORIGIN_PASS')
+          PY
+      - name: Preserve genuine Ghidra evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ga01-cpu32-genuine-ghidra-evidence
+          path: |
+            ${{ runner.temp }}/ga01-cpu32-evidence.log
+            ${{ runner.temp }}/ga01-cpu32-evidence.sha256
+            ${{ runner.temp }}/extension.sha256
+            ${{ runner.temp }}/ghidra-release.sha256
+          if-no-files-found: warn
+, log, re.M)
           if len(matches) != 1:
               raise SystemExit(f'Expected exactly one runtime CodeSource witness, got {len(matches)}')
           loaded = pathlib.Path(matches[0]).resolve(strict=True)
