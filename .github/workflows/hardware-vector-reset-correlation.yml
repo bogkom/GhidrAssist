@@ -239,4 +239,14 @@ jobs:
                   raise SystemExit('Runtime JAR does not contain production decoder')
           print('GA01_RUNTIME_CLASS_ORIGIN_PASS')
           PY
-
+      - name: Preserve genuine Ghidra evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ga01-cpu32-genuine-ghidra-evidence
+          path: |
+            ${{ runner.temp }}/ga01-cpu32-evidence.log
+            ${{ runner.temp }}/ga01-cpu32-evidence.sha256
+            ${{ runner.temp }}/extension.sha256
+            ${{ runner.temp }}/ghidra-release.sha256
+          if-no-files-found: warn
