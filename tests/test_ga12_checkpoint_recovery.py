@@ -80,9 +80,9 @@ class RecoveryTests(unittest.TestCase):
     def real_checkpoint(self, name, *, verdict="PASS"):
         folder = self.make(name)
         if verdict == "PASS":
-            log = ("GA18_PREPARE_DECODED_SITES_PASS instructions=4 function=0x100 bytes=18\\n"
+            log = ("GA18_PREPARE_DECODED_SITES_PASS instructions=4 function=0x100 bytes=18\n"
                    "GA18_DECODED_SITES_GHIDRA_PASS sites=2 positive=2 negative=4 recovery=2\n"
-                   "GA01_CPU32_HEADLESS_PASS exit=0 fixture=synthetic\\n")
+                   "GA01_CPU32_HEADLESS_PASS exit=0 fixture=synthetic\n")
         else:
             log = "GA01_CPU32_HEADLESS_FAIL exit=1\n"
         (folder / "evidence.log").write_text(log, encoding="utf-8")
