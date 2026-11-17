@@ -3,8 +3,10 @@ on:
   pull_request:
     paths:
       - 'scripts/recover-ga12-cpu32-checkpoint.py'
+      - 'scripts/handoff-ga12-cpu32-checkpoint.py'
       - 'scripts/verify-ga12-cpu32-checkpoint.py'
       - 'tests/test_ga12_checkpoint_recovery.py'
+      - 'tests/test_ga12_handoff.py'
       - '.github/workflows/ga12-checkpoint-recovery.yml'
   workflow_dispatch:
 jobs:
@@ -16,6 +18,9 @@ jobs:
         with:
           python-version: '3.11'
       - name: Compile recovery and verifier
-        run: python3 -m py_compile scripts/recover-ga12-cpu32-checkpoint.py scripts/verify-ga12-cpu32-checkpoint.py tests/test_ga12_checkpoint_recovery.py
+        run: python3 -m py_compile scripts/recover-ga12-cpu32-checkpoint.py scripts/verify-ga12-cpu32-checkpoint.py tests/test_ga12_checkpoint_recovery.py scripts/handoff-ga12-cpu32-checkpoint.py tests/test_ga12_handoff.py
       - name: Recovery positive and negative regressions
         run: python3 -m unittest discover -s tests -p test_ga12_checkpoint_recovery.py -v
+
+      - name: Verified handoff positive and negative regressions
+        run: python3 -m unittest discover -s tests -p test_ga12_handoff.py -v
