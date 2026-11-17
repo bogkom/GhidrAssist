@@ -23,6 +23,8 @@ on:
       - 'docs/ga01-decoded-sites-cpu32-fixture.md'
       - 'scripts/create-ga01-cpu32-decoder-fixture.py'
       - 'scripts/run-ga01-cpu32-headless.py'
+      - 'scripts/verify-ga12-cpu32-checkpoint.py'
+      - 'tests/test_ga12_cpu32_checkpoint_verifier.py'
       - 'tests/test_ga01_cpu32_headless_runner.py'
       - 'tests/test_ga01_runtime_workflow_contract.py'
       - '.github/workflows/hardware-vector-reset-correlation.yml'
@@ -47,6 +49,8 @@ on:
       - 'docs/ga01-decoded-sites-cpu32-fixture.md'
       - 'scripts/create-ga01-cpu32-decoder-fixture.py'
       - 'scripts/run-ga01-cpu32-headless.py'
+      - 'scripts/verify-ga12-cpu32-checkpoint.py'
+      - 'tests/test_ga12_cpu32_checkpoint_verifier.py'
       - 'tests/test_ga01_cpu32_headless_runner.py'
       - 'tests/test_ga01_runtime_workflow_contract.py'
       - '.github/workflows/hardware-vector-reset-correlation.yml'
@@ -87,7 +91,8 @@ jobs:
         run: |
           set -euo pipefail
           python3 -m unittest discover -s tests -p 'test_ga01_runtime_workflow_contract.py' -v
-          python3 -m py_compile scripts/run-ga01-cpu32-headless.py
+          python3 -m unittest discover -s tests -p 'test_ga12_cpu32_checkpoint_verifier.py' -v
+          python3 -m py_compile scripts/run-ga01-cpu32-headless.py scripts/verify-ga12-cpu32-checkpoint.py
           python3 -m unittest discover -s tests -p 'test_ga01_cpu32_headless_runner.py' -v
       - name: Compile and test pure-Java bounded graph/vector evidence
         shell: bash
@@ -214,6 +219,10 @@ jobs:
             --evidence-log "$RUNNER_TEMP/ga01-cpu32-evidence.log" \
             --result-json "$RUNNER_TEMP/ga01-cpu32-result.json"
           sha256sum "$RUNNER_TEMP/ga01-cpu32-evidence.log" | tee "$RUNNER_TEMP/ga01-cpu32-evidence.sha256"
+          python3 scripts/verify-ga12-cpu32-checkpoint.py \
+            --result-json "$RUNNER_TEMP/ga01-cpu32-result.json" \
+            --evidence-log "$RUNNER_TEMP/ga01-cpu32-evidence.log" \
+            --source-sha "$GITHUB_SHA"
           python3 - <<'PY'
           import json, os, pathlib
           report = json.loads((pathlib.Path(os.environ["RUNNER_TEMP"]) / "ga01-cpu32-result.json").read_text())
