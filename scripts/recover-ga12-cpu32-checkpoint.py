@@ -5,6 +5,7 @@ Each run is stored in a UTC-named directory (YYYYMMDDTHHMMSSZ) containing
 result.json and evidence.log. Never rewrites evidence or silently falls back.
 """
 import argparse
+import hashlib
 import json
 from pathlib import Path
 import re
@@ -41,7 +42,10 @@ def inspect(root, source_sha, allow_prior=False):
                     verdict = check(result, log, source_sha)
                     if verdict == "PASS":
                         return {"status": "RECOVERABLE", "checkpoint": folder.name,
-                                "source_sha": source_sha, "skipped": failures}
+                                "source_sha": source_sha,
+                                "result_sha256": hashlib.sha256(result.read_bytes()).hexdigest(),
+                                "log_sha256": hashlib.sha256(log.read_bytes()).hexdigest(),
+                                "skipped": failures}
                     reason = "checkpoint records FAIL"
                 except ValueError as exc:
                     reason = str(exc)
