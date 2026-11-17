@@ -54,8 +54,7 @@ class HandoffTests(unittest.TestCase):
             with patch.object(module.recover, "inspect", return_value={
                 "status": "RECOVERABLE", "checkpoint": folder.name,
                 "result_sha256": hashlib.sha256(b"result").hexdigest(),
-                "log_sha256": hashlib.sha256(b"log").hexdigest(), "skipped": []}), \
-                 patch("ga12_verify_handoff_placeholder", create=True) if False else patch.object(module.recover, "inspect") as unused:
+                "log_sha256": hashlib.sha256(b"log").hexdigest(), "skipped": []}):
                 # Real semantic verifier must reject fabricated fixtures.
                 self.assertEqual(module.handoff(root, SOURCE)["status"], "BLOCKED")
 
