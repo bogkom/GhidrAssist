@@ -220,7 +220,7 @@ jobs:
           python3 - <<'PY'
           import hashlib, os, pathlib, re, zipfile
           log = (pathlib.Path(os.environ['RUNNER_TEMP']) / 'ga01-cpu32-evidence.log').read_text()
-          matches = re.findall(r'^(?:INFO\s+)?GA18VerifyDecodedEffectSites\.java> GA01_RUNTIME_DECODER_JAR=([^\r\n]+?)(?: \(GhidraScript\))?[ \t]*$', log, re.M)
+          matches = re.findall(r'^(?:INFO\s+)?GA18VerifyDecodedEffectSites\.java> GA01_RUNTIME_DECODER_JAR=([^\r\n]+?\.jar)(?: \(GhidraScript\))?[ \t]*$', log, re.M)
           if len(matches) != 1:
               raise SystemExit(f'Expected exactly one runtime CodeSource witness, got {len(matches)}')
           loaded = pathlib.Path(matches[0]).resolve(strict=True)
