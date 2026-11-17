@@ -119,17 +119,17 @@ class HeadlessRunnerContract(unittest.TestCase):
                     binary.parent.mkdir()
                     props = home / "Ghidra" / "application.properties"
                     props.parent.mkdir(parents=True)
-                    props.write_text("application.version=12.1.4\\napplication.release.name=PUBLIC\\n")
-                    binary.write_text("#!/bin/sh\\n" +
-                                      "printf '%s\\\\n' " +
+                    props.write_text("application.version=12.1.4\napplication.release.name=PUBLIC\n")
+                    binary.write_text("#!/bin/sh\n" +
+                                      "printf '%s\\\n' " +
                                       " ".join("'" + line + "'" for line in output.splitlines()) +
-                                      f"\\nexit {exit_code}\\n")
+                                      f"\nexit {exit_code}\n")
                     binary.chmod(0o755)
                     return subprocess.run(
                         [sys.executable, str(RUNNER), "--ghidra-home", str(home),
                          "--source-sha", SHA, "--result-json", str(report)],
                         capture_output=True, text=True)
-            good = run(PREPARE + "\\n" + VERIFY)
+            good = run(PREPARE + "\n" + VERIFY)
             self.assertEqual(0, good.returncode, good.stdout + good.stderr)
             payload = json.loads(report.read_text())
             self.assertEqual("PASS", payload["status"])
@@ -138,10 +138,10 @@ class HeadlessRunnerContract(unittest.TestCase):
             self.assertEqual("12.1.4 PUBLIC", payload["ghidra_version"])
             self.assertEqual(64, len(payload["fixture_sha256"]))
             previous = report.read_bytes()
-            self.assertNotEqual(0, run(PREPARE + "\\n" + VERIFY).returncode)
+            self.assertNotEqual(0, run(PREPARE + "\n" + VERIFY).returncode)
             self.assertEqual(previous, report.read_bytes())
             report.unlink()
-            bad = run(PREPARE + "\\n" + VERIFY, exit_code=9)
+            bad = run(PREPARE + "\n" + VERIFY, exit_code=9)
             self.assertNotEqual(0, bad.returncode)
             failed = json.loads(report.read_text())
             self.assertEqual("FAIL", failed["status"])
