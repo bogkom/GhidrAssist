@@ -24,6 +24,7 @@ on:
       - 'scripts/create-ga01-cpu32-decoder-fixture.py'
       - 'scripts/run-ga01-cpu32-headless.py'
       - 'tests/test_ga01_cpu32_headless_runner.py'
+      - 'tests/test_ga01_runtime_workflow_contract.py'
       - '.github/workflows/hardware-vector-reset-correlation.yml'
   pull_request:
     paths:
@@ -47,6 +48,7 @@ on:
       - 'scripts/create-ga01-cpu32-decoder-fixture.py'
       - 'scripts/run-ga01-cpu32-headless.py'
       - 'tests/test_ga01_cpu32_headless_runner.py'
+      - 'tests/test_ga01_runtime_workflow_contract.py'
       - '.github/workflows/hardware-vector-reset-correlation.yml'
 
 jobs:
@@ -84,6 +86,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          python3 -m unittest discover -s tests -p 'test_ga01_runtime_workflow_contract.py' -v
           python3 -m py_compile scripts/run-ga01-cpu32-headless.py
           python3 -m unittest discover -s tests -p 'test_ga01_cpu32_headless_runner.py' -v
       - name: Compile and test pure-Java bounded graph/vector evidence
