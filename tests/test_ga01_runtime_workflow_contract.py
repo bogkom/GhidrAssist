@@ -37,8 +37,8 @@ class WorkflowContract(unittest.TestCase):
         valid = "GA01_RUNTIME_DECODER_JAR=" + path + " (GhidraScript)  "
         self.assertEqual(re.findall(pattern, valid, re.M), [path])
         self.assertEqual(re.findall(pattern, "GA01_RUNTIME_DECODER_JAR=" + path, re.M), [path])
-        self.assertEqual(re.findall(pattern, valid + "\\n" + valid, re.M), [path, path])
-        self.assertEqual(re.findall(pattern, "GA01_RUNTIME_DECODER_JAR=\\n", re.M), [])
+        self.assertEqual(re.findall(pattern, valid + "\n" + valid, re.M), [path, path])
+        self.assertEqual(re.findall(pattern, "GA01_RUNTIME_DECODER_JAR=\n", re.M), [])
 
     def test_runtime_provenance_and_failure_artifact(self):
         text = WORKFLOW.read_text()
