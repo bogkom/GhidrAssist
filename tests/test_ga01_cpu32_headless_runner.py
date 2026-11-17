@@ -121,7 +121,7 @@ class HeadlessRunnerContract(unittest.TestCase):
                     props.parent.mkdir(parents=True)
                     props.write_text("application.version=12.1.4\napplication.release.name=PUBLIC\n")
                     binary.write_text("#!/bin/sh\n" +
-                                      "printf '%s\\\n' " +
+                                      "printf '%s\\n' " +
                                       " ".join("'" + line + "'" for line in output.splitlines()) +
                                       f"\nexit {exit_code}\n")
                     binary.chmod(0o755)
