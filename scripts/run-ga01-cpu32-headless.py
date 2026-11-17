@@ -109,7 +109,7 @@ def main():
                 with args.result_json.open("x", encoding="utf-8") as result_file:
                     json.dump(payload, result_file, sort_keys=True, indent=2)
                     result_file.write("\n")
-            return verdict(passed, "verified" if passed else "invalid_evidence_or_exit", result.returncode)
+            return 0 if passed else 1
         def record(message):
             print(message, flush=True)
             if evidence is not None:
