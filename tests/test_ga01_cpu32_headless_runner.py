@@ -148,6 +148,53 @@ class HeadlessRunnerContract(unittest.TestCase):
             self.assertEqual(9, failed["process_exit"])
             self.assertEqual("invalid_evidence_or_exit", failed["reason"])
 
+    def test_result_reservation_rejects_existing_checkpoint_before_launch(self):
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            binary = home / "support" / "analyzeHeadless"
+            binary.parent.mkdir()
+            props = home / "Ghidra" / "application.properties"
+            props.parent.mkdir(parents=True)
+            props.write_text("application.version=12.1.4\\napplication.release.name=PUBLIC\\n")
+            sentinel = home / "launched"
+            binary.write_text("#!/bin/sh\\ntouch '" + str(sentinel) + "'\\n")
+            binary.chmod(0o755)
+            report = home / "existing.json"
+            report.write_text('{"original":true}\\n')
+            log = home / "evidence.log"
+            result = subprocess.run(
+                [sys.executable, str(RUNNER), "--ghidra-home", str(home),
+                 "--source-sha", SHA, "--result-json", str(report),
+                 "--evidence-log", str(log)], capture_output=True, text=True)
+            self.assertNotEqual(0, result.returncode)
+            self.assertIn("cannot reserve exclusive result JSON", result.stderr)
+            self.assertFalse(sentinel.exists())
+            self.assertFalse(log.exists())
+            self.assertEqual('{"original":true}\\n', report.read_text())
+
+    def test_structured_report_hash_matches_preserved_log(self):
+        import hashlib
+        with tempfile.TemporaryDirectory() as directory:
+            report = Path(directory) / "result.json"
+            log = Path(directory) / "evidence.log"
+            with tempfile.TemporaryDirectory() as home_dir:
+                home = Path(home_dir)
+                binary = home / "support" / "analyzeHeadless"
+                binary.parent.mkdir()
+                props = home / "Ghidra" / "application.properties"
+                props.parent.mkdir(parents=True)
+                props.write_text("application.version=12.1.4\\napplication.release.name=PUBLIC\\n")
+                binary.write_text("#!/bin/sh\\nprintf '%s\\\\n' '" + PREPARE + "' '" + VERIFY + "'\\n")
+                binary.chmod(0o755)
+                result = subprocess.run(
+                    [sys.executable, str(RUNNER), "--ghidra-home", str(home),
+                     "--source-sha", SHA, "--result-json", str(report),
+                     "--evidence-log", str(log)], capture_output=True, text=True)
+                self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+            payload = json.loads(report.read_text())
+            self.assertEqual(hashlib.sha256(log.read_bytes()).hexdigest(),
+                             payload["evidence_log_sha256"])
+
     def test_both_markers(self):
         result = self.invoke(PREPARE + "\n" + VERIFY)
         self.assertEqual(0, result.returncode, result.stdout + result.stderr)
