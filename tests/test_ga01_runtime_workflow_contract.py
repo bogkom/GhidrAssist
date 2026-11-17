@@ -10,7 +10,7 @@ class WorkflowContract(unittest.TestCase):
         lines = WORKFLOW.read_text().splitlines()
         blocks = []
         for i, line in enumerate(lines):
-            if line.strip() == "python3 - <<'PY'":
+            if line.strip().endswith("python3 - <<'PY'"):
                 body = []
                 for next_line in lines[i + 1:]:
                     if next_line == "          PY":
