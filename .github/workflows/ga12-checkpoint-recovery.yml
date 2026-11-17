@@ -1,0 +1,21 @@
+name: GA-12 checkpoint recovery source regression
+on:
+  pull_request:
+    paths:
+      - 'scripts/recover-ga12-cpu32-checkpoint.py'
+      - 'scripts/verify-ga12-cpu32-checkpoint.py'
+      - 'tests/test_ga12_checkpoint_recovery.py'
+      - '.github/workflows/ga12-checkpoint-recovery.yml'
+  workflow_dispatch:
+jobs:
+  recovery-source:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Compile recovery and verifier
+        run: python3 -m py_compile scripts/recover-ga12-cpu32-checkpoint.py scripts/verify-ga12-cpu32-checkpoint.py tests/test_ga12_checkpoint_recovery.py
+      - name: Recovery positive and negative regressions
+        run: python3 -m unittest discover -s tests -p test_ga12_checkpoint_recovery.py -v
