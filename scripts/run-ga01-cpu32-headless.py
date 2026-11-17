@@ -161,7 +161,7 @@ def main():
                   and not any(token in output for token in failures))
         record(f"GA01_CPU32_HEADLESS_{'PASS' if passed else 'FAIL'} "
                f"exit={result.returncode} source={args.source_sha} fixture={digest}")
-        return 0 if passed else 1
+        return verdict(passed, "verified" if passed else "invalid_evidence_or_exit", result.returncode)
 
 
 if __name__ == "__main__":
