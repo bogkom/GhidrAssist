@@ -124,6 +124,30 @@ class RecoveryTests(unittest.TestCase):
         self.assertEqual(recovery.inspect(self.root, "b" * 40, allow_prior=True)["status"],
                          "BLOCKED")
 
+    def test_real_verifier_rejects_conflicting_pass_marker(self):
+        folder = self.real_checkpoint("20261117T110000Z")
+        log_path = folder / "evidence.log"
+        log = log_path.read_text(encoding="utf-8")
+        log += "GA18_DECODED_SITES_GHIDRA_PASS sites=2 positive=2 negative=4 recovery=2\\n"
+        log_path.write_text(log, encoding="utf-8")
+        result_path = folder / "result.json"
+        payload = json.loads(result_path.read_text(encoding="utf-8"))
+        payload["evidence_log_sha256"] = hashlib.sha256(log.encode()).hexdigest()
+        result_path.write_text(json.dumps(payload), encoding="utf-8")
+        self.assertEqual(recovery.inspect(self.root, SHA)["status"], "BLOCKED")
+
+    def test_real_verifier_rejects_reordered_evidence(self):
+        folder = self.real_checkpoint("20261117T110000Z")
+        log_path = folder / "evidence.log"
+        lines = log_path.read_text(encoding="utf-8").splitlines(keepends=True)
+        log = "".join([lines[1], lines[0], lines[2]])
+        log_path.write_text(log, encoding="utf-8")
+        result_path = folder / "result.json"
+        payload = json.loads(result_path.read_text(encoding="utf-8"))
+        payload["evidence_log_sha256"] = hashlib.sha256(log.encode()).hexdigest()
+        result_path.write_text(json.dumps(payload), encoding="utf-8")
+        self.assertEqual(recovery.inspect(self.root, SHA)["status"], "BLOCKED")
+
     def test_no_checkpoints(self):
         with self.assertRaisesRegex(ValueError, "no UTC-named"):
             recovery.inspect(self.root, SHA)
