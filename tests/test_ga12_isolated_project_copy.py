@@ -157,5 +157,18 @@ class ProjectCopyTests(unittest.TestCase):
         self.assertEqual((code, result["status"]), (2, "BLOCKED"))
         self.assertFalse(self.restored.exists())
 
+
+    def test_genuine_reopen_harness_requires_second_program_witness(self):
+        # Source contract only; this does NOT execute Ghidra.
+        harness = (SCRIPT.parent / "ga12-genuine-reopen-smoke.sh").read_text()
+        witness = (SCRIPT.parents[1] / "ghidra_scripts" /
+                   "GA12VerifyRestoredProgram.java").read_text()
+        self.assertIn("-process ga12-synthetic.bin", harness)
+        self.assertIn("GA12_GENUINE_REOPEN_PASS", harness)
+        self.assertGreaterEqual(harness.count("grep -q 'GA12_REOPEN_PASS'"), 2)
+        self.assertIn("currentProgram.getMemory().getSize()", witness)
+        self.assertIn("GA12_REOPEN_PASS", witness)
+        self.assertNotIn("-import \"$WORK/import/ga12-synthetic.bin\" \\\n    -scriptPath", harness.split("# Open the restored project")[1])
+
 if __name__ == "__main__":
     unittest.main()
