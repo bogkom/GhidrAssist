@@ -29,4 +29,9 @@ assert "GA12_SEED_FAIL: annotation already present" in smoke
 assert 'GA12_EXISTING_ANALYSIS_RESEED_REJECTED' in smoke
 assert (chr(92) * 2 + chr(10)) not in smoke, "double backslash before newline splits genuine headless command"
 assert '-postScript GA12VerifyRestoredProgram.java ga12-synthetic.bin seed' in smoke
+assert 'GA12_REJECTED_RESEED_NONMUTATION_PASS' in smoke
+assert 'GA12_NEGATIVE_FAIL: rejected reseed changed persisted analysis' in smoke
+assert 'post-rejection.log' in smoke
+assert smoke.count('-postScript GA12VerifyRestoredProgram.java ga12-synthetic.bin verify') == 2
+assert smoke.index('GA12_EXISTING_ANALYSIS_RESEED_REJECTED') < smoke.index('post-rejection.log')
 print("GA12_ANALYSIS_OBJECTS_SOURCE_PASS")
