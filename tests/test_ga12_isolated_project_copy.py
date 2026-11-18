@@ -67,6 +67,36 @@ class ProjectCopyTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "differ"):
             mod.validate_manifest(self.snapshot)
 
+    def test_refuse_non_ghidra_folder(self):
+        (self.project / "synthetic.gpr").unlink()
+        with self.assertRaisesRegex(ValueError, "exactly one Ghidra"):
+            self.make_snapshot()
+        self.assertFalse(self.snapshot.exists())
+
+    def test_refuse_unpaired_repository(self):
+        (self.project / "synthetic.rep").rename(self.project / "other.rep")
+        with self.assertRaisesRegex(ValueError, "matching Ghidra"):
+            self.make_snapshot()
+        self.assertFalse(self.snapshot.exists())
+
+    def test_refuse_multiple_projects(self):
+        (self.project / "other.gpr").write_bytes(b"another")
+        with self.assertRaisesRegex(ValueError, "exactly one Ghidra"):
+            self.make_snapshot()
+        self.assertFalse(self.snapshot.exists())
+
+    def test_refuse_snapshot_with_broken_project_pair_even_if_manifest_matches(self):
+        self.make_snapshot()
+        (self.snapshot / "synthetic.rep").rename(self.snapshot / "other.rep")
+        manifest_path = self.snapshot / mod.MANIFEST
+        import json
+        manifest = json.loads(manifest_path.read_text())
+        for item in manifest["files"]:
+            item["path"] = item["path"].replace("synthetic.rep/", "other.rep/")
+        manifest_path.write_text(json.dumps(manifest))
+        with self.assertRaisesRegex(ValueError, "matching Ghidra"):
+            mod.validate_manifest(self.snapshot)
+
     def test_refuse_restore_without_authorization(self):
         # CLI must reject restore even if snapshot is valid.
         import subprocess
