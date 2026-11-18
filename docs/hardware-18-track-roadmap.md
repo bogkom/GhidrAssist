@@ -1,3 +1,7 @@
+## GA-12 — 2026-11-18: independent negative verifier calibration (PR #347)
+
+Candidate head `147b72a1a3bcf736a6eca57cecbca952766e29ad` extends the same package with a separate restored copy, an intentional EOL annotation mutation in a real headless Ghidra process, and a fresh verifier process that must report a persisted-annotation mismatch. The original restored copy remains untouched by this calibration. Source regression checks the negative control and failure markers. This is **not PASS evidence** until exact-head Actions verify Java 21 source checks, Java 25 full extension build, and the genuine Ghidra 12.1.4 PUBLIC headless run. It does not demonstrate Apply/Undo history or formal GA-12 completion.
+
 ## GA-12 — 2026-11-18: rejected reseed nonmutation candidate
 
 Branch `work/ga12-reseed-nonmutation-20261118` extends the disposable CPU32 genuine headless smoke: after a rejected duplicate seed, a third independent Ghidra process must reopen the restored project and verify both persisted comments and the USER_DEFINED label. This detects partial writes or loss of analysis objects caused by the negative path, rather than trusting a failure marker alone. Source regression requires the extra verify invocation and failure gate. **Candidate only** until exact-head Actions, Java 21 source checks, Java 25 full extension build and genuine Ghidra 12.1.4 PUBLIC execution are verified. No in-process Undo, Apply replay, GUI acceptance or formal GA-12 PASS is implied; GA-12 remains PARTIAL.
