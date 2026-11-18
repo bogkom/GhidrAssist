@@ -51,6 +51,17 @@ def inventory(root):
     return sorted(files, key=lambda item: item["path"])
 
 
+def validate_project_layout(root):
+    """Require one recognizable Ghidra project pair, not an arbitrary folder."""
+    projects = sorted(p for p in root.iterdir() if p.is_file() and p.suffix == ".gpr")
+    if len(projects) != 1:
+        raise ValueError("expected exactly one Ghidra .gpr project")
+    repository = root / (projects[0].stem + ".rep")
+    if repository.is_symlink() or not repository.is_dir():
+        raise ValueError("matching Ghidra .rep repository required")
+    return projects[0].name
+
+
 def validate_manifest(root):
     path = root / MANIFEST
     if path.is_symlink() or not path.is_file():
@@ -60,6 +71,7 @@ def validate_manifest(root):
         raise ValueError("invalid manifest schema")
     if manifest["evidence_class"] != "OFFLINE_ISOLATED_PROJECT_COPY":
         raise ValueError("invalid evidence classification")
+    validate_project_layout(root)
     actual = inventory_without_manifest(root)
     if actual != manifest["files"]:
         raise ValueError("snapshot contents differ from manifest")
@@ -103,7 +115,9 @@ def copy_new(source, destination, with_manifest):
         raise ValueError("destination parent must be a real directory")
     staging = Path(tempfile.mkdtemp(prefix=".ga12-staging-", dir=destination.parent))
     try:
+        validate_project_layout(source)
         shutil.copytree(source, staging, dirs_exist_ok=True, symlinks=True)
+        validate_project_layout(staging)
         if with_manifest:
             expected = inventory(source)
             if inventory(staging) != expected:
