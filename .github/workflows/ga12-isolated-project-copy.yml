@@ -1,0 +1,22 @@
+name: GA12 isolated project copy source tests
+on:
+  push:
+    branches:
+      - 'work/ga12-isolated-project-snapshot-*'
+  pull_request:
+    paths:
+      - 'scripts/ga12-isolated-project-copy.py'
+      - 'tests/test_ga12_isolated_project_copy.py'
+      - '.github/workflows/ga12-isolated-project-copy.yml'
+jobs:
+  source-regressions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Compile
+        run: python3 -m py_compile scripts/ga12-isolated-project-copy.py tests/test_ga12_isolated_project_copy.py
+      - name: Positive and negative regressions
+        run: python3 -m unittest discover -s tests -p 'test_ga12_isolated_project_copy.py' -v
