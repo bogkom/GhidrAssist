@@ -34,4 +34,12 @@ assert 'GA12_NEGATIVE_FAIL: rejected reseed changed persisted analysis' in smoke
 assert 'post-rejection.log' in smoke
 assert smoke.count('-postScript GA12VerifyRestoredProgram.java ga12-synthetic.bin verify') == 2
 assert smoke.index('GA12_EXISTING_ANALYSIS_RESEED_REJECTED') < smoke.index('post-rejection.log')
+assert 'args[1].equals("tamper")' in source
+assert '"GA12_INTENTIONALLY_TAMPERED"' in source
+assert 'GA12_TAMPER_APPLIED' in source
+assert 'GA12_TAMPER_DETECTION_PASS' in smoke
+assert 'GA12_NEGATIVE_FAIL: verifier accepted tampered analysis' in smoke
+assert '-postScript GA12VerifyRestoredProgram.java ga12-synthetic.bin tamper' in smoke
+assert 'tamper-rejected.log' in smoke
+assert smoke.index('GA12_TAMPER_APPLIED') < smoke.index('GA12_TAMPER_DETECTION_PASS')
 print("GA12_ANALYSIS_OBJECTS_SOURCE_PASS")
