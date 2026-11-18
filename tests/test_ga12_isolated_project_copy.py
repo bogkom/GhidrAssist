@@ -166,7 +166,10 @@ class ProjectCopyTests(unittest.TestCase):
         self.assertIn("-process ga12-synthetic.bin", harness)
         self.assertIn("GA12_GENUINE_REOPEN_PASS", harness)
         self.assertGreaterEqual(harness.count("grep -q 'GA12_REOPEN_PASS'"), 2)
-        self.assertIn("currentProgram.getMemory().getSize()", witness)
+        self.assertIn("currentProgram.getMemory().getSize() != 6", witness)
+        self.assertIn("68000:BE:32:CPU32", witness)
+        self.assertIn("java.util.Arrays.equals(actual, expected)", witness)
+        self.assertIn("fixture=4e714e714e75", witness)
         self.assertIn("GA12_REOPEN_PASS", witness)
         self.assertNotIn(" -import ", harness.split("# Open the restored project")[1])
 
