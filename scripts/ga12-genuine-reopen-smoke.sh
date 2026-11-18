@@ -78,4 +78,51 @@ if ! grep -q 'GA12_SEED_FAIL: annotation already present' "$WORK/reseed.log" || 
     exit 1
 fi
 echo "GA12_EXISTING_ANALYSIS_RESEED_REJECTED"
+# A failed reseed must leave the restored database intact after the process
+# closes. Verify all three independent objects in a THIRD headless process.
+"$HEADLESS" "$WORK/restored" GA12Fixture -process ga12-synthetic.bin \
+    -scriptPath "$WORK/scripts" \
+    -postScript GA12VerifyRestoredProgram.java ga12-synthetic.bin verify \
+    > "$WORK/post-rejection.log" 2>&1 || { cat "$WORK/post-rejection.log"; exit 1; }
+if ! grep -q 'GA12_REOPEN_PASS' "$WORK/post-rejection.log" || \
+    ! grep -q 'GA12_ANALYSIS_PERSISTED_PASS' "$WORK/post-rejection.log"; then
+    cat "$WORK/post-rejection.log"
+    echo "GA12_NEGATIVE_FAIL: rejected reseed changed persisted analysis" >&2
+    exit 1
+fi
+echo "GA12_REJECTED_RESEED_NONMUTATION_PASS"
+# Negative verifier calibration: restore a SECOND disposable project and mutate
+# only its EOL comment. A fresh process must reject the persisted mismatch.
+python3 "$ROOT/scripts/ga12-isolated-project-copy.py" restore \
+    --source "$WORK/snapshot" --destination "$WORK/tampered" \
+    --authorize-isolated-restore
+"$HEADLESS" "$WORK/tampered" GA12Fixture -process ga12-synthetic.bin \
+    -scriptPath "$WORK/scripts" \
+    -postScript GA12VerifyRestoredProgram.java ga12-synthetic.bin tamper \
+    > "$WORK/tamper.log" 2>&1 || { cat "$WORK/tamper.log"; exit 1; }
+grep -q 'GA12_TAMPER_APPLIED' "$WORK/tamper.log" || { cat "$WORK/tamper.log"; exit 1; }
+"$HEADLESS" "$WORK/tampered" GA12Fixture -process ga12-synthetic.bin \
+    -scriptPath "$WORK/scripts" \
+    -postScript GA12VerifyRestoredProgram.java ga12-synthetic.bin verify \
+    > "$WORK/tamper-rejected.log" 2>&1 || true
+if ! grep -q 'GA12_REOPEN_FAIL: persisted annotation missing or changed' "$WORK/tamper-rejected.log" || \
+    grep -q 'GA12_ANALYSIS_PERSISTED_PASS' "$WORK/tamper-rejected.log"; then
+    cat "$WORK/tamper-rejected.log"
+    echo "GA12_NEGATIVE_FAIL: verifier accepted tampered analysis" >&2
+    exit 1
+fi
+echo "GA12_TAMPER_DETECTION_PASS"
+# The negative-control mutation must be isolated to the second restored copy.
+# Reopen the original restored project in another independent headless process.
+"$HEADLESS" "$WORK/restored" GA12Fixture -process ga12-synthetic.bin \
+    -scriptPath "$WORK/scripts" \
+    -postScript GA12VerifyRestoredProgram.java ga12-synthetic.bin verify \
+    > "$WORK/pristine-after-tamper.log" 2>&1 || { cat "$WORK/pristine-after-tamper.log"; exit 1; }
+if ! grep -q 'GA12_REOPEN_PASS' "$WORK/pristine-after-tamper.log" || \
+    ! grep -q 'GA12_ANALYSIS_PERSISTED_PASS' "$WORK/pristine-after-tamper.log"; then
+    cat "$WORK/pristine-after-tamper.log"
+    echo "GA12_NEGATIVE_FAIL: tamper control affected pristine restored project" >&2
+    exit 1
+fi
+echo "GA12_TAMPER_ISOLATION_PASS"
 echo "GA12_GENUINE_REOPEN_PASS"
