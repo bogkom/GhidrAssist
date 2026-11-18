@@ -14,7 +14,7 @@ public class GA12VerifyRestoredProgram extends GhidraScript {
         }
         String[] args = getScriptArgs();
         if (args.length != 2 || !currentProgram.getName().equals(args[0])
-                || !(args[1].equals("seed") || args[1].equals("verify"))) {
+                || !(args[1].equals("seed") || args[1].equals("verify") || args[1].equals("tamper"))) {
             throw new IllegalStateException("GA12_REOPEN_FAIL: unexpected program");
         }
         if (!"68000:BE:32:CPU32".equals(currentProgram.getLanguageID().toString())) {
@@ -53,7 +53,17 @@ public class GA12VerifyRestoredProgram extends GhidraScript {
         Symbol labelObserved = currentProgram.getSymbolTable().getPrimarySymbol(labelSite);
         String secondObserved = currentProgram.getListing().getComment(CodeUnit.EOL_COMMENT, secondSite);
         String observed = currentProgram.getListing().getComment(CodeUnit.PLATE_COMMENT, start);
-        if (args[1].equals("seed")) {
+        if (args[1].equals("tamper")) {
+            // Negative control is restricted to a second disposable restored copy.
+            // Prove that the verifier rejects an actual persisted annotation change.
+            if (!marker.equals(observed) || !secondMarker.equals(secondObserved)
+                    || labelObserved == null || !labelName.equals(labelObserved.getName())) {
+                throw new IllegalStateException("GA12_TAMPER_FAIL: baseline missing");
+            }
+            currentProgram.getListing().setComment(secondSite, CodeUnit.EOL_COMMENT,
+                    "GA12_INTENTIONALLY_TAMPERED");
+            println("GA12_TAMPER_APPLIED");
+        } else if (args[1].equals("seed")) {
             if ((observed != null && !observed.isEmpty())
                     || (secondObserved != null && !secondObserved.isEmpty())
                     || labelObserved != null) {
