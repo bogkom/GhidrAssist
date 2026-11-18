@@ -1,0 +1,83 @@
+"""Positive and negative offline GA-12 project copy tests (no Ghidra runtime)."""
+import importlib.util
+from pathlib import Path
+import tempfile
+import unittest
+
+SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "ga12-isolated-project-copy.py"
+spec = importlib.util.spec_from_file_location("ga12_copy", SCRIPT)
+mod = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(mod)
+
+
+class ProjectCopyTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        self.project = self.root / "synthetic-project"
+        self.project.mkdir()
+        (self.project / "synthetic.gpr").write_bytes(b"fixture")
+        (self.project / "synthetic.rep").mkdir()
+        (self.project / "synthetic.rep" / "data").write_bytes(b"program-state")
+        self.snapshot = self.root / "snapshot"
+        self.restored = self.root / "restored"
+
+    def make_snapshot(self):
+        mod.copy_new(self.project, self.snapshot, True)
+
+    def test_roundtrip_and_digest(self):
+        self.make_snapshot()
+        self.assertEqual(len(mod.validate_manifest(self.snapshot)["files"]), 2)
+        mod.copy_new(self.snapshot, self.restored, False)
+        self.assertEqual(mod.inventory(self.project), mod.inventory(self.restored))
+        self.assertFalse((self.restored / mod.MANIFEST).exists())
+
+    def test_refuse_overwrite(self):
+        self.make_snapshot()
+        with self.assertRaisesRegex(ValueError, "already exists"):
+            mod.copy_new(self.project, self.snapshot, True)
+
+    def test_refuse_modified_snapshot(self):
+        self.make_snapshot()
+        (self.snapshot / "synthetic.rep" / "data").write_bytes(b"tampered")
+        with self.assertRaisesRegex(ValueError, "differ"):
+            mod.validate_manifest(self.snapshot)
+        with self.assertRaisesRegex(ValueError, "differ"):
+            mod.copy_new(self.snapshot, self.restored, False)
+        self.assertFalse(self.restored.exists())
+
+    def test_refuse_symlink(self):
+        (self.project / "alias").symlink_to(self.project / "synthetic.gpr")
+        with self.assertRaisesRegex(ValueError, "symlinks"):
+            mod.copy_new(self.project, self.snapshot, True)
+        self.assertFalse(self.snapshot.exists())
+
+    def test_refuse_nested_destination(self):
+        with self.assertRaisesRegex(ValueError, "inside source"):
+            mod.copy_new(self.project, self.project / "snapshot", True)
+
+    def test_refuse_missing_manifest(self):
+        with self.assertRaisesRegex(ValueError, "manifest"):
+            mod.validate_manifest(self.project)
+
+    def test_refuse_extra_file(self):
+        self.make_snapshot()
+        (self.snapshot / "unexpected").write_bytes(b"extra")
+        with self.assertRaisesRegex(ValueError, "differ"):
+            mod.validate_manifest(self.snapshot)
+
+    def test_refuse_restore_without_authorization(self):
+        # CLI must reject restore even if snapshot is valid.
+        import subprocess
+        self.make_snapshot()
+        run = subprocess.run(["python3", str(SCRIPT), "restore", "--source",
+                              str(self.snapshot), "--destination", str(self.restored)],
+                             capture_output=True, text=True)
+        self.assertEqual(run.returncode, 2)
+        self.assertIn("authorization", run.stdout)
+        self.assertFalse(self.restored.exists())
+
+
+if __name__ == "__main__":
+    unittest.main()
