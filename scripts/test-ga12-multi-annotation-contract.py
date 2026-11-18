@@ -27,6 +27,6 @@ for required in (
 smoke = (Path(__file__).resolve().parent / "ga12-genuine-reopen-smoke.sh").read_text()
 assert "GA12_SEED_FAIL: annotation already present" in smoke
 assert 'GA12_EXISTING_ANALYSIS_RESEED_REJECTED' in smoke
-assert "\\\\\\n" not in smoke, "double backslash before newline splits genuine headless command"
+assert (chr(92) * 2 + chr(10)) not in smoke, "double backslash before newline splits genuine headless command"
 assert '-postScript GA12VerifyRestoredProgram.java ga12-synthetic.bin seed' in smoke
 print("GA12_ANALYSIS_OBJECTS_SOURCE_PASS")
