@@ -24,3 +24,64 @@ jobs:
         run: bash -n scripts/ga12-genuine-reopen-smoke.sh
       - name: Positive and negative regressions
         run: python3 -m unittest discover -s tests -p 'test_ga12_isolated_project_copy.py' -v
+
+  genuine-project-reopen:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Resolve official Ghidra 12.1.4 PUBLIC asset
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, urllib.request
+          req = urllib.request.Request(
+              'https://api.github.com/repos/NationalSecurityAgency/ghidra/releases?per_page=100',
+              headers={'Accept': 'application/vnd.github+json', 'User-Agent': 'GhidrAssist-CI',
+                       'Authorization': 'Bearer ' + os.environ['GH_TOKEN']})
+          with urllib.request.urlopen(req, timeout=40) as response:
+              releases = json.load(response)
+          matches = [a for r in releases for a in r.get('assets', [])
+                     if a['name'].startswith('ghidra_12.1.4_PUBLIC_') and a['name'].endswith('.zip')]
+          if len(matches) != 1:
+              raise SystemExit(f'Expected exactly one pinned Ghidra asset, got {len(matches)}')
+          with open(os.environ['GITHUB_ENV'], 'a') as out:
+              print('GHIDRA_RELEASE_URL=' + matches[0]['browser_download_url'], file=out)
+          PY
+      - name: Install isolated official release
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 --output "$RUNNER_TEMP/ghidra.zip" "$GHIDRA_RELEASE_URL"
+          sha256sum "$RUNNER_TEMP/ghidra.zip" | tee "$RUNNER_TEMP/ghidra.sha256"
+          unzip -q "$RUNNER_TEMP/ghidra.zip" -d "$RUNNER_TEMP"
+          ghidra_home="$(find "$RUNNER_TEMP" -maxdepth 1 -type d -name 'ghidra_12.1.4_PUBLIC*' -print -quit)"
+          test -x "$ghidra_home/support/analyzeHeadless"
+          echo "GHIDRA_INSTALL_DIR=$ghidra_home" >> "$GITHUB_ENV"
+      - name: Genuine synthetic CPU32 import snapshot corruption rejection restore and reopen
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/ga12-genuine-reopen-smoke.sh | tee "$RUNNER_TEMP/ga12-reopen.log"
+          grep -Fxq 'GA12_CORRUPT_RESTORE_REJECTED' "$RUNNER_TEMP/ga12-reopen.log"
+          grep -Fxq 'GA12_GENUINE_REOPEN_PASS' "$RUNNER_TEMP/ga12-reopen.log"
+          sha256sum "$RUNNER_TEMP/ga12-reopen.log" > "$RUNNER_TEMP/ga12-reopen.sha256"
+      - name: Upload synthetic Ghidra execution evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ga12-genuine-reopen-evidence
+          path: |
+            ${{ runner.temp }}/ga12-reopen.log
+            ${{ runner.temp }}/ga12-reopen.sha256
+            ${{ runner.temp }}/ghidra.sha256
+          if-no-files-found: warn
