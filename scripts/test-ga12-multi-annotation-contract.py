@@ -32,9 +32,9 @@ assert '-postScript GA12VerifyRestoredProgram.java ga12-synthetic.bin seed' in s
 assert 'GA12_REJECTED_RESEED_NONMUTATION_PASS' in smoke
 assert 'GA12_NEGATIVE_FAIL: rejected reseed changed persisted analysis' in smoke
 assert 'post-rejection.log' in smoke
-assert smoke.count('-postScript GA12VerifyRestoredProgram.java ga12-synthetic.bin verify') == 4
+assert smoke.count('-postScript GA12VerifyRestoredProgram.java ga12-synthetic.bin verify') == 6
 # Restored, post-rejection, tampered-copy, and pristine-after-tamper checks must each use a fresh process.
-for witness in ('reopen.log', 'post-rejection.log', 'tamper-rejected.log', 'pristine-after-tamper.log'):
+for witness in ('reopen.log', 'post-rejection.log', 'tamper-rejected.log', 'pristine-after-tamper.log', 'label-tamper-rejected.log', 'pristine-after-label-tamper.log'):
     assert witness in smoke, f'missing independent verify log: {witness}'
 assert smoke.index('GA12_EXISTING_ANALYSIS_RESEED_REJECTED') < smoke.index('post-rejection.log')
 assert 'args[1].equals("tamper")' in source
@@ -47,4 +47,11 @@ assert 'GA12_NEGATIVE_FAIL: verifier accepted tampered analysis' in smoke
 assert '-postScript GA12VerifyRestoredProgram.java ga12-synthetic.bin tamper' in smoke
 assert 'tamper-rejected.log' in smoke
 assert smoke.index('GA12_TAMPER_APPLIED') < smoke.index('GA12_TAMPER_DETECTION_PASS')
+assert 'args[1].equals("tamper-label")' in source
+assert 'labelObserved.setName("GA12_INTENTIONALLY_RENAMED", SourceType.USER_DEFINED)' in source
+assert 'GA12_LABEL_TAMPER_APPLIED' in source and 'GA12_LABEL_TAMPER_APPLIED' in smoke
+assert 'GA12_LABEL_TAMPER_DETECTION_PASS' in smoke
+assert 'GA12_LABEL_TAMPER_ISOLATION_PASS' in smoke
+assert smoke.index('GA12_LABEL_TAMPER_DETECTION_PASS') < smoke.index('pristine-after-label-tamper.log')
+assert '-postScript GA12VerifyRestoredProgram.java ga12-synthetic.bin tamper-label' in smoke
 print("GA12_ANALYSIS_OBJECTS_SOURCE_PASS")
