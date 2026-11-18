@@ -7,6 +7,7 @@ on:
     paths:
       - 'scripts/ga12-isolated-project-copy.py'
       - 'tests/test_ga12_isolated_project_copy.py'
+      - 'tests/test_ga12_genuine_workflow_contract.py'
       - '.github/workflows/ga12-isolated-project-copy.yml'
       - 'scripts/ga12-genuine-reopen-smoke.sh'
       - 'ghidra_scripts/GA12VerifyRestoredProgram.java'
@@ -23,7 +24,9 @@ jobs:
       - name: Validate genuine smoke shell syntax
         run: bash -n scripts/ga12-genuine-reopen-smoke.sh
       - name: Positive and negative regressions
-        run: python3 -m unittest discover -s tests -p 'test_ga12_isolated_project_copy.py' -v
+        run: |
+          python3 -m unittest discover -s tests -p 'test_ga12_isolated_project_copy.py' -v
+          python3 -m unittest discover -s tests -p 'test_ga12_genuine_workflow_contract.py' -v
 
   genuine-project-reopen:
     runs-on: ubuntu-latest
