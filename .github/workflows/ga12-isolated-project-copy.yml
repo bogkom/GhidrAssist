@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - 'work/ga12-isolated-project-snapshot-*'
+      - 'work/ga12-persisted-analysis-witness-*'
   pull_request:
     paths:
       - 'scripts/ga12-isolated-project-copy.py'
