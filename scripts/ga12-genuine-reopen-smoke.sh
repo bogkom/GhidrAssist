@@ -17,9 +17,9 @@ PY
 "$HEADLESS" "$WORK/original" GA12Fixture -import "$WORK/import/ga12-synthetic.bin" \
     -processor 68000:BE:32:CPU32 -overwrite \
     -scriptPath "$ROOT/ghidra_scripts" \
-    -postScript GA12VerifyRestoredProgram.java ga12-synthetic.bin \
+    -postScript GA12VerifyRestoredProgram.java ga12-synthetic.bin seed \
     > "$WORK/import.log" 2>&1 || { cat "$WORK/import.log"; exit 1; }
-grep -q 'GA12_REOPEN_PASS' "$WORK/import.log" || { cat "$WORK/import.log"; exit 1; }
+grep -q 'GA12_ANALYSIS_SEEDED' "$WORK/import.log" || { cat "$WORK/import.log"; exit 1; }
 # Ghidra has exited; project is closed before snapshot.
 python3 "$ROOT/scripts/ga12-isolated-project-copy.py" snapshot \
     --source "$WORK/original" --destination "$WORK/snapshot"
@@ -56,7 +56,8 @@ echo "GA12_CORRUPT_RESTORE_REJECTED"
 # is insufficient: require the witness from the actual restored program.
 "$HEADLESS" "$WORK/restored" GA12Fixture -process ga12-synthetic.bin \
     -scriptPath "$ROOT/ghidra_scripts" \
-    -postScript GA12VerifyRestoredProgram.java ga12-synthetic.bin \
+    -postScript GA12VerifyRestoredProgram.java ga12-synthetic.bin verify \
     > "$WORK/reopen.log" 2>&1 || { cat "$WORK/reopen.log"; exit 1; }
-grep -q 'GA12_REOPEN_PASS' "$WORK/reopen.log" || { cat "$WORK/reopen.log"; exit 1; }
+grep -q 'GA12_REOPEN_PASS' "$WORK/reopen.log" && \
+    grep -q 'GA12_ANALYSIS_PERSISTED_PASS' "$WORK/reopen.log" || { cat "$WORK/reopen.log"; exit 1; }
 echo "GA12_GENUINE_REOPEN_PASS"
