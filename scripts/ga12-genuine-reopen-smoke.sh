@@ -78,4 +78,17 @@ if ! grep -q 'GA12_SEED_FAIL: annotation already present' "$WORK/reseed.log" || 
     exit 1
 fi
 echo "GA12_EXISTING_ANALYSIS_RESEED_REJECTED"
+# A failed reseed must leave the restored database intact after the process
+# closes. Verify all three independent objects in a THIRD headless process.
+"$HEADLESS" "$WORK/restored" GA12Fixture -process ga12-synthetic.bin \
+    -scriptPath "$WORK/scripts" \
+    -postScript GA12VerifyRestoredProgram.java ga12-synthetic.bin verify \
+    > "$WORK/post-rejection.log" 2>&1 || { cat "$WORK/post-rejection.log"; exit 1; }
+if ! grep -q 'GA12_REOPEN_PASS' "$WORK/post-rejection.log" || \
+    ! grep -q 'GA12_ANALYSIS_PERSISTED_PASS' "$WORK/post-rejection.log"; then
+    cat "$WORK/post-rejection.log"
+    echo "GA12_NEGATIVE_FAIL: rejected reseed changed persisted analysis" >&2
+    exit 1
+fi
+echo "GA12_REJECTED_RESEED_NONMUTATION_PASS"
 echo "GA12_GENUINE_REOPEN_PASS"
