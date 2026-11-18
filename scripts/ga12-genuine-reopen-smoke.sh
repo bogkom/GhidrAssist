@@ -64,4 +64,18 @@ echo "GA12_CORRUPT_RESTORE_REJECTED"
     > "$WORK/reopen.log" 2>&1 || { cat "$WORK/reopen.log"; exit 1; }
 grep -q 'GA12_REOPEN_PASS' "$WORK/reopen.log" && \
     grep -q 'GA12_ANALYSIS_PERSISTED_PASS' "$WORK/reopen.log" || { cat "$WORK/reopen.log"; exit 1; }
+# Negative control: a second seed must refuse already-persisted analysis objects.
+# GhidraScript errors can be logged even when the headless process exits zero;
+# therefore inspect the actual script failure marker, not only exit status.
+"$HEADLESS" "$WORK/restored" GA12Fixture -process ga12-synthetic.bin \
+    -scriptPath "$WORK/scripts" \
+    -postScript GA12VerifyRestoredProgram.java ga12-synthetic.bin seed \
+    > "$WORK/reseed.log" 2>&1 || true
+if ! grep -q 'GA12_SEED_FAIL: annotation already present' "$WORK/reseed.log" || \
+    grep -q 'GA12_ANALYSIS_SEEDED' "$WORK/reseed.log"; then
+    cat "$WORK/reseed.log"
+    echo "GA12_NEGATIVE_FAIL: existing analysis was not rejected" >&2
+    exit 1
+fi
+echo "GA12_EXISTING_ANALYSIS_RESEED_REJECTED"
 echo "GA12_GENUINE_REOPEN_PASS"
