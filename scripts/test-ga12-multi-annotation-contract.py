@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Source-level contract for the two-site Ghidra persistence witness.
+"""Source-level contract for comments and user-defined label persistence.
 
 This does not replace the Java 25 genuine Ghidra reopen acceptance.
 """
@@ -14,6 +14,12 @@ for required in (
     'setComment(secondSite, CodeUnit.EOL_COMMENT, secondMarker)',
     '!marker.equals(observed) || !secondMarker.equals(secondObserved)',
     'GA12_ANALYSIS_PERSISTED_PASS',
+    'start.add(4)',
+    'getPrimarySymbol(labelSite)',
+    'createLabel(labelSite, labelName, true)',
+    'labelObserved.getSource() != SourceType.USER_DEFINED',
+    'seededLabel.getSource() != SourceType.USER_DEFINED',
+    '|| labelObserved != null',
 ):
     assert required in source, f"missing GA-12 second-site contract: {required}"
-print("GA12_MULTI_ANNOTATION_SOURCE_PASS")
+print("GA12_ANALYSIS_OBJECTS_SOURCE_PASS")
