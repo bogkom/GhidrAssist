@@ -112,4 +112,17 @@ if ! grep -q 'GA12_REOPEN_FAIL: persisted annotation missing or changed' "$WORK/
     exit 1
 fi
 echo "GA12_TAMPER_DETECTION_PASS"
+# The negative-control mutation must be isolated to the second restored copy.
+# Reopen the original restored project in another independent headless process.
+"$HEADLESS" "$WORK/restored" GA12Fixture -process ga12-synthetic.bin \
+    -scriptPath "$WORK/scripts" \
+    -postScript GA12VerifyRestoredProgram.java ga12-synthetic.bin verify \
+    > "$WORK/pristine-after-tamper.log" 2>&1 || { cat "$WORK/pristine-after-tamper.log"; exit 1; }
+if ! grep -q 'GA12_REOPEN_PASS' "$WORK/pristine-after-tamper.log" || \
+    ! grep -q 'GA12_ANALYSIS_PERSISTED_PASS' "$WORK/pristine-after-tamper.log"; then
+    cat "$WORK/pristine-after-tamper.log"
+    echo "GA12_NEGATIVE_FAIL: tamper control affected pristine restored project" >&2
+    exit 1
+fi
+echo "GA12_TAMPER_ISOLATION_PASS"
 echo "GA12_GENUINE_REOPEN_PASS"
