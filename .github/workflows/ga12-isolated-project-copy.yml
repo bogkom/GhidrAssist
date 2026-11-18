@@ -8,6 +8,8 @@ on:
       - 'scripts/ga12-isolated-project-copy.py'
       - 'tests/test_ga12_isolated_project_copy.py'
       - '.github/workflows/ga12-isolated-project-copy.yml'
+      - 'scripts/ga12-genuine-reopen-smoke.sh'
+      - 'ghidra_scripts/GA12VerifyRestoredProgram.java'
 jobs:
   source-regressions:
     runs-on: ubuntu-latest
@@ -18,5 +20,7 @@ jobs:
           python-version: '3.11'
       - name: Compile
         run: python3 -m py_compile scripts/ga12-isolated-project-copy.py tests/test_ga12_isolated_project_copy.py
+      - name: Validate genuine smoke shell syntax
+        run: bash -n scripts/ga12-genuine-reopen-smoke.sh
       - name: Positive and negative regressions
         run: python3 -m unittest discover -s tests -p 'test_ga12_isolated_project_copy.py' -v
