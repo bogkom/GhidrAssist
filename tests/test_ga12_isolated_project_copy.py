@@ -168,7 +168,7 @@ class ProjectCopyTests(unittest.TestCase):
         self.assertGreaterEqual(harness.count("grep -q 'GA12_REOPEN_PASS'"), 2)
         self.assertIn("currentProgram.getMemory().getSize()", witness)
         self.assertIn("GA12_REOPEN_PASS", witness)
-        self.assertNotIn("-import \"$WORK/import/ga12-synthetic.bin\" \\\n    -scriptPath", harness.split("# Open the restored project")[1])
+        self.assertNotIn(" -import ", harness.split("# Open the restored project")[1])
 
 if __name__ == "__main__":
     unittest.main()
