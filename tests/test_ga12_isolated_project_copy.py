@@ -109,5 +109,53 @@ class ProjectCopyTests(unittest.TestCase):
         self.assertFalse(self.restored.exists())
 
 
+    def run_cli(self, action, source, destination=None, authorize=False):
+        import json
+        import subprocess
+        import sys
+        command = [sys.executable, str(SCRIPT), action, "--source", str(source)]
+        if destination is not None:
+            command += ["--destination", str(destination)]
+        if authorize:
+            command.append("--authorize-isolated-restore")
+        result = subprocess.run(command, capture_output=True, text=True, check=False)
+        self.assertEqual(result.stderr, "")
+        return result.returncode, json.loads(result.stdout)
+
+    def test_cli_snapshot_verify_authorized_restore_end_to_end(self):
+        code, result = self.run_cli("snapshot", self.project, self.snapshot)
+        self.assertEqual((code, result["status"]), (0, "SNAPSHOT_CREATED"))
+        code, result = self.run_cli("verify", self.snapshot)
+        self.assertEqual((code, result["status"], result["files"]), (0, "VERIFIED", 2))
+        code, result = self.run_cli("restore", self.snapshot, self.restored, True)
+        self.assertEqual((code, result["status"]), (0, "RESTORED_OFFLINE_COPY"))
+        self.assertIs(result["apply_replay_authorized"], False)
+        self.assertEqual(mod.inventory(self.project), mod.inventory(self.restored))
+        self.assertFalse((self.restored / mod.MANIFEST).exists())
+
+    def test_cli_rejects_tampered_snapshot_without_partial_restore(self):
+        self.make_snapshot()
+        (self.snapshot / "synthetic.rep" / "data").write_bytes(b"changed")
+        code, result = self.run_cli("restore", self.snapshot, self.restored, True)
+        self.assertEqual((code, result["status"]), (2, "BLOCKED"))
+        self.assertFalse(self.restored.exists())
+
+    def test_cli_rejects_existing_restore_target(self):
+        self.make_snapshot()
+        self.restored.mkdir()
+        (self.restored / "sentinel").write_bytes(b"preserve")
+        code, result = self.run_cli("restore", self.snapshot, self.restored, True)
+        self.assertEqual((code, result["status"]), (2, "BLOCKED"))
+        self.assertEqual((self.restored / "sentinel").read_bytes(), b"preserve")
+
+    def test_cli_rejects_manifest_symlink_and_preserves_destination(self):
+        self.make_snapshot()
+        manifest = self.snapshot / mod.MANIFEST
+        manifest.rename(self.snapshot / "manifest-original")
+        manifest.symlink_to(self.snapshot / "manifest-original")
+        code, result = self.run_cli("restore", self.snapshot, self.restored, True)
+        self.assertEqual((code, result["status"]), (2, "BLOCKED"))
+        self.assertFalse(self.restored.exists())
+
 if __name__ == "__main__":
     unittest.main()
