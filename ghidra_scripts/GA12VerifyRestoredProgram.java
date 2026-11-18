@@ -3,6 +3,8 @@
 import ghidra.app.script.GhidraScript;
 import ghidra.program.model.address.Address;
 import ghidra.program.model.listing.CodeUnit;
+import ghidra.program.model.symbol.Symbol;
+import ghidra.program.model.symbol.SourceType;
 
 public class GA12VerifyRestoredProgram extends GhidraScript {
     @Override
@@ -42,18 +44,34 @@ public class GA12VerifyRestoredProgram extends GhidraScript {
         if (!currentProgram.getMemory().contains(secondSite)) {
             throw new IllegalStateException("GA12_REOPEN_FAIL: missing second site");
         }
+        // A user-defined label is a separate persisted database object, not a comment.
+        final String labelName = "GA12_PERSISTED_LABEL";
+        Address labelSite = start.add(4);
+        if (!currentProgram.getMemory().contains(labelSite)) {
+            throw new IllegalStateException("GA12_REOPEN_FAIL: missing label site");
+        }
+        Symbol labelObserved = currentProgram.getSymbolTable().getPrimarySymbol(labelSite);
         String secondObserved = currentProgram.getListing().getComment(CodeUnit.EOL_COMMENT, secondSite);
         String observed = currentProgram.getListing().getComment(CodeUnit.PLATE_COMMENT, start);
         if (args[1].equals("seed")) {
             if ((observed != null && !observed.isEmpty())
-                    || (secondObserved != null && !secondObserved.isEmpty())) {
+                    || (secondObserved != null && !secondObserved.isEmpty())
+                    || labelObserved != null) {
                 throw new IllegalStateException("GA12_SEED_FAIL: annotation already present");
             }
             currentProgram.getListing().setComment(start, CodeUnit.PLATE_COMMENT, marker);
             currentProgram.getListing().setComment(secondSite, CodeUnit.EOL_COMMENT, secondMarker);
+            createLabel(labelSite, labelName, true);
+            Symbol seededLabel = currentProgram.getSymbolTable().getPrimarySymbol(labelSite);
+            if (seededLabel == null || !labelName.equals(seededLabel.getName())
+                    || seededLabel.getSource() != SourceType.USER_DEFINED) {
+                throw new IllegalStateException("GA12_SEED_FAIL: user label not created");
+            }
             println("GA12_ANALYSIS_SEEDED");
         } else {
-            if (!marker.equals(observed) || !secondMarker.equals(secondObserved)) {
+            if (!marker.equals(observed) || !secondMarker.equals(secondObserved)
+                    || labelObserved == null || !labelName.equals(labelObserved.getName())
+                    || labelObserved.getSource() != SourceType.USER_DEFINED) {
                 throw new IllegalStateException("GA12_REOPEN_FAIL: persisted annotation missing or changed");
             }
             println("GA12_ANALYSIS_PERSISTED_PASS");
