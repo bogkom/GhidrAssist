@@ -7,7 +7,10 @@ HEADLESS="${GHIDRA_INSTALL_DIR:?set GHIDRA_INSTALL_DIR}/support/analyzeHeadless"
 test -x "$HEADLESS"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
-mkdir -p "$WORK/original" "$WORK/import"
+mkdir -p "$WORK/original" "$WORK/import" "$WORK/scripts"
+# Isolate the script compilation scope: unrelated repository scripts may require
+# extension classes absent from stock Ghidra headless.
+cp "$ROOT/ghidra_scripts/GA12VerifyRestoredProgram.java" "$WORK/scripts/"
 python3 - "$WORK/import/ga12-synthetic.bin" <<'PY'
 from pathlib import Path
 import sys
@@ -16,10 +19,10 @@ PY
 # Import into a newly created, disposable project. Never use an existing project.
 "$HEADLESS" "$WORK/original" GA12Fixture -import "$WORK/import/ga12-synthetic.bin" \
     -processor 68000:BE:32:CPU32 -overwrite \
-    -scriptPath "$ROOT/ghidra_scripts" \
-    -postScript GA12VerifyRestoredProgram.java ga12-synthetic.bin \
+    -scriptPath "$WORK/scripts" \
+    -postScript GA12VerifyRestoredProgram.java ga12-synthetic.bin seed \
     > "$WORK/import.log" 2>&1 || { cat "$WORK/import.log"; exit 1; }
-grep -q 'GA12_REOPEN_PASS' "$WORK/import.log" || { cat "$WORK/import.log"; exit 1; }
+grep -q 'GA12_ANALYSIS_SEEDED' "$WORK/import.log" || { cat "$WORK/import.log"; exit 1; }
 # Ghidra has exited; project is closed before snapshot.
 python3 "$ROOT/scripts/ga12-isolated-project-copy.py" snapshot \
     --source "$WORK/original" --destination "$WORK/snapshot"
@@ -55,8 +58,9 @@ echo "GA12_CORRUPT_RESTORE_REJECTED"
 # Open the restored project, do not import again. A successful process exit alone
 # is insufficient: require the witness from the actual restored program.
 "$HEADLESS" "$WORK/restored" GA12Fixture -process ga12-synthetic.bin \
-    -scriptPath "$ROOT/ghidra_scripts" \
-    -postScript GA12VerifyRestoredProgram.java ga12-synthetic.bin \
+    -scriptPath "$WORK/scripts" \
+    -postScript GA12VerifyRestoredProgram.java ga12-synthetic.bin verify \
     > "$WORK/reopen.log" 2>&1 || { cat "$WORK/reopen.log"; exit 1; }
-grep -q 'GA12_REOPEN_PASS' "$WORK/reopen.log" || { cat "$WORK/reopen.log"; exit 1; }
+grep -q 'GA12_REOPEN_PASS' "$WORK/reopen.log" && \
+    grep -q 'GA12_ANALYSIS_PERSISTED_PASS' "$WORK/reopen.log" || { cat "$WORK/reopen.log"; exit 1; }
 echo "GA12_GENUINE_REOPEN_PASS"
