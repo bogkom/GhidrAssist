@@ -37,15 +37,23 @@ public class GA12VerifyRestoredProgram extends GhidraScript {
         // A database annotation, unlike the imported fixture bytes, must survive
         // Ghidra's save/close, offline copy, restore and process reopen.
         final String marker = "GA12_SYNTHETIC_PERSISTED_ANALYSIS_V1";
+        final String secondMarker = "GA12_SYNTHETIC_SECOND_SITE_V1";
+        Address secondSite = start.add(2);
+        if (!currentProgram.getMemory().contains(secondSite)) {
+            throw new IllegalStateException("GA12_REOPEN_FAIL: missing second site");
+        }
+        String secondObserved = currentProgram.getListing().getComment(CodeUnit.EOL_COMMENT, secondSite);
         String observed = currentProgram.getListing().getComment(CodeUnit.PLATE_COMMENT, start);
         if (args[1].equals("seed")) {
-            if (observed != null && !observed.isEmpty()) {
+            if ((observed != null && !observed.isEmpty())
+                    || (secondObserved != null && !secondObserved.isEmpty())) {
                 throw new IllegalStateException("GA12_SEED_FAIL: annotation already present");
             }
             currentProgram.getListing().setComment(start, CodeUnit.PLATE_COMMENT, marker);
+            currentProgram.getListing().setComment(secondSite, CodeUnit.EOL_COMMENT, secondMarker);
             println("GA12_ANALYSIS_SEEDED");
         } else {
-            if (!marker.equals(observed)) {
+            if (!marker.equals(observed) || !secondMarker.equals(secondObserved)) {
                 throw new IllegalStateException("GA12_REOPEN_FAIL: persisted annotation missing or changed");
             }
             println("GA12_ANALYSIS_PERSISTED_PASS");
