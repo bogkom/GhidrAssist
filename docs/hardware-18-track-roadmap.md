@@ -1,6 +1,6 @@
-## GA-12 — 2026-11-18: verified handoff end-to-end regression candidate (PR #342)
+## GA-12 — 2026-11-18: verified recovery handoff integrated (PR #342)
 
-On existing branch `work/ga12-verified-recovery-handoff-20261117`, added a real-verifier positive CLI handoff with SHA-256 output checks and explicit Apply/restoration denial, negative tests for tampering, FAIL, wrong source, symlinks and opt-in older checkpoint selection. Wired handoff compilation and regressions into the existing GA-12 recovery Actions workflow and expanded the handoff documentation. Candidate only: exact-head CI, review and required Java/Ghidra acceptance are not yet confirmed. No project restoration or Apply replay; GA-12 remains **PARTIAL**. Static evidence does not establish firmware execution, active MM/VBR/ISR or physical mapping.
+PR [#342](https://github.com/bogkom/GhidrAssist/pull/342) was squash-merged as `0940b2a577fdb3faf416c6a625c9c22d5f5290c1` from exact head `1d48dd0fb98257a0566d452de10357fe52ee32b6`. [Actions 44196323936](https://github.com/bogkom/GhidrAssist/actions/runs/44196323936) completed SUCCESS for Python 3.11 compilation, checkpoint recovery positive/negative regressions and verified handoff positive/negative regressions. Review covered the 5-file diff, CLI boundaries, real verifier invocation and explicit non-authorization of Apply. This is **source/evidence-contract CI**, not Java 21/25 or a genuine isolated Ghidra runtime acceptance. No Ghidra project state restoration or Apply replay is implemented; GA-12 remains **PARTIAL**. Static evidence does not prove firmware execution, active MM/VBR/ISR or physical mapping.
 
 ## GA-12 — 2026-11-17: digest-bound recovery handoff integrated (PR #341)
 
