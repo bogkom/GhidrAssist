@@ -91,4 +91,25 @@ if ! grep -q 'GA12_REOPEN_PASS' "$WORK/post-rejection.log" || \
     exit 1
 fi
 echo "GA12_REJECTED_RESEED_NONMUTATION_PASS"
+# Negative verifier calibration: restore a SECOND disposable project and mutate
+# only its EOL comment. A fresh process must reject the persisted mismatch.
+python3 "$ROOT/scripts/ga12-isolated-project-copy.py" restore \
+    --source "$WORK/snapshot" --destination "$WORK/tampered" \
+    --authorize-isolated-restore
+"$HEADLESS" "$WORK/tampered" GA12Fixture -process ga12-synthetic.bin \
+    -scriptPath "$WORK/scripts" \
+    -postScript GA12VerifyRestoredProgram.java ga12-synthetic.bin tamper \
+    > "$WORK/tamper.log" 2>&1 || { cat "$WORK/tamper.log"; exit 1; }
+grep -q 'GA12_TAMPER_APPLIED' "$WORK/tamper.log" || { cat "$WORK/tamper.log"; exit 1; }
+"$HEADLESS" "$WORK/tampered" GA12Fixture -process ga12-synthetic.bin \
+    -scriptPath "$WORK/scripts" \
+    -postScript GA12VerifyRestoredProgram.java ga12-synthetic.bin verify \
+    > "$WORK/tamper-rejected.log" 2>&1 || true
+if ! grep -q 'GA12_REOPEN_FAIL: persisted annotation missing or changed' "$WORK/tamper-rejected.log" || \
+    grep -q 'GA12_ANALYSIS_PERSISTED_PASS' "$WORK/tamper-rejected.log"; then
+    cat "$WORK/tamper-rejected.log"
+    echo "GA12_NEGATIVE_FAIL: verifier accepted tampered analysis" >&2
+    exit 1
+fi
+echo "GA12_TAMPER_DETECTION_PASS"
 echo "GA12_GENUINE_REOPEN_PASS"
