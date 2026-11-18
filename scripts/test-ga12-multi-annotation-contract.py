@@ -32,7 +32,10 @@ assert '-postScript GA12VerifyRestoredProgram.java ga12-synthetic.bin seed' in s
 assert 'GA12_REJECTED_RESEED_NONMUTATION_PASS' in smoke
 assert 'GA12_NEGATIVE_FAIL: rejected reseed changed persisted analysis' in smoke
 assert 'post-rejection.log' in smoke
-assert smoke.count('-postScript GA12VerifyRestoredProgram.java ga12-synthetic.bin verify') == 2
+assert smoke.count('-postScript GA12VerifyRestoredProgram.java ga12-synthetic.bin verify') == 3
+# Restored, post-rejection, and tampered-copy checks must each use a fresh process.
+for witness in ('reopen.log', 'post-rejection.log', 'tamper-rejected.log'):
+    assert witness in smoke, f'missing independent verify log: {witness}'
 assert smoke.index('GA12_EXISTING_ANALYSIS_RESEED_REJECTED') < smoke.index('post-rejection.log')
 assert 'args[1].equals("tamper")' in source
 assert '"GA12_INTENTIONALLY_TAMPERED"' in source
