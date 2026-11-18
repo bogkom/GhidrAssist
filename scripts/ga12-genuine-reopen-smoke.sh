@@ -125,4 +125,34 @@ if ! grep -q 'GA12_REOPEN_PASS' "$WORK/pristine-after-tamper.log" || \
     exit 1
 fi
 echo "GA12_TAMPER_ISOLATION_PASS"
+# Independently mutate the persisted USER_DEFINED symbol in a third copy.
+# The verifier must reject a renamed symbol after process restart, without
+# affecting either of the original comments or the pristine project.
+python3 "$ROOT/scripts/ga12-isolated-project-copy.py" restore \
+    --source "$WORK/snapshot" --destination "$WORK/label-tampered" \
+    --authorize-isolated-restore
+"$HEADLESS" "$WORK/label-tampered" GA12Fixture -process ga12-synthetic.bin \
+    -scriptPath "$WORK/scripts" \
+    -postScript GA12VerifyRestoredProgram.java ga12-synthetic.bin tamper-label \
+    > "$WORK/label-tamper.log" 2>&1 || { cat "$WORK/label-tamper.log"; exit 1; }
+grep -q 'GA12_LABEL_TAMPER_APPLIED' "$WORK/label-tamper.log" || { cat "$WORK/label-tamper.log"; exit 1; }
+"$HEADLESS" "$WORK/label-tampered" GA12Fixture -process ga12-synthetic.bin \
+    -scriptPath "$WORK/scripts" \
+    -postScript GA12VerifyRestoredProgram.java ga12-synthetic.bin verify \
+    > "$WORK/label-tamper-rejected.log" 2>&1 || true
+if ! grep -q 'GA12_REOPEN_FAIL: persisted annotation missing or changed' "$WORK/label-tamper-rejected.log" || \
+    grep -q 'GA12_ANALYSIS_PERSISTED_PASS' "$WORK/label-tamper-rejected.log"; then
+    cat "$WORK/label-tamper-rejected.log"
+    echo "GA12_NEGATIVE_FAIL: verifier accepted renamed persisted symbol" >&2
+    exit 1
+fi
+echo "GA12_LABEL_TAMPER_DETECTION_PASS"
+"$HEADLESS" "$WORK/restored" GA12Fixture -process ga12-synthetic.bin \
+    -scriptPath "$WORK/scripts" \
+    -postScript GA12VerifyRestoredProgram.java ga12-synthetic.bin verify \
+    > "$WORK/pristine-after-label-tamper.log" 2>&1 || { cat "$WORK/pristine-after-label-tamper.log"; exit 1; }
+grep -q 'GA12_ANALYSIS_PERSISTED_PASS' "$WORK/pristine-after-label-tamper.log" || {
+    cat "$WORK/pristine-after-label-tamper.log"; exit 1;
+}
+echo "GA12_LABEL_TAMPER_ISOLATION_PASS"
 echo "GA12_GENUINE_REOPEN_PASS"
