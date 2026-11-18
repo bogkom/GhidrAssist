@@ -41,8 +41,8 @@ p = files[0]
 with p.open("ab") as f:
     f.write(b"GA12_CORRUPTION")
 PY
-if python3 "$ROOT/scripts/ga12-isolated-project-copy.py" restore \\
-    --source "$WORK/corrupt" --destination "$WORK/should-not-exist" \\
+if python3 "$ROOT/scripts/ga12-isolated-project-copy.py" restore \
+    --source "$WORK/corrupt" --destination "$WORK/should-not-exist" \
     --authorize-isolated-restore > "$WORK/rejected.log" 2>&1; then
     echo "GA12_NEGATIVE_FAIL: corrupt snapshot was accepted" >&2
     exit 1
