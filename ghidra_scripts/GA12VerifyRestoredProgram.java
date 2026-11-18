@@ -1,6 +1,7 @@
-// GA-12: verify that a restored disposable Ghidra project actually opens.
-// This is a GhidraScript, run by analyzeHeadless -process on a synthetic import.
+// GA-12: genuine program-content witness for a disposable restored Ghidra project.
+// Run on both initial import and -process reopen; no production program is touched.
 import ghidra.app.script.GhidraScript;
+import ghidra.program.model.address.Address;
 
 public class GA12VerifyRestoredProgram extends GhidraScript {
     @Override
@@ -10,13 +11,29 @@ public class GA12VerifyRestoredProgram extends GhidraScript {
         }
         String[] args = getScriptArgs();
         if (args.length != 1 || !currentProgram.getName().equals(args[0])) {
-            throw new IllegalStateException("GA12_REOPEN_FAIL: unexpected program: "
-                    + currentProgram.getName());
+            throw new IllegalStateException("GA12_REOPEN_FAIL: unexpected program");
         }
-        if (currentProgram.getMemory().getSize() == 0) {
-            throw new IllegalStateException("GA12_REOPEN_FAIL: empty program memory");
+        if (!"68000:BE:32:CPU32".equals(currentProgram.getLanguageID().toString())) {
+            throw new IllegalStateException("GA12_REOPEN_FAIL: unexpected processor/language");
+        }
+        if (currentProgram.getMemory().getSize() != 6) {
+            throw new IllegalStateException("GA12_REOPEN_FAIL: unexpected memory size");
+        }
+        Address start = currentProgram.getMinAddress();
+        if (start == null) {
+            throw new IllegalStateException("GA12_REOPEN_FAIL: missing start address");
+        }
+        byte[] actual = new byte[6];
+        if (currentProgram.getMemory().getBytes(start, actual) != actual.length) {
+            throw new IllegalStateException("GA12_REOPEN_FAIL: incomplete fixture bytes");
+        }
+        byte[] expected = {(byte) 0x4e, (byte) 0x71, (byte) 0x4e,
+                           (byte) 0x71, (byte) 0x4e, (byte) 0x75};
+        if (!java.util.Arrays.equals(actual, expected)) {
+            throw new IllegalStateException("GA12_REOPEN_FAIL: fixture content mismatch");
         }
         println("GA12_REOPEN_PASS program=" + currentProgram.getName()
-                + " memory_bytes=" + currentProgram.getMemory().getSize());
+                + " language=" + currentProgram.getLanguageID()
+                + " fixture=4e714e714e75 memory_bytes=6");
     }
 }
