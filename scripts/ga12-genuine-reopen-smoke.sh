@@ -200,6 +200,18 @@ cycle_run apply cycle-apply.log
 grep -q 'GA12_AUTHORIZED_APPLY_PASS' "$WORK/cycle-apply.log"
 cycle_run verify-applied cycle-applied-reopen.log
 grep -q 'GA12_APPLIED_REOPEN_PASS' "$WORK/cycle-applied-reopen.log"
+# A duplicate apply is rejected without changing the already-applied state.
+"$HEADLESS" "$WORK/cycle" GA12Fixture -process ga12-synthetic.bin \
+    -scriptPath "$WORK/scripts" \
+    -postScript GA12AuthorizedAnnotationCycle.java ga12-synthetic.bin apply authorize-isolated-analysis \
+    > "$WORK/cycle-duplicate-apply.log" 2>&1 || true
+if ! grep -q 'GA12_APPLY_PRECONDITION_REJECTED' "$WORK/cycle-duplicate-apply.log" || \
+    grep -q 'GA12_AUTHORIZED_APPLY_PASS' "$WORK/cycle-duplicate-apply.log"; then
+    cat "$WORK/cycle-duplicate-apply.log"; exit 1
+fi
+cycle_run verify-applied cycle-after-duplicate-apply.log
+grep -q 'GA12_APPLIED_REOPEN_PASS' "$WORK/cycle-after-duplicate-apply.log"
+echo "GA12_DUPLICATE_APPLY_NONMUTATION_PASS"
 cycle_run rollback cycle-rollback.log
 grep -q 'GA12_AUTHORIZED_ROLLBACK_PASS' "$WORK/cycle-rollback.log"
 "$HEADLESS" "$WORK/cycle" GA12Fixture -process ga12-synthetic.bin \
@@ -207,5 +219,21 @@ grep -q 'GA12_AUTHORIZED_ROLLBACK_PASS' "$WORK/cycle-rollback.log"
     -postScript GA12VerifyRestoredProgram.java ga12-synthetic.bin verify \
     > "$WORK/cycle-final-reopen.log" 2>&1 || { cat "$WORK/cycle-final-reopen.log"; exit 1; }
 grep -q 'GA12_ANALYSIS_PERSISTED_PASS' "$WORK/cycle-final-reopen.log"
+# A duplicate rollback must be rejected; a fresh process must still see
+# the original PLATE, EOL and USER_DEFINED label.
+"$HEADLESS" "$WORK/cycle" GA12Fixture -process ga12-synthetic.bin \
+    -scriptPath "$WORK/scripts" \
+    -postScript GA12AuthorizedAnnotationCycle.java ga12-synthetic.bin rollback authorize-isolated-analysis \
+    > "$WORK/cycle-duplicate-rollback.log" 2>&1 || true
+if ! grep -q 'GA12_ROLLBACK_PRECONDITION_REJECTED' "$WORK/cycle-duplicate-rollback.log" || \
+    grep -q 'GA12_AUTHORIZED_ROLLBACK_PASS' "$WORK/cycle-duplicate-rollback.log"; then
+    cat "$WORK/cycle-duplicate-rollback.log"; exit 1
+fi
+"$HEADLESS" "$WORK/cycle" GA12Fixture -process ga12-synthetic.bin \
+    -scriptPath "$WORK/scripts" \
+    -postScript GA12VerifyRestoredProgram.java ga12-synthetic.bin verify \
+    > "$WORK/cycle-after-duplicate-rollback.log" 2>&1 || { cat "$WORK/cycle-after-duplicate-rollback.log"; exit 1; }
+grep -q 'GA12_ANALYSIS_PERSISTED_PASS' "$WORK/cycle-after-duplicate-rollback.log"
+echo "GA12_DUPLICATE_ROLLBACK_NONMUTATION_PASS"
 echo "GA12_AUTHORIZED_PERSISTED_CYCLE_PASS"
 echo "GA12_GENUINE_REOPEN_PASS"
