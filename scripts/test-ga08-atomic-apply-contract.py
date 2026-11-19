@@ -68,3 +68,17 @@ assert "Candidate address contains an instruction; preserve user code" in annota
 assert annotation.index("getInstructionContaining(at)!=null") < annotation.index("Symbol prior=")
 
 print("GA08_ATOMIC_APPLY_SOURCE_CONTRACT_PASS")
+
+# The runtime witness must call the production JAR rather than a standalone
+# reimplementation, and exercise both a stale conflict rollback and idempotency.
+from pathlib import Path as _Path
+_witness = _Path("tools/ghidra_scripts/GA08VerifyProductionApply.java").read_text()
+_workflow = _Path(".github/workflows/hardware-extension-build.yml").read_text()
+assert 'Class.forName("ghidrassist.hardware.HardwareApplyService"' in _witness
+assert 'apply.invoke(null, currentProgram, List.of(first, second))' in _witness
+assert 'earlier approved region survived a failed transaction' in _witness
+assert 'apply.invoke(null, currentProgram, List.of(first))' in _witness
+assert 'GA08 PRODUCTION APPLY ROLLBACK PASS:' in _witness
+assert 'GA08 PRODUCTION APPLY POSITIVE PASS:' in _witness
+assert '-postScript GA08VerifyProductionApply.java' in _workflow
+assert 'GA-08 genuine production Apply and rollback on disposable CPU32' in _workflow
