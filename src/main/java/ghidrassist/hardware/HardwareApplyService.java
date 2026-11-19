@@ -348,7 +348,14 @@ public final class HardwareApplyService {
                         case ANNOTATION -> annotateCandidate(program,item,messages);
                         case VBR_STRUCTURE -> defineVbr(program,item,messages);
                     };
-                    if(applied)changed++;else skipped++;
+                    // A READY/UPGRADE/MANUAL_REVIEW row that cannot be written is
+                    // not an idempotent skip. Abort the entire transaction so
+                    // earlier successful rows cannot be committed on stale state.
+                    if(!applied) {
+                        throw new IllegalStateException(
+                            "Hardware Apply could not apply approved row: "+item.name);
+                    }
+                    changed++;
                 }
             }
             commit=true;
