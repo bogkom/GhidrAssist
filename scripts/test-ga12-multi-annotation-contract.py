@@ -35,7 +35,7 @@ assert '--destination "$WORK/unauthorized"' in smoke
 assert 'GA12_REJECTED_RESEED_NONMUTATION_PASS' in smoke
 assert 'GA12_NEGATIVE_FAIL: rejected reseed changed persisted analysis' in smoke
 assert 'post-rejection.log' in smoke
-assert smoke.count('-postScript GA12VerifyRestoredProgram.java ga12-synthetic.bin verify') == 6
+assert smoke.count('-postScript GA12VerifyRestoredProgram.java ga12-synthetic.bin verify') == 8
 # Restored, post-rejection, tampered-copy, and pristine-after-tamper checks must each use a fresh process.
 for witness in ('reopen.log', 'post-rejection.log', 'tamper-rejected.log', 'pristine-after-tamper.log', 'label-tamper-rejected.log', 'pristine-after-label-tamper.log'):
     assert witness in smoke, f'missing independent verify log: {witness}'
@@ -57,6 +57,15 @@ assert 'GA12_LABEL_TAMPER_DETECTION_PASS' in smoke
 assert 'GA12_LABEL_TAMPER_ISOLATION_PASS' in smoke
 assert smoke.index('GA12_LABEL_TAMPER_DETECTION_PASS') < smoke.index('pristine-after-label-tamper.log')
 assert '-postScript GA12VerifyRestoredProgram.java ga12-synthetic.bin tamper-label' in smoke
+cycle = (Path(__file__).resolve().parents[1] / "ghidra_scripts" / "GA12AuthorizedAnnotationCycle.java").read_text()
+for token in ("GA12_AUTHORIZATION_REJECTED", "GA12_APPLY_PRECONDITION_REJECTED",
+              "GA12_ROLLBACK_PRECONDITION_REJECTED", "GA12_AUTHORIZED_APPLY_PASS",
+              "GA12_APPLIED_REOPEN_PASS", "GA12_AUTHORIZED_ROLLBACK_PASS"):
+    assert token in cycle, f"missing authorized cycle gate: {token}"
+assert "GA12_UNAUTHORIZED_APPLY_NONMUTATION_PASS" in smoke
+assert "GA12_AUTHORIZED_PERSISTED_CYCLE_PASS" in smoke
+assert smoke.index("GA12_UNAUTHORIZED_APPLY_NONMUTATION_PASS") < smoke.index("cycle_run apply")
+assert smoke.index("cycle_run apply") < smoke.index("cycle_run verify-applied") < smoke.index("cycle_run rollback")
 # The CI acceptance must actually execute this contract and require each genuine
 # negative-path witness, not merely the final positive reopen marker.
 workflow = (Path(__file__).resolve().parents[1] / ".github" / "workflows" / "ga12-isolated-project-copy.yml").read_text()
@@ -69,6 +78,8 @@ for marker in (
     "GA12_TAMPER_ISOLATION_PASS",
     "GA12_LABEL_TAMPER_DETECTION_PASS",
     "GA12_LABEL_TAMPER_ISOLATION_PASS",
+    "GA12_UNAUTHORIZED_APPLY_NONMUTATION_PASS",
+    "GA12_AUTHORIZED_PERSISTED_CYCLE_PASS",
 ):
     assert marker in workflow, f"CI does not require genuine witness: {marker}"
 assert "grep -Fxq \"$marker\" \"$RUNNER_TEMP/ga12-reopen.log\"" in workflow
