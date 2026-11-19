@@ -1,3 +1,7 @@
+## GA-12 — 2026-11-19: Java 21 / full Java 25 build evidence gate (PR #348)
+
+The existing GA-12 PR workflow now provisions and checks Java 21 in its source-regression job and requires a full `buildExtension` using the official Ghidra 12.1.4 PUBLIC Gradle wrapper on Java 25 before executing the isolated synthetic headless persistence sequence. The built ZIP must contain a JAR; its SHA-256 is archived with the Ghidra evidence. Candidate workflow commit `96604f64caac05ddfb658254253979a28a73b1e2`; results are **not yet verified** for this head. Java 21 presence alone is not proof of Java 21 Java-source compilation; Python contract regressions remain separately classified. Full product Review/Apply/Undo persistence remains unproven, so GA-12 is PARTIAL. No host worker or production project used.
+
 ## GA-12 — 2026-11-19: bind isolated Apply/rollback to fixed fixture (PR #348)
 
 The authorized annotation script now requires both the supplied program name and the actually opened Ghidra program name to equal the hard-coded disposable `ga12-synthetic.bin` fixture; a caller can no longer authorize changes to an arbitrary named CPU32 project simply by supplying that project's name. The source contract checks this guard. This is a safety boundary improvement, **not** proof of product Review/Apply/Undo or full GA-12 acceptance. Exact-head CI is pending; Java 21 regressions and full Java 25 extension build are still required.
