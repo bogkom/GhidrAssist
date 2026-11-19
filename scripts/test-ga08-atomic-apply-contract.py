@@ -40,4 +40,21 @@ assert define.index('p.getListing().createData(first,type)') < define.index(
     'p.getSymbolTable().createLabel(first,name,SourceType.USER_DEFINED)')
 assert 'if(prior!=null && prior.getSource()!=SourceType.DEFAULT){' not in define
 
+
+# A pre-existing user-approved TPURAM label without the provenance note is
+# incomplete, not ALREADY_PRESENT. The Apply path must add only the missing
+# note without attempting to create a duplicate USER_DEFINED symbol.
+annotation = source.split("private static Decision annotationDecision(", 1)[1].split(
+    "/** Read-only status", 1)[0]
+assert "comment.contains(TPURAM_CANDIDATE_NOTE)" in annotation
+assert '"Candidate label exists but provenance comment is missing' in annotation
+assert annotation.index("comment.contains(TPURAM_CANDIDATE_NOTE)") < annotation.index(
+    "State.ALREADY_PRESENT")
+annotate = source.split("private static boolean annotateCandidate(", 1)[1].split(
+    "private static boolean defineVbr(", 1)[0]
+assert "if(prior==null || prior.getSource()==SourceType.DEFAULT)" in annotate
+assert "String line=TPURAM_CANDIDATE_NOTE;" in annotate
+assert "existing==null || !existing.contains(line)" in annotate
+assert "existing+\\n" not in annotate or "existing+\\\"\\n\\\"+line" in annotate
+
 print("GA08_ATOMIC_APPLY_SOURCE_CONTRACT_PASS")
