@@ -3,6 +3,8 @@
 import ghidra.app.script.GhidraScript;
 import ghidra.program.model.address.Address;
 import ghidra.program.model.listing.CodeUnit;
+import ghidra.program.model.symbol.Symbol;
+import ghidra.program.model.symbol.SourceType;
 
 public class GA12AuthorizedAnnotationCycle extends GhidraScript {
     private static final String BASE = "GA12_SYNTHETIC_SECOND_SITE_V1";
@@ -18,6 +20,14 @@ public class GA12AuthorizedAnnotationCycle extends GhidraScript {
         }
         Address site = currentProgram.getMinAddress().add(2);
         String observed = currentProgram.getListing().getComment(CodeUnit.EOL_COMMENT, site);
+        // Check unrelated persisted objects before every authorized transition.
+        String plate = currentProgram.getListing().getComment(CodeUnit.PLATE_COMMENT, currentProgram.getMinAddress());
+        Symbol label = currentProgram.getSymbolTable().getPrimarySymbol(currentProgram.getMinAddress().add(4));
+        if (!"GA12_SYNTHETIC_PERSISTED_ANALYSIS_V1".equals(plate)
+                || label == null || !"GA12_PERSISTED_LABEL".equals(label.getName())
+                || label.getSource() != SourceType.USER_DEFINED) {
+            throw new IllegalStateException("GA12_UNRELATED_ANALYSIS_CHANGED");
+        }
         switch (args[1]) {
             case "apply":
                 if (!BASE.equals(observed)) {
