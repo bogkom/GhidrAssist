@@ -1,3 +1,7 @@
+## GA-12 — 2026-11-19: bind isolated Apply/rollback to fixed fixture (PR #348)
+
+The authorized annotation script now requires both the supplied program name and the actually opened Ghidra program name to equal the hard-coded disposable `ga12-synthetic.bin` fixture; a caller can no longer authorize changes to an arbitrary named CPU32 project simply by supplying that project's name. The source contract checks this guard. This is a safety boundary improvement, **not** proof of product Review/Apply/Undo or full GA-12 acceptance. Exact-head CI is pending; Java 21 regressions and full Java 25 extension build are still required.
+
 ## GA-12 — 2026-11-19: authorized Apply rejects independently tampered USER_DEFINED symbol (PR #348)
 
 Candidate `fc6bb0e37e2b871493445d23be24b12ec6e77e07` adds a genuine isolated Ghidra negative path: invoke authorized annotation Apply on the separately restored project with an intentionally renamed USER_DEFINED symbol; require `GA12_UNRELATED_ANALYSIS_CHANGED` and absence of Apply success, then reopen independently and require the symbol-mismatch verifier still rejects it. Source contract and CI now require `GA12_UNRELATED_ANALYSIS_REJECTION_NONMUTATION_PASS`. This is **candidate only** until exact-head Actions and review; no full Java 25 extension build, Java 21 regression, product Review/Apply/Undo or formal GA-12 PASS is claimed. No production data or host workers used.
