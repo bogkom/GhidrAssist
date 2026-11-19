@@ -113,4 +113,6 @@ build_step = workflow.split("      - name: Build full GhidrAssist extension with
 assert build_step.count("        shell: bash") == 1
 assert build_step.count("        run: |") == 1
 assert "unzip -Z1" in build_step
+assert "grep -Eq " + chr(39) + chr(92) + ".jar$" + chr(39) in build_step, "JAR matcher must use one regex escape"
+assert "grep -Eq " + chr(39) + chr(92) * 2 + ".jar$" + chr(39) not in build_step, "double-escaped regex would miss JAR"
 print("GA12_ANALYSIS_OBJECTS_SOURCE_PASS")
