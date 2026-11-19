@@ -93,7 +93,7 @@ jobs:
           "$GHIDRA_INSTALL_DIR/support/gradle/gradlew" --no-daemon buildExtension
           mapfile -t zips < <(find dist -maxdepth 1 -type f -name '*.zip')
           test "${#zips[@]}" -eq 1
-          unzip -Z1 "${zips[0]}" | grep -Eq '\\.jar$'
+          unzip -Z1 "${zips[0]}" | grep -Eq '\.jar$'
           sha256sum "${zips[0]}" | tee "$RUNNER_TEMP/ga12-extension.sha256"
           echo GA12_FULL_JAVA25_EXTENSION_BUILD_PASS
       - name: Genuine synthetic CPU32 import snapshot corruption rejection restore and reopen
