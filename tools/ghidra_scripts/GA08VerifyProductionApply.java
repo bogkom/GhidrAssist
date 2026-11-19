@@ -20,8 +20,10 @@ public class GA08VerifyProductionApply extends GhidraScript {
         require(path != null && new File(path).isFile(), "built production extension JAR missing");
         require(currentProgram != null, "synthetic program missing");
         URL jar = new File(path).toURI().toURL();
+        // Anchor delegation to Ghidra's API loader, not the script compilation loader.
+        // The latter may not resolve transitive classes used by the production JAR.
         try (URLClassLoader loader = new URLClassLoader(new URL[] {jar},
-                getClass().getClassLoader())) {
+                ghidra.program.model.listing.Program.class.getClassLoader())) {
             Class<?> plan = Class.forName("ghidrassist.hardware.HardwareApplyPlan", true, loader);
             Class<?> itemType = Class.forName("ghidrassist.hardware.HardwareApplyPlan$Item", true, loader);
             Class<?> service = Class.forName("ghidrassist.hardware.HardwareApplyService", true, loader);
