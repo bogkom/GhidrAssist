@@ -87,6 +87,31 @@ jobs:
           bash tools/ci/ghidra-gradle-ci-network.sh "$GHIDRA_INSTALL_DIR"
           "$GHIDRA_INSTALL_DIR/support/gradle/gradlew" \
             --no-daemon --stacktrace buildExtension
+      - name: GA-08 genuine production Apply and rollback on disposable CPU32
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/generate-synthetic-callgraph.py --output "$RUNNER_TEMP/ga08-synthetic.bin"
+          package="$(find dist -maxdepth 1 -type f -name 'ghidra_12.1.4_PUBLIC_*_GhidrAssist.zip' -print -quit)"
+          test -n "$package"
+          unzip -p "$package" GhidrAssist/lib/GhidrAssist.jar > "$RUNNER_TEMP/ga08-production.jar"
+          test -s "$RUNNER_TEMP/ga08-production.jar"
+          mkdir -p "$RUNNER_TEMP/ga08-headless"
+          JAVA_TOOL_OPTIONS="-Dga08.test.jar=$RUNNER_TEMP/ga08-production.jar" \
+            "$GHIDRA_INSTALL_DIR/support/analyzeHeadless" \
+            "$RUNNER_TEMP/ga08-headless" GA08ProductionCI \
+            -import "$RUNNER_TEMP/ga08-synthetic.bin" \
+            -loader BinaryLoader -processor 68000:BE:32:CPU32 -cspec default \
+            -noanalysis -scriptPath "$GITHUB_WORKSPACE/tools/ghidra_scripts" \
+            -postScript GA08VerifyProductionApply.java \
+            > "$RUNNER_TEMP/ga08-production.log" 2>&1 || {
+              tail -n 120 "$RUNNER_TEMP/ga08-production.log"; exit 1;
+            }
+          grep -q 'GA08 PRODUCTION APPLY ROLLBACK PASS: stale_conflict=1 prior_mutations=0' "$RUNNER_TEMP/ga08-production.log"
+          grep -q 'GA08 PRODUCTION APPLY POSITIVE PASS: changed=1 idempotent_skip=1' "$RUNNER_TEMP/ga08-production.log"
+          if grep -E 'GA08 FAIL:|Exception|ERROR' "$RUNNER_TEMP/ga08-production.log"; then
+            echo 'GA-08 genuine headless witness contained an error'; exit 1
+          fi
       - name: Verify production interprocedural traversal in real Ghidra 12.1.4 (synthetic only)
         shell: bash
         run: |
