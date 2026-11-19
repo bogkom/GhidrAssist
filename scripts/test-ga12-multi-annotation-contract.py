@@ -29,12 +29,15 @@ assert "GA12_SEED_FAIL: annotation already present" in smoke
 assert 'GA12_EXISTING_ANALYSIS_RESEED_REJECTED' in smoke
 assert (chr(92) * 2 + chr(10)) not in smoke, "double backslash before newline splits genuine headless command"
 assert '-postScript GA12VerifyRestoredProgram.java ga12-synthetic.bin seed' in smoke
+assert 'GA12_UNAUTHORIZED_RESTORE_REJECTED' in smoke
+assert 'GA12_NEGATIVE_FAIL: unauthorized restore created destination' in smoke
+assert '--destination "$WORK/unauthorized"' in smoke
 assert 'GA12_REJECTED_RESEED_NONMUTATION_PASS' in smoke
 assert 'GA12_NEGATIVE_FAIL: rejected reseed changed persisted analysis' in smoke
 assert 'post-rejection.log' in smoke
-assert smoke.count('-postScript GA12VerifyRestoredProgram.java ga12-synthetic.bin verify') == 4
+assert smoke.count('-postScript GA12VerifyRestoredProgram.java ga12-synthetic.bin verify') == 10
 # Restored, post-rejection, tampered-copy, and pristine-after-tamper checks must each use a fresh process.
-for witness in ('reopen.log', 'post-rejection.log', 'tamper-rejected.log', 'pristine-after-tamper.log'):
+for witness in ('reopen.log', 'post-rejection.log', 'tamper-rejected.log', 'pristine-after-tamper.log', 'label-tamper-rejected.log', 'pristine-after-label-tamper.log'):
     assert witness in smoke, f'missing independent verify log: {witness}'
 assert smoke.index('GA12_EXISTING_ANALYSIS_RESEED_REJECTED') < smoke.index('post-rejection.log')
 assert 'args[1].equals("tamper")' in source
@@ -47,4 +50,69 @@ assert 'GA12_NEGATIVE_FAIL: verifier accepted tampered analysis' in smoke
 assert '-postScript GA12VerifyRestoredProgram.java ga12-synthetic.bin tamper' in smoke
 assert 'tamper-rejected.log' in smoke
 assert smoke.index('GA12_TAMPER_APPLIED') < smoke.index('GA12_TAMPER_DETECTION_PASS')
+assert 'args[1].equals("tamper-label")' in source
+assert 'labelObserved.setName("GA12_INTENTIONALLY_RENAMED", SourceType.USER_DEFINED)' in source
+assert 'GA12_LABEL_TAMPER_APPLIED' in source and 'GA12_LABEL_TAMPER_APPLIED' in smoke
+assert 'GA12_LABEL_TAMPER_DETECTION_PASS' in smoke
+assert 'GA12_LABEL_TAMPER_ISOLATION_PASS' in smoke
+assert smoke.index('GA12_LABEL_TAMPER_DETECTION_PASS') < smoke.index('pristine-after-label-tamper.log')
+assert '-postScript GA12VerifyRestoredProgram.java ga12-synthetic.bin tamper-label' in smoke
+cycle = (Path(__file__).resolve().parents[1] / "ghidra_scripts" / "GA12AuthorizedAnnotationCycle.java").read_text()
+for token in ("GA12_AUTHORIZATION_REJECTED", "GA12_APPLY_PRECONDITION_REJECTED",
+              "GA12_ROLLBACK_PRECONDITION_REJECTED", "GA12_AUTHORIZED_APPLY_PASS",
+              "GA12_APPLIED_REOPEN_PASS", "GA12_AUTHORIZED_ROLLBACK_PASS"):
+    assert token in cycle, f"missing authorized cycle gate: {token}"
+assert 'private static final String FIXTURE = "ga12-synthetic.bin"' in cycle
+assert '!FIXTURE.equals(args[0]) || !FIXTURE.equals(currentProgram.getName())' in cycle
+assert "GA12_UNRELATED_ANALYSIS_CHANGED" in cycle
+assert "GA12_UNRELATED_ANALYSIS_REJECTION_NONMUTATION_PASS" in smoke
+assert smoke.index("cycle-unrelated-rejected.log") < smoke.index("cycle-unrelated-reopen.log") < smoke.index("cycle_run apply")
+assert "label.getSource() != SourceType.USER_DEFINED" in cycle
+assert '"GA12_SYNTHETIC_PERSISTED_ANALYSIS_V1".equals(plate)' in cycle
+assert "GA12_UNAUTHORIZED_APPLY_NONMUTATION_PASS" in smoke
+assert "GA12_AUTHORIZED_PERSISTED_CYCLE_PASS" in smoke
+for phase in ("APPLY", "ROLLBACK"):
+    assert f"GA12_DUPLICATE_{phase}_NONMUTATION_PASS" in smoke
+    assert f"GA12_{phase}_PRECONDITION_REJECTED" in smoke
+assert smoke.index("cycle-duplicate-apply.log") < smoke.index("cycle-after-duplicate-apply.log") < smoke.index("cycle_run rollback")
+assert smoke.index("cycle-duplicate-rollback.log") < smoke.index("cycle-after-duplicate-rollback.log")
+assert smoke.index("GA12_UNAUTHORIZED_APPLY_NONMUTATION_PASS") < smoke.index("cycle_run apply")
+assert smoke.index("cycle_run apply") < smoke.index("cycle_run verify-applied") < smoke.index("cycle_run rollback")
+# The CI acceptance must actually execute this contract and require each genuine
+# negative-path witness, not merely the final positive reopen marker.
+workflow = (Path(__file__).resolve().parents[1] / ".github" / "workflows" / "ga12-isolated-project-copy.yml").read_text()
+assert "python3 scripts/test-ga12-multi-annotation-contract.py" in workflow
+assert "'scripts/test-ga12-multi-annotation-contract.py'" in workflow
+for marker in (
+    "GA12_UNAUTHORIZED_RESTORE_REJECTED",
+    "GA12_REJECTED_RESEED_NONMUTATION_PASS",
+    "GA12_TAMPER_DETECTION_PASS",
+    "GA12_TAMPER_ISOLATION_PASS",
+    "GA12_LABEL_TAMPER_DETECTION_PASS",
+    "GA12_LABEL_TAMPER_ISOLATION_PASS",
+    "GA12_UNAUTHORIZED_APPLY_NONMUTATION_PASS",
+    "GA12_UNRELATED_ANALYSIS_REJECTION_NONMUTATION_PASS",
+    "GA12_AUTHORIZED_PERSISTED_CYCLE_PASS",
+    "GA12_DUPLICATE_APPLY_NONMUTATION_PASS",
+    "GA12_DUPLICATE_ROLLBACK_NONMUTATION_PASS",
+):
+    assert marker in workflow, f"CI does not require genuine witness: {marker}"
+assert "grep -Fxq \"$marker\" \"$RUNNER_TEMP/ga12-reopen.log\"" in workflow
+# Guard against malformed YAML block scalars swallowing later steps, and
+# against duplicated smoke/upload steps. A previous edit accidentally joined
+# a grep expression and the following step header on one physical line.
+assert workflow.count("      - name: Build full GhidrAssist extension with Java 25") == 1
+assert workflow.count("      - name: Genuine synthetic CPU32 import snapshot corruption rejection restore and reopen") == 1
+assert workflow.count("      - name: Upload synthetic Ghidra execution evidence") == 1
+assert workflow.count("bash scripts/ga12-genuine-reopen-smoke.sh | tee") == 1
+assert workflow.count("ga12-extension.sha256") == 2
+assert 'echo GA12_FULL_JAVA25_EXTENSION_BUILD_PASS' in workflow
+assert 'unzip -Z1 "${zips[0]}" | grep -Eq' in workflow
+assert "grep -Eq" in workflow
+build_step = workflow.split("      - name: Build full GhidrAssist extension with Java 25", 1)[1].split("      - name: Genuine synthetic", 1)[0]
+assert build_step.count("        shell: bash") == 1
+assert build_step.count("        run: |") == 1
+assert "unzip -Z1" in build_step
+assert "grep -Eq " + chr(39) + chr(92) + ".jar$" + chr(39) in build_step, "JAR matcher must use one regex escape"
+assert "grep -Eq " + chr(39) + chr(92) * 2 + ".jar$" + chr(39) not in build_step, "double-escaped regex would miss JAR"
 print("GA12_ANALYSIS_OBJECTS_SOURCE_PASS")
