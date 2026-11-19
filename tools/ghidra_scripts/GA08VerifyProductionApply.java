@@ -75,6 +75,34 @@ public class GA08VerifyProductionApply extends GhidraScript {
             require(currentProgram.getMemory().getBlock(otherAt).getName()
                     .equals("GA08_USER_CONFLICT"), "user block changed on rollback");
             println("GA08 PRODUCTION APPLY ROLLBACK PASS: stale_conflict=1 prior_mutations=0");
+            // Genuine transaction rollback: MEMORY is created first, then the
+            // deliberately unmapped VBR row is rejected in the later kind pass.
+            // Unlike the preflight conflict above, this must undo a real write.
+            Object vbr = items.stream().filter(item -> {
+                try {
+                    return itemType.getField("kind").get(item).toString().equals("VBR_STRUCTURE");
+                } catch (Exception ex) { throw new IllegalStateException(ex); }
+            }).findFirst().orElseThrow();
+            long vbrAddress = itemType.getField("address").getLong(vbr);
+            var vbrAt = currentProgram.getAddressFactory().getDefaultAddressSpace()
+                    .getAddress(vbrAddress);
+            require(currentProgram.getMemory().getBlock(vbrAt) == null,
+                    "VBR negative control must be unmapped");
+            boolean lateRejected = false;
+            try {
+                apply.invoke(null, currentProgram, List.of(first, vbr));
+            } catch (java.lang.reflect.InvocationTargetException expected) {
+                lateRejected = expected.getCause() instanceof IllegalStateException
+                    && expected.getCause().getMessage().contains("blocked");
+            }
+            require(lateRejected, "late VBR conflict must reject a partially written batch");
+            require(currentProgram.getMemory().getBlock(at) == null,
+                    "first MEMORY block survived transaction rollback after late VBR conflict");
+            require(currentProgram.getMemory().getBlock(vbrAt) == null,
+                    "unmapped VBR was unexpectedly created");
+            require(currentProgram.getMemory().getBlock(otherAt).getName()
+                    .equals("GA08_USER_CONFLICT"), "late rollback modified user memory");
+            println("GA08 PRODUCTION APPLY LATE ROLLBACK PASS: prior_mutations=1 surviving=0");
             Object outcome = apply.invoke(null, currentProgram, List.of(first));
             require(outcome.getClass().getField("changed").getInt(outcome) == 1,
                     "production Apply must report one changed row");
