@@ -60,4 +60,11 @@ assert "if(prior==null || prior.getSource()==SourceType.DEFAULT)" in annotate
 assert "String line=TPURAM_CANDIDATE_NOTE;" in annotate
 assert "existing==null || !existing.contains(line)" in annotate
 
+
+# A speculative candidate annotation must refuse existing instructions rather than
+# silently attaching a user-defined symbol to executable analysis.
+assert "getInstructionContaining(at)!=null" in annotation
+assert "Candidate address contains an instruction; preserve user code" in annotation
+assert annotation.index("getInstructionContaining(at)!=null") < annotation.index("Symbol prior=")
+
 print("GA08_ATOMIC_APPLY_SOURCE_CONTRACT_PASS")
