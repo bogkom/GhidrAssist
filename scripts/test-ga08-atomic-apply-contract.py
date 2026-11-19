@@ -30,4 +30,14 @@ assert register.index('prior.getLength()!=item.length') < register.index(
 assert '"Data/code defined with incompatible size or location",false' in register
 assert '"Data/code defined with incompatible size or location",false' in register
 
+# Existing matching user label + undefined bytes is a legitimate completion path:
+# create the data, preserve the label and do not attempt a duplicate label.
+define = source.split("private static boolean defineRegister(", 1)[1].split(
+    "private static boolean annotateCandidate(", 1)[0]
+assert '!prior.getName().equals(item.name)' in define
+assert 'if(prior==null || prior.getSource()==SourceType.DEFAULT)' in define
+assert define.index('p.getListing().createData(first,type)') < define.index(
+    'p.getSymbolTable().createLabel(first,name,SourceType.USER_DEFINED)')
+assert 'if(prior!=null && prior.getSource()!=SourceType.DEFAULT){' not in define
+
 print("GA08_ATOMIC_APPLY_SOURCE_CONTRACT_PASS")
