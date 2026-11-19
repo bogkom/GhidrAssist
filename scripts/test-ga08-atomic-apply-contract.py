@@ -18,6 +18,14 @@ assert "if(applied)changed++;else skipped++;" not in apply
 assert "commit=true;" in apply
 assert apply.index("commit=true;") > apply.index("boolean applied=switch(kind)")
 
+# Memory conflicts are rejected before the first block mutation, even when
+# the conflicting row appears later in the approved batch.
+assert "for (HardwareApplyPlan.Item item : approved)" in apply
+assert "if (item.kind != HardwareApplyPlan.Kind.MEMORY) continue;" in apply
+assert "Decision initial = preflight(program, item, approved);" in apply
+assert apply.index("Decision initial = preflight(program, item, approved);") < apply.index("for(HardwareApplyPlan.Kind kind:")
+assert apply.index("if (initial.state == State.BLOCKED)") < apply.index("for(HardwareApplyPlan.Kind kind:")
+
 # A user label matching the proposed register is not sufficient when the
 # underlying bytes contain code or incompatible data. This must fail closed.
 register = source.split("private static Decision registerDecision(", 1)[1].split(
