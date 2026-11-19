@@ -28,7 +28,11 @@ assert 'return decide(State.BLOCKED,\n                        "Data/code defined
 assert register.index('prior.getLength()!=item.length') < register.index(
     '"Short register label and compatible data already defined"')
 assert '"Data/code defined with incompatible size or location",false' in register
-assert '"Data/code defined with incompatible size or location",false' in register
+# Matching USER_DEFINED label + undefined bytes must be READY, not skipped.
+assert 'if(undefined) {' in register
+assert '"Matching register label exists; define missing data only"' in register
+assert register.index('if(undefined) {') < register.index('"Short register label and compatible data already defined"')
+assert 'return decide(State.READY,' in register
 
 # Existing matching user label + undefined bytes is a legitimate completion path:
 # create the data, preserve the label and do not attempt a duplicate label.
