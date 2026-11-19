@@ -42,6 +42,35 @@ public class GA08VerifyProductionApply extends GhidraScript {
             var at = currentProgram.getAddressFactory().getDefaultAddressSpace().getAddress(address);
             require(currentProgram.getMemory().getBlock(at) == null,
                     "fixture must not pre-map the module");
+            Object second = items.stream().filter(item -> {
+                try {
+                    return itemType.getField("kind").get(item).toString().equals("MEMORY")
+                        && itemType.getField("address").getLong(item) != address
+                        && !itemType.getField("name").get(item).equals("TPURAM_2K_CANDIDATE");
+                } catch (Exception ex) { throw new IllegalStateException(ex); }
+            }).findFirst().orElseThrow();
+            long other = itemType.getField("address").getLong(second);
+            var otherAt = currentProgram.getAddressFactory().getDefaultAddressSpace().getAddress(other);
+            int fixtureTx = currentProgram.startTransaction("GA08 disposable conflicting user block");
+            try {
+                currentProgram.getMemory().createUninitializedBlock(
+                    "GA08_USER_CONFLICT", otherAt, 1, false);
+            } finally {
+                currentProgram.endTransaction(fixtureTx, true);
+            }
+            boolean rejected = false;
+            try {
+                apply.invoke(null, currentProgram, List.of(first, second));
+            } catch (java.lang.reflect.InvocationTargetException expected) {
+                rejected = expected.getCause() instanceof IllegalStateException
+                    && expected.getCause().getMessage().contains("blocked");
+            }
+            require(rejected, "conflicting approved row must reject the whole batch");
+            require(currentProgram.getMemory().getBlock(at) == null,
+                    "earlier approved region survived a failed transaction");
+            require(currentProgram.getMemory().getBlock(otherAt).getName()
+                    .equals("GA08_USER_CONFLICT"), "user block changed on rollback");
+            println("GA08 PRODUCTION APPLY ROLLBACK PASS: stale_conflict=1 prior_mutations=0");
             Object outcome = apply.invoke(null, currentProgram, List.of(first));
             require(outcome.getClass().getField("changed").getInt(outcome) == 1,
                     "production Apply must report one changed row");
