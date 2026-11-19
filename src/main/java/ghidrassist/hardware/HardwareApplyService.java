@@ -147,13 +147,19 @@ public final class HardwareApplyService {
                     return decide(State.BLOCKED,
                         "Data/code defined with incompatible size or location",false);
             }
+            if(undefined) {
+                // A matching user label does not prove that register data exists.
+                // Complete the definition without recreating the existing label.
+                return decide(State.READY,
+                    old!=null && old.getSource()!=SourceType.DEFAULT ?
+                        "Matching register label exists; define missing data only" :
+                        "Mapped, undefined register bytes",true);
+            }
             if(old!=null && old.getSource()!=SourceType.DEFAULT)
                 return decide(State.ALREADY_PRESENT,
                     "Short register label and compatible data already defined",false);
-            if(!undefined)
-                return decide(State.UPGRADE,
-                    "Preserve existing typed data; add short register label",true);
-            return decide(State.READY,"Mapped, undefined and no user symbol",true);
+            return decide(State.UPGRADE,
+                "Preserve existing typed data; add short register label",true);
         }
         for(HardwareApplyPlan.Item candidate:all){
             if(candidate.kind!=HardwareApplyPlan.Kind.MEMORY)continue;
