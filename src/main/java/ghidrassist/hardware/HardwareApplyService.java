@@ -257,8 +257,9 @@ public final class HardwareApplyService {
             return false;
         }
         Symbol prior=p.getSymbolTable().getPrimarySymbol(first);
-        if(prior!=null && prior.getSource()!=SourceType.DEFAULT){
-            notes.add("SKIP "+item.name+"; preserve existing symbol "+
+        if(prior!=null && prior.getSource()!=SourceType.DEFAULT &&
+                !prior.getName().equals(item.name)){
+            notes.add("BLOCK "+item.name+"; preserve existing symbol "+
                 prior.getName());
             return false;
         }
@@ -281,7 +282,8 @@ public final class HardwareApplyService {
             // Preserve user-approved data type: only add an informative symbol.
         }
         String name=item.name;
-        p.getSymbolTable().createLabel(first,name,SourceType.USER_DEFINED);
+        if(prior==null || prior.getSource()==SourceType.DEFAULT)
+            p.getSymbolTable().createLabel(first,name,SourceType.USER_DEFINED);
         notes.add("DEFINED REGISTER "+name+" at "+first);
         return true;
     }
