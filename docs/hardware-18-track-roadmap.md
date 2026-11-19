@@ -1,3 +1,7 @@
+## GA-12 — 2026-11-19: authorized Apply rejects independently tampered USER_DEFINED symbol (PR #348)
+
+Candidate `fc6bb0e37e2b871493445d23be24b12ec6e77e07` adds a genuine isolated Ghidra negative path: invoke authorized annotation Apply on the separately restored project with an intentionally renamed USER_DEFINED symbol; require `GA12_UNRELATED_ANALYSIS_CHANGED` and absence of Apply success, then reopen independently and require the symbol-mismatch verifier still rejects it. Source contract and CI now require `GA12_UNRELATED_ANALYSIS_REJECTION_NONMUTATION_PASS`. This is **candidate only** until exact-head Actions and review; no full Java 25 extension build, Java 21 regression, product Review/Apply/Undo or formal GA-12 PASS is claimed. No production data or host workers used.
+
 ## GA-12 — 2026-11-19: genuine authorization boundary negative control (PR #348)
 
 The same active PR branch now exercises a **valid** closed synthetic Ghidra snapshot through `restore` **without** `--authorize-isolated-restore`. The smoke must reject the request and prove no destination was created; the source contract and actual Actions headless evidence gate require `GA12_UNAUTHORIZED_RESTORE_REJECTED`. Candidate SHA `038841ff2bd25621c2aeba7b38b7c3802e44079b`; **not PASS** until exact-head CI. This tests a CLI authorization boundary, not in-process Review/Apply/Undo durability. Java 21 source regressions, full Java 25 extension build and formal GA-12 acceptance remain outstanding. No production project used.
