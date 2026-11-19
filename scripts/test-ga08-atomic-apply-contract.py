@@ -87,6 +87,10 @@ assert 'apply.invoke(null, currentProgram, List.of(first, second))' in _witness
 assert 'earlier approved region survived a failed transaction' in _witness
 assert 'apply.invoke(null, currentProgram, List.of(first))' in _witness
 assert 'GA08 PRODUCTION APPLY ROLLBACK PASS:' in _witness
+assert 'apply.invoke(null, currentProgram, List.of(first, vbr))' in _witness
+assert 'first MEMORY block survived transaction rollback after late VBR conflict' in _witness
+assert 'GA08 PRODUCTION APPLY LATE ROLLBACK PASS: prior_mutations=1 surviving=0' in _witness
+assert "GA08 PRODUCTION APPLY LATE ROLLBACK PASS: prior_mutations=1 surviving=0" in _workflow
 assert 'GA08 PRODUCTION APPLY POSITIVE PASS:' in _witness
 assert '-postScript GA08VerifyProductionApply.java' in _workflow
 assert 'GA-08 genuine production Apply and rollback on disposable CPU32' in _workflow
