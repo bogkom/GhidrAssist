@@ -169,17 +169,25 @@ public final class HardwareApplyService {
         }
         return decide(State.BLOCKED,"No safe mapped memory for register",false);
     }
+    private static final String TPURAM_CANDIDATE_NOTE =
+        "GhidrAssist: candidate relocated 2KiB TPURAM 0xFFF000..0xFFF7FF; " +
+        "confirm TRAMBAR and runtime memory configuration.";
     private static Decision annotationDecision(Program p,HardwareApplyPlan.Item item) {
         Address at=address(p,item.address);
         if(!p.getMemory().contains(at))
             return decide(State.BLOCKED,"Annotation address is not mapped; create CS region first",false);
         Symbol prior=p.getSymbolTable().getPrimarySymbol(at);
         if(prior!=null && prior.getSource()!=SourceType.DEFAULT) {
-            return decide(prior.getName().equals(item.name) ?
-                State.ALREADY_PRESENT : State.BLOCKED,
-                prior.getName().equals(item.name) ?
-                    "Candidate label already exists" :
+            if(!prior.getName().equals(item.name))
+                return decide(State.BLOCKED,
                     "Keep existing user label: "+prior.getName(),false);
+            String comment=p.getListing().getComment(
+                ghidra.program.model.listing.CodeUnit.PLATE_COMMENT,at);
+            if(comment!=null && comment.contains(TPURAM_CANDIDATE_NOTE))
+                return decide(State.ALREADY_PRESENT,
+                    "Candidate label and provenance comment already exist",false);
+            return decide(State.MANUAL_REVIEW,
+                "Candidate label exists but provenance comment is missing; add comment only",false);
         }
         return decide(State.MANUAL_REVIEW,
             "Mapped inside existing memory; add candidate label and comment only",false);
@@ -295,10 +303,11 @@ public final class HardwareApplyService {
             return false;
         }
         Address at=address(p,item.address);
-        p.getSymbolTable().createLabel(at,item.name,SourceType.USER_DEFINED);
+        Symbol prior=p.getSymbolTable().getPrimarySymbol(at);
+        if(prior==null || prior.getSource()==SourceType.DEFAULT)
+            p.getSymbolTable().createLabel(at,item.name,SourceType.USER_DEFINED);
         String existing=p.getListing().getComment(ghidra.program.model.listing.CodeUnit.PLATE_COMMENT,at);
-        String line="GhidrAssist: candidate relocated 2KiB TPURAM 0xFFF000..0xFFF7FF; "+
-            "confirm TRAMBAR and runtime memory configuration.";
+        String line=TPURAM_CANDIDATE_NOTE;
         if(existing==null || !existing.contains(line))
             p.getListing().setComment(at,
                 ghidra.program.model.listing.CodeUnit.PLATE_COMMENT,
