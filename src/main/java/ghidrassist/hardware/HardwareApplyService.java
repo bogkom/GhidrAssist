@@ -329,6 +329,19 @@ public final class HardwareApplyService {
             for(HardwareApplyPlan.Kind kind:HardwareApplyPlan.Kind.values()) {
                 for(HardwareApplyPlan.Item item:approved) {
                     if(item.kind!=kind)continue;
+                    // Recheck the live database inside the same undoable transaction.
+                    // A stale Review selection must not partially apply earlier rows
+                    // and silently skip a newly conflicting user definition.
+                    Decision current=preflight(program,item,approved);
+                    if(current.state==State.BLOCKED) {
+                        throw new IllegalStateException("Hardware Apply blocked by changed project state: "+
+                            item.name+" ("+current.description+")");
+                    }
+                    if(current.state==State.ALREADY_PRESENT) {
+                        skipped++;
+                        messages.add("SKIP "+item.name+": "+current.description);
+                        continue;
+                    }
                     boolean applied=switch(kind) {
                         case MEMORY -> createRegion(program,item,messages);
                         case REGISTER -> defineRegister(program,item,messages);
