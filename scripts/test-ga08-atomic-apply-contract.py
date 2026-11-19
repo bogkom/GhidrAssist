@@ -82,3 +82,9 @@ assert 'GA08 PRODUCTION APPLY ROLLBACK PASS:' in _witness
 assert 'GA08 PRODUCTION APPLY POSITIVE PASS:' in _witness
 assert '-postScript GA08VerifyProductionApply.java' in _workflow
 assert 'GA-08 genuine production Apply and rollback on disposable CPU32' in _workflow
+
+# Headless can report a script exception yet exit zero. Missing assertions
+# must expose the actual Ghidra log, never fail silently at grep.
+assert "GA-08 missing runtime assertion: headless process exit alone is not PASS" in _workflow
+assert "tail -n 160 \"$RUNNER_TEMP/ga08-production.log\"" in _workflow
+assert "grep -F 'GA08 PRODUCTION APPLY'" in _workflow
