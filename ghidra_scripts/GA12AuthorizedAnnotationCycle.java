@@ -7,13 +7,14 @@ import ghidra.program.model.symbol.Symbol;
 import ghidra.program.model.symbol.SourceType;
 
 public class GA12AuthorizedAnnotationCycle extends GhidraScript {
+    private static final String FIXTURE = "ga12-synthetic.bin";
     private static final String BASE = "GA12_SYNTHETIC_SECOND_SITE_V1";
     private static final String APPLIED = "GA12_AUTHORIZED_APPLIED_V1";
     @Override
     protected void run() throws Exception {
         String[] args = getScriptArgs();
         if (args.length != 3 || currentProgram == null
-                || !currentProgram.getName().equals(args[0])
+                || !FIXTURE.equals(args[0]) || !FIXTURE.equals(currentProgram.getName())
                 || !"68000:BE:32:CPU32".equals(currentProgram.getLanguageID().toString())
                 || !args[2].equals("authorize-isolated-analysis")) {
             throw new IllegalStateException("GA12_AUTHORIZATION_REJECTED");
