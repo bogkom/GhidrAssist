@@ -1,3 +1,7 @@
+## GA-12 — 2026-11-19: genuine authorization boundary negative control (PR #348)
+
+The same active PR branch now exercises a **valid** closed synthetic Ghidra snapshot through `restore` **without** `--authorize-isolated-restore`. The smoke must reject the request and prove no destination was created; the source contract and actual Actions headless evidence gate require `GA12_UNAUTHORIZED_RESTORE_REJECTED`. Candidate SHA `038841ff2bd25621c2aeba7b38b7c3802e44079b`; **not PASS** until exact-head CI. This tests a CLI authorization boundary, not in-process Review/Apply/Undo durability. Java 21 source regressions, full Java 25 extension build and formal GA-12 acceptance remain outstanding. No production project used.
+
 ## GA-12 — 2026-11-18: independent persisted symbol tamper calibration candidate
 
 Branch `work/ga12-label-tamper-calibration-20261118` adds a third disposable restored project, renames its USER_DEFINED symbol using the genuine Ghidra symbol API, and requires an independent headless verifier to reject the persisted symbol mismatch. A further fresh process reopens the pristine project to check isolation. Source regression covers both negative and positive process witnesses; this is **candidate code, not a PASS** until exact-head Java 21, Java 25 full extension build, genuine Ghidra 12.1.4 PUBLIC execution, review and integration. It does not establish durable Review/Apply/Undo, rollback or formal GA-12 completion. No original firmware, production project or host worker is used.
