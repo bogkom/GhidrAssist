@@ -19,6 +19,8 @@ public class GA08VerifyProductionApply extends GhidraScript {
         String path = System.getProperty("ga08.test.jar");
         require(path != null && new File(path).isFile(), "built production extension JAR missing");
         require(currentProgram != null, "synthetic program missing");
+        require("ga08-synthetic.bin".equals(currentProgram.getName()),
+                "refuse to run production Apply witness outside disposable fixture");
         URL jar = new File(path).toURI().toURL();
         // Anchor delegation to Ghidra's API loader, not the script compilation loader.
         // The latter may not resolve transitive classes used by the production JAR.
