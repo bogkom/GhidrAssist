@@ -93,28 +93,7 @@ jobs:
           "$GHIDRA_INSTALL_DIR/support/gradle/gradlew" --no-daemon buildExtension
           mapfile -t zips < <(find dist -maxdepth 1 -type f -name '*.zip')
           test "${#zips[@]}" -eq 1
-          unzip -Z1 "${zips[0]}" | grep -Eq '\\.jar        shell: bash
-        run: |
-          set -euo pipefail
-          bash scripts/ga12-genuine-reopen-smoke.sh | tee "$RUNNER_TEMP/ga12-reopen.log"
-          grep -Fxq 'GA12_CORRUPT_RESTORE_REJECTED' "$RUNNER_TEMP/ga12-reopen.log"
-          grep -Fxq 'GA12_GENUINE_REOPEN_PASS' "$RUNNER_TEMP/ga12-reopen.log"
-          for marker in GA12_UNAUTHORIZED_RESTORE_REJECTED GA12_REJECTED_RESEED_NONMUTATION_PASS GA12_TAMPER_DETECTION_PASS GA12_TAMPER_ISOLATION_PASS GA12_LABEL_TAMPER_DETECTION_PASS GA12_LABEL_TAMPER_ISOLATION_PASS GA12_UNAUTHORIZED_APPLY_NONMUTATION_PASS GA12_UNRELATED_ANALYSIS_REJECTION_NONMUTATION_PASS GA12_AUTHORIZED_PERSISTED_CYCLE_PASS GA12_DUPLICATE_APPLY_NONMUTATION_PASS GA12_DUPLICATE_ROLLBACK_NONMUTATION_PASS; do
-            grep -Fxq "$marker" "$RUNNER_TEMP/ga12-reopen.log"
-          done
-          sha256sum "$RUNNER_TEMP/ga12-reopen.log" > "$RUNNER_TEMP/ga12-reopen.sha256"
-      - name: Upload synthetic Ghidra execution evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ga12-genuine-reopen-evidence
-          path: |
-            ${{ runner.temp }}/ga12-reopen.log
-            ${{ runner.temp }}/ga12-reopen.sha256
-            ${{ runner.temp }}/ghidra.sha256
-            ${{ runner.temp }}/ga12-extension.sha256
-          if-no-files-found: warn
-
+          unzip -Z1 "${zips[0]}" | grep -Eq '\\.jar$'
           sha256sum "${zips[0]}" | tee "$RUNNER_TEMP/ga12-extension.sha256"
           echo GA12_FULL_JAVA25_EXTENSION_BUILD_PASS
       - name: Genuine synthetic CPU32 import snapshot corruption rejection restore and reopen
@@ -137,4 +116,5 @@ jobs:
             ${{ runner.temp }}/ga12-reopen.log
             ${{ runner.temp }}/ga12-reopen.sha256
             ${{ runner.temp }}/ghidra.sha256
+            ${{ runner.temp }}/ga12-extension.sha256
           if-no-files-found: warn
