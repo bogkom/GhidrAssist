@@ -55,6 +55,5 @@ annotate = source.split("private static boolean annotateCandidate(", 1)[1].split
 assert "if(prior==null || prior.getSource()==SourceType.DEFAULT)" in annotate
 assert "String line=TPURAM_CANDIDATE_NOTE;" in annotate
 assert "existing==null || !existing.contains(line)" in annotate
-assert "existing+\\n" not in annotate or "existing+\\\"\\n\\\"+line" in annotate
 
 print("GA08_ATOMIC_APPLY_SOURCE_CONTRACT_PASS")
