@@ -10,6 +10,7 @@ on:
       - codex/agentic-policy-and-evidence-fixes
     paths:
       - 'src/main/java/ghidrassist/hardware/**'
+      - 'scripts/test-ga08-atomic-apply-contract.py'
       - 'src/main/java/ghidrassist/automation/**'
       - 'src/main/java/ghidrassist/agent/**'
       - 'src/main/java/ghidrassist/tools/**'
@@ -61,6 +62,8 @@ jobs:
         with:
           distribution: temurin
           java-version: '25'
+      - name: GA-08 atomic Apply source regression
+        run: python3 scripts/test-ga08-atomic-apply-contract.py
       - name: Download exact Ghidra 12.1.4 distribution
         shell: bash
         run: |
