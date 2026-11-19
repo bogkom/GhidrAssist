@@ -135,18 +135,24 @@ public final class HardwareApplyService {
         Memory m=p.getMemory();
         if(covers(m,first,last)) {
             Symbol old=p.getSymbolTable().getPrimarySymbol(first);
-            if(old!=null && old.getSource()!=SourceType.DEFAULT) {
-                if(old.getName().equals(item.name))
-                    return decide(State.ALREADY_PRESENT,"Short register label already defined",false);
+            if(old!=null && old.getSource()!=SourceType.DEFAULT &&
+                    !old.getName().equals(item.name))
                 return decide(State.BLOCKED,"Existing non-default label: "+old.getName(),false);
-            }
-            if(!p.getListing().isUndefined(first,last)) {
+            // A matching label alone does not prove the register is safe:
+            // reject overlapping instructions and incompatible typed data.
+            boolean undefined=p.getListing().isUndefined(first,last);
+            if(!undefined) {
                 ghidra.program.model.listing.Data prior=p.getListing().getDataAt(first);
-                if(prior!=null && prior.isDefined() && prior.getLength()==item.length)
-                    return decide(State.UPGRADE,"Preserve existing typed data; add short register label",true);
-                return decide(State.ALREADY_PRESENT,
-                    "Data/code defined with incompatible size or location",false);
+                if(prior==null || !prior.isDefined() || prior.getLength()!=item.length)
+                    return decide(State.BLOCKED,
+                        "Data/code defined with incompatible size or location",false);
             }
+            if(old!=null && old.getSource()!=SourceType.DEFAULT)
+                return decide(State.ALREADY_PRESENT,
+                    "Short register label and compatible data already defined",false);
+            if(!undefined)
+                return decide(State.UPGRADE,
+                    "Preserve existing typed data; add short register label",true);
             return decide(State.READY,"Mapped, undefined and no user symbol",true);
         }
         for(HardwareApplyPlan.Item candidate:all){
