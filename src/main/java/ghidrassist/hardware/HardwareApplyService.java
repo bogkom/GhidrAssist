@@ -353,6 +353,18 @@ public final class HardwareApplyService {
         int changed=0,skipped=0;boolean commit=false;
         List<String> messages=new ArrayList<>();
         try {
+            // Preflight the entire approved MEMORY batch before creating any block.
+            // Register rows may depend on newly mapped regions, so their live
+            // preflight remains in the ordered mutation pass below.
+            for (HardwareApplyPlan.Item item : approved) {
+                if (item.kind != HardwareApplyPlan.Kind.MEMORY) continue;
+                Decision initial = preflight(program, item, approved);
+                if (initial.state == State.BLOCKED) {
+                    throw new IllegalStateException(
+                        "Hardware Apply blocked by changed project state: " +
+                        item.name + " (" + initial.description + ")");
+                }
+            }
             for(HardwareApplyPlan.Kind kind:HardwareApplyPlan.Kind.values()) {
                 for(HardwareApplyPlan.Item item:approved) {
                     if(item.kind!=kind)continue;
