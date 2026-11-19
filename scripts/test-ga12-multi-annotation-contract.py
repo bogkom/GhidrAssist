@@ -54,4 +54,18 @@ assert 'GA12_LABEL_TAMPER_DETECTION_PASS' in smoke
 assert 'GA12_LABEL_TAMPER_ISOLATION_PASS' in smoke
 assert smoke.index('GA12_LABEL_TAMPER_DETECTION_PASS') < smoke.index('pristine-after-label-tamper.log')
 assert '-postScript GA12VerifyRestoredProgram.java ga12-synthetic.bin tamper-label' in smoke
+# The CI acceptance must actually execute this contract and require each genuine
+# negative-path witness, not merely the final positive reopen marker.
+workflow = (Path(__file__).resolve().parents[1] / ".github" / "workflows" / "ga12-isolated-project-copy.yml").read_text()
+assert "python3 scripts/test-ga12-multi-annotation-contract.py" in workflow
+assert "'scripts/test-ga12-multi-annotation-contract.py'" in workflow
+for marker in (
+    "GA12_REJECTED_RESEED_NONMUTATION_PASS",
+    "GA12_TAMPER_DETECTION_PASS",
+    "GA12_TAMPER_ISOLATION_PASS",
+    "GA12_LABEL_TAMPER_DETECTION_PASS",
+    "GA12_LABEL_TAMPER_ISOLATION_PASS",
+):
+    assert marker in workflow, f"CI does not require genuine witness: {marker}"
+assert "grep -Fxq \"$marker\" \"$RUNNER_TEMP/ga12-reopen.log\"" in workflow
 print("GA12_ANALYSIS_OBJECTS_SOURCE_PASS")
