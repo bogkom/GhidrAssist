@@ -170,6 +170,28 @@ grep -q 'GA12_ANALYSIS_PERSISTED_PASS' "$WORK/pristine-after-label-tamper.log" |
     cat "$WORK/pristine-after-label-tamper.log"; exit 1;
 }
 echo "GA12_LABEL_TAMPER_ISOLATION_PASS"
+# The authorized transition must fail closed when unrelated analysis was
+# tampered in a separately restored project. Neither an Apply success marker
+# nor a new EOL value is acceptable, even with the authorization token.
+"$HEADLESS" "$WORK/label-tampered" GA12Fixture -process ga12-synthetic.bin \
+    -scriptPath "$WORK/scripts" \
+    -postScript GA12AuthorizedAnnotationCycle.java ga12-synthetic.bin apply authorize-isolated-analysis \
+    > "$WORK/cycle-unrelated-rejected.log" 2>&1 || true
+if ! grep -q 'GA12_UNRELATED_ANALYSIS_CHANGED' "$WORK/cycle-unrelated-rejected.log" || \
+    grep -q 'GA12_AUTHORIZED_APPLY_PASS' "$WORK/cycle-unrelated-rejected.log"; then
+    cat "$WORK/cycle-unrelated-rejected.log"; exit 1
+fi
+# Reopen with the original verifier to prove the renamed label was not repaired
+# or overwritten by the rejected authorized transition.
+"$HEADLESS" "$WORK/label-tampered" GA12Fixture -process ga12-synthetic.bin \
+    -scriptPath "$WORK/scripts" \
+    -postScript GA12VerifyRestoredProgram.java ga12-synthetic.bin verify \
+    > "$WORK/cycle-unrelated-reopen.log" 2>&1 || true
+if ! grep -q 'GA12_REOPEN_FAIL: persisted annotation missing or changed' "$WORK/cycle-unrelated-reopen.log" || \
+    grep -q 'GA12_ANALYSIS_PERSISTED_PASS' "$WORK/cycle-unrelated-reopen.log"; then
+    cat "$WORK/cycle-unrelated-reopen.log"; exit 1
+fi
+echo "GA12_UNRELATED_ANALYSIS_REJECTION_NONMUTATION_PASS"
 # Authorized persisted annotation cycle on a fourth disposable restore.
 # Each phase runs in a separate Ghidra process, proving durable transitions.
 python3 "$ROOT/scripts/ga12-isolated-project-copy.py" restore \
