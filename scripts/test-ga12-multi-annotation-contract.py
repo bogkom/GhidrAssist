@@ -62,6 +62,8 @@ for token in ("GA12_AUTHORIZATION_REJECTED", "GA12_APPLY_PRECONDITION_REJECTED",
               "GA12_ROLLBACK_PRECONDITION_REJECTED", "GA12_AUTHORIZED_APPLY_PASS",
               "GA12_APPLIED_REOPEN_PASS", "GA12_AUTHORIZED_ROLLBACK_PASS"):
     assert token in cycle, f"missing authorized cycle gate: {token}"
+assert 'private static final String FIXTURE = "ga12-synthetic.bin"' in cycle
+assert '!FIXTURE.equals(args[0]) || !FIXTURE.equals(currentProgram.getName())' in cycle
 assert "GA12_UNRELATED_ANALYSIS_CHANGED" in cycle
 assert "GA12_UNRELATED_ANALYSIS_REJECTION_NONMUTATION_PASS" in smoke
 assert smoke.index("cycle-unrelated-rejected.log") < smoke.index("cycle-unrelated-reopen.log") < smoke.index("cycle_run apply")
