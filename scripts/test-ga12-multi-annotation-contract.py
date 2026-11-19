@@ -98,4 +98,17 @@ for marker in (
 ):
     assert marker in workflow, f"CI does not require genuine witness: {marker}"
 assert "grep -Fxq \"$marker\" \"$RUNNER_TEMP/ga12-reopen.log\"" in workflow
+# Guard against malformed YAML block scalars swallowing later steps, and
+# against duplicated smoke/upload steps. A previous edit accidentally joined
+# a grep expression and the following step header on one physical line.
+assert workflow.count("      - name: Build full GhidrAssist extension with Java 25") == 1
+assert workflow.count("      - name: Genuine synthetic CPU32 import snapshot corruption rejection restore and reopen") == 1
+assert workflow.count("      - name: Upload synthetic Ghidra execution evidence") == 1
+assert workflow.count("bash scripts/ga12-genuine-reopen-smoke.sh | tee") == 1
+assert workflow.count("ga12-extension.sha256") == 2
+assert 'echo GA12_FULL_JAVA25_EXTENSION_BUILD_PASS' in workflow
+assert 'unzip -Z1 "${zips[0]}" | grep -Eq' in workflow
+assert "grep -Eq '\\\\.jar
+" in workflow
+assert "        shell: bash" not in workflow.split("      - name: Build full GhidrAssist extension with Java 25", 1)[1].split("      - name: Genuine synthetic", 1)[0]
 print("GA12_ANALYSIS_OBJECTS_SOURCE_PASS")
