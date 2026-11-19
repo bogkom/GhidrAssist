@@ -182,6 +182,20 @@ cycle_run() {
         -postScript GA12AuthorizedAnnotationCycle.java ga12-synthetic.bin "$phase" authorize-isolated-analysis \
         > "$WORK/$log" 2>&1 || { cat "$WORK/$log"; exit 1; }
 }
+# A denied write must not alter the disposable database.
+"$HEADLESS" "$WORK/cycle" GA12Fixture -process ga12-synthetic.bin \
+    -scriptPath "$WORK/scripts" \
+    -postScript GA12AuthorizedAnnotationCycle.java ga12-synthetic.bin apply missing-authorization \
+    > "$WORK/cycle-denied.log" 2>&1 || true
+grep -q 'GA12_AUTHORIZATION_REJECTED' "$WORK/cycle-denied.log" || {
+    cat "$WORK/cycle-denied.log"; exit 1;
+}
+"$HEADLESS" "$WORK/cycle" GA12Fixture -process ga12-synthetic.bin \
+    -scriptPath "$WORK/scripts" \
+    -postScript GA12VerifyRestoredProgram.java ga12-synthetic.bin verify \
+    > "$WORK/cycle-denied-reopen.log" 2>&1 || { cat "$WORK/cycle-denied-reopen.log"; exit 1; }
+grep -q 'GA12_ANALYSIS_PERSISTED_PASS' "$WORK/cycle-denied-reopen.log"
+echo "GA12_UNAUTHORIZED_APPLY_NONMUTATION_PASS"
 cycle_run apply cycle-apply.log
 grep -q 'GA12_AUTHORIZED_APPLY_PASS' "$WORK/cycle-apply.log"
 cycle_run verify-applied cycle-applied-reopen.log
