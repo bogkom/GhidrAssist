@@ -12,6 +12,7 @@ mkdir -p "$WORK/original" "$WORK/import" "$WORK/scripts"
 # Isolate the script compilation scope: unrelated repository scripts may require
 # extension classes absent from stock Ghidra headless.
 cp "$ROOT/ghidra_scripts/GA12VerifyRestoredProgram.java" "$WORK/scripts/"
+cp "$ROOT/ghidra_scripts/GA12AuthorizedAnnotationCycle.java" "$WORK/scripts/"
 python3 - "$WORK/import/ga12-synthetic.bin" <<'PY'
 from pathlib import Path
 import sys
@@ -169,4 +170,28 @@ grep -q 'GA12_ANALYSIS_PERSISTED_PASS' "$WORK/pristine-after-label-tamper.log" |
     cat "$WORK/pristine-after-label-tamper.log"; exit 1;
 }
 echo "GA12_LABEL_TAMPER_ISOLATION_PASS"
+# Authorized persisted annotation cycle on a fourth disposable restore.
+# Each phase runs in a separate Ghidra process, proving durable transitions.
+python3 "$ROOT/scripts/ga12-isolated-project-copy.py" restore \
+    --source "$WORK/snapshot" --destination "$WORK/cycle" \
+    --authorize-isolated-restore
+cycle_run() {
+    local phase="$1" log="$2"
+    "$HEADLESS" "$WORK/cycle" GA12Fixture -process ga12-synthetic.bin \
+        -scriptPath "$WORK/scripts" \
+        -postScript GA12AuthorizedAnnotationCycle.java ga12-synthetic.bin "$phase" authorize-isolated-analysis \
+        > "$WORK/$log" 2>&1 || { cat "$WORK/$log"; exit 1; }
+}
+cycle_run apply cycle-apply.log
+grep -q 'GA12_AUTHORIZED_APPLY_PASS' "$WORK/cycle-apply.log"
+cycle_run verify-applied cycle-applied-reopen.log
+grep -q 'GA12_APPLIED_REOPEN_PASS' "$WORK/cycle-applied-reopen.log"
+cycle_run rollback cycle-rollback.log
+grep -q 'GA12_AUTHORIZED_ROLLBACK_PASS' "$WORK/cycle-rollback.log"
+"$HEADLESS" "$WORK/cycle" GA12Fixture -process ga12-synthetic.bin \
+    -scriptPath "$WORK/scripts" \
+    -postScript GA12VerifyRestoredProgram.java ga12-synthetic.bin verify \
+    > "$WORK/cycle-final-reopen.log" 2>&1 || { cat "$WORK/cycle-final-reopen.log"; exit 1; }
+grep -q 'GA12_ANALYSIS_PERSISTED_PASS' "$WORK/cycle-final-reopen.log"
+echo "GA12_AUTHORIZED_PERSISTED_CYCLE_PASS"
 echo "GA12_GENUINE_REOPEN_PASS"
