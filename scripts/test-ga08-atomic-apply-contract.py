@@ -17,4 +17,17 @@ assert apply.index("if(!applied)") < apply.index("commit=true;")
 assert "if(applied)changed++;else skipped++;" not in apply
 assert "commit=true;" in apply
 assert apply.index("commit=true;") > apply.index("boolean applied=switch(kind)")
+
+# A user label matching the proposed register is not sufficient when the
+# underlying bytes contain code or incompatible data. This must fail closed.
+register = source.split("private static Decision registerDecision(", 1)[1].split(
+    "private static Decision annotationDecision(", 1)[0]
+assert register.index("boolean undefined=p.getListing().isUndefined(first,last)") < register.index(
+    'return decide(State.ALREADY_PRESENT,')
+assert 'return decide(State.BLOCKED,\n                        "Data/code defined with incompatible size or location"' in register
+assert register.index('prior.getLength()!=item.length') < register.index(
+    '"Short register label and compatible data already defined"')
+assert '"Data/code defined with incompatible size or location",false' in register
+assert '"Data/code defined with incompatible size or location",false' in register
+
 print("GA08_ATOMIC_APPLY_SOURCE_CONTRACT_PASS")
