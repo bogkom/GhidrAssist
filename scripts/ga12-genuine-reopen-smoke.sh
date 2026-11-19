@@ -31,6 +31,20 @@ python3 "$ROOT/scripts/ga12-isolated-project-copy.py" verify --source "$WORK/sna
 python3 "$ROOT/scripts/ga12-isolated-project-copy.py" restore \
     --source "$WORK/snapshot" --destination "$WORK/restored" \
     --authorize-isolated-restore
+# Authorization negative path: a valid snapshot must not create a destination
+# without the explicit isolated-restore flag. This checks the actual CLI
+# against a genuine closed Ghidra project, not just a mock fixture.
+if python3 "$ROOT/scripts/ga12-isolated-project-copy.py" restore \
+    --source "$WORK/snapshot" --destination "$WORK/unauthorized" \
+    > "$WORK/unauthorized.log" 2>&1; then
+    echo "GA12_NEGATIVE_FAIL: unauthorized restore accepted" >&2
+    exit 1
+fi
+if test -e "$WORK/unauthorized"; then
+    echo "GA12_NEGATIVE_FAIL: unauthorized restore created destination" >&2
+    exit 1
+fi
+echo "GA12_UNAUTHORIZED_RESTORE_REJECTED"
 # Negative acceptance: a byte-level corrupt snapshot must be rejected before
 # any destination project is created. Preserve the original valid snapshot.
 cp -a "$WORK/snapshot" "$WORK/corrupt"
