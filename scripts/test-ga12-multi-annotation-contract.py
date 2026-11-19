@@ -35,7 +35,7 @@ assert '--destination "$WORK/unauthorized"' in smoke
 assert 'GA12_REJECTED_RESEED_NONMUTATION_PASS' in smoke
 assert 'GA12_NEGATIVE_FAIL: rejected reseed changed persisted analysis' in smoke
 assert 'post-rejection.log' in smoke
-assert smoke.count('-postScript GA12VerifyRestoredProgram.java ga12-synthetic.bin verify') == 9
+assert smoke.count('-postScript GA12VerifyRestoredProgram.java ga12-synthetic.bin verify') == 10
 # Restored, post-rejection, tampered-copy, and pristine-after-tamper checks must each use a fresh process.
 for witness in ('reopen.log', 'post-rejection.log', 'tamper-rejected.log', 'pristine-after-tamper.log', 'label-tamper-rejected.log', 'pristine-after-label-tamper.log'):
     assert witness in smoke, f'missing independent verify log: {witness}'
@@ -63,6 +63,8 @@ for token in ("GA12_AUTHORIZATION_REJECTED", "GA12_APPLY_PRECONDITION_REJECTED",
               "GA12_APPLIED_REOPEN_PASS", "GA12_AUTHORIZED_ROLLBACK_PASS"):
     assert token in cycle, f"missing authorized cycle gate: {token}"
 assert "GA12_UNRELATED_ANALYSIS_CHANGED" in cycle
+assert "GA12_UNRELATED_ANALYSIS_REJECTION_NONMUTATION_PASS" in smoke
+assert smoke.index("cycle-unrelated-rejected.log") < smoke.index("cycle-unrelated-reopen.log") < smoke.index("cycle_run apply")
 assert "label.getSource() != SourceType.USER_DEFINED" in cycle
 assert '"GA12_SYNTHETIC_PERSISTED_ANALYSIS_V1".equals(plate)' in cycle
 assert "GA12_UNAUTHORIZED_APPLY_NONMUTATION_PASS" in smoke
@@ -87,6 +89,7 @@ for marker in (
     "GA12_LABEL_TAMPER_DETECTION_PASS",
     "GA12_LABEL_TAMPER_ISOLATION_PASS",
     "GA12_UNAUTHORIZED_APPLY_NONMUTATION_PASS",
+    "GA12_UNRELATED_ANALYSIS_REJECTION_NONMUTATION_PASS",
     "GA12_AUTHORIZED_PERSISTED_CYCLE_PASS",
     "GA12_DUPLICATE_APPLY_NONMUTATION_PASS",
     "GA12_DUPLICATE_ROLLBACK_NONMUTATION_PASS",
