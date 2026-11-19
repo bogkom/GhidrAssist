@@ -182,6 +182,10 @@ public final class HardwareApplyService {
         Address at=address(p,item.address);
         if(!p.getMemory().contains(at))
             return decide(State.BLOCKED,"Annotation address is not mapped; create CS region first",false);
+        // Never attach speculative TPURAM annotations to existing executable code.
+        if(p.getListing().getInstructionContaining(at)!=null)
+            return decide(State.BLOCKED,
+                "Candidate address contains an instruction; preserve user code",false);
         Symbol prior=p.getSymbolTable().getPrimarySymbol(at);
         if(prior!=null && prior.getSource()!=SourceType.DEFAULT) {
             if(!prior.getName().equals(item.name))
