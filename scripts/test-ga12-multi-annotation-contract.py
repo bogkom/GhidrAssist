@@ -62,6 +62,9 @@ for token in ("GA12_AUTHORIZATION_REJECTED", "GA12_APPLY_PRECONDITION_REJECTED",
               "GA12_ROLLBACK_PRECONDITION_REJECTED", "GA12_AUTHORIZED_APPLY_PASS",
               "GA12_APPLIED_REOPEN_PASS", "GA12_AUTHORIZED_ROLLBACK_PASS"):
     assert token in cycle, f"missing authorized cycle gate: {token}"
+assert "GA12_UNRELATED_ANALYSIS_CHANGED" in cycle
+assert "label.getSource() != SourceType.USER_DEFINED" in cycle
+assert '"GA12_SYNTHETIC_PERSISTED_ANALYSIS_V1".equals(plate)' in cycle
 assert "GA12_UNAUTHORIZED_APPLY_NONMUTATION_PASS" in smoke
 assert "GA12_AUTHORIZED_PERSISTED_CYCLE_PASS" in smoke
 for phase in ("APPLY", "ROLLBACK"):
