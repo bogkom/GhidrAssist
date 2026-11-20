@@ -76,6 +76,21 @@ public class GA08VerifyProductionApplyAfterRefusals extends GhidraScript {
                 require(refused, "fresh process accepted persisted user-owned block: " + names[i]);
                 require(currentProgram.getMemory().getBlocks().length == blockCount,
                         "refused Apply changed total memory block count");
+                // A refusal against one user-owned block must not mutate the OTHER
+                // user-owned block either. Checking only the target would miss
+                // collateral permission/name/geometry changes.
+                for (int peer = 1; peer < 3; peer++) {
+                    Object peerItem = memory.get(peer);
+                    long peerAddress = itemType.getField("address").getLong(peerItem);
+                    MemoryBlock peerBlock = currentProgram.getMemory().getBlock(
+                            space.getAddress(peerAddress));
+                    require(peerBlock != null && names[peer].equals(peerBlock.getName())
+                            && peerBlock.getSize() == (peer == 1 ? 1 :
+                                    itemType.getField("length").getInt(peerItem))
+                            && !peerBlock.isInitialized() && !peerBlock.isMapped()
+                            && !peerBlock.isExecute() && peerBlock.isRead() && peerBlock.isWrite(),
+                            "refused Apply mutated unrelated user-owned block: " + names[peer]);
+                }
                 require(currentProgram.getMemory().getBlock(approved.getStart()) == approved
                         && approved.getName().equals(names[0])
                         && approved.getSize() == itemType.getField("length").getInt(memory.get(0)),
