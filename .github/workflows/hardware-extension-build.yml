@@ -177,7 +177,7 @@ jobs:
             > "$RUNNER_TEMP/ga08-post-refusal.log" 2>&1 || {
               tail -n 160 "$RUNNER_TEMP/ga08-post-refusal.log"; exit 1;
             }
-          if ! grep -Fq 'GA08 POST REFUSAL PERSISTENCE PASS: module=1 user_blocks=2 idempotent=1' "$RUNNER_TEMP/ga08-post-refusal.log" ||
+          if ! grep -Fq 'GA08 THIRD PROCESS OWNERSHIP REFUSAL PASS: conflict=1 exact=1' "$RUNNER_TEMP/ga08-post-refusal.log" ||\n             ! grep -Fq 'GA08 POST REFUSAL PERSISTENCE PASS: module=1 user_blocks=2 idempotent=1' "$RUNNER_TEMP/ga08-post-refusal.log" ||
              grep -E 'GA08 POST-REFUSAL FAIL:|Exception|ERROR' "$RUNNER_TEMP/ga08-post-refusal.log"; then
             echo 'GA-08 third-process persisted nonmutation assertion missing or failed'
             tail -n 160 "$RUNNER_TEMP/ga08-post-refusal.log"
