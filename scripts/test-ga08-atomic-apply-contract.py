@@ -114,6 +114,8 @@ assert "if(!legacyPart(item,existing)" in _memory
 # never silently bless executable, unreadable or read-only user memory.
 assert "existing.isExecute() || !existing.isRead() || !existing.isWrite()" in _memory
 assert _memory.index("existing.isExecute()") < _memory.index("State.ALREADY_PRESENT")
+assert "block.isExecute() || !block.isRead() || !block.isWrite()" in _memory
+assert _memory.index("block.isExecute()") < _memory.index("State.UPGRADE")
 assert "GA08 EXACT USER BLOCK REFUSAL PASS: preserved=1" in _witness
 assert "GA08 EXACT USER BLOCK REFUSAL PASS: preserved=1" in _workflow
 
