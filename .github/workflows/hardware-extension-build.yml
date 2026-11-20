@@ -63,8 +63,25 @@ jobs:
         with:
           distribution: temurin
           java-version: '25'
-      - name: GA-08 atomic Apply source regression
-        run: python3 scripts/test-ga08-atomic-apply-contract.py
+      - name: GA-08 Java 21 source regression environment
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: GA-08 atomic Apply source regression (Java 21)
+        shell: bash
+        run: |
+          set -euo pipefail
+          java -version 2>&1 | grep -F 'version "21.'
+          python3 scripts/test-ga08-atomic-apply-contract.py
+      - name: Restore Java 25 for Ghidra 12.1.4 build
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Verify Java 25 for full extension build
+        shell: bash
+        run: java -version 2>&1 | grep -F 'version "25.'
       - name: Download exact Ghidra 12.1.4 distribution
         shell: bash
         run: |
