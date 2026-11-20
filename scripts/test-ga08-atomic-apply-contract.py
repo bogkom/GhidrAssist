@@ -270,3 +270,14 @@ assert 'csUser.setWrite(originalWrite)' in _post
 assert 'csUser.setRead(originalRead)' in _post
 assert 'GA08 CS USER PERMISSION OVERLAP REFUSAL PASS: executable=1 readonly=1 unreadable=1 restored=1' in _post
 assert 'GA08 CS USER PERMISSION OVERLAP REFUSAL PASS: executable=1 readonly=1 unreadable=1 restored=1' in _workflow
+
+# The real CS refusal witness checks all memory blocks (including unrelated
+# blocks), both after read-only preflight and after rejected production Apply.
+assert 'java.util.function.Supplier<List<String>> inventory' in _post
+assert 'for (MemoryBlock b : currentProgram.getMemory().getBlocks())' in _post
+assert 'java.util.Collections.sort(rows)' in _post
+assert 'production CS preflight mutated memory inventory:' in _post
+assert 'rejected CS Apply changed memory inventory:' in _post
+assert _post.index('List<String> beforeRefusal = inventory.get();') < _post.index('Object csDecision = preflight.invoke(')
+assert _post.index('production CS preflight mutated memory inventory:') < _post.index('apply.invoke(null, currentProgram, List.of(csCandidate))')
+assert _post.index('rejected CS Apply changed memory inventory:') > _post.index('apply.invoke(null, currentProgram, List.of(csCandidate))')
