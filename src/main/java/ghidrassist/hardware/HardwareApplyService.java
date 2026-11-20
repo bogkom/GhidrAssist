@@ -123,6 +123,7 @@ public final class HardwareApplyService {
                     block.getEnd().getOffset()>item.last() ||
                     block.isInitialized() || block.isMapped() ||
                     block.getType()!=MemoryBlockType.DEFAULT ||
+                    block.isExecute() || !block.isRead() || !block.isWrite() ||
                     !legacyPart(item,block)){
                 return decide(State.BLOCKED,
                     "Overlaps other memory: "+block.getName()+" at "+
