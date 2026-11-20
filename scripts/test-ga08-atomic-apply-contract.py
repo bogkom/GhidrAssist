@@ -179,3 +179,12 @@ assert 'item == exact ? itemType.getField("length").getInt(item) : 1' in _reopen
 assert 'user block properties changed across reopen' in _reopen
 assert 'i == 1 ? 1 : itemType.getField("length").getInt(item)' in _post
 assert 'persisted block properties changed:' in _post
+
+# The third fresh process must re-run production preflight and Apply refusal,
+# not merely inspect names left by the previous process.
+assert 'GA08 THIRD PROCESS OWNERSHIP REFUSAL PASS: conflict=1 exact=1' in _post
+assert 'GA08 THIRD PROCESS OWNERSHIP REFUSAL PASS: conflict=1 exact=1' in _workflow
+assert 'preflight.invoke(null, currentProgram, item, candidates)' in _post
+assert 'apply.invoke(null, currentProgram, List.of(item))' in _post
+assert 'fresh process refusal mutated user block' in _post
+assert 'block.isRead() && block.isWrite()' in _post
