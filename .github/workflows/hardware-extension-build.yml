@@ -148,6 +148,11 @@ jobs:
             tail -n 160 "$RUNNER_TEMP/ga08-reopen.log"
             exit 1
           fi
+          if ! grep -Fq 'GA08 REOPEN USER OWNERSHIP REFUSAL PASS: conflict=1 exact=1' "$RUNNER_TEMP/ga08-reopen.log"; then
+            echo 'GA-08 missing reopened user-owned memory refusal assertion'
+            tail -n 160 "$RUNNER_TEMP/ga08-reopen.log"
+            exit 1
+          fi
           if grep -E 'GA08 REOPEN FAIL:|Exception|ERROR' "$RUNNER_TEMP/ga08-reopen.log"; then
             tail -n 160 "$RUNNER_TEMP/ga08-reopen.log"
             exit 1
