@@ -96,26 +96,11 @@ public class GA08VerifyProductionApply extends GhidraScript {
                     && expected.getCause().getMessage().contains("blocked");
             }
             require(lateRejected, "late VBR conflict must reject a partially written batch");
-            require(currentProgram.getMemory().getBlock(at) == null,
-                    "first MEMORY block survived transaction rollback after late VBR conflict");
-            require(currentProgram.getMemory().getBlock(vbrAt) == null,
-                    "unmapped VBR was unexpectedly created");
-            require(currentProgram.getMemory().getBlock(otherAt).getName()
-                    .equals("GA08_USER_CONFLICT"), "late rollback modified user memory");
-            println("GA08 PRODUCTION APPLY LATE ROLLBACK PASS: prior_mutations=1 surviving=0");
-            Object outcome = apply.invoke(null, currentProgram, List.of(first));
-            require(outcome.getClass().getField("changed").getInt(outcome) == 1,
-                    "production Apply must report one changed row");
-            MemoryBlock block = currentProgram.getMemory().getBlock(at);
-            require(block != null && block.getSize() == length && block.getName().equals(name),
-                    "production Apply did not create the expected module");
-            // Idempotent re-Apply must not create duplicate regions.
-            Object again = apply.invoke(null, currentProgram, List.of(first));
-            require(again.getClass().getField("changed").getInt(again) == 0,
-                    "idempotent production Apply unexpectedly changed program");
-            require(again.getClass().getField("skipped").getInt(again) == 1,
-                    "idempotent production Apply must skip one row");
-            println("GA08 PRODUCTION APPLY POSITIVE PASS: changed=1 idempotent_skip=1");
+            // GhidraScript owns an outer transaction. Nested service rollback is
+            // not observable until this script returns and its outer transaction ends.
+            // A separate postScript verifies the persisted state, then applies
+            // the positive case. Never print a rollback PASS here.
+            println("GA08 LATE ROLLBACK REQUESTED: verify in next script");
         }
     }
 }
