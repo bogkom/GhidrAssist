@@ -121,6 +121,19 @@ public class GA08VerifyProductionApplyAfterRefusals extends GhidraScript {
             Object csCandidate = itemConstructor.newInstance(memoryKind,
                     String.format("CS_WINDOW_%06X_%06X", csAddress, csAddress + csLength - 1),
                     csAddress, csLength, "synthetic negative CS overlap; wiring UNKNOWN");
+            // Snapshot every memory block, not only the three named fixtures.
+            // An unsafe CS preflight/Apply must not mutate unrelated regions.
+            java.util.function.Supplier<List<String>> inventory = () -> {
+                List<String> rows = new java.util.ArrayList<>();
+                for (MemoryBlock b : currentProgram.getMemory().getBlocks()) {
+                    rows.add(b.getStart() + ":" + b.getEnd() + ":" + b.getName()
+                            + ":" + b.getType() + ":" + b.isInitialized()
+                            + ":" + b.isRead() + ":" + b.isWrite()
+                            + ":" + b.isExecute());
+                }
+                java.util.Collections.sort(rows);
+                return rows;
+            };
             // Three independent incompatible permission states. Each refusal
             // must preserve the complete memory inventory and both user blocks.
             boolean originalRead = csUser.isRead();
@@ -135,11 +148,14 @@ public class GA08VerifyProductionApplyAfterRefusals extends GhidraScript {
                     if ("executable".equals(permissionCase)) csUser.setExecute(true);
                     if ("readonly".equals(permissionCase)) csUser.setWrite(false);
                     if ("unreadable".equals(permissionCase)) csUser.setRead(false);
+                    List<String> beforeRefusal = inventory.get();
                     Object csDecision = preflight.invoke(null, currentProgram, csCandidate,
                             List.of(csCandidate));
                     require("BLOCKED".equals(csDecision.getClass().getField("state")
                             .get(csDecision).toString()),
                             permissionCase + " user CS overlap not blocked by production preflight");
+                    require(inventory.get().equals(beforeRefusal),
+                            "production CS preflight mutated memory inventory: " + permissionCase);
                     boolean csRefused = false;
                     try {
                         apply.invoke(null, currentProgram, List.of(csCandidate));
@@ -147,6 +163,8 @@ public class GA08VerifyProductionApplyAfterRefusals extends GhidraScript {
                         csRefused = failure.getCause() instanceof IllegalStateException;
                     }
                     require(csRefused, "production Apply accepted " + permissionCase + " CS overlap");
+                    require(inventory.get().equals(beforeRefusal),
+                            "rejected CS Apply changed memory inventory: " + permissionCase);
                     require(currentProgram.getMemory().getBlocks().length == blockCount
                             && currentProgram.getMemory().getBlock(space.getAddress(csAddress)) == csUser
                             && "GA08_USER_EXACT".equals(csUser.getName())
