@@ -49,8 +49,10 @@ public class GA08VerifyProductionApplyReopened extends GhidraScript {
                 MemoryBlock user = currentProgram.getMemory().getBlock(space.getAddress(address));
                 require(user != null && expected.equals(user.getName()),
                         "independent user block lost across reopen: " + expected);
-                if (item == exact) require(user.getSize() == itemType.getField("length").getInt(item),
-                        "exact user block size changed across reopen");
+                require(user.getSize() == (item == exact ? itemType.getField("length").getInt(item) : 1),
+                        "user block size changed across reopen");
+                require(!user.isInitialized() && !user.isMapped() && !user.isExecute(),
+                        "user block properties changed across reopen");
             }
             Method apply = service.getMethod("apply",
                     ghidra.program.model.listing.Program.class, List.class);
