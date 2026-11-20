@@ -44,7 +44,8 @@ public class GA08VerifyProductionApplyAfterRefusals extends GhidraScript {
                         "persisted block changed after refused Apply: " + names[i]);
                 require(block.getSize() == (i == 1 ? 1 : itemType.getField("length").getInt(item)),
                         "persisted block size changed: " + names[i]);
-                require(!block.isInitialized() && !block.isMapped() && !block.isExecute()\n                        && block.isRead() && block.isWrite(),
+                require(!block.isInitialized() && !block.isMapped() && !block.isExecute()
+                        && block.isRead() && block.isWrite(),
                         "persisted block properties changed: " + names[i]);
             }
             var apply = service.getMethod("apply", ghidra.program.model.listing.Program.class, List.class);
