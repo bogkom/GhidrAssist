@@ -127,6 +127,32 @@ jobs:
             exit 1
           fi
           grep -F 'GA08 PRODUCTION APPLY' "$RUNNER_TEMP/ga08-production.log"
+      - name: GA-08 persisted production Apply after independent project reopen
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s "$RUNNER_TEMP/ga08-production.jar"
+          # The prior headless process imported and saved the disposable project.
+          # Reopen it in a fresh Ghidra process, without reimporting the binary.
+          JAVA_TOOL_OPTIONS="-Dga08.test.jar=$RUNNER_TEMP/ga08-production.jar" \
+            "$GHIDRA_INSTALL_DIR/support/analyzeHeadless" \
+            "$RUNNER_TEMP/ga08-headless" GA08ProductionCI \
+            -process ga08-synthetic.bin -noanalysis \
+            -scriptPath "$GITHUB_WORKSPACE/tools/ghidra_scripts" \
+            -postScript GA08VerifyProductionApplyReopened.java \
+            > "$RUNNER_TEMP/ga08-reopen.log" 2>&1 || {
+              tail -n 120 "$RUNNER_TEMP/ga08-reopen.log"; exit 1;
+            }
+          if ! grep -Fq 'GA08 PRODUCTION APPLY REOPEN PASS: module=1 user_blocks=2 idempotent=1' "$RUNNER_TEMP/ga08-reopen.log"; then
+            echo 'GA-08 missing independent persisted reopen assertion'
+            tail -n 160 "$RUNNER_TEMP/ga08-reopen.log"
+            exit 1
+          fi
+          if grep -E 'GA08 REOPEN FAIL:|Exception|ERROR' "$RUNNER_TEMP/ga08-reopen.log"; then
+            tail -n 160 "$RUNNER_TEMP/ga08-reopen.log"
+            exit 1
+          fi
+          grep -F 'GA08 PRODUCTION APPLY REOPEN PASS:' "$RUNNER_TEMP/ga08-reopen.log"
       - name: Verify production interprocedural traversal in real Ghidra 12.1.4 (synthetic only)
         shell: bash
         run: |
