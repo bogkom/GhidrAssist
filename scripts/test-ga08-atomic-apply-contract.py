@@ -230,3 +230,11 @@ assert "GA08 THIRD PROCESS NO COLLATERAL MEMORY PASS:" in _workflow
 assert "\\n" not in _post
 assert " ||\\n             ! grep -Fq 'GA08 THIRD PROCESS OWNERSHIP" not in _workflow
 assert " ||\n             ! grep -Fq 'GA08 THIRD PROCESS OWNERSHIP" in _workflow
+
+# Java 21 source gate must run before the genuine Java 25 Ghidra build.
+assert 'GA-08 atomic Apply source regression (Java 21)' in _workflow
+assert 'GA-08 Java 21 source regression environment' in _workflow
+assert 'Restore Java 25 for Ghidra 12.1.4 build' in _workflow
+assert _workflow.index('GA-08 Java 21 source regression environment') < _workflow.index('GA-08 atomic Apply source regression (Java 21)')
+assert _workflow.index('GA-08 atomic Apply source regression (Java 21)') < _workflow.index('Restore Java 25 for Ghidra 12.1.4 build')
+assert _workflow.index('Verify Java 25 for full extension build') < _workflow.index('Build complete GhidrAssist extension')
