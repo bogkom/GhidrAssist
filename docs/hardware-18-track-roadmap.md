@@ -1,3 +1,7 @@
+## GA-08 — 2026-11-21: whole-inventory CS refusal witness (PR #349)
+
+Candidate extends the independent third-process synthetic CPU32 production-JAR witness. For each executable, read-only and unreadable user-owned CS overlap, it captures a sorted snapshot of **every** MEMORY block (address bounds, name, type, initialization and R/W/X flags), then requires identical inventory after production preflight and after rejected Apply. This detects collateral changes beyond the named user controls or approved module. Source contract now checks both boundaries. Commits `03dde2b2ddbbe0d768130b0d98d9968d2bcd28ee` and `8c1f9a5d7ef7ee5ccf1a78a05c84aec4b3d4eb17`. Exact-head Java 21, Java 25, genuine three-process Ghidra, GUI Review/Undo and review are **not yet verified**; GA-08 remains PARTIAL and PR unmerged. This is static/synthetic evidence, not physical CS mapping.
+
 ## GA-08 — 2026-11-20: unsafe CS-window overlap refusal (PR #349)
 
 Candidate production change rejects initialized, mapped, executable, unreadable, read-only or non-DEFAULT blocks overlapping a proposed CS window **before** coverage-based ALREADY_PRESENT/MANUAL_REVIEW decisions. This prevents a fully covered speculative external CS region from being treated as harmless solely because all addresses are mapped. The Java 21 source gate now checks this branch. Exact-head Java 21/25 and genuine Ghidra regression are **not yet verified** for this candidate; external CS decoding and wiring remain UNKNOWN. GA-08 PARTIAL, GUI Review/Undo and integration outstanding. Synthetic-only.
