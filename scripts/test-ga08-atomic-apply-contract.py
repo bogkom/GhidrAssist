@@ -112,3 +112,10 @@ assert "_EXACT" not in _memory
 assert "if(!legacyPart(item,existing)" in _memory
 assert "GA08 EXACT USER BLOCK REFUSAL PASS: preserved=1" in _witness
 assert "GA08 EXACT USER BLOCK REFUSAL PASS: preserved=1" in _workflow
+
+# Late rollback must preserve both independent user-owned blocks, not merely
+# remove the newly-created module. The runtime gate must require that witness.
+assert 'GA08_USER_CONFLICT' in _after and 'GA08_USER_EXACT' in _after
+assert 'exactBlock.getSize()==exactLength' in _after
+assert 'GA08 LATE ROLLBACK USER BLOCKS PASS: conflict=1 exact=1' in _after
+assert 'GA08 LATE ROLLBACK USER BLOCKS PASS: conflict=1 exact=1' in _workflow
