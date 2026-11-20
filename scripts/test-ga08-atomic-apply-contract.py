@@ -150,10 +150,12 @@ assert _workflow.index('GA-08 genuine production Apply and rollback on disposabl
 # corrupting them; the real Ghidra workflow requires the distinct evidence.
 assert 'GA08 REOPEN USER OWNERSHIP REFUSAL PASS: conflict=1 exact=1' in _reopen
 assert 'GA08 REOPEN USER OWNERSHIP REFUSAL PASS: conflict=1 exact=1' in _workflow
-assert 'GA08 REOPEN PERMISSION REFUSAL PASS: executable=1 readonly=1' in _reopen
-assert 'GA08 REOPEN PERMISSION REFUSAL PASS: executable=1 readonly=1' in _workflow
+assert 'GA08 REOPEN PERMISSION REFUSAL PASS: executable=1 readonly=1 unreadable=1' in _reopen
+assert 'GA08 REOPEN PERMISSION REFUSAL PASS: executable=1 readonly=1 unreadable=1' in _workflow
 assert 'impostor.setExecute(true)' in _reopen
 assert 'impostor.setWrite(false)' in _reopen
+assert 'impostor.setRead(false)' in _reopen
+assert 'impostor.setRead(originalRead)' in _reopen
 assert 'finally {' in _reopen and 'impostor.setName(originalName)' in _reopen
 
 assert 'apply.invoke(null, currentProgram, List.of(item))' in _reopen
