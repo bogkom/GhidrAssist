@@ -223,4 +223,10 @@ assert " ||\\\\n             ! grep -Fq 'GA08 POST REFUSAL PERSISTENCE PASS:" no
 assert "GA08 THIRD PROCESS NO COLLATERAL MEMORY PASS:" in _post
 assert "refused Apply changed total memory block count" in _post
 assert "refused Apply changed previously approved module" in _post
-assert "GA08 THIRD PROCESS NO COLLATERAL MEMORY PASS:" in _workflow\n
+assert "GA08 THIRD PROCESS NO COLLATERAL MEMORY PASS:" in _workflow
+
+# Guard against escaped source line separators in the third-process Java and
+# YAML shell gate: these compile/parse differently from actual newlines.
+assert "\\n" not in _post
+assert " ||\\n             ! grep -Fq 'GA08 THIRD PROCESS OWNERSHIP" not in _workflow
+assert " ||\n             ! grep -Fq 'GA08 THIRD PROCESS OWNERSHIP" in _workflow
