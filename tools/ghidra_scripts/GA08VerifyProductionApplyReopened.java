@@ -58,6 +58,25 @@ public class GA08VerifyProductionApplyReopened extends GhidraScript {
             require(outcome.getClass().getField("changed").getInt(outcome) == 0
                     && outcome.getClass().getField("skipped").getInt(outcome) == 1,
                     "reopened approved module must be idempotent");
+            // Persisted user-owned memory must still be refused on a fresh service invocation.
+            // Neither a conflicting range nor an exact-size user block is owned by GhidrAssist.
+            for (Object item : List.of(conflict, exact)) {
+                boolean refused = false;
+                try {
+                    apply.invoke(null, currentProgram, List.of(item));
+                } catch (java.lang.reflect.InvocationTargetException failure) {
+                    refused = failure.getCause() instanceof IllegalStateException;
+                }
+                require(refused, "reopened Apply accepted user-owned memory");
+                long address = itemType.getField("address").getLong(item);
+                String expected = item == conflict ? "GA08_USER_CONFLICT" : "GA08_USER_EXACT";
+                MemoryBlock user = currentProgram.getMemory().getBlock(space.getAddress(address));
+                require(user != null && expected.equals(user.getName()),
+                        "reopened refused Apply altered user-owned memory: " + expected);
+            }
+            require(currentProgram.getMemory().getBlock(space.getAddress(firstAddress)) == applied,
+                    "reopened refusal changed the approved module");
+            println("GA08 REOPEN USER OWNERSHIP REFUSAL PASS: conflict=1 exact=1");
             println("GA08 PRODUCTION APPLY REOPEN PASS: module=1 user_blocks=2 idempotent=1");
         }
     }
