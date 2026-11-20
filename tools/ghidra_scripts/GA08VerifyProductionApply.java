@@ -55,34 +55,23 @@ public class GA08VerifyProductionApply extends GhidraScript {
             }).findFirst().orElseThrow();
             long other = itemType.getField("address").getLong(second);
             var otherAt = currentProgram.getAddressFactory().getDefaultAddressSpace().getAddress(other);
-            int fixtureTx = currentProgram.startTransaction("GA08 disposable conflicting user block");
-            try {
-                currentProgram.getMemory().createUninitializedBlock(
-                    "GA08_USER_CONFLICT", otherAt, 1, false);
-            } finally {
-                currentProgram.endTransaction(fixtureTx, true);
-            }
-            // A user-owned block covering the exact proposed module range
-            // is NOT evidence that GhidrAssist previously applied that module.
+            // User-owned controls were committed by the preceding setup script.
+            require(currentProgram.getMemory().getBlock(otherAt)!=null &&
+                    "GA08_USER_CONFLICT".equals(currentProgram.getMemory().getBlock(otherAt).getName()),
+                    "independent conflict fixture missing");
             Object exact = items.stream().filter(item -> {
                 try {
                     return itemType.getField("kind").get(item).toString().equals("MEMORY")
                         && itemType.getField("address").getLong(item) != address
                         && itemType.getField("address").getLong(item) != other
                         && !itemType.getField("name").get(item).equals("TPURAM_2K_CANDIDATE");
-                } catch (Exception ex) { throw new IllegalStateException(ex); }
+                } catch(Exception ex){throw new IllegalStateException(ex);}
             }).findFirst().orElseThrow();
-            long exactOffset = itemType.getField("address").getLong(exact);
-            int exactLength = itemType.getField("length").getInt(exact);
-            var exactAt = currentProgram.getAddressFactory().getDefaultAddressSpace()
-                    .getAddress(exactOffset);
-            int exactTx = currentProgram.startTransaction("GA08 exact user-owned region");
-            try {
-                currentProgram.getMemory().createUninitializedBlock(
-                        "GA08_USER_EXACT", exactAt, exactLength, false);
-            } finally {
-                currentProgram.endTransaction(exactTx, true);
-            }
+            long exactOffset=itemType.getField("address").getLong(exact);
+            var exactAt=currentProgram.getAddressFactory().getDefaultAddressSpace().getAddress(exactOffset);
+            require(currentProgram.getMemory().getBlock(exactAt)!=null &&
+                    "GA08_USER_EXACT".equals(currentProgram.getMemory().getBlock(exactAt).getName()),
+                    "independent exact fixture missing");
             boolean exactRejected = false;
             try {
                 apply.invoke(null, currentProgram, List.of(exact));
