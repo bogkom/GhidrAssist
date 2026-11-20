@@ -238,3 +238,9 @@ assert 'Restore Java 25 for Ghidra 12.1.4 build' in _workflow
 assert _workflow.index('GA-08 Java 21 source regression environment') < _workflow.index('GA-08 atomic Apply source regression (Java 21)')
 assert _workflow.index('GA-08 atomic Apply source regression (Java 21)') < _workflow.index('Restore Java 25 for Ghidra 12.1.4 build')
 assert _workflow.index('Verify Java 25 for full extension build') < _workflow.index('Build complete GhidrAssist extension')
+
+# Each rejected Apply checks BOTH persisted user blocks, including the peer
+# that was not the target of the request.
+assert 'for (int peer = 1; peer < 3; peer++)' in _post
+assert 'refused Apply mutated unrelated user-owned block:' in _post
+assert 'peerBlock.isRead() && peerBlock.isWrite()' in _post
