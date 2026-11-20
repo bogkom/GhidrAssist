@@ -188,3 +188,18 @@ assert 'preflight.invoke(null, currentProgram, item, candidates)' in _post
 assert 'apply.invoke(null, currentProgram, List.of(item))' in _post
 assert 'fresh process refusal mutated user block' in _post
 assert 'block.isRead() && block.isWrite()' in _post
+
+# Ghidra compiles Java postScripts at runtime, after the extension build.
+# Reject escaped newline text accidentally inserted into Java source (the
+# 2026-11-20 third-process CI failure) before launching headless Ghidra.
+for _script in (
+    "GA08SetupProductionApplyFixture.java",
+    "GA08VerifyProductionApply.java",
+    "GA08VerifyProductionApplyAfterTransaction.java",
+    "GA08VerifyProductionApplyReopened.java",
+    "GA08VerifyProductionApplyAfterRefusals.java",
+):
+    _java = _Path("tools/ghidra_scripts") / _script
+    _source = _java.read_text()
+    assert "\\\\n                        &&" not in _source, f"literal escaped Java newline: {_script}"
+assert "!block.isExecute()\n                        && block.isRead()" in _post
