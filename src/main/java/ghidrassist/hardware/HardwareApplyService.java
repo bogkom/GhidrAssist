@@ -92,6 +92,17 @@ public final class HardwareApplyService {
     private static Decision memoryDecision(Program p,HardwareApplyPlan.Item item){
         List<MemoryBlock> parts=overlaps(p,item);
         if(csWindow(item)){
+            // Coverage alone cannot establish a safe external chip-select mapping.
+            // Refuse unsafe overlapping blocks even when no address gap remains.
+            for(MemoryBlock block:parts){
+                if(block.isInitialized() || block.isMapped() ||
+                        block.getType()!=MemoryBlockType.DEFAULT ||
+                        block.isExecute() || !block.isRead() || !block.isWrite())
+                    return decide(State.BLOCKED,
+                        "CS window overlaps incompatible user memory: "+
+                        block.getName()+" at "+block.getStart()+".."+block.getEnd()+
+                        "; active decode and wiring UNKNOWN",false);
+            }
             List<HardwareRegionLayout.Range> gaps=csMissing(item,parts);
             return gaps.isEmpty() ?
                 decide(State.ALREADY_PRESENT,"CS address range is already mapped",false) :
