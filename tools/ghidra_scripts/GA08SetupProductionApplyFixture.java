@@ -27,8 +27,15 @@ public class GA08SetupProductionApplyFixture extends GhidraScript {
    int tx=currentProgram.startTransaction("GA08 independent fixture setup");
    boolean commit=false;
    try {
-    currentProgram.getMemory().createUninitializedBlock("GA08_USER_CONFLICT",otherAt,1,false);
-    currentProgram.getMemory().createUninitializedBlock("GA08_USER_EXACT",exactAt,exactLength,false);
+    var conflictBlock=currentProgram.getMemory().createUninitializedBlock("GA08_USER_CONFLICT",otherAt,1,false);
+    var exactBlock=currentProgram.getMemory().createUninitializedBlock("GA08_USER_EXACT",exactAt,exactLength,false);
+    // Ghidra does not guarantee the default access flags of newly created
+    // uninitialized blocks. Make the two independent user controls explicit.
+    for (var block : new ghidra.program.model.mem.MemoryBlock[]{conflictBlock, exactBlock}) {
+     block.setRead(true);
+     block.setWrite(true);
+     block.setExecute(false);
+    }
     commit=true;
    } finally {currentProgram.endTransaction(tx,commit);}
    println("GA08 INDEPENDENT FIXTURE SETUP PASS: conflict=1 exact=1");
