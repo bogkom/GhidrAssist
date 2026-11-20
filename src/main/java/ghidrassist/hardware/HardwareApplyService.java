@@ -100,9 +100,19 @@ public final class HardwareApplyService {
                     "operator selection; active decode and wiring UNKNOWN",false);
         }
         if(parts.size()==1 && parts.get(0).getStart().getOffset()==item.address &&
-                parts.get(0).getEnd().getOffset()==item.last())
-            return decide(State.ALREADY_PRESENT,"Entire region already mapped as "+
-                parts.get(0).getName(),false);
+                parts.get(0).getEnd().getOffset()==item.last()) {
+            MemoryBlock existing=parts.get(0);
+            // Exact coverage is not ownership: never silently accept an
+            // arbitrary user block as a completed hardware module.
+            if(!legacyPart(item,existing) || existing.isInitialized() ||
+                    existing.isMapped() || existing.getType()!=MemoryBlockType.DEFAULT)
+                return decide(State.BLOCKED,
+                    "Exact region belongs to existing user memory: "+
+                    existing.getName(),false);
+            return decide(State.ALREADY_PRESENT,
+                "Matching uninitialized hardware region already mapped as "+
+                existing.getName(),false);
+        }
         if(item.name.equals("TPURAM_2K_CANDIDATE") &&
                 csMissing(item,parts).isEmpty())
             return decide(State.ALREADY_PRESENT,
