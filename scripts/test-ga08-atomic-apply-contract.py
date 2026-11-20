@@ -158,3 +158,10 @@ assert '-postScript GA08VerifyProductionApplyAfterRefusals.java' in _workflow
 assert 'GA08 POST REFUSAL PERSISTENCE PASS: module=1 user_blocks=2 idempotent=1' in _workflow
 assert _workflow.index('GA-08 persisted production Apply after independent project reopen') < _workflow.index('GA-08 independent reopen after rejected Apply must preserve persisted state')
 assert _workflow.index('GA-08 independent reopen after rejected Apply must preserve persisted state') < _workflow.index('Verify production interprocedural traversal')
+
+# Across independent processes, names alone are insufficient: dimensions and
+# mapping properties of both user-owned negative controls must remain stable.
+assert 'item == exact ? itemType.getField("length").getInt(item) : 1' in _reopen
+assert 'user block properties changed across reopen' in _reopen
+assert 'i == 1 ? 1 : itemType.getField("length").getInt(item)' in _post
+assert 'persisted block properties changed:' in _post
