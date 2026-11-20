@@ -201,5 +201,5 @@ for _script in (
 ):
     _java = _Path("tools/ghidra_scripts") / _script
     _source = _java.read_text()
-    assert "\\\\n                        &&" not in _source, f"literal escaped Java newline: {_script}"
+    assert "\\n                        &&" not in _source, f"literal escaped Java newline: {_script}"
 assert "!block.isExecute()\n                        && block.isRead()" in _post
