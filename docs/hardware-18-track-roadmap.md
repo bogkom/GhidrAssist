@@ -1,3 +1,7 @@
+## GA-08 — 2026-11-20: same-name unsafe permissions negative control (PR #349)
+
+Candidate commit `aef8ec0cc96a299d554e837fe059b5d0537e72e3` extends the independent reopened-project Ghidra witness: a disposable user block is temporarily renamed to match the hardware module, then tested with executable and read-only permissions. Both production `preflight` and `apply` must refuse each variant; the test restores original user block name and permissions in `finally`. Marker `GA08 REOPEN PERMISSION REFUSAL PASS` is **not yet verified** on this SHA. This is a genuine synthetic headless candidate, not GUI Review/Undo evidence; GA-08 remains PARTIAL pending exact-head CI, Java 21/25, GUI and review. No original ECU411 or production project modified.
+
 ### GA-08 — 2026-11-20: repair exact-head source regression gate (PR #349)
 
 [Actions 44699356439](https://github.com/bogkom/GhidrAssist/actions/runs/44699356439) on `111c8a6c824dacf098b8040c404421711151496f` failed before the Java 25 build: the Python source contract compared the exact-block permissions guard against the **first** `State.ALREADY_PRESENT` in `memoryDecision`, which belongs to the independent CS-window branch. The partial-block assertion likewise used a generic enum occurrence. Commit `eb7b32989199184b9fc63a244974b13aaf3a6d79` anchors both ordering checks to their specific return descriptions, retaining both permission guards without claiming an unexecuted PASS. Exact-head Java 21, Java 25, negative runtime permission witness, GUI Review/Undo and integration remain required; GA-08 PARTIAL.
