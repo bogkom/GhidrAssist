@@ -119,3 +119,11 @@ assert 'GA08_USER_CONFLICT' in _after and 'GA08_USER_EXACT' in _after
 assert 'exactBlock.getSize()==exactLength' in _after
 assert 'GA08 LATE ROLLBACK USER BLOCKS PASS: conflict=1 exact=1' in _after
 assert 'GA08 LATE ROLLBACK USER BLOCKS PASS: conflict=1 exact=1' in _workflow
+
+# User-owned negative controls must be committed before rollback injection.
+_setup = _Path("tools/ghidra_scripts/GA08SetupProductionApplyFixture.java").read_text()
+assert 'GA08 INDEPENDENT FIXTURE SETUP PASS: conflict=1 exact=1' in _setup
+assert 'GA08 INDEPENDENT FIXTURE SETUP PASS: conflict=1 exact=1' in _workflow
+assert _workflow.index('-postScript GA08SetupProductionApplyFixture.java') < _workflow.index('-postScript GA08VerifyProductionApply.java')
+assert 'createUninitializedBlock("GA08_USER_CONFLICT"' not in _witness
+assert 'createUninitializedBlock("GA08_USER_EXACT"' not in _witness
