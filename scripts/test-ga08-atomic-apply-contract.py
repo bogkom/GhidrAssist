@@ -252,3 +252,15 @@ assert "block.isInitialized() || block.isMapped()" in _cs
 assert "block.getType()!=MemoryBlockType.DEFAULT" in _cs
 assert "block.isExecute() || !block.isRead() || !block.isWrite()" in _cs
 assert "CS window overlaps incompatible user memory:" in _cs
+
+
+# The real third-process witness constructs a synthetic CS-window candidate
+# over a user-owned executable block and checks production preflight + Apply.
+# This is not a claim that any physical CS device is present.
+assert 'CS_WINDOW_%06X_%06X' in _post
+assert 'csUser.setExecute(true)' in _post
+assert 'preflight.invoke(null, currentProgram, csCandidate' in _post
+assert 'apply.invoke(null, currentProgram, List.of(csCandidate))' in _post
+assert 'csUser.setExecute(oldExecute)' in _post
+assert 'GA08 CS EXECUTABLE USER OVERLAP REFUSAL PASS: preflight=1 apply=1 restored=1' in _post
+assert 'GA08 CS EXECUTABLE USER OVERLAP REFUSAL PASS: preflight=1 apply=1 restored=1' in _workflow
