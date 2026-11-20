@@ -127,3 +127,15 @@ assert 'GA08 INDEPENDENT FIXTURE SETUP PASS: conflict=1 exact=1' in _workflow
 assert _workflow.index('-postScript GA08SetupProductionApplyFixture.java') < _workflow.index('-postScript GA08VerifyProductionApply.java')
 assert 'createUninitializedBlock("GA08_USER_CONFLICT"' not in _witness
 assert 'createUninitializedBlock("GA08_USER_EXACT"' not in _witness
+
+# Durability requires a second Ghidra process, not another postScript in
+# the import process. Reopen must check both user blocks and idempotency.
+_reopen = _Path("tools/ghidra_scripts/GA08VerifyProductionApplyReopened.java").read_text()
+assert '"ga08-synthetic.bin".equals(currentProgram.getName())' in _reopen
+assert 'GA08_USER_CONFLICT' in _reopen and 'GA08_USER_EXACT' in _reopen
+assert 'apply.invoke(null, currentProgram, List.of(first))' in _reopen
+assert 'GA08 PRODUCTION APPLY REOPEN PASS: module=1 user_blocks=2 idempotent=1' in _reopen
+assert '-process ga08-synthetic.bin -noanalysis' in _workflow
+assert '-postScript GA08VerifyProductionApplyReopened.java' in _workflow
+assert 'GA08 PRODUCTION APPLY REOPEN PASS: module=1 user_blocks=2 idempotent=1' in _workflow
+assert _workflow.index('GA-08 genuine production Apply and rollback on disposable CPU32') < _workflow.index('GA-08 persisted production Apply after independent project reopen')
