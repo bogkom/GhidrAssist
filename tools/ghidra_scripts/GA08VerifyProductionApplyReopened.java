@@ -86,13 +86,17 @@ public class GA08VerifyProductionApplyReopened extends GhidraScript {
             String originalName = impostor.getName();
             boolean originalExecute = impostor.isExecute();
             boolean originalWrite = impostor.isWrite();
+            boolean originalRead = impostor.isRead();
             try {
                 impostor.setName((String) itemType.getField("name").get(exact));
                 impostor.setExecute(true);
-                for (int variant = 0; variant < 2; variant++) {
+                for (int variant = 0; variant < 3; variant++) {
                     if (variant == 1) {
                         impostor.setExecute(false);
                         impostor.setWrite(false);
+                    } else if (variant == 2) {
+                        impostor.setWrite(true);
+                        impostor.setRead(false);
                     }
                     Object decision = service.getMethod("preflight",
                             ghidra.program.model.listing.Program.class, itemType, List.class)
@@ -111,14 +115,16 @@ public class GA08VerifyProductionApplyReopened extends GhidraScript {
                 }
             } finally {
                 impostor.setExecute(originalExecute);
+                impostor.setRead(originalRead);
                 impostor.setWrite(originalWrite);
                 impostor.setName(originalName);
             }
             require(originalName.equals(impostor.getName())
                     && impostor.isExecute() == originalExecute
-                    && impostor.isWrite() == originalWrite,
+                    && impostor.isWrite() == originalWrite
+                    && impostor.isRead() == originalRead,
                     "permission fixture failed to restore user block");
-            println("GA08 REOPEN PERMISSION REFUSAL PASS: executable=1 readonly=1");
+            println("GA08 REOPEN PERMISSION REFUSAL PASS: executable=1 readonly=1 unreadable=1");
             println("GA08 REOPEN USER OWNERSHIP REFUSAL PASS: conflict=1 exact=1");
             println("GA08 PRODUCTION APPLY REOPEN PASS: module=1 user_blocks=2 idempotent=1");
         }
