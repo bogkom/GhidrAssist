@@ -103,3 +103,12 @@ assert 'GA-08 genuine production Apply and rollback on disposable CPU32' in _wor
 assert "GA-08 missing runtime assertion: headless process exit alone is not PASS" in _workflow
 assert "tail -n 160 \"$RUNNER_TEMP/ga08-production.log\"" in _workflow
 assert "grep -F 'GA08 PRODUCTION APPLY'" in _workflow
+
+# Exact range coverage is not proof of ownership by GhidrAssist.
+_memory = source.split("private static Decision memoryDecision(", 1)[1].split(
+    "private static Decision registerDecision(", 1)[0]
+assert "Exact region belongs to existing user memory" in _memory
+assert "_EXACT" not in _memory
+assert "if(!legacyPart(item,existing)" in _memory
+assert "GA08 EXACT USER BLOCK REFUSAL PASS: preserved=1" in _witness
+assert "GA08 EXACT USER BLOCK REFUSAL PASS: preserved=1" in _workflow
