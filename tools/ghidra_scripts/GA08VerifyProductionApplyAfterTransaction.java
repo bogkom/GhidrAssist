@@ -39,6 +39,35 @@ public class GA08VerifyProductionApplyAfterTransaction extends GhidraScript {
             var at=currentProgram.getAddressFactory().getDefaultAddressSpace().getAddress(offset);
             require(currentProgram.getMemory().getBlock(at)==null,
                     "first MEMORY block survived late transaction rollback");
+            // Negative controls must survive the rejected late batch unchanged.
+            Object conflict=items.stream().filter(item -> {
+                try {
+                    return itemType.getField("kind").get(item).toString().equals("MEMORY")
+                        && itemType.getField("address").getLong(item)!=offset
+                        && !itemType.getField("name").get(item).equals("TPURAM_2K_CANDIDATE");
+                } catch(Exception ex){throw new IllegalStateException(ex);}
+            }).findFirst().orElseThrow();
+            long conflictOffset=itemType.getField("address").getLong(conflict);
+            var conflictAt=currentProgram.getAddressFactory().getDefaultAddressSpace().getAddress(conflictOffset);
+            MemoryBlock conflictBlock=currentProgram.getMemory().getBlock(conflictAt);
+            require(conflictBlock!=null && "GA08_USER_CONFLICT".equals(conflictBlock.getName()),
+                    "unrelated user block changed after late rollback");
+            Object exact=items.stream().filter(item -> {
+                try {
+                    return itemType.getField("kind").get(item).toString().equals("MEMORY")
+                        && itemType.getField("address").getLong(item)!=offset
+                        && itemType.getField("address").getLong(item)!=conflictOffset
+                        && !itemType.getField("name").get(item).equals("TPURAM_2K_CANDIDATE");
+                } catch(Exception ex){throw new IllegalStateException(ex);}
+            }).findFirst().orElseThrow();
+            long exactOffset=itemType.getField("address").getLong(exact);
+            int exactLength=itemType.getField("length").getInt(exact);
+            var exactAt=currentProgram.getAddressFactory().getDefaultAddressSpace().getAddress(exactOffset);
+            MemoryBlock exactBlock=currentProgram.getMemory().getBlock(exactAt);
+            require(exactBlock!=null && "GA08_USER_EXACT".equals(exactBlock.getName())
+                    && exactBlock.getSize()==exactLength,
+                    "exact user-owned block changed after late rollback");
+            println("GA08 LATE ROLLBACK USER BLOCKS PASS: conflict=1 exact=1");
             println("GA08 PRODUCTION APPLY LATE ROLLBACK PASS: prior_mutations=1 surviving=0");
             Object outcome=apply.invoke(null,currentProgram,List.of(first));
             require(outcome.getClass().getField("changed").getInt(outcome)==1,
