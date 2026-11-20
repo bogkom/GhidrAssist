@@ -103,6 +103,50 @@ public class GA08VerifyProductionApplyAfterRefusals extends GhidraScript {
                         && block.isRead() && block.isWrite(),
                         "fresh process refusal mutated user block: " + names[i]);
             }
+            // Negative CS-window control in the actual production preflight/Apply.
+            // A synthetic CS candidate covering an executable user block must
+            // fail closed; CSBAR evidence never proves physical ownership.
+            Object exact = memory.get(2);
+            long csAddress = itemType.getField("address").getLong(exact);
+            int csLength = itemType.getField("length").getInt(exact);
+            MemoryBlock csUser = currentProgram.getMemory().getBlock(space.getAddress(csAddress));
+            require(csUser != null && "GA08_USER_EXACT".equals(csUser.getName()),
+                    "CS negative control missing disposable user block");
+            Class<?> kindType = Class.forName("ghidrassist.hardware.HardwareApplyPlan$Kind", true, loader);
+            @SuppressWarnings({"unchecked", "rawtypes"})
+            Object memoryKind = Enum.valueOf((Class<? extends Enum>)kindType.asSubclass(Enum.class), "MEMORY");
+            var itemConstructor = itemType.getDeclaredConstructor(
+                    kindType, String.class, long.class, int.class, String.class);
+            itemConstructor.setAccessible(true);
+            Object csCandidate = itemConstructor.newInstance(memoryKind,
+                    String.format("CS_WINDOW_%06X_%06X", csAddress, csAddress + csLength - 1),
+                    csAddress, csLength, "synthetic negative CS overlap; wiring UNKNOWN");
+            boolean oldExecute = csUser.isExecute();
+            try {
+                csUser.setExecute(true);
+                Object csDecision = preflight.invoke(null, currentProgram, csCandidate,
+                        List.of(csCandidate));
+                require("BLOCKED".equals(csDecision.getClass().getField("state")
+                        .get(csDecision).toString()),
+                        "executable user CS overlap not blocked by production preflight");
+                boolean csRefused = false;
+                try {
+                    apply.invoke(null, currentProgram, List.of(csCandidate));
+                } catch (java.lang.reflect.InvocationTargetException failure) {
+                    csRefused = failure.getCause() instanceof IllegalStateException;
+                }
+                require(csRefused, "production Apply accepted executable user CS overlap");
+                require(currentProgram.getMemory().getBlocks().length == blockCount
+                        && currentProgram.getMemory().getBlock(space.getAddress(csAddress)) == csUser
+                        && "GA08_USER_EXACT".equals(csUser.getName())
+                        && csUser.getSize() == csLength && csUser.isExecute(),
+                        "rejected CS Apply mutated user memory");
+            } finally {
+                csUser.setExecute(oldExecute);
+            }
+            require(!csUser.isExecute() && csUser.isRead() && csUser.isWrite(),
+                    "CS fixture permissions not restored");
+            println("GA08 CS EXECUTABLE USER OVERLAP REFUSAL PASS: preflight=1 apply=1 restored=1");
             println("GA08 THIRD PROCESS NO COLLATERAL MEMORY PASS: blocks=" + blockCount);
             println("GA08 THIRD PROCESS OWNERSHIP REFUSAL PASS: conflict=1 exact=1");
             println("GA08 POST REFUSAL PERSISTENCE PASS: module=1 user_blocks=2 idempotent=1");
