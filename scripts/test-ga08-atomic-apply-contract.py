@@ -128,6 +128,15 @@ assert 'GA08 LATE ROLLBACK USER BLOCKS PASS: conflict=1 exact=1' in _workflow
 
 # User-owned negative controls must be committed before rollback injection.
 _setup = _Path("tools/ghidra_scripts/GA08SetupProductionApplyFixture.java").read_text()
+# Ghidra's createUninitializedBlock default access flags are not a stable
+# contract. The third process requires readable/writable, non-executable
+# user-owned controls, so fixture setup must explicitly establish them.
+assert 'var conflictBlock=currentProgram.getMemory().createUninitializedBlock(' in _setup
+assert 'var exactBlock=currentProgram.getMemory().createUninitializedBlock(' in _setup
+assert 'block.setRead(true);' in _setup
+assert 'block.setWrite(true);' in _setup
+assert 'block.setExecute(false);' in _setup
+assert _setup.index('block.setWrite(true);') < _setup.index('commit=true;')
 assert 'GA08 INDEPENDENT FIXTURE SETUP PASS: conflict=1 exact=1' in _setup
 assert 'GA08 INDEPENDENT FIXTURE SETUP PASS: conflict=1 exact=1' in _workflow
 assert _workflow.index('-postScript GA08SetupProductionApplyFixture.java') < _workflow.index('-postScript GA08VerifyProductionApply.java')
