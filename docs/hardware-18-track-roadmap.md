@@ -1,3 +1,7 @@
+## GA-08 — 2026-11-20: unsafe CS-window overlap refusal (PR #349)
+
+Candidate production change rejects initialized, mapped, executable, unreadable, read-only or non-DEFAULT blocks overlapping a proposed CS window **before** coverage-based ALREADY_PRESENT/MANUAL_REVIEW decisions. This prevents a fully covered speculative external CS region from being treated as harmless solely because all addresses are mapped. The Java 21 source gate now checks this branch. Exact-head Java 21/25 and genuine Ghidra regression are **not yet verified** for this candidate; external CS decoding and wiring remain UNKNOWN. GA-08 PARTIAL, GUI Review/Undo and integration outstanding. Synthetic-only.
+
 ## GA-08 — 2026-11-20: explicit Java 21 / Java 25 evidence separation (PR #349)
 
 [Hardware Analysis Actions 44779805067](https://github.com/bogkom/GhidrAssist/actions/runs/44779805067) completed SUCCESS for exact head `31b1c683bb4163a411eb04a487e85c921ecedb14`; this establishes the then-current workflow, not GUI Review/Undo or formal GA-08 acceptance. The subsequent candidate adds a distinct Java 21 source-regression environment and version assertion, then restores and asserts Java 25 before the full official Ghidra 12.1.4 PUBLIC extension build. A source contract checks the job ordering. This new candidate is unverified until exact-head Actions finish. GA-08 remains PARTIAL; GUI Review/Undo, independent review and merge remain outstanding. Synthetic-only.
