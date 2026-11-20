@@ -146,3 +146,15 @@ assert 'GA08 REOPEN USER OWNERSHIP REFUSAL PASS: conflict=1 exact=1' in _reopen
 assert 'GA08 REOPEN USER OWNERSHIP REFUSAL PASS: conflict=1 exact=1' in _workflow
 assert 'apply.invoke(null, currentProgram, List.of(item))' in _reopen
 assert 'reopened refused Apply altered user-owned memory' in _reopen
+
+# Rejected Apply must not change persisted state after the second headless
+# process exits; a third fresh Ghidra process checks the same saved project.
+_post = _Path("tools/ghidra_scripts/GA08VerifyProductionApplyAfterRefusals.java").read_text()
+assert '"ga08-synthetic.bin".equals(currentProgram.getName())' in _post
+assert 'GA08_USER_CONFLICT' in _post and 'GA08_USER_EXACT' in _post
+assert 'apply.invoke(null, currentProgram, List.of(memory.get(0)))' in _post
+assert 'GA08 POST REFUSAL PERSISTENCE PASS: module=1 user_blocks=2 idempotent=1' in _post
+assert '-postScript GA08VerifyProductionApplyAfterRefusals.java' in _workflow
+assert 'GA08 POST REFUSAL PERSISTENCE PASS: module=1 user_blocks=2 idempotent=1' in _workflow
+assert _workflow.index('GA-08 persisted production Apply after independent project reopen') < _workflow.index('GA-08 independent reopen after rejected Apply must preserve persisted state')
+assert _workflow.index('GA-08 independent reopen after rejected Apply must preserve persisted state') < _workflow.index('Verify production interprocedural traversal')
