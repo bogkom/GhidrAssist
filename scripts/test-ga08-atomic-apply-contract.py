@@ -85,13 +85,16 @@ _workflow = _Path(".github/workflows/hardware-extension-build.yml").read_text()
 assert 'Class.forName("ghidrassist.hardware.HardwareApplyService"' in _witness
 assert 'apply.invoke(null, currentProgram, List.of(first, second))' in _witness
 assert 'earlier approved region survived a failed transaction' in _witness
-assert 'apply.invoke(null, currentProgram, List.of(first))' in _witness
+_after = _Path("tools/ghidra_scripts/GA08VerifyProductionApplyAfterTransaction.java").read_text()
+assert 'apply.invoke(null,currentProgram,List.of(first))' in _after
 assert 'GA08 PRODUCTION APPLY ROLLBACK PASS:' in _witness
 assert 'apply.invoke(null, currentProgram, List.of(first, vbr))' in _witness
-assert 'first MEMORY block survived transaction rollback after late VBR conflict' in _witness
-assert 'GA08 PRODUCTION APPLY LATE ROLLBACK PASS: prior_mutations=1 surviving=0' in _witness
+assert 'GA08 LATE ROLLBACK REQUESTED:' in _witness
+assert 'first MEMORY block survived late transaction rollback' in _after
+assert 'GA08 PRODUCTION APPLY LATE ROLLBACK PASS: prior_mutations=1 surviving=0' in _after
 assert "GA08 PRODUCTION APPLY LATE ROLLBACK PASS: prior_mutations=1 surviving=0" in _workflow
-assert 'GA08 PRODUCTION APPLY POSITIVE PASS:' in _witness
+assert 'GA08 PRODUCTION APPLY POSITIVE PASS:' in _after
+assert '-postScript GA08VerifyProductionApplyAfterTransaction.java' in _workflow
 assert '-postScript GA08VerifyProductionApply.java' in _workflow
 assert 'GA-08 genuine production Apply and rollback on disposable CPU32' in _workflow
 
