@@ -244,3 +244,11 @@ assert _workflow.index('Verify Java 25 for full extension build') < _workflow.in
 assert 'for (int peer = 1; peer < 3; peer++)' in _post
 assert 'refused Apply mutated unrelated user-owned block:' in _post
 assert 'peerBlock.isRead() && peerBlock.isWrite()' in _post
+
+# CS coverage is not authorization to accept executable, mapped or initialized
+# user memory; check this before any ALREADY_PRESENT/MANUAL_REVIEW outcome.
+_cs = _memory.split("if(csWindow(item)){", 1)[1].split("List<HardwareRegionLayout.Range> gaps=csMissing(item,parts);", 1)[0]
+assert "block.isInitialized() || block.isMapped()" in _cs
+assert "block.getType()!=MemoryBlockType.DEFAULT" in _cs
+assert "block.isExecute() || !block.isRead() || !block.isWrite()" in _cs
+assert "CS window overlaps incompatible user memory:" in _cs
