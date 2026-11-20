@@ -110,6 +110,10 @@ _memory = source.split("private static Decision memoryDecision(", 1)[1].split(
 assert "Exact region belongs to existing user memory" in _memory
 assert "_EXACT" not in _memory
 assert "if(!legacyPart(item,existing)" in _memory
+# Even a name-matching exact module is not complete if permissions differ:
+# never silently bless executable, unreadable or read-only user memory.
+assert "existing.isExecute() || !existing.isRead() || !existing.isWrite()" in _memory
+assert _memory.index("existing.isExecute()") < _memory.index("State.ALREADY_PRESENT")
 assert "GA08 EXACT USER BLOCK REFUSAL PASS: preserved=1" in _witness
 assert "GA08 EXACT USER BLOCK REFUSAL PASS: preserved=1" in _workflow
 
