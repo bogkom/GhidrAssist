@@ -139,3 +139,10 @@ assert '-process ga08-synthetic.bin -noanalysis' in _workflow
 assert '-postScript GA08VerifyProductionApplyReopened.java' in _workflow
 assert 'GA08 PRODUCTION APPLY REOPEN PASS: module=1 user_blocks=2 idempotent=1' in _workflow
 assert _workflow.index('GA-08 genuine production Apply and rollback on disposable CPU32') < _workflow.index('GA-08 persisted production Apply after independent project reopen')
+
+# Reopened Apply must refuse both persisted user-owned MEMORY ranges without
+# corrupting them; the real Ghidra workflow requires the distinct evidence.
+assert 'GA08 REOPEN USER OWNERSHIP REFUSAL PASS: conflict=1 exact=1' in _reopen
+assert 'GA08 REOPEN USER OWNERSHIP REFUSAL PASS: conflict=1 exact=1' in _workflow
+assert 'apply.invoke(null, currentProgram, List.of(item))' in _reopen
+assert 'reopened refused Apply altered user-owned memory' in _reopen
