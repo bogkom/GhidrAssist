@@ -103,6 +103,7 @@ jobs:
             -import "$RUNNER_TEMP/ga08-synthetic.bin" \
             -loader BinaryLoader -processor 68000:BE:32:CPU32 -cspec default \
             -noanalysis -scriptPath "$GITHUB_WORKSPACE/tools/ghidra_scripts" \
+            -postScript GA08SetupProductionApplyFixture.java \
             -postScript GA08VerifyProductionApply.java \
             -postScript GA08VerifyProductionApplyAfterTransaction.java \
             > "$RUNNER_TEMP/ga08-production.log" 2>&1 || {
@@ -110,7 +111,8 @@ jobs:
             }
           # analyzeHeadless can exit 0 even if a postScript fails. Keep the
           # complete synthetic evidence visible on *every* marker failure.
-          if ! grep -Fq 'GA08 PRODUCTION APPLY ROLLBACK PASS: stale_conflict=1 prior_mutations=0' "$RUNNER_TEMP/ga08-production.log" ||
+          if ! grep -Fq 'GA08 INDEPENDENT FIXTURE SETUP PASS: conflict=1 exact=1' "$RUNNER_TEMP/ga08-production.log" ||
+             ! grep -Fq 'GA08 PRODUCTION APPLY ROLLBACK PASS: stale_conflict=1 prior_mutations=0' "$RUNNER_TEMP/ga08-production.log" ||
              ! grep -Fq 'GA08 EXACT USER BLOCK REFUSAL PASS: preserved=1' "$RUNNER_TEMP/ga08-production.log" ||
              ! grep -Fq 'GA08 PRODUCTION APPLY LATE ROLLBACK PASS: prior_mutations=1 surviving=0' "$RUNNER_TEMP/ga08-production.log" ||
              ! grep -Fq 'GA08 LATE ROLLBACK USER BLOCKS PASS: conflict=1 exact=1' "$RUNNER_TEMP/ga08-production.log" ||
