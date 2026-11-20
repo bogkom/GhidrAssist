@@ -113,9 +113,9 @@ assert "if(!legacyPart(item,existing)" in _memory
 # Even a name-matching exact module is not complete if permissions differ:
 # never silently bless executable, unreadable or read-only user memory.
 assert "existing.isExecute() || !existing.isRead() || !existing.isWrite()" in _memory
-assert _memory.index("existing.isExecute()") < _memory.index("State.ALREADY_PRESENT")
+assert _memory.index("existing.isExecute()") < _memory.index("Matching uninitialized hardware region already mapped")
 assert "block.isExecute() || !block.isRead() || !block.isWrite()" in _memory
-assert _memory.index("block.isExecute()") < _memory.index("State.UPGRADE")
+assert _memory.index("block.isExecute()") < _memory.index("Extend/join ")
 assert "GA08 EXACT USER BLOCK REFUSAL PASS: preserved=1" in _witness
 assert "GA08 EXACT USER BLOCK REFUSAL PASS: preserved=1" in _workflow
 
