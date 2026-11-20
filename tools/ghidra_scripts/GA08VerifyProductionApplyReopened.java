@@ -78,6 +78,47 @@ public class GA08VerifyProductionApplyReopened extends GhidraScript {
             }
             require(currentProgram.getMemory().getBlock(space.getAddress(firstAddress)) == applied,
                     "reopened refusal changed the approved module");
+            // Same name and exact extent do not confer ownership when permissions differ.
+            // Exercise the production preflight against a disposable user block,
+            // then restore the user's name and permissions even on assertion failure.
+            MemoryBlock impostor = currentProgram.getMemory().getBlock(
+                    space.getAddress(itemType.getField("address").getLong(exact)));
+            String originalName = impostor.getName();
+            boolean originalExecute = impostor.isExecute();
+            boolean originalWrite = impostor.isWrite();
+            try {
+                impostor.setName((String) itemType.getField("name").get(exact));
+                impostor.setExecute(true);
+                for (int variant = 0; variant < 2; variant++) {
+                    if (variant == 1) {
+                        impostor.setExecute(false);
+                        impostor.setWrite(false);
+                    }
+                    Object decision = service.getMethod("preflight",
+                            ghidra.program.model.listing.Program.class, itemType, List.class)
+                            .invoke(null, currentProgram, exact, items);
+                    require("BLOCKED".equals(decision.getClass().getField("state").get(decision).toString()),
+                            "same-name user block with unsafe permissions passed preflight");
+                    boolean rejected = false;
+                    try {
+                        apply.invoke(null, currentProgram, List.of(exact));
+                    } catch (java.lang.reflect.InvocationTargetException failure) {
+                        rejected = failure.getCause() instanceof IllegalStateException;
+                    }
+                    require(rejected, "same-name user block with unsafe permissions accepted Apply");
+                    require(currentProgram.getMemory().getBlock(impostor.getStart()) == impostor,
+                            "permission refusal replaced user memory");
+                }
+            } finally {
+                impostor.setExecute(originalExecute);
+                impostor.setWrite(originalWrite);
+                impostor.setName(originalName);
+            }
+            require(originalName.equals(impostor.getName())
+                    && impostor.isExecute() == originalExecute
+                    && impostor.isWrite() == originalWrite,
+                    "permission fixture failed to restore user block");
+            println("GA08 REOPEN PERMISSION REFUSAL PASS: executable=1 readonly=1");
             println("GA08 REOPEN USER OWNERSHIP REFUSAL PASS: conflict=1 exact=1");
             println("GA08 PRODUCTION APPLY REOPEN PASS: module=1 user_blocks=2 idempotent=1");
         }
