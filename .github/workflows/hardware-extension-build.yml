@@ -153,7 +153,7 @@ jobs:
             tail -n 160 "$RUNNER_TEMP/ga08-reopen.log"
             exit 1
           fi
-          if ! grep -Fq 'GA08 REOPEN PERMISSION REFUSAL PASS: executable=1 readonly=1' "$RUNNER_TEMP/ga08-reopen.log"; then
+          if ! grep -Fq 'GA08 REOPEN PERMISSION REFUSAL PASS: executable=1 readonly=1 unreadable=1' "$RUNNER_TEMP/ga08-reopen.log"; then
             echo "GA-08 reopened permission refusal evidence missing"
             tail -n 160 "$RUNNER_TEMP/ga08-reopen.log"
             exit 1
