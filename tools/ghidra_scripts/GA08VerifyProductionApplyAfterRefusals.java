@@ -44,7 +44,7 @@ public class GA08VerifyProductionApplyAfterRefusals extends GhidraScript {
                         "persisted block changed after refused Apply: " + names[i]);
                 require(block.getSize() == (i == 1 ? 1 : itemType.getField("length").getInt(item)),
                         "persisted block size changed: " + names[i]);
-                require(!block.isInitialized() && !block.isMapped() && !block.isExecute(),
+                require(!block.isInitialized() && !block.isMapped() && !block.isExecute()\n                        && block.isRead() && block.isWrite(),
                         "persisted block properties changed: " + names[i]);
             }
             var apply = service.getMethod("apply", ghidra.program.model.listing.Program.class, List.class);
@@ -52,6 +52,31 @@ public class GA08VerifyProductionApplyAfterRefusals extends GhidraScript {
             require(result.getClass().getField("changed").getInt(result) == 0
                     && result.getClass().getField("skipped").getInt(result) == 1,
                     "approved region lost idempotence after refused Apply");
+            // Re-evaluate both persisted negative controls through the production service.
+            // This is a fresh process: refusal cannot depend on transient Review state.
+            var preflight = service.getMethod("preflight",
+                    ghidra.program.model.listing.Program.class, itemType, List.class);
+            for (int i = 1; i < 3; i++) {
+                Object item = memory.get(i);
+                Object decision = preflight.invoke(null, currentProgram, item, candidates);
+                require("BLOCKED".equals(decision.getClass().getField("state").get(decision).toString()),
+                        "persisted user block no longer blocked in fresh process: " + names[i]);
+                boolean refused = false;
+                try {
+                    apply.invoke(null, currentProgram, List.of(item));
+                } catch (java.lang.reflect.InvocationTargetException failure) {
+                    refused = failure.getCause() instanceof IllegalStateException;
+                }
+                require(refused, "fresh process accepted persisted user-owned block: " + names[i]);
+                long address = itemType.getField("address").getLong(item);
+                MemoryBlock block = currentProgram.getMemory().getBlock(space.getAddress(address));
+                require(block != null && names[i].equals(block.getName())
+                        && block.getSize() == (i == 1 ? 1 : itemType.getField("length").getInt(item))
+                        && !block.isInitialized() && !block.isMapped() && !block.isExecute()
+                        && block.isRead() && block.isWrite(),
+                        "fresh process refusal mutated user block: " + names[i]);
+            }
+            println("GA08 THIRD PROCESS OWNERSHIP REFUSAL PASS: conflict=1 exact=1");
             println("GA08 POST REFUSAL PERSISTENCE PASS: module=1 user_blocks=2 idempotent=1");
         }
     }
