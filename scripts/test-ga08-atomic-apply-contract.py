@@ -218,3 +218,5 @@ assert "!block.isExecute()\n                        && block.isRead()" in _post
 # checking either runtime marker. Require two real shell lines.
 assert " ||\n             ! grep -Fq 'GA08 POST REFUSAL PERSISTENCE PASS:" in _workflow
 assert " ||\\\\n             ! grep -Fq 'GA08 POST REFUSAL PERSISTENCE PASS:" not in _workflow
+
+# Refusal must preserve unrelated approved module and global memory inventory.\nassert "GA08 THIRD PROCESS NO COLLATERAL MEMORY PASS:" in _post\nassert "refused Apply changed total memory block count" in _post\nassert "refused Apply changed previously approved module" in _post\nassert "GA08 THIRD PROCESS NO COLLATERAL MEMORY PASS:" in _workflow\n
