@@ -111,6 +111,7 @@ jobs:
           # analyzeHeadless can exit 0 even if a postScript fails. Keep the
           # complete synthetic evidence visible on *every* marker failure.
           if ! grep -Fq 'GA08 PRODUCTION APPLY ROLLBACK PASS: stale_conflict=1 prior_mutations=0' "$RUNNER_TEMP/ga08-production.log" ||
+             ! grep -Fq 'GA08 EXACT USER BLOCK REFUSAL PASS: preserved=1' "$RUNNER_TEMP/ga08-production.log" ||
              ! grep -Fq 'GA08 PRODUCTION APPLY LATE ROLLBACK PASS: prior_mutations=1 surviving=0' "$RUNNER_TEMP/ga08-production.log" ||
              ! grep -Fq 'GA08 PRODUCTION APPLY POSITIVE PASS: changed=1 idempotent_skip=1' "$RUNNER_TEMP/ga08-production.log"; then
             echo 'GA-08 missing runtime assertion: headless process exit alone is not PASS'
