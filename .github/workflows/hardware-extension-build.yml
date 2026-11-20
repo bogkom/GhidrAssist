@@ -104,6 +104,7 @@ jobs:
             -loader BinaryLoader -processor 68000:BE:32:CPU32 -cspec default \
             -noanalysis -scriptPath "$GITHUB_WORKSPACE/tools/ghidra_scripts" \
             -postScript GA08VerifyProductionApply.java \
+            -postScript GA08VerifyProductionApplyAfterTransaction.java \
             > "$RUNNER_TEMP/ga08-production.log" 2>&1 || {
               tail -n 120 "$RUNNER_TEMP/ga08-production.log"; exit 1;
             }
