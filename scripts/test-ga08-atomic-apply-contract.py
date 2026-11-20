@@ -259,8 +259,14 @@ assert "CS window overlaps incompatible user memory:" in _cs
 # This is not a claim that any physical CS device is present.
 assert 'CS_WINDOW_%06X_%06X' in _post
 assert 'csUser.setExecute(true)' in _post
+assert 'csUser.setWrite(false)' in _post
+assert 'csUser.setRead(false)' in _post
+assert 'for (String permissionCase : permissionCases)' in _post
+assert 'rejected CS Apply mutated peer user block' in _post
 assert 'preflight.invoke(null, currentProgram, csCandidate' in _post
 assert 'apply.invoke(null, currentProgram, List.of(csCandidate))' in _post
-assert 'csUser.setExecute(oldExecute)' in _post
-assert 'GA08 CS EXECUTABLE USER OVERLAP REFUSAL PASS: preflight=1 apply=1 restored=1' in _post
-assert 'GA08 CS EXECUTABLE USER OVERLAP REFUSAL PASS: preflight=1 apply=1 restored=1' in _workflow
+assert 'csUser.setExecute(originalExecute)' in _post
+assert 'csUser.setWrite(originalWrite)' in _post
+assert 'csUser.setRead(originalRead)' in _post
+assert 'GA08 CS USER PERMISSION OVERLAP REFUSAL PASS: executable=1 readonly=1 unreadable=1 restored=1' in _post
+assert 'GA08 CS USER PERMISSION OVERLAP REFUSAL PASS: executable=1 readonly=1 unreadable=1 restored=1' in _workflow
