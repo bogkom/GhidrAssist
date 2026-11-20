@@ -62,6 +62,38 @@ public class GA08VerifyProductionApply extends GhidraScript {
             } finally {
                 currentProgram.endTransaction(fixtureTx, true);
             }
+            // A user-owned block covering the exact proposed module range
+            // is NOT evidence that GhidrAssist previously applied that module.
+            Object exact = items.stream().filter(item -> {
+                try {
+                    return itemType.getField("kind").get(item).toString().equals("MEMORY")
+                        && itemType.getField("address").getLong(item) != address
+                        && itemType.getField("address").getLong(item) != other
+                        && !itemType.getField("name").get(item).equals("TPURAM_2K_CANDIDATE");
+                } catch (Exception ex) { throw new IllegalStateException(ex); }
+            }).findFirst().orElseThrow();
+            long exactOffset = itemType.getField("address").getLong(exact);
+            int exactLength = itemType.getField("length").getInt(exact);
+            var exactAt = currentProgram.getAddressFactory().getDefaultAddressSpace()
+                    .getAddress(exactOffset);
+            int exactTx = currentProgram.startTransaction("GA08 exact user-owned region");
+            try {
+                currentProgram.getMemory().createUninitializedBlock(
+                        "GA08_USER_EXACT", exactAt, exactLength, false);
+            } finally {
+                currentProgram.endTransaction(exactTx, true);
+            }
+            boolean exactRejected = false;
+            try {
+                apply.invoke(null, currentProgram, List.of(exact));
+            } catch (java.lang.reflect.InvocationTargetException expected) {
+                exactRejected = expected.getCause() instanceof IllegalStateException
+                        && expected.getCause().getMessage().contains("blocked");
+            }
+            require(exactRejected, "exact user-owned module must be BLOCKED");
+            require(currentProgram.getMemory().getBlock(exactAt).getName()
+                    .equals("GA08_USER_EXACT"), "exact user block changed");
+            println("GA08 EXACT USER BLOCK REFUSAL PASS: preserved=1");
             boolean rejected = false;
             try {
                 apply.invoke(null, currentProgram, List.of(first, second));
