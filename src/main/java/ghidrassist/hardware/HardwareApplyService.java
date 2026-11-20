@@ -105,7 +105,8 @@ public final class HardwareApplyService {
             // Exact coverage is not ownership: never silently accept an
             // arbitrary user block as a completed hardware module.
             if(!legacyPart(item,existing) || existing.isInitialized() ||
-                    existing.isMapped() || existing.getType()!=MemoryBlockType.DEFAULT)
+                    existing.isMapped() || existing.getType()!=MemoryBlockType.DEFAULT ||
+                    existing.isExecute() || !existing.isRead() || !existing.isWrite())
                 return decide(State.BLOCKED,
                     "Exact region belongs to existing user memory: "+
                     existing.getName(),false);
