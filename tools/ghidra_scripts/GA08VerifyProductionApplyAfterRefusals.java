@@ -48,7 +48,12 @@ public class GA08VerifyProductionApplyAfterRefusals extends GhidraScript {
                         && block.isRead() && block.isWrite(),
                         "persisted block properties changed: " + names[i]);
             }
-            // Refused Apply must neither add hidden blocks nor disturb the approved module.\n            int blockCount = currentProgram.getMemory().getBlocks().length;\n            MemoryBlock approved = currentProgram.getMemory().getBlock(\n                    space.getAddress(itemType.getField("address").getLong(memory.get(0))));\n            require(approved != null, "approved module missing before refusal checks");\n            var apply = service.getMethod("apply", ghidra.program.model.listing.Program.class, List.class);
+            // Refused Apply must neither add hidden blocks nor disturb the approved module.
+            int blockCount = currentProgram.getMemory().getBlocks().length;
+            MemoryBlock approved = currentProgram.getMemory().getBlock(
+                    space.getAddress(itemType.getField("address").getLong(memory.get(0))));
+            require(approved != null, "approved module missing before refusal checks");
+            var apply = service.getMethod("apply", ghidra.program.model.listing.Program.class, List.class);
             Object result = apply.invoke(null, currentProgram, List.of(memory.get(0)));
             require(result.getClass().getField("changed").getInt(result) == 0
                     && result.getClass().getField("skipped").getInt(result) == 1,
@@ -68,7 +73,13 @@ public class GA08VerifyProductionApplyAfterRefusals extends GhidraScript {
                 } catch (java.lang.reflect.InvocationTargetException failure) {
                     refused = failure.getCause() instanceof IllegalStateException;
                 }
-                require(refused, "fresh process accepted persisted user-owned block: " + names[i]);\n                require(currentProgram.getMemory().getBlocks().length == blockCount,\n                        "refused Apply changed total memory block count");\n                require(currentProgram.getMemory().getBlock(approved.getStart()) == approved\n                        && approved.getName().equals(names[0])\n                        && approved.getSize() == itemType.getField("length").getInt(memory.get(0)),\n                        "refused Apply changed previously approved module");
+                require(refused, "fresh process accepted persisted user-owned block: " + names[i]);
+                require(currentProgram.getMemory().getBlocks().length == blockCount,
+                        "refused Apply changed total memory block count");
+                require(currentProgram.getMemory().getBlock(approved.getStart()) == approved
+                        && approved.getName().equals(names[0])
+                        && approved.getSize() == itemType.getField("length").getInt(memory.get(0)),
+                        "refused Apply changed previously approved module");
                 long address = itemType.getField("address").getLong(item);
                 MemoryBlock block = currentProgram.getMemory().getBlock(space.getAddress(address));
                 require(block != null && names[i].equals(block.getName())
@@ -77,7 +88,8 @@ public class GA08VerifyProductionApplyAfterRefusals extends GhidraScript {
                         && block.isRead() && block.isWrite(),
                         "fresh process refusal mutated user block: " + names[i]);
             }
-            println("GA08 THIRD PROCESS NO COLLATERAL MEMORY PASS: blocks=" + blockCount);\n            println("GA08 THIRD PROCESS OWNERSHIP REFUSAL PASS: conflict=1 exact=1");
+            println("GA08 THIRD PROCESS NO COLLATERAL MEMORY PASS: blocks=" + blockCount);
+            println("GA08 THIRD PROCESS OWNERSHIP REFUSAL PASS: conflict=1 exact=1");
             println("GA08 POST REFUSAL PERSISTENCE PASS: module=1 user_blocks=2 idempotent=1");
         }
     }
