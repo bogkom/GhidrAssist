@@ -203,3 +203,9 @@ for _script in (
     _source = _java.read_text()
     assert "\\n                        &&" not in _source, f"literal escaped Java newline: {_script}"
 assert "!block.isExecute()\n                        && block.isRead()" in _post
+
+# A literal backslash-n inside a YAML shell conditional is not a line
+# continuation. It caused the third-process evidence gate to fail before
+# checking either runtime marker. Require two real shell lines.
+assert " ||\\n             ! grep -Fq 'GA08 POST REFUSAL PERSISTENCE PASS:" in _workflow
+assert " ||\\\\n             ! grep -Fq 'GA08 POST REFUSAL PERSISTENCE PASS:" not in _workflow
