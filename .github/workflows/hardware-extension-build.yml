@@ -191,6 +191,7 @@ jobs:
             -process ga08-synthetic.bin -noanalysis \
             -scriptPath "$GITHUB_WORKSPACE/tools/ghidra_scripts" \
             -postScript GA08VerifyProductionApplyAfterRefusals.java \
+            -postScript GA08PersistPositiveCs.java \
             > "$RUNNER_TEMP/ga08-post-refusal.log" 2>&1 || {
               tail -n 160 "$RUNNER_TEMP/ga08-post-refusal.log"; exit 1;
             }
