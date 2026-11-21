@@ -130,10 +130,9 @@ public final class HardwareApplyService {
                 "Matching uninitialized hardware region already mapped as "+
                 existing.getName(),false);
         }
-        if(item.name.equals("TPURAM_2K_CANDIDATE") &&
-                csMissing(item,parts).isEmpty())
-            return decide(State.ALREADY_PRESENT,
-                "Entire TPURAM candidate range is mapped; select TPURAM_CANDIDATE annotation instead",false);
+        // Full coverage by unrelated user blocks is not proof that TPURAM
+        // belongs to this candidate. Let the normal ownership checks below
+        // reject foreign blocks instead of reporting ALREADY_PRESENT.
         for(MemoryBlock block:parts){
             if(block.getStart().getOffset()<item.address ||
                     block.getEnd().getOffset()>item.last() ||
