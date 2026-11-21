@@ -356,6 +356,9 @@ assert 'GA08 FOURTH REOPEN DIAGNOSTIC:' in _fourth
 _save = Path("tools/ghidra_scripts/GA08PersistPositiveCs.java").read_text()
 assert 'ga08-synthetic.bin' in _save
 assert 'currentProgram.save(' in _save
+assert 'GA08 SAVE DIAGNOSTIC: programChanged=' in _save
+assert 'GA08 SAVE FAILURE:' in _save
+assert 'throw saveFailure;' in _save
 assert 'CS_WINDOW_E00000_E0001F_PART_1' in _save
 assert '-postScript GA08PersistPositiveCs.java' in _workflow
 assert 'GA08 EXPLICIT SAVE ATTEMPT PASS: fragment=1' in _workflow
