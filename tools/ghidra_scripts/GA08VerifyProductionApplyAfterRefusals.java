@@ -237,6 +237,51 @@ public class GA08VerifyProductionApplyAfterRefusals extends GhidraScript {
                     && inventory.get().equals(originalInventory),
                     "CS refusal poisoned approved-module idempotence or memory inventory");
             println("GA08 CS REFUSAL RECOVERY PASS: idempotent=1 inventory=1");
+            // Positive counterpart: explicit selection can create an isolated,
+            // previously unmapped speculative CS window. This proves the
+            // negative ownership guards did not disable approved creation.
+            // This is a disposable fixture, never evidence of physical decode.
+            long positiveAddress = 0x00e00000L;
+            int positiveLength = 0x20;
+            require(currentProgram.getMemory().getBlock(space.getAddress(positiveAddress)) == null
+                    && currentProgram.getMemory().getBlock(
+                        space.getAddress(positiveAddress + positiveLength - 1)) == null,
+                    "positive CS fixture address is occupied");
+            String positiveName = String.format("CS_WINDOW_%06X_%06X",
+                    positiveAddress, positiveAddress + positiveLength - 1);
+            Object positiveCs = itemConstructor.newInstance(memoryKind, positiveName,
+                    positiveAddress, positiveLength,
+                    "explicit synthetic CS approval; physical wiring UNKNOWN");
+            Object positiveDecision = preflight.invoke(null, currentProgram, positiveCs,
+                    List.of(positiveCs));
+            require("MANUAL_REVIEW".equals(positiveDecision.getClass().getField("state")
+                    .get(positiveDecision).toString()),
+                    "unmapped speculative CS was not held for explicit review");
+            Object positiveResult = apply.invoke(null, currentProgram, List.of(positiveCs));
+            require(positiveResult.getClass().getField("changed").getInt(positiveResult) == 1,
+                    "explicitly selected synthetic CS was not created");
+            MemoryBlock positiveBlock = currentProgram.getMemory().getBlock(
+                    space.getAddress(positiveAddress));
+            require(positiveBlock != null && positiveBlock.getSize() == positiveLength
+                    && positiveBlock.getName().equals(positiveName + "_PART_1")
+                    && !positiveBlock.isInitialized() && !positiveBlock.isMapped()
+                    && positiveBlock.isRead() && positiveBlock.isWrite()
+                    && !positiveBlock.isExecute(),
+                    "approved synthetic CS fragment has unexpected properties");
+            Object secondDecision = preflight.invoke(null, currentProgram, positiveCs,
+                    List.of(positiveCs));
+            require("ALREADY_PRESENT".equals(secondDecision.getClass().getField("state")
+                    .get(secondDecision).toString()),
+                    "created CS fragment is not recognized as already present");
+            Object secondResult = apply.invoke(null, currentProgram, List.of(positiveCs));
+            require(secondResult.getClass().getField("changed").getInt(secondResult) == 0
+                    && secondResult.getClass().getField("skipped").getInt(secondResult) == 1,
+                    "second CS Apply was not idempotent");
+            require(currentProgram.getMemory().getBlock(space.getAddress(positiveAddress))
+                    == positiveBlock && inventory.get().size() == originalInventory.size() + 1,
+                    "CS positive Apply disturbed other memory");
+            println("GA08 CS EXPLICIT POSITIVE APPLY PASS: review=1 created=1 idempotent=1");
+
             println("GA08 CS USER PERMISSION OVERLAP REFUSAL PASS: benign=1 executable=1 readonly=1 unreadable=1 volatile=1 restored=1");
             println("GA08 THIRD PROCESS NO COLLATERAL MEMORY PASS: blocks=" + blockCount);
             println("GA08 THIRD PROCESS OWNERSHIP REFUSAL PASS: conflict=1 exact=1");
