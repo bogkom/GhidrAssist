@@ -188,7 +188,7 @@ jobs:
           JAVA_TOOL_OPTIONS="-Dga08.test.jar=$RUNNER_TEMP/ga08-production.jar" \
             "$GHIDRA_INSTALL_DIR/support/analyzeHeadless" \
             "$RUNNER_TEMP/ga08-headless" GA08ProductionCI \
-            -process ga08-synthetic.bin -noanalysis -commit \
+            -process ga08-synthetic.bin -noanalysis \
             -scriptPath "$GITHUB_WORKSPACE/tools/ghidra_scripts" \
             -postScript GA08VerifyProductionApplyAfterRefusals.java \
             > "$RUNNER_TEMP/ga08-post-refusal.log" 2>&1 || {
