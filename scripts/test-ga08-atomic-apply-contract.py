@@ -328,3 +328,16 @@ assert 'block.getEnd().getOffset()>item.last()' in _service
 assert 'usedNames.contains(name)' in _service
 assert 'GA08 CS OUTSIDE WINDOW REFUSAL PASS: preflight=1 apply=1 restored=1' in _post
 assert 'GA08 CS OUTSIDE WINDOW REFUSAL PASS: preflight=1 apply=1 restored=1' in _workflow
+
+# Fourth independent read-only Ghidra process must observe the positive CS
+# fragment persisted by the third process, not only an in-memory assertion.
+_fourth = Path("tools/ghidra_scripts/GA08VerifyPositiveCsReopened.java").read_text()
+assert 'ga08-synthetic.bin' in _fourth
+assert 'CS_WINDOW_E00000_E0001F_PART_1' in _fourth
+assert 'cs.getEnd().equals(space.getAddress(end))' in _fourth
+assert 'GA08_USER_CONFLICT' in _fourth and 'GA08_USER_EXACT' in _fourth
+assert 'GA08 FOURTH PROCESS POSITIVE CS PERSISTENCE PASS: fragment=1 user_controls=2' in _fourth
+assert 'GA08VerifyPositiveCsReopened.java' in _workflow
+assert 'GA08 FOURTH PROCESS POSITIVE CS PERSISTENCE PASS: fragment=1 user_controls=2' in _workflow
+assert _workflow.index('GA08VerifyProductionApplyAfterRefusals.java') < _workflow.index('GA08VerifyPositiveCsReopened.java')
+assert '-readOnly' in _workflow.split('GA08VerifyPositiveCsReopened.java')[0].split('GA-08 fourth independent reopen')[-1]
