@@ -42,9 +42,8 @@ public class GA08PersistPositiveCs extends GhidraScript {
                     ghidra.program.model.listing.Program.class, itemType, List.class);
             var apply = service.getMethod("apply",
                     ghidra.program.model.listing.Program.class, List.class);
-            String state = preflight.invoke(null, currentProgram, candidate, List.of(candidate))
-                    .getClass().getField("state").get(
-                        preflight.invoke(null, currentProgram, candidate, List.of(candidate))).toString();
+            Object decision = preflight.invoke(null, currentProgram, candidate, List.of(candidate));
+            String state = decision.getClass().getField("state").get(decision).toString();
             require(block == null ? "MANUAL_REVIEW".equals(state) : "ALREADY_PRESENT".equals(state),
                     "unexpected final transaction preflight: " + state);
             Object result = apply.invoke(null, currentProgram, List.of(candidate));
@@ -63,6 +62,6 @@ public class GA08PersistPositiveCs extends GhidraScript {
                 + " blocks=" + currentProgram.getMemory().getBlocks().length);
         // HeadlessAnalyzer saves after the postScript transaction completes.
         // Calling currentProgram.save() here can race that transaction.
-        println("GA08 EXPLICIT SAVE ATTEMPT PASS: fragment=1");
+        println("GA08 FINAL TRANSACTION APPLY PASS: fragment=1");
     }
 }
