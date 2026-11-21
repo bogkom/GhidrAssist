@@ -341,3 +341,10 @@ assert 'GA08VerifyPositiveCsReopened.java' in _workflow
 assert 'GA08 FOURTH PROCESS POSITIVE CS PERSISTENCE PASS: fragment=1 user_controls=2' in _workflow
 assert _workflow.index('GA08VerifyProductionApplyAfterRefusals.java') < _workflow.index('GA08VerifyPositiveCsReopened.java')
 assert '-readOnly' in _workflow.split('GA08VerifyPositiveCsReopened.java')[0].split('GA-08 fourth independent reopen')[-1]
+
+# Durable positive Apply must explicitly save before independent read-only reopen.
+assert 'currentProgram.save("GA08 approved synthetic CS persistence checkpoint", monitor)' in _post
+assert 'GA08 CS EXPLICIT SAVE PASS: fragment=1' in _post
+assert 'GA08 CS EXPLICIT SAVE PASS: fragment=1' in _workflow
+assert _post.index('currentProgram.save("GA08 approved synthetic CS persistence checkpoint", monitor)') < _post.index('GA08 CS EXPLICIT POSITIVE APPLY PASS:')
+assert 'GA08 FOURTH REOPEN DIAGNOSTIC:' in _fourth
