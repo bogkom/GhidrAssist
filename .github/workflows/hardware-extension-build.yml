@@ -207,6 +207,25 @@ jobs:
             exit 1
           fi
           grep -F 'GA08 POST REFUSAL PERSISTENCE PASS:' "$RUNNER_TEMP/ga08-post-refusal.log"
+      - name: GA-08 fourth independent reopen persists explicitly approved CS after refusals
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$GHIDRA_INSTALL_DIR/support/analyzeHeadless" \
+            "$RUNNER_TEMP/ga08-headless" GA08ProductionCI \
+            -process ga08-synthetic.bin -noanalysis -readOnly \
+            -scriptPath "$GITHUB_WORKSPACE/tools/ghidra_scripts" \
+            -postScript GA08VerifyPositiveCsReopened.java \
+            > "$RUNNER_TEMP/ga08-positive-reopen.log" 2>&1 || {
+              tail -n 160 "$RUNNER_TEMP/ga08-positive-reopen.log"; exit 1;
+            }
+          if ! grep -Fq 'GA08 FOURTH PROCESS POSITIVE CS PERSISTENCE PASS: fragment=1 user_controls=2' "$RUNNER_TEMP/ga08-positive-reopen.log" ||
+             grep -E 'GA08 FOURTH REOPEN FAIL:|Exception|ERROR' "$RUNNER_TEMP/ga08-positive-reopen.log"; then
+            echo 'GA-08 independent positive CS persistence evidence missing'
+            tail -n 160 "$RUNNER_TEMP/ga08-positive-reopen.log"
+            exit 1
+          fi
+          grep -F 'GA08 FOURTH PROCESS POSITIVE CS PERSISTENCE PASS:' "$RUNNER_TEMP/ga08-positive-reopen.log"
       - name: Verify production interprocedural traversal in real Ghidra 12.1.4 (synthetic only)
         shell: bash
         run: |
