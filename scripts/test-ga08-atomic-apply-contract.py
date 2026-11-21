@@ -302,7 +302,13 @@ assert "volatile=1 restored=1" in third
 # CS ownership must be proven by generated fragment names, not by benign R/W flags.
 assert 'boolean owned=block.getName().equals(item.name)' in _memory
 assert 'java.util.regex.Pattern.quote(item.name)' in _memory
-assert '!owned || block.isInitialized()' in _memory
+# Keep the ownership refusal anchored to the actual CS guard even when
+# geometry checks are inserted between ownership and memory flags.
+assert 'if(!owned || block.getStart().getOffset()<item.address ||' in _memory
+assert 'block.getEnd().getOffset()>item.last() ||' in _memory
+assert 'block.isInitialized() || block.isMapped() || block.isVolatile() ||' in _memory
+assert _memory.index('boolean owned=block.getName().equals(item.name)') < _memory.index('if(!owned || block.getStart().getOffset()<item.address ||')
+assert _memory.index('if(!owned || block.getStart().getOffset()<item.address ||') < _memory.index('"CS window overlaps incompatible user memory: "')
 assert '"benign-user-owned"' in _post
 
 # Boundary refusal must be enforced by the production service and genuine Ghidra gate.
