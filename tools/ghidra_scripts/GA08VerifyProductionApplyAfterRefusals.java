@@ -136,13 +136,14 @@ public class GA08VerifyProductionApplyAfterRefusals extends GhidraScript {
             };
             // Baseline for every negative CS case, including unrelated blocks.
             List<String> originalInventory = inventory.get();
-            // Three independent incompatible permission states. Each refusal
+            // A normal R/W user-owned block must also be refused: safe-looking
+            // permissions do not establish GhidrAssist ownership. Each refusal
             // must preserve the complete memory inventory and both user blocks.
             boolean originalRead = csUser.isRead();
             boolean originalWrite = csUser.isWrite();
             boolean originalExecute = csUser.isExecute();
             boolean originalVolatile = csUser.isVolatile();
-            String[] permissionCases = {"executable", "readonly", "unreadable", "volatile"};
+            String[] permissionCases = {"benign-user-owned", "executable", "readonly", "unreadable", "volatile"};
             for (String permissionCase : permissionCases) {
                 try {
                     csUser.setRead(true);
@@ -208,7 +209,7 @@ public class GA08VerifyProductionApplyAfterRefusals extends GhidraScript {
                     && inventory.get().equals(originalInventory),
                     "CS refusal poisoned approved-module idempotence or memory inventory");
             println("GA08 CS REFUSAL RECOVERY PASS: idempotent=1 inventory=1");
-            println("GA08 CS USER PERMISSION OVERLAP REFUSAL PASS: executable=1 readonly=1 unreadable=1 volatile=1 restored=1");
+            println("GA08 CS USER PERMISSION OVERLAP REFUSAL PASS: benign=1 executable=1 readonly=1 unreadable=1 volatile=1 restored=1");
             println("GA08 THIRD PROCESS NO COLLATERAL MEMORY PASS: blocks=" + blockCount);
             println("GA08 THIRD PROCESS OWNERSHIP REFUSAL PASS: conflict=1 exact=1");
             println("GA08 POST REFUSAL PERSISTENCE PASS: module=1 user_blocks=2 idempotent=1");
