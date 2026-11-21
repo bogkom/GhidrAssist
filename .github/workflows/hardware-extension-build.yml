@@ -196,6 +196,7 @@ jobs:
             }
           if ! grep -Fq 'GA08 THIRD PROCESS NO COLLATERAL MEMORY PASS:' "$RUNNER_TEMP/ga08-post-refusal.log" ||
              ! grep -Fq 'GA08 THIRD PROCESS OWNERSHIP REFUSAL PASS: conflict=1 exact=1' "$RUNNER_TEMP/ga08-post-refusal.log" ||
+             ! grep -Fq 'GA08 CS OUTSIDE WINDOW REFUSAL PASS: preflight=1 apply=1 restored=1' "$RUNNER_TEMP/ga08-post-refusal.log" ||
              ! grep -Fq 'GA08 CS REFUSAL RECOVERY PASS: idempotent=1 inventory=1' "$RUNNER_TEMP/ga08-post-refusal.log" ||
              ! grep -Fq 'GA08 CS USER PERMISSION OVERLAP REFUSAL PASS: benign=1 executable=1 readonly=1 unreadable=1 volatile=1 restored=1' "$RUNNER_TEMP/ga08-post-refusal.log" ||
              ! grep -Fq 'GA08 POST REFUSAL PERSISTENCE PASS: module=1 user_blocks=2 idempotent=1' "$RUNNER_TEMP/ga08-post-refusal.log" ||
