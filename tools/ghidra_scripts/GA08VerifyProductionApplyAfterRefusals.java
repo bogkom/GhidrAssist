@@ -202,6 +202,34 @@ public class GA08VerifyProductionApplyAfterRefusals extends GhidraScript {
                 require(inventory.get().equals(originalInventory),
                         "CS refusal left collateral changes after restoration: " + permissionCase);
             }
+            // A name-matching block extending beyond the proposed CS window
+            // is not a reusable fragment. Even a renamed user block cannot
+            // authorize adoption of memory outside the selected extent.
+            require(csLength > 1, "CS boundary fixture must have multiple bytes");
+            String originalName = csUser.getName();
+            try {
+                csUser.setName(String.format("CS_WINDOW_%06X_%06X",
+                        csAddress, csAddress + csLength - 2));
+                Object narrow = itemConstructor.newInstance(memoryKind, csUser.getName(),
+                        csAddress, csLength - 1, "synthetic boundary negative; wiring UNKNOWN");
+                List<String> beforeNarrow = inventory.get();
+                Object decision = preflight.invoke(null, currentProgram, narrow, List.of(narrow));
+                require("BLOCKED".equals(decision.getClass().getField("state").get(decision).toString()),
+                        "CS accepted a name-matching block extending outside selected range");
+                boolean rejected = false;
+                try {
+                    apply.invoke(null, currentProgram, List.of(narrow));
+                } catch (java.lang.reflect.InvocationTargetException failure) {
+                    rejected = failure.getCause() instanceof IllegalStateException;
+                }
+                require(rejected && inventory.get().equals(beforeNarrow),
+                        "out-of-range CS block was adopted or changed");
+            } finally {
+                csUser.setName(originalName);
+            }
+            require(inventory.get().equals(originalInventory),
+                    "CS boundary negative did not restore user memory");
+            println("GA08 CS OUTSIDE WINDOW REFUSAL PASS: preflight=1 apply=1 restored=1");
             // A rejected CS proposal must not poison a later valid Apply.
             Object afterCs = apply.invoke(null, currentProgram, List.of(memory.get(0)));
             require(afterCs.getClass().getField("changed").getInt(afterCs) == 0
