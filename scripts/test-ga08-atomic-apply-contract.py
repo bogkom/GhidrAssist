@@ -342,24 +342,20 @@ assert 'GA08 FOURTH PROCESS POSITIVE CS PERSISTENCE PASS: fragment=1 user_contro
 assert _workflow.index('GA08VerifyProductionApplyAfterRefusals.java') < _workflow.index('GA08VerifyPositiveCsReopened.java')
 assert '-readOnly' in _workflow.split('GA08VerifyPositiveCsReopened.java')[0].split('GA-08 fourth independent reopen')[-1]
 
-# Durable positive Apply must explicitly save before independent read-only reopen.
+# The final headless script must use the production Apply transaction. The
+# fourth independent read-only reopen, not a diagnostic marker, proves durability.
 assert 'currentProgram.save(' not in _post
 assert 'GA08 CS PERSISTENCE READY PASS: fragment=1' in _post
 assert 'GA08 CS PERSISTENCE READY PASS: fragment=1' in _workflow
-assert '-process ga08-synthetic.bin -noanalysis \\' in _workflow
-assert '-process ga08-synthetic.bin -noanalysis -commit' not in _workflow
 assert _post.index('GA08 CS PERSISTENCE READY PASS:') < _post.index('GA08 CS EXPLICIT POSITIVE APPLY PASS:')
-assert 'GA08 FOURTH REOPEN DIAGNOSTIC:' in _fourth
-
-# Explicit persistence runs in a separate postScript; its marker is only an
-# attempted-save witness. The fourth independent read-only reopen is decisive.
 _save = Path("tools/ghidra_scripts/GA08PersistPositiveCs.java").read_text()
 assert 'ga08-synthetic.bin' in _save
-assert 'currentProgram.save(' in _save
+assert 'currentProgram.save(' not in _save
 assert 'GA08 SAVE DIAGNOSTIC: programChanged=' in _save
-assert 'GA08 SAVE FAILURE:' in _save
-assert 'throw saveFailure;' in _save
 assert 'CS_WINDOW_E00000_E0001F_PART_1' in _save
+assert 'HardwareApplyService' in _save
+assert 'MANUAL_REVIEW' in _save and 'ALREADY_PRESENT' in _save
+assert 'GA08 FINAL TRANSACTION APPLY PASS: fragment=1' in _save
 assert '-postScript GA08PersistPositiveCs.java' in _workflow
 assert 'GA08 FINAL TRANSACTION APPLY PASS: fragment=1' in _workflow
 assert _workflow.index('GA08VerifyProductionApplyAfterRefusals.java') < _workflow.index('GA08PersistPositiveCs.java') < _workflow.index('GA08VerifyPositiveCsReopened.java')
