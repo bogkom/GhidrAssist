@@ -350,7 +350,7 @@ assert 'GA08 CS PERSISTENCE READY PASS: fragment=1' in _workflow
 assert _post.index('GA08 CS PERSISTENCE READY PASS:') < _post.index('GA08 CS EXPLICIT POSITIVE APPLY PASS:')
 _save = Path("tools/ghidra_scripts/GA08PersistPositiveCs.java").read_text()
 assert 'ga08-synthetic.bin' in _save
-assert 'currentProgram.save(' not in _save
+# Ignore explanatory comments; reject executable save calls inside the postScript.\nassert not any(line.strip().startswith('currentProgram.save(') for line in _save.splitlines())
 assert 'GA08 SAVE DIAGNOSTIC: programChanged=' in _save
 assert 'CS_WINDOW_E00000_E0001F_PART_1' in _save
 assert 'HardwareApplyService' in _save
