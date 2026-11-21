@@ -95,7 +95,7 @@ public final class HardwareApplyService {
             // Coverage alone cannot establish a safe external chip-select mapping.
             // Refuse unsafe overlapping blocks even when no address gap remains.
             for(MemoryBlock block:parts){
-                if(block.isInitialized() || block.isMapped() ||
+                if(block.isInitialized() || block.isMapped() || block.isVolatile() ||
                         block.getType()!=MemoryBlockType.DEFAULT ||
                         block.isExecute() || !block.isRead() || !block.isWrite())
                     return decide(State.BLOCKED,
@@ -116,7 +116,7 @@ public final class HardwareApplyService {
             // Exact coverage is not ownership: never silently accept an
             // arbitrary user block as a completed hardware module.
             if(!legacyPart(item,existing) || existing.isInitialized() ||
-                    existing.isMapped() || existing.getType()!=MemoryBlockType.DEFAULT ||
+                    existing.isMapped() || existing.isVolatile() || existing.getType()!=MemoryBlockType.DEFAULT ||
                     existing.isExecute() || !existing.isRead() || !existing.isWrite())
                 return decide(State.BLOCKED,
                     "Exact region belongs to existing user memory: "+
@@ -132,7 +132,7 @@ public final class HardwareApplyService {
         for(MemoryBlock block:parts){
             if(block.getStart().getOffset()<item.address ||
                     block.getEnd().getOffset()>item.last() ||
-                    block.isInitialized() || block.isMapped() ||
+                    block.isInitialized() || block.isMapped() || block.isVolatile() ||
                     block.getType()!=MemoryBlockType.DEFAULT ||
                     block.isExecute() || !block.isRead() || !block.isWrite() ||
                     !legacyPart(item,block)){
