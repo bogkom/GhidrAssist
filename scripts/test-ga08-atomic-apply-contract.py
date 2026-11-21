@@ -346,6 +346,7 @@ assert '-readOnly' in _workflow.split('GA08VerifyPositiveCsReopened.java')[0].sp
 assert 'currentProgram.save(' not in _post
 assert 'GA08 CS PERSISTENCE READY PASS: fragment=1' in _post
 assert 'GA08 CS PERSISTENCE READY PASS: fragment=1' in _workflow
-assert '-process ga08-synthetic.bin -noanalysis -commit' in _workflow
+assert '-process ga08-synthetic.bin -noanalysis \\' in _workflow
+assert '-process ga08-synthetic.bin -noanalysis -commit' not in _workflow
 assert _post.index('GA08 CS PERSISTENCE READY PASS:') < _post.index('GA08 CS EXPLICIT POSITIVE APPLY PASS:')
 assert 'GA08 FOURTH REOPEN DIAGNOSTIC:' in _fourth
