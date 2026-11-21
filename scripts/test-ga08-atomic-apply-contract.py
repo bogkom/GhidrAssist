@@ -350,3 +350,13 @@ assert '-process ga08-synthetic.bin -noanalysis \\' in _workflow
 assert '-process ga08-synthetic.bin -noanalysis -commit' not in _workflow
 assert _post.index('GA08 CS PERSISTENCE READY PASS:') < _post.index('GA08 CS EXPLICIT POSITIVE APPLY PASS:')
 assert 'GA08 FOURTH REOPEN DIAGNOSTIC:' in _fourth
+
+# Explicit persistence runs in a separate postScript; its marker is only an
+# attempted-save witness. The fourth independent read-only reopen is decisive.
+_save = Path("tools/ghidra_scripts/GA08PersistPositiveCs.java").read_text()
+assert 'ga08-synthetic.bin' in _save
+assert 'currentProgram.save(' in _save
+assert 'CS_WINDOW_E00000_E0001F_PART_1' in _save
+assert '-postScript GA08PersistPositiveCs.java' in _workflow
+assert 'GA08 EXPLICIT SAVE ATTEMPT PASS: fragment=1' in _workflow
+assert _workflow.index('GA08VerifyProductionApplyAfterRefusals.java') < _workflow.index('GA08PersistPositiveCs.java') < _workflow.index('GA08VerifyPositiveCsReopened.java')
