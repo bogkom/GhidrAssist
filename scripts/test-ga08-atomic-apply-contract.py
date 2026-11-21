@@ -295,6 +295,10 @@ assert 'inventory.get().equals(originalInventory)' in _post
 assert 'Object afterCs = apply.invoke(null, currentProgram, List.of(memory.get(0)))' in _post
 assert 'GA08 CS REFUSAL RECOVERY PASS: idempotent=1 inventory=1' in _post
 assert 'GA08 CS REFUSAL RECOVERY PASS: idempotent=1 inventory=1' in _workflow
+assert 'GA08 CS EXPLICIT POSITIVE APPLY PASS: review=1 created=1 idempotent=1' in _post
+assert 'GA08 CS EXPLICIT POSITIVE APPLY PASS: review=1 created=1 idempotent=1' in _workflow
+assert '"MANUAL_REVIEW".equals(positiveDecision' in _post
+assert '"ALREADY_PRESENT".equals(secondDecision' in _post
 
 # Volatile memory cannot be silently adopted as an MMIO/CS module.
 assert "block.isVolatile()" in source
