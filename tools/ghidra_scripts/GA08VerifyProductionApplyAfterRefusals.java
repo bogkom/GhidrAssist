@@ -286,6 +286,7 @@ public class GA08VerifyProductionApplyAfterRefusals extends GhidraScript {
             MemoryBlock savedCs = currentProgram.getMemory().getBlock(space.getAddress(positiveAddress));
             require(savedCs != null && savedCs.getName().equals(positiveName + "_PART_1"),
                     "approved CS disappeared after explicit save");
+            println("GA08 CS PERSISTENCE DIAGNOSTIC: program_changed=" + currentProgram.isChanged() + " cs_present=" + (currentProgram.getMemory().getBlock(space.getAddress(positiveAddress)) != null));
             println("GA08 CS PERSISTENCE READY PASS: fragment=1");
             println("GA08 CS EXPLICIT POSITIVE APPLY PASS: review=1 created=1 idempotent=1");
 
