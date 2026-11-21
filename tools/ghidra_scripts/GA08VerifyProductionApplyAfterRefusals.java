@@ -129,7 +129,7 @@ public class GA08VerifyProductionApplyAfterRefusals extends GhidraScript {
                     rows.add(b.getStart() + ":" + b.getEnd() + ":" + b.getName()
                             + ":" + b.getType() + ":" + b.isInitialized()
                             + ":" + b.isRead() + ":" + b.isWrite()
-                            + ":" + b.isExecute());
+                            + ":" + b.isExecute() + ":" + b.isVolatile());
                 }
                 java.util.Collections.sort(rows);
                 return rows;
@@ -141,12 +141,15 @@ public class GA08VerifyProductionApplyAfterRefusals extends GhidraScript {
             boolean originalRead = csUser.isRead();
             boolean originalWrite = csUser.isWrite();
             boolean originalExecute = csUser.isExecute();
-            String[] permissionCases = {"executable", "readonly", "unreadable"};
+            boolean originalVolatile = csUser.isVolatile();
+            String[] permissionCases = {"executable", "readonly", "unreadable", "volatile"};
             for (String permissionCase : permissionCases) {
                 try {
                     csUser.setRead(true);
                     csUser.setWrite(true);
                     csUser.setExecute(false);
+                    csUser.setVolatile(false);
+                    if ("volatile".equals(permissionCase)) csUser.setVolatile(true);
                     if ("executable".equals(permissionCase)) csUser.setExecute(true);
                     if ("readonly".equals(permissionCase)) csUser.setWrite(false);
                     if ("unreadable".equals(permissionCase)) csUser.setRead(false);
@@ -173,7 +176,8 @@ public class GA08VerifyProductionApplyAfterRefusals extends GhidraScript {
                             && csUser.getSize() == csLength
                             && csUser.isRead() == !"unreadable".equals(permissionCase)
                             && csUser.isWrite() == !"readonly".equals(permissionCase)
-                            && csUser.isExecute() == "executable".equals(permissionCase),
+                            && csUser.isExecute() == "executable".equals(permissionCase)
+                            && csUser.isVolatile() == "volatile".equals(permissionCase),
                             "rejected " + permissionCase + " CS Apply mutated user memory");
                     MemoryBlock peer = currentProgram.getMemory().getBlock(
                             space.getAddress(itemType.getField("address").getLong(memory.get(1))));
@@ -188,9 +192,11 @@ public class GA08VerifyProductionApplyAfterRefusals extends GhidraScript {
                     csUser.setRead(originalRead);
                     csUser.setWrite(originalWrite);
                     csUser.setExecute(originalExecute);
+                    csUser.setVolatile(originalVolatile);
                 }
                 require(csUser.isRead() == originalRead && csUser.isWrite() == originalWrite
-                        && csUser.isExecute() == originalExecute,
+                        && csUser.isExecute() == originalExecute
+                        && csUser.isVolatile() == originalVolatile,
                         "CS fixture permissions not restored after " + permissionCase);
                 require(inventory.get().equals(originalInventory),
                         "CS refusal left collateral changes after restoration: " + permissionCase);
@@ -202,7 +208,7 @@ public class GA08VerifyProductionApplyAfterRefusals extends GhidraScript {
                     && inventory.get().equals(originalInventory),
                     "CS refusal poisoned approved-module idempotence or memory inventory");
             println("GA08 CS REFUSAL RECOVERY PASS: idempotent=1 inventory=1");
-            println("GA08 CS USER PERMISSION OVERLAP REFUSAL PASS: executable=1 readonly=1 unreadable=1 restored=1");
+            println("GA08 CS USER PERMISSION OVERLAP REFUSAL PASS: executable=1 readonly=1 unreadable=1 volatile=1 restored=1");
             println("GA08 THIRD PROCESS NO COLLATERAL MEMORY PASS: blocks=" + blockCount);
             println("GA08 THIRD PROCESS OWNERSHIP REFUSAL PASS: conflict=1 exact=1");
             println("GA08 POST REFUSAL PERSISTENCE PASS: module=1 user_blocks=2 idempotent=1");
