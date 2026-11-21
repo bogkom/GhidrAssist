@@ -268,8 +268,8 @@ assert 'apply.invoke(null, currentProgram, List.of(csCandidate))' in _post
 assert 'csUser.setExecute(originalExecute)' in _post
 assert 'csUser.setWrite(originalWrite)' in _post
 assert 'csUser.setRead(originalRead)' in _post
-assert 'GA08 CS USER PERMISSION OVERLAP REFUSAL PASS: executable=1 readonly=1 unreadable=1 restored=1' in _post
-assert 'GA08 CS USER PERMISSION OVERLAP REFUSAL PASS: executable=1 readonly=1 unreadable=1 restored=1' in _workflow
+assert 'GA08 CS USER PERMISSION OVERLAP REFUSAL PASS: executable=1 readonly=1 unreadable=1 volatile=1 restored=1' in _post
+assert 'GA08 CS USER PERMISSION OVERLAP REFUSAL PASS: executable=1 readonly=1 unreadable=1 volatile=1 restored=1' in _workflow
 
 # The real CS refusal witness checks all memory blocks (including unrelated
 # blocks), both after read-only preflight and after rejected production Apply.
@@ -289,3 +289,12 @@ assert 'inventory.get().equals(originalInventory)' in _post
 assert 'Object afterCs = apply.invoke(null, currentProgram, List.of(memory.get(0)))' in _post
 assert 'GA08 CS REFUSAL RECOVERY PASS: idempotent=1 inventory=1' in _post
 assert 'GA08 CS REFUSAL RECOVERY PASS: idempotent=1 inventory=1' in _workflow
+
+# Volatile memory cannot be silently adopted as an MMIO/CS module.
+assert "block.isVolatile()" in source
+assert "existing.isVolatile()" in source
+third = Path("tools/ghidra_scripts/GA08VerifyProductionApplyAfterRefusals.java").read_text()
+assert '"volatile"' in third and "csUser.setVolatile(true)" in third
+assert "csUser.setVolatile(originalVolatile)" in third
+assert "b.isVolatile()" in third
+assert "volatile=1 restored=1" in third
