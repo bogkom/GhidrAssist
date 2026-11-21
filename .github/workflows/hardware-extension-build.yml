@@ -227,6 +227,18 @@ jobs:
             exit 1
           fi
           grep -F 'GA08 FOURTH PROCESS POSITIVE CS PERSISTENCE PASS:' "$RUNNER_TEMP/ga08-positive-reopen.log"
+      - name: GA-08 preserve synthetic persistence diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ga08-persistence-diagnostics-${{ github.sha }}
+          retention-days: 7
+          if-no-files-found: warn
+          path: |
+            ${{ runner.temp }}/ga08-production.log
+            ${{ runner.temp }}/ga08-reopen.log
+            ${{ runner.temp }}/ga08-post-refusal.log
+            ${{ runner.temp }}/ga08-positive-reopen.log
       - name: Verify production interprocedural traversal in real Ghidra 12.1.4 (synthetic only)
         shell: bash
         run: |
