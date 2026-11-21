@@ -119,6 +119,12 @@ assert _memory.index("block.isExecute()") < _memory.index("Extend/join ")
 assert "GA08 EXACT USER BLOCK REFUSAL PASS: preserved=1" in _witness
 assert "GA08 EXACT USER BLOCK REFUSAL PASS: preserved=1" in _workflow
 
+# A fully covered speculative TPURAM window may be entirely user-owned.
+# Coverage must not short-circuit the ownership checks as ALREADY_PRESENT.
+assert 'Entire TPURAM candidate range is mapped' not in _memory
+assert 'Full coverage by unrelated user blocks is not proof that TPURAM' in _memory
+assert _memory.index('!legacyPart(item,block)') < _memory.index('if(parts.isEmpty())')
+
 # Late rollback must preserve both independent user-owned blocks, not merely
 # remove the newly-created module. The runtime gate must require that witness.
 assert 'GA08_USER_CONFLICT' in _after and 'GA08_USER_EXACT' in _after
