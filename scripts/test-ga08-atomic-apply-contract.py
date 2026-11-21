@@ -304,3 +304,11 @@ assert 'boolean owned=block.getName().equals(item.name)' in _memory
 assert 'java.util.regex.Pattern.quote(item.name)' in _memory
 assert '!owned || block.isInitialized()' in _memory
 assert '"benign-user-owned"' in _post
+
+# Boundary refusal must be enforced by the production service and genuine Ghidra gate.
+_service = _Path("src/main/java/ghidrassist/hardware/HardwareApplyService.java").read_text()
+assert 'block.getStart().getOffset()<item.address' in _service
+assert 'block.getEnd().getOffset()>item.last()' in _service
+assert 'usedNames.contains(name)' in _service
+assert 'GA08 CS OUTSIDE WINDOW REFUSAL PASS: preflight=1 apply=1 restored=1' in _post
+assert 'GA08 CS OUTSIDE WINDOW REFUSAL PASS: preflight=1 apply=1 restored=1' in _workflow
