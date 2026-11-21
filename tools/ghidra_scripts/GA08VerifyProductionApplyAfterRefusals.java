@@ -280,12 +280,13 @@ public class GA08VerifyProductionApplyAfterRefusals extends GhidraScript {
             require(currentProgram.getMemory().getBlock(space.getAddress(positiveAddress))
                     == positiveBlock && inventory.get().size() == originalInventory.size() + 1,
                     "CS positive Apply disturbed other memory");
-            require(currentProgram.canSave(), "disposable project cannot save approved CS");
-            currentProgram.save("GA08 approved synthetic CS persistence checkpoint", monitor);
+            // GhidraScript runs inside a headless-managed transaction. Saving
+            // here would precede transaction completion. The enclosing
+            // analyzeHeadless -process -commit persists the completed script.
             MemoryBlock savedCs = currentProgram.getMemory().getBlock(space.getAddress(positiveAddress));
             require(savedCs != null && savedCs.getName().equals(positiveName + "_PART_1"),
                     "approved CS disappeared after explicit save");
-            println("GA08 CS EXPLICIT SAVE PASS: fragment=1");
+            println("GA08 CS PERSISTENCE READY PASS: fragment=1");
             println("GA08 CS EXPLICIT POSITIVE APPLY PASS: review=1 created=1 idempotent=1");
 
             println("GA08 CS USER PERMISSION OVERLAP REFUSAL PASS: benign=1 executable=1 readonly=1 unreadable=1 volatile=1 restored=1");
