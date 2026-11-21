@@ -98,7 +98,9 @@ public final class HardwareApplyService {
             for(MemoryBlock block:parts){
                 boolean owned=block.getName().equals(item.name) ||
                     block.getName().matches(java.util.regex.Pattern.quote(item.name)+"_PART_[1-9][0-9]*");
-                if(!owned || block.isInitialized() || block.isMapped() || block.isVolatile() ||
+                if(!owned || block.getStart().getOffset()<item.address ||
+                        block.getEnd().getOffset()>item.last() ||
+                        block.isInitialized() || block.isMapped() || block.isVolatile() ||
                         block.getType()!=MemoryBlockType.DEFAULT ||
                         block.isExecute() || !block.isRead() || !block.isWrite())
                     return decide(State.BLOCKED,
@@ -252,15 +254,22 @@ public final class HardwareApplyService {
         List<MemoryBlock> parts=overlaps(p,item);
         if(csWindow(item)){
             int segment=0;
+            // A later Apply can fill a new gap after earlier fragments were
+            // created. Never reuse a name already present in this program.
+            java.util.Set<String> usedNames=new java.util.HashSet<>();
+            for(MemoryBlock existing:m.getBlocks())usedNames.add(existing.getName());
             for(HardwareRegionLayout.Range gap:csMissing(item,parts)){
-                String name=item.name+"_PART_"+(++segment);
+                String name;
+                do { name=item.name+"_PART_"+(++segment); }
+                while(usedNames.contains(name));
+                usedNames.add(name);
                 MemoryBlock added=m.createUninitializedBlock(name,address(p,gap.first),
                     gap.length(),false);
                 added.setRead(true);added.setWrite(true);added.setExecute(false);
                 notes.add("NEW CS REGION "+name+" "+
                     ChipSelectModel.hex(gap.first,6)+".."+ChipSelectModel.hex(gap.last,6));
             }
-            return segment>0;
+            return !notes.isEmpty();
         }
         if(parts.isEmpty()){
             MemoryBlock b=m.createUninitializedBlock(item.name,address(p,item.address),
