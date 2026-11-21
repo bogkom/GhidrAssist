@@ -188,7 +188,7 @@ jobs:
           JAVA_TOOL_OPTIONS="-Dga08.test.jar=$RUNNER_TEMP/ga08-production.jar" \
             "$GHIDRA_INSTALL_DIR/support/analyzeHeadless" \
             "$RUNNER_TEMP/ga08-headless" GA08ProductionCI \
-            -process ga08-synthetic.bin -noanalysis \
+            -process ga08-synthetic.bin -noanalysis -commit \
             -scriptPath "$GITHUB_WORKSPACE/tools/ghidra_scripts" \
             -postScript GA08VerifyProductionApplyAfterRefusals.java \
             > "$RUNNER_TEMP/ga08-post-refusal.log" 2>&1 || {
@@ -199,7 +199,7 @@ jobs:
              ! grep -Fq 'GA08 CS OUTSIDE WINDOW REFUSAL PASS: preflight=1 apply=1 restored=1' "$RUNNER_TEMP/ga08-post-refusal.log" ||
              ! grep -Fq 'GA08 CS REFUSAL RECOVERY PASS: idempotent=1 inventory=1' "$RUNNER_TEMP/ga08-post-refusal.log" ||
              ! grep -Fq 'GA08 CS EXPLICIT POSITIVE APPLY PASS: review=1 created=1 idempotent=1' "$RUNNER_TEMP/ga08-post-refusal.log" ||
-             ! grep -Fq 'GA08 CS EXPLICIT SAVE PASS: fragment=1' "$RUNNER_TEMP/ga08-post-refusal.log" ||
+             ! grep -Fq 'GA08 CS PERSISTENCE READY PASS: fragment=1' "$RUNNER_TEMP/ga08-post-refusal.log" ||
              ! grep -Fq 'GA08 CS USER PERMISSION OVERLAP REFUSAL PASS: benign=1 executable=1 readonly=1 unreadable=1 volatile=1 restored=1' "$RUNNER_TEMP/ga08-post-refusal.log" ||
              ! grep -Fq 'GA08 POST REFUSAL PERSISTENCE PASS: module=1 user_blocks=2 idempotent=1' "$RUNNER_TEMP/ga08-post-refusal.log" ||
              grep -E 'GA08 POST-REFUSAL FAIL:|Exception|ERROR' "$RUNNER_TEMP/ga08-post-refusal.log"; then
