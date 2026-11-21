@@ -134,6 +134,8 @@ public class GA08VerifyProductionApplyAfterRefusals extends GhidraScript {
                 java.util.Collections.sort(rows);
                 return rows;
             };
+            // Baseline for every negative CS case, including unrelated blocks.
+            List<String> originalInventory = inventory.get();
             // Three independent incompatible permission states. Each refusal
             // must preserve the complete memory inventory and both user blocks.
             boolean originalRead = csUser.isRead();
@@ -190,7 +192,16 @@ public class GA08VerifyProductionApplyAfterRefusals extends GhidraScript {
                 require(csUser.isRead() == originalRead && csUser.isWrite() == originalWrite
                         && csUser.isExecute() == originalExecute,
                         "CS fixture permissions not restored after " + permissionCase);
+                require(inventory.get().equals(originalInventory),
+                        "CS refusal left collateral changes after restoration: " + permissionCase);
             }
+            // A rejected CS proposal must not poison a later valid Apply.
+            Object afterCs = apply.invoke(null, currentProgram, List.of(memory.get(0)));
+            require(afterCs.getClass().getField("changed").getInt(afterCs) == 0
+                    && afterCs.getClass().getField("skipped").getInt(afterCs) == 1
+                    && inventory.get().equals(originalInventory),
+                    "CS refusal poisoned approved-module idempotence or memory inventory");
+            println("GA08 CS REFUSAL RECOVERY PASS: idempotent=1 inventory=1");
             println("GA08 CS USER PERMISSION OVERLAP REFUSAL PASS: executable=1 readonly=1 unreadable=1 restored=1");
             println("GA08 THIRD PROCESS NO COLLATERAL MEMORY PASS: blocks=" + blockCount);
             println("GA08 THIRD PROCESS OWNERSHIP REFUSAL PASS: conflict=1 exact=1");
