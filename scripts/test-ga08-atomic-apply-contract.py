@@ -281,3 +281,11 @@ assert 'rejected CS Apply changed memory inventory:' in _post
 assert _post.index('List<String> beforeRefusal = inventory.get();') < _post.index('Object csDecision = preflight.invoke(')
 assert _post.index('production CS preflight mutated memory inventory:') < _post.index('apply.invoke(null, currentProgram, List.of(csCandidate))')
 assert _post.index('rejected CS Apply changed memory inventory:') > _post.index('apply.invoke(null, currentProgram, List.of(csCandidate))')
+
+# CS refusal recovery is a positive production Apply control, not merely
+# a sequence of negative preflight checks.
+assert 'List<String> originalInventory = inventory.get();' in _post
+assert 'inventory.get().equals(originalInventory)' in _post
+assert 'Object afterCs = apply.invoke(null, currentProgram, List.of(memory.get(0)))' in _post
+assert 'GA08 CS REFUSAL RECOVERY PASS: idempotent=1 inventory=1' in _post
+assert 'GA08 CS REFUSAL RECOVERY PASS: idempotent=1 inventory=1' in _workflow
