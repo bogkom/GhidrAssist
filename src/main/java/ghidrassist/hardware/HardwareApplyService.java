@@ -92,10 +92,13 @@ public final class HardwareApplyService {
     private static Decision memoryDecision(Program p,HardwareApplyPlan.Item item){
         List<MemoryBlock> parts=overlaps(p,item);
         if(csWindow(item)){
-            // Coverage alone cannot establish a safe external chip-select mapping.
-            // Refuse unsafe overlapping blocks even when no address gap remains.
+            // A benign-looking user block is still user-owned: coverage is not
+            // authorization to adopt it as a speculative external CS mapping.
+            // Only exact previously created CS fragments may be reused.
             for(MemoryBlock block:parts){
-                if(block.isInitialized() || block.isMapped() || block.isVolatile() ||
+                boolean owned=block.getName().equals(item.name) ||
+                    block.getName().matches(java.util.regex.Pattern.quote(item.name)+"_PART_[1-9][0-9]*");
+                if(!owned || block.isInitialized() || block.isMapped() || block.isVolatile() ||
                         block.getType()!=MemoryBlockType.DEFAULT ||
                         block.isExecute() || !block.isRead() || !block.isWrite())
                     return decide(State.BLOCKED,
