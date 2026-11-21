@@ -18,6 +18,17 @@ public class GA08VerifyPositiveCsReopened extends GhidraScript {
         long end = 0x00e0001fL;
         String expected = "CS_WINDOW_E00000_E0001F_PART_1";
         MemoryBlock cs = memory.getBlock(space.getAddress(start));
+        if (cs == null || !expected.equals(cs.getName())) {
+            println("GA08 FOURTH REOPEN DIAGNOSTIC: address=" + space.getAddress(start)
+                    + " block=" + (cs == null ? "<unmapped>" :
+                    cs.getName() + " [" + cs.getStart() + ".." + cs.getEnd() + "]"));
+            for (MemoryBlock b : memory.getBlocks()) {
+                if (b.getName().startsWith("CS_WINDOW_")) {
+                    println("GA08 FOURTH REOPEN DIAGNOSTIC CS: " + b.getName()
+                            + " [" + b.getStart() + ".." + b.getEnd() + "]");
+                }
+            }
+        }
         require(cs != null && expected.equals(cs.getName())
                 && cs.getStart().equals(space.getAddress(start))
                 && cs.getEnd().equals(space.getAddress(end))
