@@ -8,10 +8,25 @@ import java.net.URL;
 import java.net.URLClassLoader;
 import java.lang.reflect.Method;
 import java.util.List;
+import java.util.ArrayList;
+import java.util.Collections;
 
 public class GA08VerifyProductionApply extends GhidraScript {
     private void require(boolean condition, String message) {
         if (!condition) throw new IllegalStateException("GA08 FAIL: " + message);
+    }
+
+    // Full-memory witness: a refused batch must not mutate unrelated user regions.
+    private List<String> inventory() {
+        List<String> entries = new ArrayList<>();
+        for (MemoryBlock block : currentProgram.getMemory().getBlocks()) {
+            entries.add(block.getStart() + ".." + block.getEnd() + "|" + block.getName()
+                    + "|" + block.getType() + "|" + block.isInitialized()
+                    + "|" + block.isRead() + "|" + block.isWrite()
+                    + "|" + block.isExecute() + "|" + block.isVolatile());
+        }
+        Collections.sort(entries);
+        return entries;
     }
 
     @Override
@@ -72,6 +87,7 @@ public class GA08VerifyProductionApply extends GhidraScript {
             require(currentProgram.getMemory().getBlock(exactAt)!=null &&
                     "GA08_USER_EXACT".equals(currentProgram.getMemory().getBlock(exactAt).getName()),
                     "independent exact fixture missing");
+            List<String> beforeRefusals = inventory();
             boolean exactRejected = false;
             try {
                 apply.invoke(null, currentProgram, List.of(exact));
@@ -82,6 +98,8 @@ public class GA08VerifyProductionApply extends GhidraScript {
             require(exactRejected, "exact user-owned module must be BLOCKED");
             require(currentProgram.getMemory().getBlock(exactAt).getName()
                     .equals("GA08_USER_EXACT"), "exact user block changed");
+            require(beforeRefusals.equals(inventory()),
+                    "exact user-owned refusal changed the complete MEMORY inventory");
             println("GA08 EXACT USER BLOCK REFUSAL PASS: preserved=1");
             boolean rejected = false;
             try {
@@ -95,6 +113,8 @@ public class GA08VerifyProductionApply extends GhidraScript {
                     "earlier approved region survived a failed transaction");
             require(currentProgram.getMemory().getBlock(otherAt).getName()
                     .equals("GA08_USER_CONFLICT"), "user block changed on rollback");
+            require(beforeRefusals.equals(inventory()),
+                    "stale-conflict refusal changed the complete MEMORY inventory");
             println("GA08 PRODUCTION APPLY ROLLBACK PASS: stale_conflict=1 prior_mutations=0");
             // Genuine transaction rollback: MEMORY is created first, then the
             // deliberately unmapped VBR row is rejected in the later kind pass.
