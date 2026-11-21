@@ -361,5 +361,5 @@ assert 'GA08 SAVE FAILURE:' in _save
 assert 'throw saveFailure;' in _save
 assert 'CS_WINDOW_E00000_E0001F_PART_1' in _save
 assert '-postScript GA08PersistPositiveCs.java' in _workflow
-assert 'GA08 EXPLICIT SAVE ATTEMPT PASS: fragment=1' in _workflow
+assert 'GA08 FINAL TRANSACTION APPLY PASS: fragment=1' in _workflow
 assert _workflow.index('GA08VerifyProductionApplyAfterRefusals.java') < _workflow.index('GA08PersistPositiveCs.java') < _workflow.index('GA08VerifyPositiveCsReopened.java')
