@@ -40,6 +40,16 @@ public class GA08VerifyPositiveCsReopened extends GhidraScript {
                 "CS end not covered by same fragment");
         require(Arrays.stream(memory.getBlocks()).filter(b -> b.getName().equals(expected)).count() == 1,
                 "duplicate approved CS fragment");
+        // No second speculative CS window may survive the persisted Apply.
+        // A second block with another name would evade the name-only check.
+        require(Arrays.stream(memory.getBlocks())
+                .filter(b -> b.getName().startsWith("CS_WINDOW_")).count() == 1,
+                "unexpected additional speculative CS window");
+        require(Arrays.stream(memory.getBlocks())
+                .filter(b -> b != cs)
+                .noneMatch(b -> b.getStart().compareTo(cs.getEnd()) <= 0
+                        && b.getEnd().compareTo(cs.getStart()) >= 0),
+                "approved CS overlaps another memory block");
         require(Arrays.stream(memory.getBlocks())
                 .anyMatch(b -> "GA08_USER_CONFLICT".equals(b.getName()))
                 && Arrays.stream(memory.getBlocks())
