@@ -1,3 +1,7 @@
+## GA-08 — 2026-11-22: cross-kind REGISTER/VBR collision candidate (PR #349)
+
+Atomic Apply now refuses a Review batch containing a REGISTER whose byte span overlaps an approved VBR_STRUCTURE, before any MEMORY creation. The genuine disposable Ghidra witness covers both selection orders and requires unchanged complete memory inventory, initialized bytes and symbols. Java 21 source contract and Java 25 headless Actions marker require two runtime refusals. Candidate only: no PASS until exact-head CI. Real Swing Review/Apply/Undo/Redo, independent review and merge remain outstanding; GA-08 PARTIAL. A static VBR candidate is not proof of an active ISR table.
+
 ## GA-08 — 2026-11-22: REGISTER containment coverage (PR #349)
 
 Candidate extends the real disposable Ghidra production-Apply negative witness from four to eight REGISTER overlap refusals: duplicate, partial intersection, contained one-byte span and containing four-byte span, each in both Review approval orders. Every refusal must preserve the entire memory inventory, initialized-byte fingerprint and symbol fingerprint. Java 21 source contract and the Java 25 headless workflow marker now require all eight. **No new PASS until exact-head CI confirms the runtime results.** Swing Review/Apply/Undo/Redo, independent review and merge remain outstanding; GA-08 PARTIAL. Synthetic-only, no physical MCU mapping claim.
