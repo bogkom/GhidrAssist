@@ -367,3 +367,10 @@ for _changed_input in ("tools/ghidra_scripts/**", "tools/generate-synthetic-*.py
     assert _workflow.count("      - '" + _changed_input + "'") == 2, (
         "missing push/PR integration trigger for " + _changed_input
     )
+
+# Pushes to the active acceptance branch must execute the full integration
+# workflow independently of pull_request events (including draft PRs).
+_push = _workflow.split('  push:', 1)[1].split('  pull_request:', 1)[0]
+assert 'work/ga08-atomic-apply-preflight-20261119' in _push
+assert "      - 'tools/ghidra_scripts/**'" in _push
+assert "      - 'tools/generate-synthetic-*.py'" in _push
