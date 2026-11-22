@@ -427,3 +427,15 @@ assert "left.address <= right.last() && right.address <= left.last()" in _vbr_gu
 assert "Hardware Apply ambiguous overlapping VBR approvals:" in _vbr_guard
 assert source.index("Hardware Apply ambiguous overlapping VBR approvals:") < source.index(
     "// Preflight the entire approved MEMORY batch")
+
+# Competing VBR proposals: genuine production Apply, both Review orders,
+# immutable memory inventory and initialized-byte/symbol fingerprint.
+assert 'GA08_VECTOR_DUPLICATE' in _overlap
+assert 'GA08_VECTOR_PARTIAL' in _overlap
+assert 'GA08_VECTOR_CONTAINED' in _overlap
+assert 'ambiguous overlapping VBR approvals' in _overlap
+assert 'List.of(first, conflict, vbrCollision)' in _overlap
+assert 'List.of(first, vbrCollision, conflict)' in _overlap
+assert 'beforeRefusals.equals(inventory())' in _overlap
+assert 'beforeContent.equals(contentFingerprint())' in _overlap
+assert 'GA08 OVERLAPPING VBR RUNTIME REFUSAL PASS: cases=6' in _workflow
