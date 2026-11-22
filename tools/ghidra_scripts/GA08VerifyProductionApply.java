@@ -199,6 +199,49 @@ public class GA08VerifyProductionApply extends GhidraScript {
                 }
             }
             println("GA08 OVERLAPPING MEMORY RUNTIME REFUSAL PASS: cases=" + overlapRejected);
+            // Independently verify register ownership collision rejection before
+            // any MEMORY writes. Exercise both approval orders, including an
+            // identical row and a partially intersecting register span.
+            Object registerKind = items.stream().filter(item -> {
+                try {
+                    return itemType.getField("kind").get(item).toString().equals("REGISTER");
+                } catch (Exception ex) { throw new IllegalStateException(ex); }
+            }).map(item -> {
+                try { return itemType.getField("kind").get(item); }
+                catch (Exception ex) { throw new IllegalStateException(ex); }
+            }).findFirst().orElseThrow();
+            Object regA = itemConstructor.newInstance(registerKind,
+                    "GA08_REGISTER_A", address + 8, 2, "synthetic register");
+            Object[] registerConflicts = {
+                itemConstructor.newInstance(registerKind,
+                        "GA08_REGISTER_DUPLICATE", address + 8, 2, "duplicate register"),
+                itemConstructor.newInstance(registerKind,
+                        "GA08_REGISTER_PARTIAL", address + 9, 2, "intersecting register")
+            };
+            int registerRejected = 0;
+            for (Object conflict : registerConflicts) {
+                for (boolean reverse : new boolean[] {false, true}) {
+                    List<?> selection = reverse
+                            ? List.of(first, conflict, regA) : List.of(first, regA, conflict);
+                    boolean refused = false;
+                    try {
+                        apply.invoke(null, currentProgram, selection);
+                    } catch (java.lang.reflect.InvocationTargetException expected) {
+                        Throwable cause = expected.getCause();
+                        refused = cause instanceof IllegalStateException
+                                && cause.getMessage() != null
+                                && cause.getMessage().contains("overlapping REGISTER approvals");
+                    }
+                    require(refused, "ambiguous REGISTER pair not rejected; reverse=" + reverse);
+                    require(beforeRefusals.equals(inventory()),
+                            "REGISTER collision altered memory inventory");
+                    require(beforeContent.equals(contentFingerprint()),
+                            "REGISTER collision altered bytes or symbols");
+                    registerRejected++;
+                }
+            }
+            println("GA08 OVERLAPPING REGISTER RUNTIME REFUSAL PASS: cases=" + registerRejected);
+
 
             println("GA08 PRODUCTION APPLY ROLLBACK PASS: stale_conflict=1 prior_mutations=0");
             // Genuine transaction rollback: MEMORY is created first, then the
