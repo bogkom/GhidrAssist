@@ -391,5 +391,7 @@ assert 'GA08_CONTAINED' in _overlap
 assert 'overlapping MEMORY approvals' in _overlap
 assert 'beforeRefusals.equals(inventory())' in _overlap
 assert 'beforeContent.equals(contentFingerprint())' in _overlap
+assert 'for (boolean reverse : new boolean[] {false, true})' in _overlap
+assert 'List.of(conflicting, first)' in _overlap
 assert 'GA08 OVERLAPPING MEMORY RUNTIME REFUSAL PASS: cases=' in _overlap
-assert 'GA08 OVERLAPPING MEMORY RUNTIME REFUSAL PASS: cases=3' in _workflow
+assert 'GA08 OVERLAPPING MEMORY RUNTIME REFUSAL PASS: cases=6' in _workflow
