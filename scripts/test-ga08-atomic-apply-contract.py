@@ -359,3 +359,11 @@ assert 'GA08 FINAL TRANSACTION APPLY PASS: fragment=1' in _save
 assert '-postScript GA08PersistPositiveCs.java' in _workflow
 assert 'GA08 FINAL TRANSACTION APPLY PASS: fragment=1' in _workflow
 assert _workflow.index('GA08VerifyProductionApplyAfterRefusals.java') < _workflow.index('GA08PersistPositiveCs.java') < _workflow.index('GA08VerifyPositiveCsReopened.java')
+
+# The native Ghidra witnesses and synthetic binary generators are executable
+# acceptance inputs. Editing them must trigger the same Java 21/25 and real
+# synthetic Ghidra workflow as changes to production Apply code.
+for _changed_input in ("tools/ghidra_scripts/**", "tools/generate-synthetic-*.py"):
+    assert _workflow.count("      - '" + _changed_input + "'") == 2, (
+        "missing push/PR integration trigger for " + _changed_input
+    )
