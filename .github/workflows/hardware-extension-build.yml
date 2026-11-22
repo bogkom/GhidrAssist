@@ -11,6 +11,8 @@ on:
     paths:
       - 'src/main/java/ghidrassist/hardware/**'
       - 'scripts/test-ga08-atomic-apply-contract.py'
+      - 'tools/ghidra_scripts/**'
+      - 'tools/generate-synthetic-*.py'
       - 'src/main/java/ghidrassist/automation/**'
       - 'src/main/java/ghidrassist/agent/**'
       - 'src/main/java/ghidrassist/tools/**'
@@ -32,6 +34,8 @@ on:
   pull_request:
     paths:
       - 'scripts/test-ga08-atomic-apply-contract.py'
+      - 'tools/ghidra_scripts/**'
+      - 'tools/generate-synthetic-*.py'
       - 'src/main/java/ghidrassist/hardware/**'
       - 'src/main/java/ghidrassist/automation/**'
       - 'src/main/java/ghidrassist/agent/**'
