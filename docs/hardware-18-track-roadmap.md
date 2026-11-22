@@ -5919,3 +5919,8 @@ Exact previous SHA `9beabc491331e98fda48d43f4ad17bf98ac9eb7a` failed Hardware An
 ### GA-08 — 2026-11-22: acceptance-branch push integration gate (PR #349)
 
 The Hardware Analysis workflow now explicitly includes the active `work/ga08-atomic-apply-preflight-20261119` branch in `push.branches`, in addition to `pull_request`. Its existing synthetic Ghidra scripts and firmware-generator path filters remain enabled for both triggers. The Java 21 source-contract regression now asserts this branch and both synthetic input filters in the push section. Implementation commits `ada375aa` and `e3bc2151` are **not** execution evidence; require exact-head workflow results before assigning PASS. Previous head `7f7535040511d64f67d3e9b9dcfd3da165c74269` had Hardware Analysis SUCCESS (Actions 44991780352), while GA-18 package B failed (44991780524). GA-08 still PARTIAL: real isolated Swing Review/Undo, independent review, and merge are outstanding. No original ECU411, physical MCU, Wyse/Precision or Supervisor used.
+
+
+### GA-08 — 2026-11-22: overlapping Review MEMORY selections (PR #349)
+
+The production atomic Apply now refuses a batch containing two overlapping approved MEMORY candidates before the first block mutation. This includes identical ranges, containment and partial overlap, regardless of candidate names. The Java 21 source contract checks the fail-closed guard and its ordering before normal preflight. This is an **unverified implementation candidate**, not a Java 21/25, synthetic Ghidra or Swing GUI PASS. Runtime positive/negative acceptance, GUI Review/Undo, independent review and merge remain required. No physical CS decode or runtime MM is inferred.
