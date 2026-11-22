@@ -403,6 +403,22 @@ public final class HardwareApplyService {
                     }
                 }
             }
+            // Register approvals are also exclusive claims on bytes. Two rows
+            // with intersecting register spans cannot both be authorized by
+            // Review, even if their names or widths happen to match.
+            for (int i = 0; i < approved.size(); i++) {
+                HardwareApplyPlan.Item left = approved.get(i);
+                if (left.kind != HardwareApplyPlan.Kind.REGISTER) continue;
+                for (int j = i + 1; j < approved.size(); j++) {
+                    HardwareApplyPlan.Item right = approved.get(j);
+                    if (right.kind != HardwareApplyPlan.Kind.REGISTER) continue;
+                    if (left.address <= right.last() && right.address <= left.last()) {
+                        throw new IllegalStateException(
+                            "Hardware Apply ambiguous overlapping REGISTER approvals: " +
+                            left.name + " / " + right.name);
+                    }
+                }
+            }
             // Preflight the entire approved MEMORY batch before creating any block.
             // Register rows may depend on newly mapped regions, so their live
             // preflight remains in the ordered mutation pass below.
