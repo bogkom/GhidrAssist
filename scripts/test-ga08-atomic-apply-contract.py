@@ -406,3 +406,12 @@ assert 'GA08_REGISTER_CONTAINED' in _overlap
 assert 'GA08_REGISTER_CONTAINING' in _overlap
 assert 'GA08 OVERLAPPING REGISTER RUNTIME REFUSAL PASS: cases=' in _overlap
 assert 'GA08 OVERLAPPING REGISTER RUNTIME REFUSAL PASS: cases=8' in _workflow
+
+# Cross-kind typed writes must reject overlapping VBR and REGISTER approvals
+# before any preceding MEMORY row can be committed.
+assert 'ambiguous REGISTER/VBR approvals' in _service
+assert 'register.kind != HardwareApplyPlan.Kind.REGISTER' in _service
+assert 'vector.kind != HardwareApplyPlan.Kind.VBR_STRUCTURE' in _service
+assert 'GA08_VECTOR_REGISTER' in _overlap
+assert 'GA08 REGISTER VBR COLLISION REFUSAL PASS: cases=' in _overlap
+assert 'GA08 REGISTER VBR COLLISION REFUSAL PASS: cases=2' in _workflow
