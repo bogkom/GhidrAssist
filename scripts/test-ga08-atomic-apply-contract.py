@@ -415,3 +415,15 @@ assert 'vector.kind != HardwareApplyPlan.Kind.VBR_STRUCTURE' in _service
 assert 'GA08_VECTOR_REGISTER' in _overlap
 assert 'GA08 REGISTER VBR COLLISION REFUSAL PASS: cases=' in _overlap
 assert 'GA08 REGISTER VBR COLLISION REFUSAL PASS: cases=2' in _workflow
+
+
+# Competing VBR hypotheses are typed-memory claims, not proof of an active
+# runtime vector base. Both orderings must fail before the mutation pass.
+_vbr_guard = source.split("// Two VBR hypotheses may describe overlapping vector bytes.", 1)[1].split(
+    "// Preflight the entire approved MEMORY batch", 1)[0]
+assert "left.kind != HardwareApplyPlan.Kind.VBR_STRUCTURE" in _vbr_guard
+assert "right.kind != HardwareApplyPlan.Kind.VBR_STRUCTURE" in _vbr_guard
+assert "left.address <= right.last() && right.address <= left.last()" in _vbr_guard
+assert "Hardware Apply ambiguous overlapping VBR approvals:" in _vbr_guard
+assert source.index("Hardware Apply ambiguous overlapping VBR approvals:") < source.index(
+    "// Preflight the entire approved MEMORY batch")
