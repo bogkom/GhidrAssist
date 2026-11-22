@@ -1,3 +1,7 @@
+## GA-08 — 2026-11-22: REGISTER containment coverage (PR #349)
+
+Candidate extends the real disposable Ghidra production-Apply negative witness from four to eight REGISTER overlap refusals: duplicate, partial intersection, contained one-byte span and containing four-byte span, each in both Review approval orders. Every refusal must preserve the entire memory inventory, initialized-byte fingerprint and symbol fingerprint. Java 21 source contract and the Java 25 headless workflow marker now require all eight. **No new PASS until exact-head CI confirms the runtime results.** Swing Review/Apply/Undo/Redo, independent review and merge remain outstanding; GA-08 PARTIAL. Synthetic-only, no physical MCU mapping claim.
+
 ## GA-08 — 2026-11-22: reject overlapping REGISTER approvals (PR #349)
 
 The production atomic Apply now rejects two approved REGISTER rows whose byte spans intersect, including duplicate and partial overlaps, before any memory mutation. This closes an ambiguity distinct from the already tested MEMORY overlap guard. The disposable Ghidra witness checks both approval orders for both conflicts (four negative cases), unchanged memory inventory, initialized-byte SHA-256 and symbols. The Java 21 source contract and Java 25 genuine-headless Actions marker are updated. Candidate code only: exact-head CI, independent review, and actual Swing Review/Apply/Undo/Redo are **not yet verified**. GA-08 remains PARTIAL; no production project or host worker used.
