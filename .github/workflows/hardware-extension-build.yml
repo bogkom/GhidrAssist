@@ -140,6 +140,7 @@ jobs:
              ! grep -Fq 'GA08 OVERLAPPING MEMORY RUNTIME REFUSAL PASS: cases=6' "$RUNNER_TEMP/ga08-production.log" ||
              ! grep -Fq 'GA08 OVERLAPPING REGISTER RUNTIME REFUSAL PASS: cases=8' "$RUNNER_TEMP/ga08-production.log" ||
              ! grep -Fq 'GA08 REGISTER VBR COLLISION REFUSAL PASS: cases=2' "$RUNNER_TEMP/ga08-production.log" ||
+             ! grep -Fq 'GA08 OVERLAPPING VBR RUNTIME REFUSAL PASS: cases=6' "$RUNNER_TEMP/ga08-production.log" ||
              ! grep -Fq 'GA08 PRODUCTION APPLY LATE ROLLBACK PASS: prior_mutations=1 surviving=0' "$RUNNER_TEMP/ga08-production.log" ||
              ! grep -Fq 'GA08 LATE ROLLBACK USER BLOCKS PASS: conflict=1 exact=1' "$RUNNER_TEMP/ga08-production.log" ||
              ! grep -Fq 'GA08 PRODUCTION APPLY POSITIVE PASS: changed=1 idempotent_skip=1' "$RUNNER_TEMP/ga08-production.log"; then
