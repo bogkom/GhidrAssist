@@ -8,6 +8,7 @@ on:
       - feature/hardware-analysis-seven-stages
       - feature/hardware-controlflow-rag-integration
       - codex/agentic-policy-and-evidence-fixes
+      - work/ga08-atomic-apply-preflight-20261119
     paths:
       - 'src/main/java/ghidrassist/hardware/**'
       - 'scripts/test-ga08-atomic-apply-contract.py'
