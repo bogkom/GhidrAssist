@@ -173,24 +173,30 @@ public class GA08VerifyProductionApply extends GhidraScript {
                         address, 1, "synthetic contained range")
             };
             int overlapRejected = 0;
+            // Both approval orders matter: a conflict must be rejected before
+            // the first write regardless of which row Review presents first.
             for (Object conflicting : overlapping) {
-                boolean refused = false;
-                try {
-                    apply.invoke(null, currentProgram, List.of(first, conflicting));
-                } catch (java.lang.reflect.InvocationTargetException expected) {
-                    Throwable cause = expected.getCause();
-                    refused = cause instanceof IllegalStateException
-                            && cause.getMessage() != null
-                            && cause.getMessage().contains("overlapping MEMORY approvals");
+                for (boolean reverse : new boolean[] {false, true}) {
+                    List<?> selection = reverse
+                            ? List.of(conflicting, first) : List.of(first, conflicting);
+                    boolean refused = false;
+                    try {
+                        apply.invoke(null, currentProgram, selection);
+                    } catch (java.lang.reflect.InvocationTargetException expected) {
+                        Throwable cause = expected.getCause();
+                        refused = cause instanceof IllegalStateException
+                                && cause.getMessage() != null
+                                && cause.getMessage().contains("overlapping MEMORY approvals");
+                    }
+                    require(refused, "ambiguous MEMORY pair was not rejected; reverse=" + reverse);
+                    require(currentProgram.getMemory().getBlock(at) == null,
+                            "ambiguous approval created the first MEMORY region");
+                    require(beforeRefusals.equals(inventory()),
+                            "ambiguous approval changed the complete MEMORY inventory");
+                    require(beforeContent.equals(contentFingerprint()),
+                            "ambiguous approval changed initialized bytes or symbols");
+                    overlapRejected++;
                 }
-                require(refused, "ambiguous MEMORY pair was not rejected");
-                require(currentProgram.getMemory().getBlock(at) == null,
-                        "ambiguous approval created the first MEMORY region");
-                require(beforeRefusals.equals(inventory()),
-                        "ambiguous approval changed the complete MEMORY inventory");
-                require(beforeContent.equals(contentFingerprint()),
-                        "ambiguous approval changed initialized bytes or symbols");
-                overlapRejected++;
             }
             println("GA08 OVERLAPPING MEMORY RUNTIME REFUSAL PASS: cases=" + overlapRejected);
 
