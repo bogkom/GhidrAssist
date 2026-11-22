@@ -402,5 +402,7 @@ assert 'left.kind != HardwareApplyPlan.Kind.REGISTER' in _service
 assert 'right.kind != HardwareApplyPlan.Kind.REGISTER' in _service
 assert 'GA08_REGISTER_DUPLICATE' in _overlap
 assert 'GA08_REGISTER_PARTIAL' in _overlap
+assert 'GA08_REGISTER_CONTAINED' in _overlap
+assert 'GA08_REGISTER_CONTAINING' in _overlap
 assert 'GA08 OVERLAPPING REGISTER RUNTIME REFUSAL PASS: cases=' in _overlap
-assert 'GA08 OVERLAPPING REGISTER RUNTIME REFUSAL PASS: cases=4' in _workflow
+assert 'GA08 OVERLAPPING REGISTER RUNTIME REFUSAL PASS: cases=8' in _workflow
