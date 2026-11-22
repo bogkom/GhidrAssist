@@ -29,6 +29,39 @@ public class GA08VerifyProductionApply extends GhidraScript {
         return entries;
     }
 
+    // Include initialized bytes and all user symbols: memory geometry alone
+    // cannot detect a refused Apply silently rewriting existing program data.
+    private String contentFingerprint() throws Exception {
+        java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
+        for (MemoryBlock block : currentProgram.getMemory().getBlocks()) {
+            if (!block.isInitialized()) continue;
+            long remaining = block.getSize();
+            var address = block.getStart();
+            byte[] bytes = new byte[4096];
+            while (remaining > 0) {
+                int count = (int) Math.min(remaining, bytes.length);
+                int read = currentProgram.getMemory().getBytes(address, bytes, 0, count);
+                require(read == count, "short initialized memory read");
+                digest.update(bytes, 0, count);
+                remaining -= count;
+                address = address.add(count);
+            }
+        }
+        java.util.List<String> symbols = new java.util.ArrayList<>();
+        var iterator = currentProgram.getSymbolTable().getAllSymbols(true);
+        while (iterator.hasNext()) {
+            var symbol = iterator.next();
+            symbols.add(symbol.getAddress() + "|" + symbol.getName() + "|"
+                    + symbol.getSource() + "|" + symbol.getSymbolType());
+        }
+        java.util.Collections.sort(symbols);
+        for (String symbol : symbols) {
+            digest.update(symbol.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            digest.update((byte) 0);
+        }
+        return java.util.HexFormat.of().formatHex(digest.digest());
+    }
+
     @Override
     public void run() throws Exception {
         String path = System.getProperty("ga08.test.jar");
@@ -88,6 +121,7 @@ public class GA08VerifyProductionApply extends GhidraScript {
                     "GA08_USER_EXACT".equals(currentProgram.getMemory().getBlock(exactAt).getName()),
                     "independent exact fixture missing");
             List<String> beforeRefusals = inventory();
+            String beforeContent = contentFingerprint();
             boolean exactRejected = false;
             try {
                 apply.invoke(null, currentProgram, List.of(exact));
@@ -100,6 +134,8 @@ public class GA08VerifyProductionApply extends GhidraScript {
                     .equals("GA08_USER_EXACT"), "exact user block changed");
             require(beforeRefusals.equals(inventory()),
                     "exact user-owned refusal changed the complete MEMORY inventory");
+            require(beforeContent.equals(contentFingerprint()),
+                    "exact refusal altered initialized bytes or symbols");
             println("GA08 EXACT USER BLOCK REFUSAL PASS: preserved=1");
             boolean rejected = false;
             try {
@@ -115,6 +151,9 @@ public class GA08VerifyProductionApply extends GhidraScript {
                     .equals("GA08_USER_CONFLICT"), "user block changed on rollback");
             require(beforeRefusals.equals(inventory()),
                     "stale-conflict refusal changed the complete MEMORY inventory");
+            require(beforeContent.equals(contentFingerprint()),
+                    "mixed refusal altered initialized bytes or symbols");
+            println("GA08 REFUSED APPLY CONTENT INTEGRITY PASS: exact=1 mixed=1");
             println("GA08 PRODUCTION APPLY ROLLBACK PASS: stale_conflict=1 prior_mutations=0");
             // Genuine transaction rollback: MEMORY is created first, then the
             // deliberately unmapped VBR row is rejected in the later kind pass.
