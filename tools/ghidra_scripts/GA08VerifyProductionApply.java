@@ -279,6 +279,49 @@ public class GA08VerifyProductionApply extends GhidraScript {
                 crossKindRejected++;
             }
             println("GA08 REGISTER VBR COLLISION REFUSAL PASS: cases=" + crossKindRejected);
+            // Two competing vector-table hypotheses cannot both own the same
+            // typed bytes. Keep a preceding MEMORY approval to prove the
+            // refusal happens before any write, in either Review ordering.
+            int vectorLength = itemType.getField("length").getInt(vbrCollision);
+            require(vectorLength > 1, "VBR fixture must cover multiple bytes");
+            Object[] vectorConflicts = {
+                itemConstructor.newInstance(itemType.getField("kind").get(vbrCollision),
+                        "GA08_VECTOR_DUPLICATE", vectorBase, vectorLength,
+                        "synthetic duplicate vector table"),
+                itemConstructor.newInstance(itemType.getField("kind").get(vbrCollision),
+                        "GA08_VECTOR_PARTIAL", vectorBase + vectorLength - 1, 2,
+                        "synthetic intersecting vector table"),
+                itemConstructor.newInstance(itemType.getField("kind").get(vbrCollision),
+                        "GA08_VECTOR_CONTAINED", vectorBase, 1,
+                        "synthetic contained vector table")
+            };
+            int vectorRejected = 0;
+            for (Object conflict : vectorConflicts) {
+                for (boolean reverse : new boolean[] {false, true}) {
+                    List<?> selection = reverse
+                            ? List.of(first, conflict, vbrCollision)
+                            : List.of(first, vbrCollision, conflict);
+                    boolean refused = false;
+                    try {
+                        apply.invoke(null, currentProgram, selection);
+                    } catch (java.lang.reflect.InvocationTargetException expected) {
+                        Throwable cause = expected.getCause();
+                        refused = cause instanceof IllegalStateException
+                                && cause.getMessage() != null
+                                && cause.getMessage().contains("ambiguous overlapping VBR approvals");
+                    }
+                    require(refused, "competing VBR proposals not refused; reverse=" + reverse);
+                    require(currentProgram.getMemory().getBlock(at) == null,
+                            "competing VBR refusal created a MEMORY region");
+                    require(beforeRefusals.equals(inventory()),
+                            "competing VBR refusal changed memory inventory");
+                    require(beforeContent.equals(contentFingerprint()),
+                            "competing VBR refusal changed bytes or symbols");
+                    vectorRejected++;
+                }
+            }
+            println("GA08 OVERLAPPING VBR RUNTIME REFUSAL PASS: cases=" + vectorRejected);
+
 
 
 
