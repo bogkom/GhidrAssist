@@ -395,3 +395,12 @@ assert 'for (boolean reverse : new boolean[] {false, true})' in _overlap
 assert 'List.of(conflicting, first)' in _overlap
 assert 'GA08 OVERLAPPING MEMORY RUNTIME REFUSAL PASS: cases=' in _overlap
 assert 'GA08 OVERLAPPING MEMORY RUNTIME REFUSAL PASS: cases=6' in _workflow
+
+# Register rows must also have exclusive byte ownership across the approved batch.
+assert 'overlapping REGISTER approvals' in _service
+assert 'left.kind != HardwareApplyPlan.Kind.REGISTER' in _service
+assert 'right.kind != HardwareApplyPlan.Kind.REGISTER' in _service
+assert 'GA08_REGISTER_DUPLICATE' in _overlap
+assert 'GA08_REGISTER_PARTIAL' in _overlap
+assert 'GA08 OVERLAPPING REGISTER RUNTIME REFUSAL PASS: cases=' in _overlap
+assert 'GA08 OVERLAPPING REGISTER RUNTIME REFUSAL PASS: cases=4' in _workflow
