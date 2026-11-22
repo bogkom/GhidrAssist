@@ -434,6 +434,22 @@ public final class HardwareApplyService {
                     }
                 }
             }
+            // Two VBR hypotheses may describe overlapping vector bytes. A
+            // Review approval is not proof of the active VBR and cannot
+            // authorize two competing structures in the same Apply batch.
+            for (int i = 0; i < approved.size(); i++) {
+                HardwareApplyPlan.Item left = approved.get(i);
+                if (left.kind != HardwareApplyPlan.Kind.VBR_STRUCTURE) continue;
+                for (int j = i + 1; j < approved.size(); j++) {
+                    HardwareApplyPlan.Item right = approved.get(j);
+                    if (right.kind != HardwareApplyPlan.Kind.VBR_STRUCTURE) continue;
+                    if (left.address <= right.last() && right.address <= left.last()) {
+                        throw new IllegalStateException(
+                            "Hardware Apply ambiguous overlapping VBR approvals: " +
+                            left.name + " / " + right.name);
+                    }
+                }
+            }
             // Preflight the entire approved MEMORY batch before creating any block.
             // Register rows may depend on newly mapped regions, so their live
             // preflight remains in the ordered mutation pass below.
