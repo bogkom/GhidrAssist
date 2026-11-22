@@ -245,6 +245,41 @@ public class GA08VerifyProductionApply extends GhidraScript {
                 }
             }
             println("GA08 OVERLAPPING REGISTER RUNTIME REFUSAL PASS: cases=" + registerRejected);
+            // Cross-kind collision: a register cannot be approved over the
+            // same bytes as a VBR structure, regardless of Review order.
+            Object vbrCollision = items.stream().filter(item -> {
+                try {
+                    return itemType.getField("kind").get(item).toString().equals("VBR_STRUCTURE");
+                } catch (Exception ex) { throw new IllegalStateException(ex); }
+            }).findFirst().orElseThrow();
+            long vectorBase = itemType.getField("address").getLong(vbrCollision);
+            Object vectorRegister = itemConstructor.newInstance(registerKind,
+                    "GA08_VECTOR_REGISTER", vectorBase + 4, 2, "synthetic VBR collision");
+            int crossKindRejected = 0;
+            for (boolean reverse : new boolean[] {false, true}) {
+                List<?> selection = reverse
+                        ? List.of(first, vbrCollision, vectorRegister)
+                        : List.of(first, vectorRegister, vbrCollision);
+                boolean refused = false;
+                try {
+                    apply.invoke(null, currentProgram, selection);
+                } catch (java.lang.reflect.InvocationTargetException expected) {
+                    Throwable cause = expected.getCause();
+                    refused = cause instanceof IllegalStateException
+                            && cause.getMessage() != null
+                            && cause.getMessage().contains("ambiguous REGISTER/VBR approvals");
+                }
+                require(refused, "REGISTER/VBR collision not refused; reverse=" + reverse);
+                require(currentProgram.getMemory().getBlock(at) == null,
+                        "REGISTER/VBR refusal created a MEMORY region");
+                require(beforeRefusals.equals(inventory()),
+                        "REGISTER/VBR refusal changed memory inventory");
+                require(beforeContent.equals(contentFingerprint()),
+                        "REGISTER/VBR refusal changed bytes or symbols");
+                crossKindRejected++;
+            }
+            println("GA08 REGISTER VBR COLLISION REFUSAL PASS: cases=" + crossKindRejected);
+
 
 
             println("GA08 PRODUCTION APPLY ROLLBACK PASS: stale_conflict=1 prior_mutations=0");
