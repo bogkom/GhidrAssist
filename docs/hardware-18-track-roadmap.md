@@ -5948,3 +5948,8 @@ The Hardware Analysis workflow now explicitly includes the active `work/ga08-ato
 ### GA-08 — 2026-11-22: overlapping Review MEMORY selections (PR #349)
 
 The production atomic Apply now refuses a batch containing two overlapping approved MEMORY candidates before the first block mutation. This includes identical ranges, containment and partial overlap, regardless of candidate names. The Java 21 source contract checks the fail-closed guard and its ordering before normal preflight. This is an **unverified implementation candidate**, not a Java 21/25, synthetic Ghidra or Swing GUI PASS. Runtime positive/negative acceptance, GUI Review/Undo, independent review and merge remain required. No physical CS decode or runtime MM is inferred.
+
+
+### GA-08 — 2026-11-22: competing VBR Review hypotheses (PR #349)
+
+Production atomic Apply now refuses two overlapping approved VBR_STRUCTURE rows before any mutation, independent of Review ordering. This is a static conflict guard only: neither VBR proposal is evidence of the active runtime VBR or ISR dispatch. The Java 21 source contract checks the fail-closed guard and its placement ahead of mutation. Implementation commits `fc17215d` and `eee36e9d` are **not** execution evidence. Required: exact-head Java 21 regression, Java 25 build, isolated synthetic Ghidra positive/negative runtime witnesses (including both approval orders), real Swing Review/Apply/Undo/Redo, independent review and merge. GA-08 remains PARTIAL; synthetic/isolated only.
