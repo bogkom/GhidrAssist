@@ -380,3 +380,16 @@ _push = _workflow.split('  push:', 1)[1].split('  pull_request:', 1)[0]
 assert 'work/ga08-atomic-apply-preflight-20261119' in _push
 assert "      - 'tools/ghidra_scripts/**'" in _push
 assert "      - 'tools/generate-synthetic-*.py'" in _push
+
+# The production overlap guard must be witnessed in genuine disposable Ghidra,
+# not just recognized as a source-code pattern.
+_overlap = Path("tools/ghidra_scripts/GA08VerifyProductionApply.java").read_text()
+assert 'getDeclaredConstructor(' in _overlap
+assert 'GA08_DUPLICATE' in _overlap
+assert 'GA08_PARTIAL' in _overlap
+assert 'GA08_CONTAINED' in _overlap
+assert 'overlapping MEMORY approvals' in _overlap
+assert 'beforeRefusals.equals(inventory())' in _overlap
+assert 'beforeContent.equals(contentFingerprint())' in _overlap
+assert 'GA08 OVERLAPPING MEMORY RUNTIME REFUSAL PASS: cases=' in _overlap
+assert 'GA08 OVERLAPPING MEMORY RUNTIME REFUSAL PASS: cases=3' in _workflow
