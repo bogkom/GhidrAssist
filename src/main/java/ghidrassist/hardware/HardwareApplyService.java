@@ -387,6 +387,22 @@ public final class HardwareApplyService {
         int changed=0,skipped=0;boolean commit=false;
         List<String> messages=new ArrayList<>();
         try {
+            // Two independently approved MEMORY proposals must never claim the
+            // same byte range. Review selection is not an ownership override;
+            // reject ambiguous batches before mutating the first block.
+            for (int i = 0; i < approved.size(); i++) {
+                HardwareApplyPlan.Item left = approved.get(i);
+                if (left.kind != HardwareApplyPlan.Kind.MEMORY) continue;
+                for (int j = i + 1; j < approved.size(); j++) {
+                    HardwareApplyPlan.Item right = approved.get(j);
+                    if (right.kind != HardwareApplyPlan.Kind.MEMORY) continue;
+                    if (left.address <= right.last() && right.address <= left.last()) {
+                        throw new IllegalStateException(
+                            "Hardware Apply ambiguous overlapping MEMORY approvals: " +
+                            left.name + " / " + right.name);
+                    }
+                }
+            }
             // Preflight the entire approved MEMORY batch before creating any block.
             // Register rows may depend on newly mapped regions, so their live
             // preflight remains in the ordered mutation pass below.
