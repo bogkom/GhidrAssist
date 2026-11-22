@@ -216,7 +216,11 @@ public class GA08VerifyProductionApply extends GhidraScript {
                 itemConstructor.newInstance(registerKind,
                         "GA08_REGISTER_DUPLICATE", address + 8, 2, "duplicate register"),
                 itemConstructor.newInstance(registerKind,
-                        "GA08_REGISTER_PARTIAL", address + 9, 2, "intersecting register")
+                        "GA08_REGISTER_PARTIAL", address + 9, 2, "intersecting register"),
+                itemConstructor.newInstance(registerKind,
+                        "GA08_REGISTER_CONTAINED", address + 8, 1, "contained register"),
+                itemConstructor.newInstance(registerKind,
+                        "GA08_REGISTER_CONTAINING", address + 7, 4, "containing register")
             };
             int registerRejected = 0;
             for (Object conflict : registerConflicts) {
