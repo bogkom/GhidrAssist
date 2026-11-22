@@ -154,6 +154,46 @@ public class GA08VerifyProductionApply extends GhidraScript {
             require(beforeContent.equals(contentFingerprint()),
                     "mixed refusal altered initialized bytes or symbols");
             println("GA08 REFUSED APPLY CONTENT INTEGRITY PASS: exact=1 mixed=1");
+            // Runtime regression for ambiguous MEMORY approvals. These are
+            // deliberately synthetic Review rows, not discovered MCU regions.
+            // Duplicate, partial intersection and containment must all fail
+            // before the first approved memory write.
+            java.lang.reflect.Constructor<?> itemConstructor =
+                    itemType.getDeclaredConstructor(
+                        Class.forName("ghidrassist.hardware.HardwareApplyPlan$Kind", true, loader),
+                        String.class, long.class, int.class, String.class);
+            itemConstructor.setAccessible(true);
+            Object memoryKind = itemType.getField("kind").get(first);
+            Object[] overlapping = {
+                itemConstructor.newInstance(memoryKind, "GA08_DUPLICATE", address,
+                        length, "synthetic duplicate"),
+                itemConstructor.newInstance(memoryKind, "GA08_PARTIAL",
+                        address + length - 1, 2, "synthetic boundary intersection"),
+                itemConstructor.newInstance(memoryKind, "GA08_CONTAINED",
+                        address, 1, "synthetic contained range")
+            };
+            int overlapRejected = 0;
+            for (Object conflicting : overlapping) {
+                boolean refused = false;
+                try {
+                    apply.invoke(null, currentProgram, List.of(first, conflicting));
+                } catch (java.lang.reflect.InvocationTargetException expected) {
+                    Throwable cause = expected.getCause();
+                    refused = cause instanceof IllegalStateException
+                            && cause.getMessage() != null
+                            && cause.getMessage().contains("overlapping MEMORY approvals");
+                }
+                require(refused, "ambiguous MEMORY pair was not rejected");
+                require(currentProgram.getMemory().getBlock(at) == null,
+                        "ambiguous approval created the first MEMORY region");
+                require(beforeRefusals.equals(inventory()),
+                        "ambiguous approval changed the complete MEMORY inventory");
+                require(beforeContent.equals(contentFingerprint()),
+                        "ambiguous approval changed initialized bytes or symbols");
+                overlapRejected++;
+            }
+            println("GA08 OVERLAPPING MEMORY RUNTIME REFUSAL PASS: cases=" + overlapRejected);
+
             println("GA08 PRODUCTION APPLY ROLLBACK PASS: stale_conflict=1 prior_mutations=0");
             // Genuine transaction rollback: MEMORY is created first, then the
             // deliberately unmapped VBR row is rejected in the later kind pass.
