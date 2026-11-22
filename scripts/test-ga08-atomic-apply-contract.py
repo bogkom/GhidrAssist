@@ -4,6 +4,12 @@ from pathlib import Path
 
 source = Path("src/main/java/ghidrassist/hardware/HardwareApplyService.java").read_text()
 apply = source.split("public static Outcome apply(", 1)[1]
+# Two approved memory candidates must not overlap even when both appear
+# individually safe against the pre-Apply project database.
+assert 'Hardware Apply ambiguous overlapping MEMORY approvals:' in apply
+assert 'left.address <= right.last() && right.address <= left.last()' in apply
+assert apply.index('Hardware Apply ambiguous overlapping MEMORY approvals:') < apply.index('Decision initial = preflight(program, item, approved);')
+
 assert apply.index("startTransaction(") < apply.index("preflight(program,item,approved)")
 assert apply.index("preflight(program,item,approved)") < apply.index("boolean applied=switch(kind)")
 assert "if(current.state==State.BLOCKED)" in apply
