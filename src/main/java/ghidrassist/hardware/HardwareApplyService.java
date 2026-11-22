@@ -419,6 +419,21 @@ public final class HardwareApplyService {
                     }
                 }
             }
+            // REGISTER and VBR_STRUCTURE both define typed bytes. Even a
+            // manually approved VBR hypothesis cannot overwrite an approved
+            // register in the same transaction; order is not authorization.
+            for (HardwareApplyPlan.Item register : approved) {
+                if (register.kind != HardwareApplyPlan.Kind.REGISTER) continue;
+                for (HardwareApplyPlan.Item vector : approved) {
+                    if (vector.kind != HardwareApplyPlan.Kind.VBR_STRUCTURE) continue;
+                    if (register.address <= vector.last() &&
+                            vector.address <= register.last()) {
+                        throw new IllegalStateException(
+                            "Hardware Apply ambiguous REGISTER/VBR approvals: " +
+                            register.name + " / " + vector.name);
+                    }
+                }
+            }
             // Preflight the entire approved MEMORY batch before creating any block.
             // Register rows may depend on newly mapped regions, so their live
             // preflight remains in the ordered mutation pass below.
