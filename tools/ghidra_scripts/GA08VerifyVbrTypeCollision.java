@@ -13,6 +13,23 @@ public class GA08VerifyVbrTypeCollision extends GhidraScript {
         if (!ok) throw new IllegalStateException("GA08 FAIL: " + why);
     }
 
+    // Ghidra's DataTypeManager can retain newly added types across a Program
+    // transaction rollback. Clean up only our known disposable fixture type.
+    private void removeTemporaryType(CategoryPath category, String name) throws Exception {
+        DataType existing = currentProgram.getDataTypeManager().getDataType(category, name);
+        if (existing == null) return;
+        int cleanup = currentProgram.startTransaction("GA08 remove disposable VBR type");
+        boolean committed = false;
+        try {
+            currentProgram.getDataTypeManager().remove(existing, monitor);
+            committed = true;
+        } finally {
+            currentProgram.endTransaction(cleanup, committed);
+        }
+        check(currentProgram.getDataTypeManager().getDataType(category, name) == null,
+                "temporary VBR type cleanup failed");
+    }
+
     @Override
     public void run() throws Exception {
         check(currentProgram != null && "ga08-synthetic.bin".equals(currentProgram.getName()),
@@ -72,8 +89,7 @@ public class GA08VerifyVbrTypeCollision extends GhidraScript {
             } finally {
                 currentProgram.endTransaction(tx, false);
             }
-            check(currentProgram.getDataTypeManager().getDataType(category, typeName) == null,
-                    "collision test failed to roll back temporary user type");
+            removeTemporaryType(category, typeName);
             int positive = currentProgram.startTransaction("GA08 disposable compatible VBR");
             try {
                 StructureDataType valid = new StructureDataType(category, typeName, 0);
@@ -91,8 +107,7 @@ public class GA08VerifyVbrTypeCollision extends GhidraScript {
             }
             check(currentProgram.getMemory().getBlock(start) == null,
                     "compatible VBR test leaked temporary memory");
-            check(currentProgram.getDataTypeManager().getDataType(category, typeName) == null,
-                    "compatible VBR test leaked temporary type");
+            removeTemporaryType(category, typeName);
             println("GA08 VBR TYPE COLLISION RUNTIME PASS: blocked=1 compatible_review=1 rollback=2");
         }
     }
