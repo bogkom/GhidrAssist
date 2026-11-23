@@ -1,3 +1,7 @@
+## GA-08 — 2026-11-23: read-only VBR type-collision parity (PR #349)
+
+Production Review preflight now resolves the existing `/GhidrAssist/Hardware/CPU32_VBR_256_VECTORS` type without mutating the data-type manager and refuses incompatible byte length or component count, matching the defensive `KEEP_HANDLER` check in Apply. A Java 21 source contract asserts this Review/Apply parity. Commits: `2a1e5f15b07952fe1fd6e3ad8d02ca34653abf0a`, `d6e6861ffceea2f57e078cf97bb95a68f9ea9f21`. **Candidate only**: no verified Java 21 execution, Java 25 build, isolated Ghidra type-collision positive/negative witness or real Swing Review/Apply/Undo/Redo at this SHA. Independent review and integration remain blocked; GA-08 PARTIAL. VBR evidence is static and does not prove an active ISR.
+
 ## GA-08 — 2026-11-23: VBR existing data-type collision guard (PR #349)
 
 Candidate at commit `ef77515a5d1c08127360997c5e6e59d9dbcf1576`: the production VBR writer now checks the resolved data type after Ghidra's `KEEP_HANDLER` lookup. A pre-existing same-name structure with incompatible byte length or component count is refused rather than silently written into the reviewed vector span. This is an additional safeguard for user-owned data types, not proof of runtime VBR/ISR. **No Java 21/25 or genuine isolated Ghidra PASS for this new SHA yet.** Still requires executable positive/negative regression for conflicting data types, real Swing Review/Apply/Undo/Redo, independent review and integration. GA-08 remains PARTIAL.
