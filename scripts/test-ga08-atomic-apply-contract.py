@@ -450,3 +450,9 @@ assert 'GA08 INVALID VBR GEOMETRY REFUSAL PASS: cases=' in _overlap
 assert 'GA08 INVALID VBR GEOMETRY REFUSAL PASS: cases=4' in _workflow
 assert 'invalid VBR geometry' in apply
 assert 'GA08 OVERLAPPING VBR RUNTIME REFUSAL PASS: cases=6' in _workflow
+
+# The UI Review preflight and production Apply must agree on malformed VBR geometry.
+assert "Invalid VBR geometry: requires aligned 1024-byte vector table" in _service
+assert _service.index("Invalid VBR geometry: requires aligned 1024-byte vector table") < _service.index("VBR location unmapped or contains defined code/data")
+assert 'Method preflight = service.getMethod("preflight"' in _overlap
+assert 'malformed VBR Review preflight not BLOCKED' in _overlap
