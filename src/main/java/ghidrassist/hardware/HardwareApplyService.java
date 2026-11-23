@@ -241,6 +241,17 @@ public final class HardwareApplyService {
         if (item.length != 256 * 4 || (item.address & 3L) != 0)
             return decide(State.BLOCKED,
                 "Invalid VBR geometry: requires aligned 1024-byte vector table", false);
+        // Resolve the existing type without mutating the data-type manager.
+        // Review must refuse the same KEEP_HANDLER collision that Apply would
+        // otherwise discover only after starting the write transaction.
+        DataType existingVectors=p.getDataTypeManager().getDataType(
+            new CategoryPath("/GhidrAssist/Hardware"),"CPU32_VBR_256_VECTORS");
+        if(existingVectors!=null &&
+                (existingVectors.getLength()!=item.length ||
+                 !(existingVectors instanceof ghidra.program.model.data.Structure structure) ||
+                 structure.getNumComponents()!=256))
+            return decide(State.BLOCKED,
+                "Incompatible existing VBR data type: "+existingVectors.getName(),false);
         Address a=address(p,item.address),b=address(p,item.last());
         if(!covers(p.getMemory(),a,b) || !p.getListing().isUndefined(a,b))
             return decide(State.BLOCKED,
