@@ -319,11 +319,11 @@ public class GA08VerifyProductionApply extends GhidraScript {
                         "GA08_VECTOR_DUPLICATE", vectorBase, vectorLength,
                         "synthetic duplicate vector table"),
                 itemConstructor.newInstance(itemType.getField("kind").get(vbrCollision),
-                        "GA08_VECTOR_PARTIAL", vectorBase + vectorLength - 1, 2,
-                        "synthetic intersecting vector table"),
+                        "GA08_VECTOR_PARTIAL_FORWARD", vectorBase + 4, vectorLength,
+                        "synthetic aligned forward-intersecting vector table"),
                 itemConstructor.newInstance(itemType.getField("kind").get(vbrCollision),
-                        "GA08_VECTOR_CONTAINED", vectorBase, 1,
-                        "synthetic contained vector table")
+                        "GA08_VECTOR_PARTIAL_BACKWARD", vectorBase - 4, vectorLength,
+                        "synthetic aligned backward-intersecting vector table")
             };
             int vectorRejected = 0;
             for (Object conflict : vectorConflicts) {
