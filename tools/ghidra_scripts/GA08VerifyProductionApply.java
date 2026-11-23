@@ -279,6 +279,36 @@ public class GA08VerifyProductionApply extends GhidraScript {
                 crossKindRejected++;
             }
             println("GA08 REGISTER VBR COLLISION REFUSAL PASS: cases=" + crossKindRejected);
+            // A Review row with a shortened/oversized or unaligned VBR
+            // span must not authorize writing the full 256-vector structure.
+            // Keep an earlier MEMORY row to detect any partial commit.
+            Object vectorKind = itemType.getField("kind").get(vbrCollision);
+            int malformedVbrRejected = 0;
+            for (int[] geometry : new int[][] {
+                    {0, 1}, {0, 1023}, {0, 1025}, {2, 1024}}) {
+                Object malformed = itemConstructor.newInstance(vectorKind,
+                        "GA08_MALFORMED_VBR", vectorBase + geometry[0],
+                        geometry[1], "synthetic invalid vector geometry");
+                boolean refused = false;
+                try {
+                    apply.invoke(null, currentProgram, List.of(first, malformed));
+                } catch (java.lang.reflect.InvocationTargetException expected) {
+                    Throwable cause = expected.getCause();
+                    refused = cause instanceof IllegalStateException
+                            && cause.getMessage() != null
+                            && cause.getMessage().contains("invalid VBR geometry");
+                }
+                require(refused, "malformed VBR geometry not rejected: offset="
+                        + geometry[0] + " length=" + geometry[1]);
+                require(currentProgram.getMemory().getBlock(at) == null,
+                        "malformed VBR approval created MEMORY");
+                require(beforeRefusals.equals(inventory()),
+                        "malformed VBR approval changed MEMORY inventory");
+                require(beforeContent.equals(contentFingerprint()),
+                        "malformed VBR approval changed bytes or symbols");
+                malformedVbrRejected++;
+            }
+            println("GA08 INVALID VBR GEOMETRY REFUSAL PASS: cases=" + malformedVbrRejected);
             // Two competing vector-table hypotheses cannot both own the same
             // typed bytes. Keep a preceding MEMORY approval to prove the
             // refusal happens before any write, in either Review ordering.
