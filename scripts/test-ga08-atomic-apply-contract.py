@@ -483,3 +483,12 @@ assert 'currentProgram.endTransaction(positive, false)' in _collision
 assert 'compatible_review=1 rollback=2' in _collision
 assert '-postScript GA08VerifyVbrTypeCollision.java' in _workflow
 assert 'GA08 VBR TYPE COLLISION RUNTIME PASS: blocked=1 compatible_review=1 rollback=2' in _workflow
+
+# Disposable VBR cleanup must remove only its own named block before rollback.
+# Ghidra headless can retain a memory-map entry after transaction abort.
+assert '"GA08_TEMP_VBR".equals(temporary.getName())' in _collision
+assert 'temporary.getStart().equals(start)' in _collision
+assert 'temporary.getSize() == length' in _collision
+assert 'currentProgram.getMemory().removeBlock(temporary, monitor)' in _collision
+assert _collision.index('removeBlock(temporary, monitor)') < _collision.index('currentProgram.endTransaction(positive, false)')
+assert 'compatible VBR test leaked temporary memory' in _collision
