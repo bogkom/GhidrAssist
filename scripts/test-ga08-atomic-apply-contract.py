@@ -456,3 +456,17 @@ assert "Invalid VBR geometry: requires aligned 1024-byte vector table" in _servi
 assert _service.index("Invalid VBR geometry: requires aligned 1024-byte vector table") < _service.index("VBR location unmapped or contains defined code/data")
 assert 'Method preflight = service.getMethod("preflight"' in _overlap
 assert 'malformed VBR Review preflight not BLOCKED' in _overlap
+
+# Review must fail closed on an existing KEEP_HANDLER type collision before
+# Apply enters its write transaction. This source gate is not a Ghidra runtime PASS.
+_vbr_preflight = _service.split("public static Decision preflight(", 1)[1].split(
+    "private static boolean createRegion(", 1)[0]
+assert 'getDataType(' in _vbr_preflight
+assert '"CPU32_VBR_256_VECTORS"' in _vbr_preflight
+assert 'existingVectors.getLength()!=item.length' in _vbr_preflight
+assert 'structure.getNumComponents()!=256' in _vbr_preflight
+assert 'Incompatible existing VBR data type:' in _vbr_preflight
+assert _vbr_preflight.index('Incompatible existing VBR data type:') < _vbr_preflight.index(
+    'VBR location unmapped or contains defined code/data')
+assert 'DataTypeConflictHandler.KEEP_HANDLER' in _service
+assert 'Hardware Apply incompatible existing VBR data type:' in _service
