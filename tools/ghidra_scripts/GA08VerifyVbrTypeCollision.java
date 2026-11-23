@@ -53,7 +53,7 @@ public class GA08VerifyVbrTypeCollision extends GhidraScript {
                 currentProgram.getDataTypeManager().addDataType(
                         wrong, DataTypeConflictHandler.KEEP_HANDLER);
                 Object decision = preflight.invoke(null, currentProgram, vbr, rows);
-                check(decision.toString().contains("BLOCKED"),
+                check(decision.getClass().getField("state").get(decision).toString().equals("BLOCKED"),
                         "Review accepted conflicting existing VBR type: " + decision);
                 boolean refused = false;
                 try {
@@ -84,7 +84,7 @@ public class GA08VerifyVbrTypeCollision extends GhidraScript {
                 currentProgram.getMemory().createUninitializedBlock(
                         "GA08_TEMP_VBR", start, length, false);
                 Object decision = preflight.invoke(null, currentProgram, vbr, rows);
-                check(decision.toString().contains("MANUAL_REVIEW"),
+                check(decision.getClass().getField("state").get(decision).toString().equals("MANUAL_REVIEW"),
                         "compatible VBR type should remain manually reviewed: " + decision);
             } finally {
                 currentProgram.endTransaction(positive, false);
