@@ -470,3 +470,16 @@ assert _vbr_preflight.index('Incompatible existing VBR data type:') < _vbr_prefl
     'VBR location unmapped or contains defined code/data')
 assert 'DataTypeConflictHandler.KEEP_HANDLER' in _service
 assert 'Hardware Apply incompatible existing VBR data type:' in _service
+
+# The collision parity gate must run in a genuine disposable Ghidra process.
+# Source inspection alone cannot substitute for this execution witness.
+_collision = Path("tools/ghidra_scripts/GA08VerifyVbrTypeCollision.java").read_text()
+assert 'ga08-synthetic.bin' in _collision
+assert 'getMethod("preflight"' in _collision
+assert 'getMethod("apply"' in _collision
+assert 'DataTypeConflictHandler.KEEP_HANDLER' in _collision
+assert 'currentProgram.endTransaction(tx, false)' in _collision
+assert 'currentProgram.endTransaction(positive, false)' in _collision
+assert 'compatible_review=1 rollback=2' in _collision
+assert '-postScript GA08VerifyVbrTypeCollision.java' in _workflow
+assert 'GA08 VBR TYPE COLLISION RUNTIME PASS: blocked=1 compatible_review=1 rollback=2' in _workflow
