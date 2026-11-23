@@ -438,4 +438,7 @@ assert 'List.of(first, conflict, vbrCollision)' in _overlap
 assert 'List.of(first, vbrCollision, conflict)' in _overlap
 assert 'beforeRefusals.equals(inventory())' in _overlap
 assert 'beforeContent.equals(contentFingerprint())' in _overlap
-assert 'GA08 OVERLAPPING VBR RUNTIME REFUSAL PASS: cases=6' in _workflow
+assert 'GA08 INVALID VBR GEOMETRY REFUSAL PASS: cases=' in _overlap
+ assert 'GA08 INVALID VBR GEOMETRY REFUSAL PASS: cases=4' in _workflow
+ assert 'invalid VBR geometry' in _apply
+ assert 'GA08 OVERLAPPING VBR RUNTIME REFUSAL PASS: cases=6' in _workflow
