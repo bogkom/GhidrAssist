@@ -380,6 +380,15 @@ public final class HardwareApplyService {
                 "Vector entry; actual runtime VBR not verified");
         DataType type=p.getDataTypeManager().addDataType(vectors,
             DataTypeConflictHandler.KEEP_HANDLER);
+        // KEEP_HANDLER may return an existing user-owned type with this name.
+        // Its geometry is not evidence that it is the expected vector layout.
+        // Never create a structure outside the reviewed 1024-byte span.
+        if (type.getLength() != item.length ||
+                !(type instanceof ghidra.program.model.data.Structure structure) ||
+                structure.getNumComponents() != 256) {
+            throw new IllegalStateException(
+                "Hardware Apply incompatible existing VBR data type: " + type.getName());
+        }
         p.getListing().createData(start,type);
         notes.add("DEFINED VBR STRUCTURE "+item.location());
         return true;
