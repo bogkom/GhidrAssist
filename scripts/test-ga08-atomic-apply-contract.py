@@ -432,7 +432,15 @@ assert source.index("Hardware Apply ambiguous overlapping VBR approvals:") < sou
 # immutable memory inventory and initialized-byte/symbol fingerprint.
 assert 'GA08_VECTOR_DUPLICATE' in _overlap
 assert 'GA08_VECTOR_PARTIAL' in _overlap
-assert 'GA08_VECTOR_CONTAINED' in _overlap
+assert 'GA08_VECTOR_PARTIAL_FORWARD' in _overlap
+assert 'GA08_VECTOR_PARTIAL_BACKWARD' in _overlap
+# Every competing VBR row must retain the full 1024-byte typed geometry.
+# Shorter 'contained' rows are rejected by the earlier geometry guard and
+# cannot exercise the VBR/VBR collision branch.
+assert 'vectorBase + 4, vectorLength' in _overlap
+assert 'vectorBase - 4, vectorLength' in _overlap
+assert 'vectorBase, vectorLength' in _overlap
+assert 'GA08_VECTOR_CONTAINED' not in _overlap
 assert 'ambiguous overlapping VBR approvals' in _overlap
 assert 'List.of(first, conflict, vbrCollision)' in _overlap
 assert 'List.of(first, vbrCollision, conflict)' in _overlap
