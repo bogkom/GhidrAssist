@@ -80,6 +80,8 @@ public class GA08VerifyProductionApply extends GhidraScript {
             Method candidates = plan.getMethod("mc68332Mm1Candidates", long.class);
             Method apply = service.getMethod("apply",
                     ghidra.program.model.listing.Program.class, List.class);
+            Method preflight = service.getMethod("preflight",
+                    ghidra.program.model.listing.Program.class, itemType, List.class);
             List<?> items = (List<?>) candidates.invoke(null, 0x1000L);
             Object first = items.stream().filter(item -> {
                 try {
@@ -289,6 +291,12 @@ public class GA08VerifyProductionApply extends GhidraScript {
                 Object malformed = itemConstructor.newInstance(vectorKind,
                         "GA08_MALFORMED_VBR", vectorBase + geometry[0],
                         geometry[1], "synthetic invalid vector geometry");
+                Object review = preflight.invoke(null, currentProgram,
+                        malformed, List.of(first, malformed));
+                Object reviewState = review.getClass().getField("state").get(review);
+                require("BLOCKED".equals(reviewState.toString()),
+                        "malformed VBR Review preflight not BLOCKED: offset="
+                                + geometry[0] + " length=" + geometry[1]);
                 boolean refused = false;
                 try {
                     apply.invoke(null, currentProgram, List.of(first, malformed));
