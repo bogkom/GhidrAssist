@@ -236,6 +236,11 @@ public final class HardwareApplyService {
         if(item.kind==HardwareApplyPlan.Kind.MEMORY)return memoryDecision(p,item);
         if(item.kind==HardwareApplyPlan.Kind.REGISTER)return registerDecision(p,item,plan);
         if(item.kind==HardwareApplyPlan.Kind.ANNOTATION)return annotationDecision(p,item);
+        // Review and Apply must reject the same malformed vector geometry.
+        // A shortened or unaligned table must never appear approvable.
+        if (item.length != 256 * 4 || (item.address & 3L) != 0)
+            return decide(State.BLOCKED,
+                "Invalid VBR geometry: requires aligned 1024-byte vector table", false);
         Address a=address(p,item.address),b=address(p,item.last());
         if(!covers(p.getMemory(),a,b) || !p.getListing().isUndefined(a,b))
             return decide(State.BLOCKED,
