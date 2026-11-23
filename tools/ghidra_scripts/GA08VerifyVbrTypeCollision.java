@@ -102,6 +102,16 @@ public class GA08VerifyVbrTypeCollision extends GhidraScript {
                 Object decision = preflight.invoke(null, currentProgram, vbr, rows);
                 check(decision.getClass().getField("state").get(decision).toString().equals("MANUAL_REVIEW"),
                         "compatible VBR type should remain manually reviewed: " + decision);
+                // Explicitly remove the fixture block while its transaction is open.
+                // Some headless Ghidra memory-map changes survive endTransaction(false).
+                // Never remove an unknown/user-owned block: assert our exact identity.
+                var temporary = currentProgram.getMemory().getBlock(start);
+                check(temporary != null && "GA08_TEMP_VBR".equals(temporary.getName())
+                        && temporary.getStart().equals(start) && temporary.getSize() == length,
+                        "unexpected block at disposable VBR address");
+                currentProgram.getMemory().removeBlock(temporary, monitor);
+                check(currentProgram.getMemory().getBlock(start) == null,
+                        "temporary VBR memory cleanup failed");
             } finally {
                 currentProgram.endTransaction(positive, false);
             }
