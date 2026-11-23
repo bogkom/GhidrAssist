@@ -387,6 +387,17 @@ public final class HardwareApplyService {
         int changed=0,skipped=0;boolean commit=false;
         List<String> messages=new ArrayList<>();
         try {
+            // A VBR row describes exactly 256 four-byte vectors. A malformed
+            // Review row must not preflight a shorter span and then write a
+            // full 1024-byte structure beyond its approved address range.
+            for (HardwareApplyPlan.Item item : approved) {
+                if (item.kind == HardwareApplyPlan.Kind.VBR_STRUCTURE &&
+                        (item.length != 256 * 4 || (item.address & 3L) != 0)) {
+                    throw new IllegalStateException(
+                        "Hardware Apply invalid VBR geometry: " + item.name +
+                        " (requires aligned 1024-byte vector table)");
+                }
+            }
             // Two independently approved MEMORY proposals must never claim the
             // same byte range. Review selection is not an ownership override;
             // reject ambiguous batches before mutating the first block.
