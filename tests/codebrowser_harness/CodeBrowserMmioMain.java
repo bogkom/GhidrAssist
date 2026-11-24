@@ -1300,6 +1300,144 @@ public final class CodeBrowserMmioMain {
                 "Unverified CS window must require explicit operator review");
             result.addProperty("cs_review_never_auto_selected",true);
             result.addProperty("conflict_alias_cs_windows_blocked",true);
+
+            // Exercise the separate GA-05/08 typed pointer-variable Review
+            // through the real CodeBrowser UI. The function and variables are
+            // created only in this disposable 256-byte synthetic fixture.
+            Address pointerEntry=first.getAddressFactory()
+                .getDefaultAddressSpace().getAddress(0xf0);
+            int pointerTx=first.startTransaction(
+                "TEST ONLY: create typed pointer-variable GUI fixture");
+            ghidra.program.model.listing.Function pointerFunction;
+            try {
+                first.getMemory().setBytes(pointerEntry,
+                    new byte[]{(byte)0x4e,(byte)0x75});
+                require(new DisassembleCommand(pointerEntry,null,false)
+                    .applyTo(first,TaskMonitor.DUMMY),
+                    "Failed to decode synthetic pointer-variable RTS");
+                pointerFunction=first.getFunctionManager().createFunction(
+                    "FUN_000000F0",pointerEntry,
+                    new ghidra.program.model.address.AddressSet(
+                        pointerEntry,pointerEntry),
+                    ghidra.program.model.symbol.SourceType.ANALYSIS);
+                require(pointerFunction!=null,
+                    "Failed to create synthetic pointer-variable function");
+                var pointerType=new ghidra.program.model.data.PointerDataType();
+                pointerFunction.addParameter(
+                    new ghidra.program.model.listing.ParameterImpl(
+                        "param_1",pointerType,8,first,
+                        ghidra.program.model.symbol.SourceType.DEFAULT),
+                    ghidra.program.model.symbol.SourceType.DEFAULT);
+                pointerFunction.addLocalVariable(
+                    new ghidra.program.model.listing.LocalVariableImpl(
+                        "local_8",pointerType,-8,first,
+                        ghidra.program.model.symbol.SourceType.DEFAULT),
+                    ghidra.program.model.symbol.SourceType.DEFAULT);
+            } finally {first.endTransaction(pointerTx,true);}
+            require(pointerFunction.getParameters().length==1 &&
+                    pointerFunction.getLocalVariables().length==1,
+                "Synthetic typed pointer argument/local fixture is incomplete");
+            var originalParameter=pointerFunction.getParameters()[0].getName();
+            var originalLocal=pointerFunction.getLocalVariables()[0].getName();
+            edt(()->{
+                ((JComboBox<?>)fieldUnchecked(tab,"selection")).setSelectedIndex(1);
+                require(tool[0].getService(GoToService.class)
+                    .goTo(pointerEntry,first),
+                    "Could not navigate CodeBrowser to synthetic pointer function");
+            });
+            until(()->plugin.getCurrentFunction()==pointerFunction,15);
+            require(((JButton)fieldUnchecked(tab,"reviewVariables")).isEnabled(),
+                "Pointer-variable Review action is unavailable");
+            long beforePointerCancel=first.getModificationNumber();
+            SwingUtilities.invokeLater(
+                ()->((JButton)fieldUnchecked(tab,"reviewVariables")).doClick());
+            until(()->dialogWithTitle(
+                "MC68332: existing typed Ghidra pointer variables")!=null,15);
+            JDialog pointerReview=dialogWithTitle(
+                "MC68332: existing typed Ghidra pointer variables");
+            JTable pointerTable=child(pointerReview.getContentPane(),JTable.class);
+            require(pointerTable!=null && pointerTable.getRowCount()==2,
+                "Pointer-variable Review must show the real parameter and local");
+            int pointerLocalRow=-1,pointerParameterRow=-1;
+            for(int row=0;row<pointerTable.getRowCount();row++){
+                require("READY".equals(String.valueOf(pointerTable.getValueAt(row,1))) &&
+                        Boolean.FALSE.equals(pointerTable.getValueAt(row,0)),
+                    "Pointer candidates must be READY and unchecked by default");
+                String kind=String.valueOf(pointerTable.getValueAt(row,3));
+                if("LOCAL".equals(kind))pointerLocalRow=row;
+                if("PARAMETER".equals(kind))pointerParameterRow=row;
+            }
+            require(pointerLocalRow>=0 && pointerParameterRow>=0,
+                "Review did not distinguish parameter from local variable");
+            JOptionPane pointerCancelPane=child(
+                pointerReview.getContentPane(),JOptionPane.class);
+            require(pointerCancelPane!=null,
+                "Pointer-variable Review Cancel control missing");
+            edt(()->pointerCancelPane.setValue(JOptionPane.CANCEL_OPTION));
+            until(()->dialogWithTitle(
+                "MC68332: existing typed Ghidra pointer variables")==null,10);
+            require(first.getModificationNumber()==beforePointerCancel &&
+                    originalParameter.equals(pointerFunction.getParameters()[0].getName()) &&
+                    originalLocal.equals(pointerFunction.getLocalVariables()[0].getName()),
+                "Cancel changed the synthetic Function database");
+            result.addProperty("pointer_variable_gui_cancel_no_change",true);
+
+            SwingUtilities.invokeLater(
+                ()->((JButton)fieldUnchecked(tab,"reviewVariables")).doClick());
+            until(()->dialogWithTitle(
+                "MC68332: existing typed Ghidra pointer variables")!=null,15);
+            JDialog approvedPointerReview=dialogWithTitle(
+                "MC68332: existing typed Ghidra pointer variables");
+            JTable approvedPointerTable=child(
+                approvedPointerReview.getContentPane(),JTable.class);
+            require(approvedPointerTable!=null,
+                "Pointer-variable approval table missing");
+            int modelLocalRow=approvedPointerTable.convertRowIndexToModel(
+                pointerLocalRow);
+            approvedPointerTable.getModel().setValueAt(true,modelLocalRow,0);
+            JOptionPane approvedPointerPane=child(
+                approvedPointerReview.getContentPane(),JOptionPane.class);
+            require(approvedPointerPane!=null,
+                "Pointer-variable Review approval control missing");
+            edt(()->approvedPointerPane.setValue(JOptionPane.OK_OPTION));
+            until(()->dialogWithTitle("Explicit pointer rename approval")!=null,15);
+            JDialog pointerConsent=dialogWithTitle("Explicit pointer rename approval");
+            JOptionPane pointerConsentPane=child(
+                pointerConsent.getContentPane(),JOptionPane.class);
+            require(pointerConsentPane!=null,
+                "Explicit pointer rename confirmation missing");
+            edt(()->pointerConsentPane.setValue(JOptionPane.YES_OPTION));
+            String approvedLocalName=String.valueOf(
+                approvedPointerTable.getModel().getValueAt(modelLocalRow,5));
+            until(()->approvedLocalName.equals(
+                pointerFunction.getLocalVariables()[0].getName()),15);
+            require(originalParameter.equals(pointerFunction.getParameters()[0].getName()) &&
+                    ghidra.program.model.symbol.SourceType.USER_DEFINED==
+                        pointerFunction.getLocalVariables()[0].getSource(),
+                "Explicit GUI approval changed an unselected variable or lost user source");
+            var receiptKey=ghidrassist.hardware.HardwareScopedVariableReceipt.optionKey(
+                pointerEntry.getOffset(),
+                ghidrassist.hardware.HardwareScopedVariableReview.Kind.LOCAL,0);
+            require(first.getOptions(ghidrassist.hardware
+                    .HardwareScopedVariableReceipt.OPTIONS_CATEGORY)
+                    .getString(receiptKey,null)!=null,
+                "Approved pointer rename did not persist its in-transaction receipt");
+            require(first.canUndo(),"Pointer-variable GUI Apply did not create Undo");
+            first.undo();
+            require(originalLocal.equals(pointerFunction.getLocalVariables()[0].getName()) &&
+                    first.getOptions(ghidrassist.hardware
+                        .HardwareScopedVariableReceipt.OPTIONS_CATEGORY)
+                        .getString(receiptKey,null)==null,
+                "Undo did not revert both pointer name and receipt");
+            require(first.canRedo(),"Pointer-variable GUI Apply did not create Redo");
+            first.redo();
+            require(approvedLocalName.equals(
+                    pointerFunction.getLocalVariables()[0].getName()) &&
+                    first.getOptions(ghidrassist.hardware
+                        .HardwareScopedVariableReceipt.OPTIONS_CATEGORY)
+                        .getString(receiptKey,null)!=null,
+                "Redo did not restore pointer name and receipt");
+            result.addProperty("pointer_variable_gui_apply_undo_redo_verified",true);
             // This is serialized tool *configuration*, not user preference persistence
             // across a real application restart.
             ToolTemplate saved=tool[0].saveToolToToolTemplate();
