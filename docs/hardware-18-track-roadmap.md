@@ -1,3 +1,9 @@
+## GA-08 — 2026-11-24: pointer-variable Review GUI acceptance merged (PR #353)
+
+PR #353 is **MERGED**. Exact tested head: `4e1bb838288084d84194c2c9c937bb414da07379`; squash merge: `8b7a81117bbc2145c685aef6b1efd6492c17cadd`. The new disposable synthetic CodeBrowser/Xvfb regression exercised the actual typed pointer parameter/local Review table: both candidates began unchecked, Cancel left names and Program revision unchanged, explicit approval renamed only the selected local, and native Undo/Redo reverted/restored both name and same-transaction receipt. The full extension build and GUI harness passed in [GA-09 run 45404095486](https://github.com/bogkom/GhidrAssist/actions/runs/45404095486). Related exact-head workflows also passed: [GA-15/18 JSON-RPC + CLI 45404095391](https://github.com/bogkom/GhidrAssist/actions/runs/45404095391), [ReAct cancellation/switch/delayed callback 45404095537](https://github.com/bogkom/GhidrAssist/actions/runs/45404095537), and [GA-18 isolated review-copy 45404095689](https://github.com/bogkom/GhidrAssist/actions/runs/45404095689). Local CodeBrowser harness protocol suite: 47/47 PASS.
+
+This closes the distinct pointer-variable Review GUI evidence gap for this path; **GA-08 remains PARTIAL** pending its other roadmap criteria and broader acceptance. No original firmware, production project, Wyse/Precision computer or Supervisor was used.
+
 ## GA-08 / GA-02/03 — 2026-11-24: atomic Review/Apply and source-boundary checks integrated
 
 PR #349 is **MERGED**. Its exact tested head `079711d2906e46d47555a325fbe5d4cd69086f5f` passed 39/39 GitHub Actions checks; merge commit: `a27f0c1fe44cb77c306d7e1449c01b4a909d22e9`. CodeBrowser/Xvfb run [45360811940](https://github.com/bogkom/GhidrAssist/actions/runs/45360811940) passed real Swing Review, Cancel, Apply, Undo and Redo on a disposable synthetic project. This completes the atomic Apply package's GUI gate, not all GA-08 acceptance or any physical MCU claim.
