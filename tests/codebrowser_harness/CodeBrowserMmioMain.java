@@ -1242,11 +1242,16 @@ public final class CodeBrowserMmioMain {
             first.undo();
             require(!first.getMemory().contains(regionStart),
                 "Ghidra Undo failed to remove GUI-applied disposable SIM region");
+            require(first.canRedo(),
+                "Production GUI Apply did not leave a native Ghidra Redo action");
+            first.redo();
+            require(first.getMemory().contains(regionStart),
+                "Ghidra Redo failed to restore GUI-applied disposable SIM region");
             require(first.getListing().getInstructionAt(site)!=null &&
                 first.getListing().getInstructionAt(site).toString().equals(before),
-                "Synthetic Listing unexpectedly changed across GUI Apply/Undo");
-            result.addProperty("review_gui_consent_and_undo_verified",true);
-            result.addProperty("synthetic_apply_undo_verified",true);
+                "Synthetic Listing unexpectedly changed across GUI Apply/Undo/Redo");
+            result.addProperty("review_gui_consent_and_undo_redo_verified",true);
+            result.addProperty("synthetic_apply_undo_redo_verified",true);
 
             // Reconciled source-gating must never invent an active CS window
             // from contradictory words, an unknown indirect STORE, or a
