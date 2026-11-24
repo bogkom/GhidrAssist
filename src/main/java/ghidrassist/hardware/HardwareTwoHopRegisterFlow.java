@@ -68,6 +68,8 @@ public final class HardwareTwoHopRegisterFlow {
             if(!sourcePc(outerCaller) || !sourcePc(outerCallPc) ||
                     !sourcePc(bridgeEntry) || !sourcePc(innerCallPc) ||
                     !sourcePc(leafEntry) || !sourcePc(storePc) ||
+                    outerCallPc<outerCaller || innerCallPc<bridgeEntry ||
+                    storePc<leafEntry ||
                     effectiveAddress!=null && (effectiveAddress<0 ||
                         effectiveAddress>HardwareDataflow.MASK24) ||
                     writtenWord!=null && (writtenWord<0 || writtenWord>0xffff) ||
