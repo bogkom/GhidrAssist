@@ -500,6 +500,18 @@ public final class HardwareTwoHopRegisterFlowSelfTest {
             2,3,false,false),
             "odd two-hop STORE PC cannot be published as a typed candidate");
         reject(()->new HardwareTwoHopRegisterFlow.Candidate(
+            0x600,0x5fe,0x640,0x642,0x700,0x700,simcr,0x40ca,16,
+            2,3,false,false),
+            "outer CALL before its function entry is rejected");
+        reject(()->new HardwareTwoHopRegisterFlow.Candidate(
+            0x600,0x60c,0x640,0x63e,0x700,0x700,simcr,0x40ca,16,
+            2,3,false,false),
+            "nested CALL before bridge entry is rejected");
+        reject(()->new HardwareTwoHopRegisterFlow.Candidate(
+            0x600,0x60c,0x640,0x642,0x700,0x6fe,simcr,0x40ca,16,
+            2,3,false,false),
+            "STORE before leaf entry is rejected");
+        reject(()->new HardwareTwoHopRegisterFlow.Candidate(
             0x600,0x60c,0x640,0x642,0x700,0x700,0x1000000L,0x40ca,16,
             2,3,false,false),
             "out-of-range two-hop MMIO address cannot be published");
