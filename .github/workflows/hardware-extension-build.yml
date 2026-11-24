@@ -8,8 +8,12 @@ on:
       - feature/hardware-analysis-seven-stages
       - feature/hardware-controlflow-rag-integration
       - codex/agentic-policy-and-evidence-fixes
+      - work/ga08-atomic-apply-preflight-20261119
     paths:
       - 'src/main/java/ghidrassist/hardware/**'
+      - 'scripts/test-ga08-atomic-apply-contract.py'
+      - 'tools/ghidra_scripts/**'
+      - 'tools/generate-synthetic-*.py'
       - 'src/main/java/ghidrassist/automation/**'
       - 'src/main/java/ghidrassist/agent/**'
       - 'src/main/java/ghidrassist/tools/**'
@@ -30,6 +34,9 @@ on:
       - 'tools/ci/ghidra-gradle-ci-network.sh'
   pull_request:
     paths:
+      - 'scripts/test-ga08-atomic-apply-contract.py'
+      - 'tools/ghidra_scripts/**'
+      - 'tools/generate-synthetic-*.py'
       - 'src/main/java/ghidrassist/hardware/**'
       - 'src/main/java/ghidrassist/automation/**'
       - 'src/main/java/ghidrassist/agent/**'
@@ -61,6 +68,25 @@ jobs:
         with:
           distribution: temurin
           java-version: '25'
+      - name: GA-08 Java 21 source regression environment
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: GA-08 atomic Apply source regression (Java 21)
+        shell: bash
+        run: |
+          set -euo pipefail
+          java -version 2>&1 | grep -F 'version "21.'
+          python3 scripts/test-ga08-atomic-apply-contract.py
+      - name: Restore Java 25 for Ghidra 12.1.4 build
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Verify Java 25 for full extension build
+        shell: bash
+        run: java -version 2>&1 | grep -F 'version "25.'
       - name: Download exact Ghidra 12.1.4 distribution
         shell: bash
         run: |
@@ -83,6 +109,151 @@ jobs:
           bash tools/ci/ghidra-gradle-ci-network.sh "$GHIDRA_INSTALL_DIR"
           "$GHIDRA_INSTALL_DIR/support/gradle/gradlew" \
             --no-daemon --stacktrace buildExtension
+      - name: GA-08 genuine production Apply and rollback on disposable CPU32
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/generate-synthetic-callgraph.py --output "$RUNNER_TEMP/ga08-synthetic.bin"
+          package="$(find dist -maxdepth 1 -type f -name 'ghidra_12.1.4_PUBLIC_*_GhidrAssist.zip' -print -quit)"
+          test -n "$package"
+          unzip -p "$package" GhidrAssist/lib/GhidrAssist.jar > "$RUNNER_TEMP/ga08-production.jar"
+          test -s "$RUNNER_TEMP/ga08-production.jar"
+          mkdir -p "$RUNNER_TEMP/ga08-headless"
+          JAVA_TOOL_OPTIONS="-Dga08.test.jar=$RUNNER_TEMP/ga08-production.jar" \
+            "$GHIDRA_INSTALL_DIR/support/analyzeHeadless" \
+            "$RUNNER_TEMP/ga08-headless" GA08ProductionCI \
+            -import "$RUNNER_TEMP/ga08-synthetic.bin" \
+            -loader BinaryLoader -processor 68000:BE:32:CPU32 -cspec default \
+            -noanalysis -scriptPath "$GITHUB_WORKSPACE/tools/ghidra_scripts" \
+            -postScript GA08SetupProductionApplyFixture.java \
+            -postScript GA08VerifyProductionApply.java \
+            -postScript GA08VerifyProductionApplyAfterTransaction.java \
+            -postScript GA08VerifyVbrTypeCollision.java \
+            > "$RUNNER_TEMP/ga08-production.log" 2>&1 || {
+              tail -n 120 "$RUNNER_TEMP/ga08-production.log"; exit 1;
+            }
+          # analyzeHeadless can exit 0 even if a postScript fails. Keep the
+          # complete synthetic evidence visible on *every* marker failure.
+          if ! grep -Fq 'GA08 INDEPENDENT FIXTURE SETUP PASS: conflict=1 exact=1' "$RUNNER_TEMP/ga08-production.log" ||
+             ! grep -Fq 'GA08 PRODUCTION APPLY ROLLBACK PASS: stale_conflict=1 prior_mutations=0' "$RUNNER_TEMP/ga08-production.log" ||
+             ! grep -Fq 'GA08 EXACT USER BLOCK REFUSAL PASS: preserved=1' "$RUNNER_TEMP/ga08-production.log" ||
+             ! grep -Fq 'GA08 REFUSED APPLY CONTENT INTEGRITY PASS: exact=1 mixed=1' "$RUNNER_TEMP/ga08-production.log" ||
+             ! grep -Fq 'GA08 OVERLAPPING MEMORY RUNTIME REFUSAL PASS: cases=6' "$RUNNER_TEMP/ga08-production.log" ||
+             ! grep -Fq 'GA08 OVERLAPPING REGISTER RUNTIME REFUSAL PASS: cases=8' "$RUNNER_TEMP/ga08-production.log" ||
+             ! grep -Fq 'GA08 REGISTER VBR COLLISION REFUSAL PASS: cases=2' "$RUNNER_TEMP/ga08-production.log" ||
+             ! grep -Fq 'GA08 INVALID VBR GEOMETRY REFUSAL PASS: cases=4' "$RUNNER_TEMP/ga08-production.log" ||
+             ! grep -Fq 'GA08 OVERLAPPING VBR RUNTIME REFUSAL PASS: cases=6' "$RUNNER_TEMP/ga08-production.log" ||
+             ! grep -Fq 'GA08 VBR TYPE COLLISION RUNTIME PASS: blocked=1 compatible_review=1 rollback=2' "$RUNNER_TEMP/ga08-production.log" ||
+             ! grep -Fq 'GA08 PRODUCTION APPLY LATE ROLLBACK PASS: prior_mutations=1 surviving=0' "$RUNNER_TEMP/ga08-production.log" ||
+             ! grep -Fq 'GA08 LATE ROLLBACK USER BLOCKS PASS: conflict=1 exact=1' "$RUNNER_TEMP/ga08-production.log" ||
+             ! grep -Fq 'GA08 PRODUCTION APPLY POSITIVE PASS: changed=1 idempotent_skip=1' "$RUNNER_TEMP/ga08-production.log"; then
+            echo 'GA-08 missing runtime assertion: headless process exit alone is not PASS'
+            tail -n 160 "$RUNNER_TEMP/ga08-production.log"
+            exit 1
+          fi
+          if grep -E 'GA08 FAIL:|Exception|ERROR' "$RUNNER_TEMP/ga08-production.log"; then
+            echo 'GA-08 genuine headless witness contained an error'
+            tail -n 160 "$RUNNER_TEMP/ga08-production.log"
+            exit 1
+          fi
+          grep -F 'GA08 PRODUCTION APPLY' "$RUNNER_TEMP/ga08-production.log"
+      - name: GA-08 persisted production Apply after independent project reopen
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s "$RUNNER_TEMP/ga08-production.jar"
+          # The prior headless process imported and saved the disposable project.
+          # Reopen it in a fresh Ghidra process, without reimporting the binary.
+          JAVA_TOOL_OPTIONS="-Dga08.test.jar=$RUNNER_TEMP/ga08-production.jar" \
+            "$GHIDRA_INSTALL_DIR/support/analyzeHeadless" \
+            "$RUNNER_TEMP/ga08-headless" GA08ProductionCI \
+            -process ga08-synthetic.bin -noanalysis \
+            -scriptPath "$GITHUB_WORKSPACE/tools/ghidra_scripts" \
+            -postScript GA08VerifyProductionApplyReopened.java \
+            > "$RUNNER_TEMP/ga08-reopen.log" 2>&1 || {
+              tail -n 120 "$RUNNER_TEMP/ga08-reopen.log"; exit 1;
+            }
+          if ! grep -Fq 'GA08 PRODUCTION APPLY REOPEN PASS: module=1 user_blocks=2 idempotent=1' "$RUNNER_TEMP/ga08-reopen.log"; then
+            echo 'GA-08 missing independent persisted reopen assertion'
+            tail -n 160 "$RUNNER_TEMP/ga08-reopen.log"
+            exit 1
+          fi
+          if ! grep -Fq 'GA08 REOPEN USER OWNERSHIP REFUSAL PASS: conflict=1 exact=1' "$RUNNER_TEMP/ga08-reopen.log"; then
+            echo 'GA-08 missing reopened user-owned memory refusal assertion'
+            tail -n 160 "$RUNNER_TEMP/ga08-reopen.log"
+            exit 1
+          fi
+          if ! grep -Fq 'GA08 REOPEN PERMISSION REFUSAL PASS: executable=1 readonly=1 unreadable=1' "$RUNNER_TEMP/ga08-reopen.log"; then
+            echo "GA-08 reopened permission refusal evidence missing"
+            tail -n 160 "$RUNNER_TEMP/ga08-reopen.log"
+            exit 1
+          fi
+          if grep -E 'GA08 REOPEN FAIL:|Exception|ERROR' "$RUNNER_TEMP/ga08-reopen.log"; then
+            tail -n 160 "$RUNNER_TEMP/ga08-reopen.log"
+            exit 1
+          fi
+          grep -F 'GA08 PRODUCTION APPLY REOPEN PASS:' "$RUNNER_TEMP/ga08-reopen.log"
+      - name: GA-08 independent reopen after rejected Apply must preserve persisted state
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s "$RUNNER_TEMP/ga08-production.jar"
+          JAVA_TOOL_OPTIONS="-Dga08.test.jar=$RUNNER_TEMP/ga08-production.jar" \
+            "$GHIDRA_INSTALL_DIR/support/analyzeHeadless" \
+            "$RUNNER_TEMP/ga08-headless" GA08ProductionCI \
+            -process ga08-synthetic.bin -noanalysis \
+            -scriptPath "$GITHUB_WORKSPACE/tools/ghidra_scripts" \
+            -postScript GA08VerifyProductionApplyAfterRefusals.java \
+            -postScript GA08PersistPositiveCs.java \
+            > "$RUNNER_TEMP/ga08-post-refusal.log" 2>&1 || {
+              tail -n 160 "$RUNNER_TEMP/ga08-post-refusal.log"; exit 1;
+            }
+          if ! grep -Fq 'GA08 THIRD PROCESS NO COLLATERAL MEMORY PASS:' "$RUNNER_TEMP/ga08-post-refusal.log" ||
+             ! grep -Fq 'GA08 THIRD PROCESS OWNERSHIP REFUSAL PASS: conflict=1 exact=1' "$RUNNER_TEMP/ga08-post-refusal.log" ||
+             ! grep -Fq 'GA08 CS OUTSIDE WINDOW REFUSAL PASS: preflight=1 apply=1 restored=1' "$RUNNER_TEMP/ga08-post-refusal.log" ||
+             ! grep -Fq 'GA08 CS REFUSAL RECOVERY PASS: idempotent=1 inventory=1' "$RUNNER_TEMP/ga08-post-refusal.log" ||
+             ! grep -Fq 'GA08 CS EXPLICIT POSITIVE APPLY PASS: review=1 created=1 idempotent=1' "$RUNNER_TEMP/ga08-post-refusal.log" ||
+             ! grep -Fq 'GA08 CS PERSISTENCE READY PASS: fragment=1' "$RUNNER_TEMP/ga08-post-refusal.log" ||
+             ! grep -Fq 'GA08 FINAL TRANSACTION APPLY PASS: fragment=1' "$RUNNER_TEMP/ga08-post-refusal.log" ||
+             ! grep -Fq 'GA08 CS USER PERMISSION OVERLAP REFUSAL PASS: benign=1 executable=1 readonly=1 unreadable=1 volatile=1 restored=1' "$RUNNER_TEMP/ga08-post-refusal.log" ||
+             ! grep -Fq 'GA08 POST REFUSAL PERSISTENCE PASS: module=1 user_blocks=2 idempotent=1' "$RUNNER_TEMP/ga08-post-refusal.log" ||
+             grep -E 'GA08 POST-REFUSAL FAIL:|Exception|ERROR' "$RUNNER_TEMP/ga08-post-refusal.log"; then
+            echo 'GA-08 third-process persisted nonmutation assertion missing or failed'
+            tail -n 160 "$RUNNER_TEMP/ga08-post-refusal.log"
+            exit 1
+          fi
+          grep -F 'GA08 POST REFUSAL PERSISTENCE PASS:' "$RUNNER_TEMP/ga08-post-refusal.log"
+      - name: GA-08 fourth independent reopen persists explicitly approved CS after refusals
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$GHIDRA_INSTALL_DIR/support/analyzeHeadless" \
+            "$RUNNER_TEMP/ga08-headless" GA08ProductionCI \
+            -process ga08-synthetic.bin -noanalysis -readOnly \
+            -scriptPath "$GITHUB_WORKSPACE/tools/ghidra_scripts" \
+            -postScript GA08VerifyPositiveCsReopened.java \
+            > "$RUNNER_TEMP/ga08-positive-reopen.log" 2>&1 || {
+              tail -n 160 "$RUNNER_TEMP/ga08-positive-reopen.log"; exit 1;
+            }
+          if ! grep -Fq 'GA08 FOURTH PROCESS POSITIVE CS PERSISTENCE PASS: fragment=1 user_controls=2' "$RUNNER_TEMP/ga08-positive-reopen.log" ||
+             grep -E 'GA08 FOURTH REOPEN FAIL:|Exception|ERROR' "$RUNNER_TEMP/ga08-positive-reopen.log"; then
+            echo 'GA-08 independent positive CS persistence evidence missing'
+            tail -n 160 "$RUNNER_TEMP/ga08-positive-reopen.log"
+            exit 1
+          fi
+          grep -F 'GA08 FOURTH PROCESS POSITIVE CS PERSISTENCE PASS:' "$RUNNER_TEMP/ga08-positive-reopen.log"
+      - name: GA-08 preserve synthetic persistence diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ga08-persistence-diagnostics-${{ github.sha }}
+          retention-days: 7
+          if-no-files-found: warn
+          path: |
+            ${{ runner.temp }}/ga08-production.log
+            ${{ runner.temp }}/ga08-reopen.log
+            ${{ runner.temp }}/ga08-post-refusal.log
+            ${{ runner.temp }}/ga08-positive-reopen.log
       - name: Verify production interprocedural traversal in real Ghidra 12.1.4 (synthetic only)
         shell: bash
         run: |

@@ -3621,8 +3621,33 @@ public final class Ga11VectorHeadlessMain {
                     check(full.getListing().getInstructionAt(
                         address(full,0xfffc00L))!=null,
                         "Real CPU32 QSM instruction missing");
+                    // GA-08 atomic Apply must reject the *entire* stale Review
+                    // batch if any approved row conflicts with a user label.
+                    // A rejected batch must not create the otherwise safe SYNCR.
+                    long beforeRefusal=full.getModificationNumber();
+                    boolean refused=false;
+                    try {
+                        ghidrassist.hardware.HardwareApplyService.apply(
+                            full,List.of(simcrItem,syncrItem,qsmcrItem));
+                    } catch(IllegalStateException expected) {
+                        refused=expected.getMessage()!=null &&
+                            expected.getMessage().contains("SIMCR");
+                    }
+                    check(refused,"Mixed stale Review batch was not rejected");
+                    check(full.getSymbolTable().getPrimarySymbol(
+                              address(full,0xfffa04L))==null &&
+                          "USER_SIMCR_KEEP".equals(full.getSymbolTable()
+                            .getPrimarySymbol(address(full,0xfffa00L)).getName()) &&
+                          wordBefore.equals(full.getListing().getDataAt(
+                            address(full,0xfffa04L)).getDataType().getName()) &&
+                          full.getListing().getInstructionAt(
+                            address(full,0xfffc00L))!=null,
+                        "Rejected mixed Apply changed user label, type or code");
+                    result.addProperty("apply_stale_review_atomic_refusal",true);
+                    // A fresh Review selecting only the safe typed Word upgrade
+                    // must still succeed, and native Undo must restore it.
                     var outcome=ghidrassist.hardware.HardwareApplyService.apply(
-                        full,List.of(simcrItem,syncrItem,qsmcrItem));
+                        full,List.of(syncrItem));
                     check(outcome.changed==1 &&
                           "USER_SIMCR_KEEP".equals(full.getSymbolTable()
                             .getPrimarySymbol(address(full,0xfffa00L)).getName()) &&

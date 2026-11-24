@@ -92,6 +92,22 @@ public final class HardwareApplyService {
     private static Decision memoryDecision(Program p,HardwareApplyPlan.Item item){
         List<MemoryBlock> parts=overlaps(p,item);
         if(csWindow(item)){
+            // A benign-looking user block is still user-owned: coverage is not
+            // authorization to adopt it as a speculative external CS mapping.
+            // Only exact previously created CS fragments may be reused.
+            for(MemoryBlock block:parts){
+                boolean owned=block.getName().equals(item.name) ||
+                    block.getName().matches(java.util.regex.Pattern.quote(item.name)+"_PART_[1-9][0-9]*");
+                if(!owned || block.getStart().getOffset()<item.address ||
+                        block.getEnd().getOffset()>item.last() ||
+                        block.isInitialized() || block.isMapped() || block.isVolatile() ||
+                        block.getType()!=MemoryBlockType.DEFAULT ||
+                        block.isExecute() || !block.isRead() || !block.isWrite())
+                    return decide(State.BLOCKED,
+                        "CS window overlaps incompatible user memory: "+
+                        block.getName()+" at "+block.getStart()+".."+block.getEnd()+
+                        "; active decode and wiring UNKNOWN",false);
+            }
             List<HardwareRegionLayout.Range> gaps=csMissing(item,parts);
             return gaps.isEmpty() ?
                 decide(State.ALREADY_PRESENT,"CS address range is already mapped",false) :
@@ -100,18 +116,29 @@ public final class HardwareApplyService {
                     "operator selection; active decode and wiring UNKNOWN",false);
         }
         if(parts.size()==1 && parts.get(0).getStart().getOffset()==item.address &&
-                parts.get(0).getEnd().getOffset()==item.last())
-            return decide(State.ALREADY_PRESENT,"Entire region already mapped as "+
-                parts.get(0).getName(),false);
-        if(item.name.equals("TPURAM_2K_CANDIDATE") &&
-                csMissing(item,parts).isEmpty())
+                parts.get(0).getEnd().getOffset()==item.last()) {
+            MemoryBlock existing=parts.get(0);
+            // Exact coverage is not ownership: never silently accept an
+            // arbitrary user block as a completed hardware module.
+            if(!legacyPart(item,existing) || existing.isInitialized() ||
+                    existing.isMapped() || existing.isVolatile() || existing.getType()!=MemoryBlockType.DEFAULT ||
+                    existing.isExecute() || !existing.isRead() || !existing.isWrite())
+                return decide(State.BLOCKED,
+                    "Exact region belongs to existing user memory: "+
+                    existing.getName(),false);
             return decide(State.ALREADY_PRESENT,
-                "Entire TPURAM candidate range is mapped; select TPURAM_CANDIDATE annotation instead",false);
+                "Matching uninitialized hardware region already mapped as "+
+                existing.getName(),false);
+        }
+        // Full coverage by unrelated user blocks is not proof that TPURAM
+        // belongs to this candidate. Let the normal ownership checks below
+        // reject foreign blocks instead of reporting ALREADY_PRESENT.
         for(MemoryBlock block:parts){
             if(block.getStart().getOffset()<item.address ||
                     block.getEnd().getOffset()>item.last() ||
-                    block.isInitialized() || block.isMapped() ||
+                    block.isInitialized() || block.isMapped() || block.isVolatile() ||
                     block.getType()!=MemoryBlockType.DEFAULT ||
+                    block.isExecute() || !block.isRead() || !block.isWrite() ||
                     !legacyPart(item,block)){
                 return decide(State.BLOCKED,
                     "Overlaps other memory: "+block.getName()+" at "+
@@ -135,19 +162,31 @@ public final class HardwareApplyService {
         Memory m=p.getMemory();
         if(covers(m,first,last)) {
             Symbol old=p.getSymbolTable().getPrimarySymbol(first);
-            if(old!=null && old.getSource()!=SourceType.DEFAULT) {
-                if(old.getName().equals(item.name))
-                    return decide(State.ALREADY_PRESENT,"Short register label already defined",false);
+            if(old!=null && old.getSource()!=SourceType.DEFAULT &&
+                    !old.getName().equals(item.name))
                 return decide(State.BLOCKED,"Existing non-default label: "+old.getName(),false);
-            }
-            if(!p.getListing().isUndefined(first,last)) {
+            // A matching label alone does not prove the register is safe:
+            // reject overlapping instructions and incompatible typed data.
+            boolean undefined=p.getListing().isUndefined(first,last);
+            if(!undefined) {
                 ghidra.program.model.listing.Data prior=p.getListing().getDataAt(first);
-                if(prior!=null && prior.isDefined() && prior.getLength()==item.length)
-                    return decide(State.UPGRADE,"Preserve existing typed data; add short register label",true);
-                return decide(State.ALREADY_PRESENT,
-                    "Data/code defined with incompatible size or location",false);
+                if(prior==null || !prior.isDefined() || prior.getLength()!=item.length)
+                    return decide(State.BLOCKED,
+                        "Data/code defined with incompatible size or location",false);
             }
-            return decide(State.READY,"Mapped, undefined and no user symbol",true);
+            if(undefined) {
+                // A matching user label does not prove that register data exists.
+                // Complete the definition without recreating the existing label.
+                return decide(State.READY,
+                    old!=null && old.getSource()!=SourceType.DEFAULT ?
+                        "Matching register label exists; define missing data only" :
+                        "Mapped, undefined register bytes",true);
+            }
+            if(old!=null && old.getSource()!=SourceType.DEFAULT)
+                return decide(State.ALREADY_PRESENT,
+                    "Short register label and compatible data already defined",false);
+            return decide(State.UPGRADE,
+                "Preserve existing typed data; add short register label",true);
         }
         for(HardwareApplyPlan.Item candidate:all){
             if(candidate.kind!=HardwareApplyPlan.Kind.MEMORY)continue;
@@ -163,17 +202,29 @@ public final class HardwareApplyService {
         }
         return decide(State.BLOCKED,"No safe mapped memory for register",false);
     }
+    private static final String TPURAM_CANDIDATE_NOTE =
+        "GhidrAssist: candidate relocated 2KiB TPURAM 0xFFF000..0xFFF7FF; " +
+        "confirm TRAMBAR and runtime memory configuration.";
     private static Decision annotationDecision(Program p,HardwareApplyPlan.Item item) {
         Address at=address(p,item.address);
         if(!p.getMemory().contains(at))
             return decide(State.BLOCKED,"Annotation address is not mapped; create CS region first",false);
+        // Never attach speculative TPURAM annotations to existing executable code.
+        if(p.getListing().getInstructionContaining(at)!=null)
+            return decide(State.BLOCKED,
+                "Candidate address contains an instruction; preserve user code",false);
         Symbol prior=p.getSymbolTable().getPrimarySymbol(at);
         if(prior!=null && prior.getSource()!=SourceType.DEFAULT) {
-            return decide(prior.getName().equals(item.name) ?
-                State.ALREADY_PRESENT : State.BLOCKED,
-                prior.getName().equals(item.name) ?
-                    "Candidate label already exists" :
+            if(!prior.getName().equals(item.name))
+                return decide(State.BLOCKED,
                     "Keep existing user label: "+prior.getName(),false);
+            String comment=p.getListing().getComment(
+                ghidra.program.model.listing.CodeUnit.PLATE_COMMENT,at);
+            if(comment!=null && comment.contains(TPURAM_CANDIDATE_NOTE))
+                return decide(State.ALREADY_PRESENT,
+                    "Candidate label and provenance comment already exist",false);
+            return decide(State.MANUAL_REVIEW,
+                "Candidate label exists but provenance comment is missing; add comment only",false);
         }
         return decide(State.MANUAL_REVIEW,
             "Mapped inside existing memory; add candidate label and comment only",false);
@@ -185,6 +236,22 @@ public final class HardwareApplyService {
         if(item.kind==HardwareApplyPlan.Kind.MEMORY)return memoryDecision(p,item);
         if(item.kind==HardwareApplyPlan.Kind.REGISTER)return registerDecision(p,item,plan);
         if(item.kind==HardwareApplyPlan.Kind.ANNOTATION)return annotationDecision(p,item);
+        // Review and Apply must reject the same malformed vector geometry.
+        // A shortened or unaligned table must never appear approvable.
+        if (item.length != 256 * 4 || (item.address & 3L) != 0)
+            return decide(State.BLOCKED,
+                "Invalid VBR geometry: requires aligned 1024-byte vector table", false);
+        // Resolve the existing type without mutating the data-type manager.
+        // Review must refuse the same KEEP_HANDLER collision that Apply would
+        // otherwise discover only after starting the write transaction.
+        DataType existingVectors=p.getDataTypeManager().getDataType(
+            new CategoryPath("/GhidrAssist/Hardware"),"CPU32_VBR_256_VECTORS");
+        if(existingVectors!=null &&
+                (existingVectors.getLength()!=item.length ||
+                 !(existingVectors instanceof ghidra.program.model.data.Structure structure) ||
+                 structure.getNumComponents()!=256))
+            return decide(State.BLOCKED,
+                "Incompatible existing VBR data type: "+existingVectors.getName(),false);
         Address a=address(p,item.address),b=address(p,item.last());
         if(!covers(p.getMemory(),a,b) || !p.getListing().isUndefined(a,b))
             return decide(State.BLOCKED,
@@ -202,15 +269,22 @@ public final class HardwareApplyService {
         List<MemoryBlock> parts=overlaps(p,item);
         if(csWindow(item)){
             int segment=0;
+            // A later Apply can fill a new gap after earlier fragments were
+            // created. Never reuse a name already present in this program.
+            java.util.Set<String> usedNames=new java.util.HashSet<>();
+            for(MemoryBlock existing:m.getBlocks())usedNames.add(existing.getName());
             for(HardwareRegionLayout.Range gap:csMissing(item,parts)){
-                String name=item.name+"_PART_"+(++segment);
+                String name;
+                do { name=item.name+"_PART_"+(++segment); }
+                while(usedNames.contains(name));
+                usedNames.add(name);
                 MemoryBlock added=m.createUninitializedBlock(name,address(p,gap.first),
                     gap.length(),false);
                 added.setRead(true);added.setWrite(true);added.setExecute(false);
                 notes.add("NEW CS REGION "+name+" "+
                     ChipSelectModel.hex(gap.first,6)+".."+ChipSelectModel.hex(gap.last,6));
             }
-            return segment>0;
+            return !notes.isEmpty();
         }
         if(parts.isEmpty()){
             MemoryBlock b=m.createUninitializedBlock(item.name,address(p,item.address),
@@ -251,8 +325,9 @@ public final class HardwareApplyService {
             return false;
         }
         Symbol prior=p.getSymbolTable().getPrimarySymbol(first);
-        if(prior!=null && prior.getSource()!=SourceType.DEFAULT){
-            notes.add("SKIP "+item.name+"; preserve existing symbol "+
+        if(prior!=null && prior.getSource()!=SourceType.DEFAULT &&
+                !prior.getName().equals(item.name)){
+            notes.add("BLOCK "+item.name+"; preserve existing symbol "+
                 prior.getName());
             return false;
         }
@@ -275,7 +350,8 @@ public final class HardwareApplyService {
             // Preserve user-approved data type: only add an informative symbol.
         }
         String name=item.name;
-        p.getSymbolTable().createLabel(first,name,SourceType.USER_DEFINED);
+        if(prior==null || prior.getSource()==SourceType.DEFAULT)
+            p.getSymbolTable().createLabel(first,name,SourceType.USER_DEFINED);
         notes.add("DEFINED REGISTER "+name+" at "+first);
         return true;
     }
@@ -287,10 +363,11 @@ public final class HardwareApplyService {
             return false;
         }
         Address at=address(p,item.address);
-        p.getSymbolTable().createLabel(at,item.name,SourceType.USER_DEFINED);
+        Symbol prior=p.getSymbolTable().getPrimarySymbol(at);
+        if(prior==null || prior.getSource()==SourceType.DEFAULT)
+            p.getSymbolTable().createLabel(at,item.name,SourceType.USER_DEFINED);
         String existing=p.getListing().getComment(ghidra.program.model.listing.CodeUnit.PLATE_COMMENT,at);
-        String line="GhidrAssist: candidate relocated 2KiB TPURAM 0xFFF000..0xFFF7FF; "+
-            "confirm TRAMBAR and runtime memory configuration.";
+        String line=TPURAM_CANDIDATE_NOTE;
         if(existing==null || !existing.contains(line))
             p.getListing().setComment(at,
                 ghidra.program.model.listing.CodeUnit.PLATE_COMMENT,
@@ -314,6 +391,15 @@ public final class HardwareApplyService {
                 "Vector entry; actual runtime VBR not verified");
         DataType type=p.getDataTypeManager().addDataType(vectors,
             DataTypeConflictHandler.KEEP_HANDLER);
+        // KEEP_HANDLER may return an existing user-owned type with this name.
+        // Its geometry is not evidence that it is the expected vector layout.
+        // Never create a structure outside the reviewed 1024-byte span.
+        if (type.getLength() != item.length ||
+                !(type instanceof ghidra.program.model.data.Structure structure) ||
+                structure.getNumComponents() != 256) {
+            throw new IllegalStateException(
+                "Hardware Apply incompatible existing VBR data type: " + type.getName());
+        }
         p.getListing().createData(start,type);
         notes.add("DEFINED VBR STRUCTURE "+item.location());
         return true;
@@ -326,16 +412,122 @@ public final class HardwareApplyService {
         int changed=0,skipped=0;boolean commit=false;
         List<String> messages=new ArrayList<>();
         try {
+            // A VBR row describes exactly 256 four-byte vectors. A malformed
+            // Review row must not preflight a shorter span and then write a
+            // full 1024-byte structure beyond its approved address range.
+            for (HardwareApplyPlan.Item item : approved) {
+                if (item.kind == HardwareApplyPlan.Kind.VBR_STRUCTURE &&
+                        (item.length != 256 * 4 || (item.address & 3L) != 0)) {
+                    throw new IllegalStateException(
+                        "Hardware Apply invalid VBR geometry: " + item.name +
+                        " (requires aligned 1024-byte vector table)");
+                }
+            }
+            // Two independently approved MEMORY proposals must never claim the
+            // same byte range. Review selection is not an ownership override;
+            // reject ambiguous batches before mutating the first block.
+            for (int i = 0; i < approved.size(); i++) {
+                HardwareApplyPlan.Item left = approved.get(i);
+                if (left.kind != HardwareApplyPlan.Kind.MEMORY) continue;
+                for (int j = i + 1; j < approved.size(); j++) {
+                    HardwareApplyPlan.Item right = approved.get(j);
+                    if (right.kind != HardwareApplyPlan.Kind.MEMORY) continue;
+                    if (left.address <= right.last() && right.address <= left.last()) {
+                        throw new IllegalStateException(
+                            "Hardware Apply ambiguous overlapping MEMORY approvals: " +
+                            left.name + " / " + right.name);
+                    }
+                }
+            }
+            // Register approvals are also exclusive claims on bytes. Two rows
+            // with intersecting register spans cannot both be authorized by
+            // Review, even if their names or widths happen to match.
+            for (int i = 0; i < approved.size(); i++) {
+                HardwareApplyPlan.Item left = approved.get(i);
+                if (left.kind != HardwareApplyPlan.Kind.REGISTER) continue;
+                for (int j = i + 1; j < approved.size(); j++) {
+                    HardwareApplyPlan.Item right = approved.get(j);
+                    if (right.kind != HardwareApplyPlan.Kind.REGISTER) continue;
+                    if (left.address <= right.last() && right.address <= left.last()) {
+                        throw new IllegalStateException(
+                            "Hardware Apply ambiguous overlapping REGISTER approvals: " +
+                            left.name + " / " + right.name);
+                    }
+                }
+            }
+            // REGISTER and VBR_STRUCTURE both define typed bytes. Even a
+            // manually approved VBR hypothesis cannot overwrite an approved
+            // register in the same transaction; order is not authorization.
+            for (HardwareApplyPlan.Item register : approved) {
+                if (register.kind != HardwareApplyPlan.Kind.REGISTER) continue;
+                for (HardwareApplyPlan.Item vector : approved) {
+                    if (vector.kind != HardwareApplyPlan.Kind.VBR_STRUCTURE) continue;
+                    if (register.address <= vector.last() &&
+                            vector.address <= register.last()) {
+                        throw new IllegalStateException(
+                            "Hardware Apply ambiguous REGISTER/VBR approvals: " +
+                            register.name + " / " + vector.name);
+                    }
+                }
+            }
+            // Two VBR hypotheses may describe overlapping vector bytes. A
+            // Review approval is not proof of the active VBR and cannot
+            // authorize two competing structures in the same Apply batch.
+            for (int i = 0; i < approved.size(); i++) {
+                HardwareApplyPlan.Item left = approved.get(i);
+                if (left.kind != HardwareApplyPlan.Kind.VBR_STRUCTURE) continue;
+                for (int j = i + 1; j < approved.size(); j++) {
+                    HardwareApplyPlan.Item right = approved.get(j);
+                    if (right.kind != HardwareApplyPlan.Kind.VBR_STRUCTURE) continue;
+                    if (left.address <= right.last() && right.address <= left.last()) {
+                        throw new IllegalStateException(
+                            "Hardware Apply ambiguous overlapping VBR approvals: " +
+                            left.name + " / " + right.name);
+                    }
+                }
+            }
+            // Preflight the entire approved MEMORY batch before creating any block.
+            // Register rows may depend on newly mapped regions, so their live
+            // preflight remains in the ordered mutation pass below.
+            for (HardwareApplyPlan.Item item : approved) {
+                if (item.kind != HardwareApplyPlan.Kind.MEMORY) continue;
+                Decision initial = preflight(program, item, approved);
+                if (initial.state == State.BLOCKED) {
+                    throw new IllegalStateException(
+                        "Hardware Apply blocked by changed project state: " +
+                        item.name + " (" + initial.description + ")");
+                }
+            }
             for(HardwareApplyPlan.Kind kind:HardwareApplyPlan.Kind.values()) {
                 for(HardwareApplyPlan.Item item:approved) {
                     if(item.kind!=kind)continue;
+                    // Recheck the live database inside the same undoable transaction.
+                    // A stale Review selection must not partially apply earlier rows
+                    // and silently skip a newly conflicting user definition.
+                    Decision current=preflight(program,item,approved);
+                    if(current.state==State.BLOCKED) {
+                        throw new IllegalStateException("Hardware Apply blocked by changed project state: "+
+                            item.name+" ("+current.description+")");
+                    }
+                    if(current.state==State.ALREADY_PRESENT) {
+                        skipped++;
+                        messages.add("SKIP "+item.name+": "+current.description);
+                        continue;
+                    }
                     boolean applied=switch(kind) {
                         case MEMORY -> createRegion(program,item,messages);
                         case REGISTER -> defineRegister(program,item,messages);
                         case ANNOTATION -> annotateCandidate(program,item,messages);
                         case VBR_STRUCTURE -> defineVbr(program,item,messages);
                     };
-                    if(applied)changed++;else skipped++;
+                    // A READY/UPGRADE/MANUAL_REVIEW row that cannot be written is
+                    // not an idempotent skip. Abort the entire transaction so
+                    // earlier successful rows cannot be committed on stale state.
+                    if(!applied) {
+                        throw new IllegalStateException(
+                            "Hardware Apply could not apply approved row: "+item.name);
+                    }
+                    changed++;
                 }
             }
             commit=true;
