@@ -73,6 +73,34 @@ public final class HardwareFunctionStageCacheSelfTest {
         check(cache.get(equalB,secondToken,scope,0x100,100,graph,targets)==null &&
             cache.completed(equalB)==0,
             "equal-but-distinct owners must never share a fixed-point snapshot");
+        check(cache.put(equalB,secondToken,scope,0x100,100,
+                graph,targets,computed) &&
+            cache.get(equalA,firstToken,scope,0x100,100,
+                graph,targets)==computed &&
+            cache.get(equalB,secondToken,scope,0x100,100,
+                graph,targets)==computed &&
+            cache.completed(equalA)==1 && cache.completed(equalB)==1,
+            "two equals-equal owners can each publish a separate completed stage");
+        cache.invalidate(equalB);
+        check(cache.completed(equalB)==0 &&
+            cache.get(equalB,secondToken,scope,0x100,100,graph,targets)==null &&
+            cache.completed(equalA)==1 &&
+            cache.get(equalA,firstToken,scope,0x100,100,
+                graph,targets)==computed,
+            "invalidating one equal owner cannot evict another owner checkpoint");
+        long newBToken=cache.begin(equalB);
+        check(newBToken!=secondToken &&
+            cache.put(equalB,newBToken,scope,0x100,100,graph,targets,computed) &&
+            cache.get(equalB,newBToken,scope,0x100,100,
+                graph,targets)==computed &&
+            cache.get(equalA,firstToken,scope,0x100,100,
+                graph,targets)==computed,
+            "restarted second owner cannot poison the untouched first owner");
+        cache.invalidate(equalA);
+        check(cache.completed(equalA)==0 &&
+            cache.get(equalB,newBToken,scope,0x100,100,
+                graph,targets)==computed,
+            "clear of first owner must preserve the independently restarted second");
         check(cache.get(first,generation,scope,0x100,101,graph,targets)==null,
             "iteration budget is part of fixed-point identity");
         check(cache.get(first,generation,scope,0x130,100,graph,targets)==null,
