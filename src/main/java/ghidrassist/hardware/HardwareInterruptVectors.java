@@ -55,7 +55,33 @@ public final class HardwareInterruptVectors {
                           int interiorFunctionPointers, int unmapped, int outsideMcu24,
                           int odd, int unreadable, int absent,
                           boolean truncated, List<Entry> displayed) {
-        public Summary { displayed=List.copyOf(displayed); }
+        public Summary {
+            if(tableAddress<0 || tableAddress>0xffffffffL ||
+                    (tableAddress&3L)!=0 ||
+                    sampledSlots<0 || sampledSlots>254 ||
+                    readable<0 || plausibleMapped<0 ||
+                    recognizedFunctions<0 || interiorFunctionPointers<0 ||
+                    unmapped<0 || outsideMcu24<0 || odd<0 ||
+                    unreadable<0 || absent<0 ||
+                    readable+unreadable!=sampledSlots ||
+                    plausibleMapped+unmapped+outsideMcu24+odd+absent!=readable ||
+                    recognizedFunctions+interiorFunctionPointers>plausibleMapped ||
+                    displayed==null || displayed.size()>64 ||
+                    displayed.size()>readable-absent ||
+                    truncated!=(displayed.size()<readable-absent))
+                throw new IllegalArgumentException("Invalid vector evidence summary");
+            displayed=List.copyOf(displayed);
+            int previous=1;
+            for(Entry row:displayed){
+                if(row.vectorNumber()<=previous || row.vectorNumber()>255 ||
+                        row.classification()==Classification.UNREADABLE ||
+                        row.classification()==Classification.NULL_OR_ERASED ||
+                        row.pointer()==null || row.slotAddress()!=
+                            tableAddress+4L*row.vectorNumber())
+                    throw new IllegalArgumentException("Invalid displayed vector evidence");
+                previous=row.vectorNumber();
+            }
+        }
 
         /** Concise source-evidence table with explicit VBR and IRQ ambiguity. */
         public String markdown() {
@@ -124,6 +150,15 @@ public final class HardwareInterruptVectors {
                     !seen.add(o.vectorNumber()) ||
                     (o.pointer()!=null &&
                       (o.pointer()<0 || o.pointer()>0xffffffffL)) ||
+                    // An odd, missing or erased pointer cannot also be a
+                    // verified mapped handler. A function name from an
+                    // unmapped target must not appear as handler evidence.
+                    (o.mappedTarget() &&
+                        (o.pointer()==null || o.pointer()==0 ||
+                         o.pointer()==0xffffffffL || (o.pointer()&1L)!=0)) ||
+                    (!o.mappedTarget() && o.containingFunction()!=null) ||
+                    (o.containingFunction()!=null &&
+                        o.containingFunction().isBlank()) ||
                     (o.outsideSelectedMcu24Range() &&
                      (o.pointer()==null || o.pointer()<=0xffffffL ||
                       o.mappedTarget() || o.containingFunction()!=null ||
@@ -193,6 +228,19 @@ public final class HardwareInterruptVectors {
     }
     private static String escape(String word) {
         if(word==null)return "UNKNOWN";
-        return word.replace("|","\\|").replace("\r"," ").replace("\n"," ");
+        StringBuilder escaped=new StringBuilder();
+        for(int at=0;at<word.length();) {
+            int c=word.codePointAt(at);
+            at+=Character.charCount(c);
+            int type=Character.getType(c);
+            if(c=='|')escaped.append("\\|");
+            else if(Character.isISOControl(c) ||
+                    type==Character.FORMAT ||
+                    type==Character.LINE_SEPARATOR ||
+                    type==Character.PARAGRAPH_SEPARATOR)
+                escaped.append(' ');
+            else escaped.appendCodePoint(c);
+        }
+        return escaped.toString();
     }
 }
