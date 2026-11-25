@@ -68,6 +68,7 @@ public final class HardwareInterruptVectors {
                     (long)recognizedFunctions+interiorFunctionPointers>plausibleMapped ||
                     displayed==null || displayed.size()>64 ||
                     displayed.size()>readable-absent ||
+                    (truncated && displayed.isEmpty()) ||
                     truncated!=(displayed.size()<readable-absent))
                 throw new IllegalArgumentException("Invalid vector evidence summary");
             displayed=List.copyOf(displayed);
@@ -88,6 +89,18 @@ public final class HardwareInterruptVectors {
                             ? pointer<=0xffffffL
                             : ((pointer&1L)!=0)!=(row.classification()==Classification.ODD_POINTER)))
                     throw new IllegalArgumentException("Invalid displayed vector pointer");
+                // A published handler name must agree with the static
+                // classification, including for manually constructed summaries.
+                boolean functionCandidate = row.classification()==
+                    Classification.RECOGNIZED_FUNCTION_CANDIDATE ||
+                    row.classification()==
+                    Classification.INTERIOR_FUNCTION_POINTER_CANDIDATE;
+                if(functionCandidate ? (row.function()==null ||
+                        row.function().isBlank()) :
+                        (row.function()!=null &&
+                         !"UNKNOWN".equals(row.function())))
+                    throw new IllegalArgumentException(
+                        "Displayed function evidence contradicts classification");
                 counts[row.classification().ordinal()]++;
             }
             int[] limits={0,0,odd,unmapped,outsideMcu24,
