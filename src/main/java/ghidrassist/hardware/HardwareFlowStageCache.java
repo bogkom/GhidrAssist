@@ -9,8 +9,6 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
-import java.util.WeakHashMap;
 
 /**
  * Exact-program, revision-scoped completed CFG stage cache.
@@ -20,14 +18,16 @@ import java.util.WeakHashMap;
 public final class HardwareFlowStageCache {
     private HardwareFlowStageCache(){}
     public record Result(GhidraHardwareFlowService.Report report,boolean reused) {}
-    private static final Map<Program,HardwareStageCheckpoint<GhidraHardwareFlowService.Report>>
-        COMPLETED=new WeakHashMap<>();
+    private static final HardwareWeakIdentityMap<Program,
+        HardwareStageCheckpoint<GhidraHardwareFlowService.Report>>
+        COMPLETED=new HardwareWeakIdentityMap<>();
     private static final int MAX_REPORT_CHARS=1_000_000;
     private static final HardwareStageEpochs<Program> EPOCHS=new HardwareStageEpochs<>();
     private static final String DISK_PROPERTY="ghidrassist.ga12.durable.dir";
     // Explicit clear must not revive a completed disk report during this
     // process. Restart still requires strict full-input fingerprint.
-    private static final Map<Program,Boolean> SKIP_DISK=new WeakHashMap<>();
+    private static final HardwareWeakIdentityMap<Program,Boolean>
+        SKIP_DISK=new HardwareWeakIdentityMap<>();
 
     private static Path diskDirectory(){
         String configured=System.getProperty(DISK_PROPERTY);
