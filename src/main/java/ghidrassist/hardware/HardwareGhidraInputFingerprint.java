@@ -1,6 +1,8 @@
 package ghidrassist.hardware;
 
 import ghidra.program.model.address.Address;
+import ghidra.program.model.address.AddressRange;
+import ghidra.program.model.address.AddressRangeIterator;
 import ghidra.program.model.listing.Function;
 import ghidra.program.model.listing.FunctionIterator;
 import ghidra.program.model.listing.Instruction;
@@ -15,7 +17,6 @@ import ghidra.util.exception.CancelledException;
 import ghidra.util.task.TaskMonitor;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
@@ -35,18 +36,14 @@ public final class HardwareGhidraInputFingerprint {
     private static final long MAX_INITIALIZED_BYTES=64L*1024L*1024L;
     private static final int MAX_INSTRUCTIONS=1_000_000;
     private static final int MAX_FUNCTIONS=100_000;
-    private static final String SNAPSHOT_ENGINE="GHIDRASSIST-GA12-CFG-SNAPSHOT-2";
+    private static final String SNAPSHOT_ENGINE="GHIDRASSIST-GA12-CFG-SNAPSHOT-3";
 
     private static MessageDigest digest(){
         try{return MessageDigest.getInstance("SHA-256");}
         catch(NoSuchAlgorithmException e){throw new AssertionError(e);}
     }
     private static void string(MessageDigest md,String value){
-        byte[] text=(value==null?"<null>":value).getBytes(StandardCharsets.UTF_8);
-        int length=text.length;
-        md.update(new byte[] {(byte)(length>>>24),(byte)(length>>>16),
-            (byte)(length>>>8),(byte)length});
-        md.update(text);
+        HardwareInputFingerprintFields.string(md,value);
     }
     private static void offset(MessageDigest md,long number){
         string(md,Long.toUnsignedString(number));
@@ -144,6 +141,23 @@ public final class HardwareGhidraInputFingerprint {
                 string(contents,function.getEntryPoint().toString());
                 string(contents,function.getName());
                 offset(contents,function.getBody().getNumAddresses());
+                // Equal byte counts and the same decoded instructions do not
+                // imply an equal body: unclassified gaps/ranges change which
+                // address belongs to the analyzed function. Never reuse a
+                // durable CFG checkpoint across changed function topology.
+                AddressRangeIterator bodyRanges=
+                    function.getBody().getAddressRanges();
+                int rangeCount=0;
+                while(bodyRanges.hasNext()){
+                    monitor.checkCancelled();
+                    if(++rangeCount>MAX_INSTRUCTIONS)return Optional.empty();
+                    AddressRange range=bodyRanges.next();
+                    HardwareInputFingerprintFields.functionRange(
+                        contents,range.getMinAddress().toString(),
+                        range.getMaxAddress().toString());
+                }
+                HardwareInputFingerprintFields.endFunctionRanges(
+                    contents,rangeCount);
                 InstructionIterator instructions=
                     program.getListing().getInstructions(function.getBody(),true);
                 while(instructions.hasNext()){
