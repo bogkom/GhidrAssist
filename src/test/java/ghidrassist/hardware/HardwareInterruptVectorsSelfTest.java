@@ -122,9 +122,9 @@ public final class HardwareInterruptVectorsSelfTest {
             "oversized vector inventory fails before allocating/sorting");
         rejects(()->new HardwareInterruptVectors.Summary(0,2,2,2,0,0,
                 0,0,0,0,0,false,List.of(
-                    new HardwareInterruptVectors.Entry(3,12,0x1000,
+                    new HardwareInterruptVectors.Entry(3,12,0x1000L,
                         HardwareInterruptVectors.Classification.MAPPED_TARGET,"UNKNOWN"),
-                    new HardwareInterruptVectors.Entry(2,8,0x2000,
+                    new HardwareInterruptVectors.Entry(2,8,0x2000L,
                         HardwareInterruptVectors.Classification.MAPPED_TARGET,"UNKNOWN"))),
             "out-of-order source vector rows cannot be published");
         var mappedRow=new HardwareInterruptVectors.Entry(2,8,0x1000L,
@@ -139,6 +139,24 @@ public final class HardwareInterruptVectorsSelfTest {
             0,0,0,0,0,false,List.of(new HardwareInterruptVectors.Entry(
                 2,8,0x1001L,HardwareInterruptVectors.Classification.MAPPED_TARGET,"UNKNOWN"))),
             "mapped display cannot contain odd pointer");
+        rejects(()->new HardwareInterruptVectors.Summary(0,1,1,1,0,0,
+            0,0,0,0,0,true,List.of()),
+            "truncated evidence cannot conceal every observed candidate row");
+        rejects(()->new HardwareInterruptVectors.Summary(0,1,1,1,1,0,
+            0,0,0,0,0,false,List.of(new HardwareInterruptVectors.Entry(
+                2,8,0x1000L,
+                HardwareInterruptVectors.Classification.RECOGNIZED_FUNCTION_CANDIDATE,"  "))),
+            "recognized handler candidate requires a nonblank function name");
+        rejects(()->new HardwareInterruptVectors.Summary(0,1,1,1,0,0,
+            0,0,0,0,0,false,List.of(new HardwareInterruptVectors.Entry(
+                2,8,0x1000L,
+                HardwareInterruptVectors.Classification.MAPPED_TARGET,"fake_handler"))),
+            "generic mapped target cannot masquerade as named handler");
+        var partial=new HardwareInterruptVectors.Summary(0,2,2,1,0,0,
+            0,0,1,0,0,true,List.of(mappedRow));
+        ok(partial.truncated() && partial.displayed().size()==1 &&
+            partial.odd()==1 && partial.markdown().contains("Output truncated"),
+            "bounded partial evidence preserves undisplayed classification totals");
         var consistent=new HardwareInterruptVectors.Summary(0,1,1,1,0,0,
             0,0,0,0,0,false,List.of(mappedRow));
         ok(consistent.displayed().equals(List.of(mappedRow)),
