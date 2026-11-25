@@ -72,14 +72,31 @@ public final class HardwareInterruptVectors {
                 throw new IllegalArgumentException("Invalid vector evidence summary");
             displayed=List.copyOf(displayed);
             int previous=1;
+            int[] counts=new int[Classification.values().length];
             for(Entry row:displayed){
                 if(row.vectorNumber()<=previous || row.vectorNumber()>255 ||
                         row.classification()==Classification.UNREADABLE ||
                         row.classification()==Classification.NULL_OR_ERASED ||
-                        row.pointer()==null || row.slotAddress()!=
+                        row.pointer()==null || row.classification()==null ||
+                        row.slotAddress()>0xfffffffcL || row.slotAddress()!=
                             tableAddress+4L*row.vectorNumber())
                     throw new IllegalArgumentException("Invalid displayed vector evidence");
                 previous=row.vectorNumber();
+                long pointer=row.pointer();
+                if(pointer<=0 || pointer>=0xffffffffL ||
+                        (row.classification()==Classification.OUTSIDE_SELECTED_MCU24_RANGE
+                            ? pointer<=0xffffffL
+                            : ((pointer&1L)!=0)!=(row.classification()==Classification.ODD_POINTER)))
+                    throw new IllegalArgumentException("Invalid displayed vector pointer");
+                counts[row.classification().ordinal()]++;
+            }
+            int[] limits={0,0,odd,unmapped,outsideMcu24,
+                plausibleMapped-recognizedFunctions-interiorFunctionPointers,
+                interiorFunctionPointers,recognizedFunctions};
+            for(Classification state:Classification.values()) {
+                int i=state.ordinal();
+                if(counts[i]>limits[i] || (!truncated && counts[i]!=limits[i]))
+                    throw new IllegalArgumentException("Displayed vector classification contradicts summary");
             }
         }
 
