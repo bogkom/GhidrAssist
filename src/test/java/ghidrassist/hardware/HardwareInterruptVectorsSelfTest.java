@@ -111,6 +111,24 @@ public final class HardwareInterruptVectorsSelfTest {
         rejects(()->new HardwareInterruptVectors.Summary(0,1,1,1,0,0,
             0,0,0,0,0,false,List.of()),
             "summary cannot advertise a mapped pointer with no displayed row");
+        rejects(()->new HardwareInterruptVectors.Summary(0,1,
+                Integer.MAX_VALUE,Integer.MAX_VALUE,
+                Integer.MAX_VALUE,0,Integer.MAX_VALUE,
+                0,Integer.MAX_VALUE,Integer.MAX_VALUE,
+                0,true,List.of()),
+            "integer overflow cannot forge a small coherent ISR summary");
+        rejects(()->HardwareInterruptVectors.inspect(0,
+                java.util.Collections.nCopies(255,
+                    new HardwareInterruptVectors.Observation(
+                        2,0x1000L,true,null,false)),8),
+            "oversized vector inventory fails before allocating/sorting");
+        rejects(()->new HardwareInterruptVectors.Summary(0,2,2,2,0,0,
+                0,0,0,0,0,false,List.of(
+                    new HardwareInterruptVectors.Entry(3,12,0x1000,
+                        HardwareInterruptVectors.Classification.MAPPED_TARGET,"UNKNOWN"),
+                    new HardwareInterruptVectors.Entry(2,8,0x2000,
+                        HardwareInterruptVectors.Classification.MAPPED_TARGET,"UNKNOWN"))),
+            "out-of-order source vector rows cannot be published");
         var validSummary=new HardwareInterruptVectors.Summary(0,0,0,0,0,0,
             0,0,0,0,0,false,List.of());
         ok(validSummary.sampledSlots()==0 && validSummary.displayed().isEmpty(),
