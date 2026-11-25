@@ -13,7 +13,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
-import java.util.WeakHashMap;
 
 /**
  * GA-12: read-only, process-local checkpoints of *completed function CFG
@@ -67,9 +66,8 @@ public final class HardwareFunctionStageCache<K> {
     private record Key(long entry,String stepsSha256,int iterationsBudget){}
     private record Saved(Key key,HardwareDataflow.Result result){}
     private final class OwnerStages {
-        // WeakHashMap uses equals() for key lookup. Retain a SECOND WEAK
-        // identity check so two equal-but-distinct Program objects can
-        // never exchange stage evidence.
+        // Independent weak identity map owns every Program stage. Retain
+        // a SECOND weak identity check as defense against corrupted state.
         final WeakReference<K> exactOwner;
         final Scope scope;
         final LinkedHashMap<Long,Saved> stages =
@@ -79,7 +77,8 @@ public final class HardwareFunctionStageCache<K> {
             this.scope=scope;
         }
     }
-    private final Map<K,OwnerStages> completed=new WeakHashMap<>();
+    private final HardwareWeakIdentityMap<K,OwnerStages> completed=
+        new HardwareWeakIdentityMap<>();
     private final HardwareStageEpochs<K> epochs=new HardwareStageEpochs<>();
 
     public synchronized long begin(K owner) {
