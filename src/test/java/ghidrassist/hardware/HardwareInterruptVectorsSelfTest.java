@@ -8,10 +8,16 @@ public final class HardwareInterruptVectorsSelfTest {
     private static void ok(boolean value,String message){
         if(!value)throw new AssertionError(message);
     }
+    private static void rejects(Runnable attempt,String message){
+        boolean denied=false;
+        try{attempt.run();}
+        catch(IllegalArgumentException expected){denied=true;}
+        ok(denied,message);
+    }
     public static void main(String[] args) {
         var input=new ArrayList<HardwareInterruptVectors.Observation>();
         input.add(new HardwareInterruptVectors.Observation(26,0x3000L,true,"isr_timer",true));
-        input.add(new HardwareInterruptVectors.Observation(2,0x1001L,true,"odd",false));
+        input.add(new HardwareInterruptVectors.Observation(2,0x1001L,false,null,false));
         input.add(new HardwareInterruptVectors.Observation(24,0x2000L,true,"spurious",true));
         input.add(new HardwareInterruptVectors.Observation(25,0L,false,null,false));
         input.add(new HardwareInterruptVectors.Observation(27,0xffffffffL,false,null,false));
@@ -76,6 +82,47 @@ public final class HardwareInterruptVectorsSelfTest {
                     29,0x01000000L,true,"isr",true,true)),8);
         } catch(IllegalArgumentException expected){invalidDevice=true;}
         ok(invalidDevice,"out-of-range pointer cannot simultaneously be a recognized handler");
+        // Contradictory evidence must fail closed rather than formatting a
+        // named ISR where no Ghidra mapped function can exist.
+        rejects(()->HardwareInterruptVectors.inspect(0,List.of(
+            new HardwareInterruptVectors.Observation(2,0x1001L,true,"odd",false)),8),
+            "odd vector pointer cannot be a mapped named handler");
+        rejects(()->HardwareInterruptVectors.inspect(0,List.of(
+            new HardwareInterruptVectors.Observation(2,null,true,null,false)),8),
+            "unreadable vector cannot be marked mapped");
+        rejects(()->HardwareInterruptVectors.inspect(0,List.of(
+            new HardwareInterruptVectors.Observation(2,0L,true,null,false)),8),
+            "null/erased vector cannot be marked mapped");
+        rejects(()->HardwareInterruptVectors.inspect(0,List.of(
+            new HardwareInterruptVectors.Observation(2,0xffffffffL,true,null,false)),8),
+            "erased vector cannot be marked mapped");
+        rejects(()->HardwareInterruptVectors.inspect(0,List.of(
+            new HardwareInterruptVectors.Observation(2,0x2000L,false,"fake",false)),8),
+            "unmapped vector must not carry a Ghidra function name");
+        rejects(()->HardwareInterruptVectors.inspect(0,List.of(
+            new HardwareInterruptVectors.Observation(2,0x2000L,true,"  ",false)),8),
+            "blank function is not a recognized handler candidate");
+        rejects(()->new HardwareInterruptVectors.Summary(0,2,2,1,1,0,
+            0,0,0,0,0,false,List.of()),
+            "summary must not hide an observed nonempty vector row");
+        rejects(()->new HardwareInterruptVectors.Summary(0,1,1,1,2,0,
+            0,0,0,0,0,true,List.of()),
+            "summary must not claim more exact function entries than mapped targets");
+        rejects(()->new HardwareInterruptVectors.Summary(0,1,1,1,0,0,
+            0,0,0,0,0,false,List.of()),
+            "summary cannot advertise a mapped pointer with no displayed row");
+        var validSummary=new HardwareInterruptVectors.Summary(0,0,0,0,0,0,
+            0,0,0,0,0,false,List.of());
+        ok(validSummary.sampledSlots()==0 && validSummary.displayed().isEmpty(),
+            "legitimate empty static source summary remains valid");
+        var bidi=HardwareInterruptVectors.inspect(0,List.of(
+            new HardwareInterruptVectors.Observation(40,0x5000L,true,
+                "handler\u202E\u2028name",true)),8);
+        ok(bidi.markdown().contains("handler  name") &&
+            !bidi.markdown().contains("\u202E") &&
+            !bidi.markdown().contains("\u2028"),
+            "format and line-separator controls cannot spoof vector report rows");
+
         var moved=HardwareInterruptVectors.inspect(0x800L,input,16);
         ok(moved.sampledSlots()==s.sampledSlots() &&
             moved.plausibleMapped()==s.plausibleMapped() &&
