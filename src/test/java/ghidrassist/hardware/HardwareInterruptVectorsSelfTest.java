@@ -127,6 +127,22 @@ public final class HardwareInterruptVectorsSelfTest {
                     new HardwareInterruptVectors.Entry(2,8,0x2000,
                         HardwareInterruptVectors.Classification.MAPPED_TARGET,"UNKNOWN"))),
             "out-of-order source vector rows cannot be published");
+        var mappedRow=new HardwareInterruptVectors.Entry(2,8,0x1000L,
+            HardwareInterruptVectors.Classification.MAPPED_TARGET,"UNKNOWN");
+        rejects(()->new HardwareInterruptVectors.Summary(0,1,1,0,0,0,
+            1,0,0,0,0,false,List.of(mappedRow)),
+            "displayed mapped row cannot contradict unmapped total");
+        rejects(()->new HardwareInterruptVectors.Summary(0,2,2,1,1,0,
+            1,0,0,0,0,true,List.of(mappedRow)),
+            "truncated rows must still respect classification subtotals");
+        rejects(()->new HardwareInterruptVectors.Summary(0,1,1,1,0,0,
+            0,0,0,0,0,false,List.of(new HardwareInterruptVectors.Entry(
+                2,8,0x1001L,HardwareInterruptVectors.Classification.MAPPED_TARGET,"UNKNOWN"))),
+            "mapped display cannot contain odd pointer");
+        var consistent=new HardwareInterruptVectors.Summary(0,1,1,1,0,0,
+            0,0,0,0,0,false,List.of(mappedRow));
+        ok(consistent.displayed().equals(List.of(mappedRow)),
+            "consistent displayed classification remains accepted");
         var validSummary=new HardwareInterruptVectors.Summary(0,0,0,0,0,0,
             0,0,0,0,0,false,List.of());
         ok(validSummary.sampledSlots()==0 && validSummary.displayed().isEmpty(),
