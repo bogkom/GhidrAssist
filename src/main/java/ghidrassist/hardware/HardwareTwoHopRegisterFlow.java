@@ -69,7 +69,8 @@ public final class HardwareTwoHopRegisterFlow {
                     !sourcePc(bridgeEntry) || !sourcePc(innerCallPc) ||
                     !sourcePc(leafEntry) || !sourcePc(storePc) ||
                     outerCallPc<outerCaller || innerCallPc<bridgeEntry ||
-                    storePc<leafEntry ||
+                    storePc<leafEntry || outerCaller==bridgeEntry ||
+                    outerCaller==leafEntry || bridgeEntry==leafEntry ||
                     effectiveAddress!=null && (effectiveAddress<0 ||
                         effectiveAddress>HardwareDataflow.MASK24) ||
                     writtenWord!=null && (writtenWord<0 || writtenWord>0xffff) ||
@@ -346,7 +347,15 @@ public final class HardwareTwoHopRegisterFlow {
             if(entryRegisters.isEmpty()){rejected++;continue;}
             eligible++;
             Bridge bridge=bridgeByEntry.get(call.directCallee());
-            if(bridge==null || !safeBridge(bridge)){unsafe++;continue;}
+            // No recursive fixpoint exists here. The two distinct CALL
+            // boundaries must not return to either earlier function entry,
+            // even if otherwise individually decoded source tuples look safe.
+            if(bridge==null || !safeBridge(bridge) ||
+                    bridge.entry()==call.caller() ||
+                    bridge.finalTarget()!=null &&
+                        bridge.finalTarget()==call.caller()){
+                unsafe++;continue;
+            }
             if(bridge.finalTarget()==null){unresolved++;continue;}
             var leaf=leafByEntry.get(bridge.finalTarget());
             if(leaf==null){badLeaf++;continue;}
