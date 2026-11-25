@@ -105,6 +105,29 @@ public final class HardwareTwoHopRegisterFlowSelfTest {
             cold.snapshots.get(0).effectiveAddress==null &&
             cold.snapshots.get(0).writtenWord==null,
             "ordinary GA-12 function evidence stays input-free/unknown");
+        // A pair of individually closed summaries is not proof that their
+        // combined CALL chain is acyclic. Reject same-function outer/bridge
+        // and outer/leaf identities before any context-seeded leaf solve.
+        var selfOuter=new HardwareCallsiteRegisterFlow.Call(
+            0x640,0x64c,0x640L,
+            Map.of("A0",simcr,"D0",0x40caL),false);
+        var selfOuterResult=scan(List.of(selfOuter),List.of(bridge),
+            List.of(leaf),48);
+        ok(selfOuterResult.rejectedBridge()==1 &&
+            selfOuterResult.possibleStores()==0 &&
+            selfOuterResult.rows().isEmpty(),
+            "self-recursive outer to bridge CALL cannot emit MMIO");
+        var backToOuter=new HardwareTwoHopRegisterFlow.Bridge(
+            0x640,bridge.steps(),0x642,0x600L,true);
+        var mutualCycleResult=scan(List.of(left),List.of(backToOuter),
+            List.of(leaf(0x600,"A1")),48);
+        ok(mutualCycleResult.rejectedBridge()==1 &&
+            mutualCycleResult.possibleStores()==0 &&
+            mutualCycleResult.rows().isEmpty(),
+            "outer to bridge to outer recursion cannot emit two-hop MMIO");
+        ok(pair.possibleStores()==2 && pair.rows().size()==2,
+            "nonrecursive caller to bridge to leaf remains accepted");
+
         // At a conditional bridge join incompatible A0 values MUST become
         // unknown; branch feasibility is never guessed.
         var fork=new HardwareTwoHopRegisterFlow.Bridge(0x640,List.of(
@@ -495,6 +518,18 @@ public final class HardwareTwoHopRegisterFlowSelfTest {
             0x600,0x60c,0x641L,
             Map.of("A0",simcr,"D0",0x40caL),false),
             "odd exact callee target is rejected at the source boundary");
+        reject(()->new HardwareTwoHopRegisterFlow.Candidate(
+            0x600,0x60c,0x600,0x602,0x700,0x700,simcr,0x40ca,16,
+            2,3,false,false),
+            "published two-hop row rejects recursive outer/bridge identity");
+        reject(()->new HardwareTwoHopRegisterFlow.Candidate(
+            0x600,0x60c,0x640,0x642,0x600,0x600,simcr,0x40ca,16,
+            2,3,false,false),
+            "published two-hop row rejects recursive outer/leaf identity");
+        reject(()->new HardwareTwoHopRegisterFlow.Candidate(
+            0x600,0x60c,0x640,0x642,0x640,0x640,simcr,0x40ca,16,
+            2,3,false,false),
+            "published two-hop row rejects recursive bridge/leaf identity");
         reject(()->new HardwareTwoHopRegisterFlow.Candidate(
             0x600,0x60c,0x640,0x642,0x700,0x701,simcr,0x40ca,16,
             2,3,false,false),

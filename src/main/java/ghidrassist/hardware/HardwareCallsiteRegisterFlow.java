@@ -39,7 +39,7 @@ public final class HardwareCallsiteRegisterFlow {
     public record Call(long caller,long callPc,Long directCallee,
                        Map<String,Long> agreedRegisters,boolean callerIncomplete) {
         public Call {
-            if(!sourcePc(caller) || !sourcePc(callPc) ||
+            if(!sourcePc(caller) || !sourcePc(callPc) || callPc<caller ||
                     directCallee!=null && !sourcePc(directCallee) ||
                     agreedRegisters==null ||
                     agreedRegisters.size()>MAX_REGISTER_CELLS)
@@ -79,7 +79,7 @@ public final class HardwareCallsiteRegisterFlow {
                             int sourceRegisterCount) {
         public Candidate {
             if(!sourcePc(caller) || !sourcePc(callPc) || !sourcePc(callee) ||
-                    !sourcePc(storePc) ||
+                    !sourcePc(storePc) || callPc<caller || storePc<callee ||
                     kind!=HardwareDataflow.Kind.STORE_DIRECT &&
                         kind!=HardwareDataflow.Kind.STORE_INDIRECT ||
                     address!=null && (address<0 ||
@@ -227,7 +227,11 @@ public final class HardwareCallsiteRegisterFlow {
             contexts++;
             Callee callee=targetMap.get(call.directCallee());
             if(callee==null){missing++;continue;}
-            if(!eligible(callee)) {bad++;continue;}
+            // A self-CALL cannot have a closed CALL-free callee body.
+            // A contradictory source tuple must not mint an MMIO candidate.
+            if(callee.entry()==call.caller() || !eligible(callee)) {
+                bad++;continue;
+            }
             int iterations=Math.min(30000,Math.max(300,callee.steps().size()*20));
             HardwareDataflow.Result result=HardwareDataflow.analyzeWithEntryRegisters(
                 callee.entry(),callee.steps(),tracked,iterations,
