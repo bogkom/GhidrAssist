@@ -182,15 +182,18 @@ public final class HardwareFlowStageCache {
                     var beforeWrite=HardwareGhidraInputFingerprint.capture(
                         program,monitor,started.mc68332Selected()).orElse(null);
                     // Explicit clear from a concurrent UI turn still wins.
-                    synchronized(COMPLETED){
-                        if(!sameRevision(program,started) ||
-                                !EPOCHS.current(program,computationEpoch))
-                            throw new CancelledException();
-                    }
                     if(beforeWrite!=null){
                         byte[] bytes=HardwareDurableCfgReport.encode(
                             snapshot(calculated));
-                        HardwareDurableStageStore.save(directory,beforeWrite,bytes);
+                        // Serialize the actual publication with explicit clear,
+                        // not just the earlier generation check.
+                        synchronized(COMPLETED){
+                            monitor.checkCancelled();
+                            if(!sameRevision(program,started) ||
+                                    !EPOCHS.current(program,computationEpoch))
+                                throw new CancelledException();
+                            HardwareDurableStageStore.save(directory,beforeWrite,bytes);
+                        }
                     }
                 }catch(IOException|IllegalArgumentException skip){
                     // Durable cache is best-effort; no analysis or UI failure.
