@@ -280,8 +280,23 @@ public final class HardwareCallsiteRegisterFlowSelfTest {
             !HardwareDataflow.mayTouchTrackedAddress(0xfffffeL,0,Set.of(0L)),
             "byte overlap uses known widths only and never invents unknown width");
 
+        // A source-only tuple must never turn a recursive function into
+        // a closed leaf: the apparent callee would itself contain the CALL.
+        var recursiveCall=new HardwareCallsiteRegisterFlow.Call(
+            0x640,0x64c,0x640L,
+            Map.of("A0",simcr,"D0",0x40caL),false);
+        var recursiveEvidence=HardwareCallsiteRegisterFlow.analyze(
+            List.of(recursiveCall),List.of(callee),Set.of(simcr,cs),8);
+        ok(recursiveEvidence.rejectedNestedOrBadCfg()==1 &&
+            recursiveEvidence.possibleStoreSites()==0 &&
+            recursiveEvidence.candidates().isEmpty(),
+            "self-recursive direct CALL cannot emit a closed-leaf MMIO source");
+
         // Public source records must not mint CALL/STORE evidence from
         // unaligned or foreign-width instruction coordinates.
+        rejects(()->new HardwareCallsiteRegisterFlow.Call(
+            0x640,0x63e,0x700L,Map.of("D0",0x40caL),false),
+            "CALL before function entry cannot seed a closed callee");
         rejects(()->new HardwareCallsiteRegisterFlow.Call(
             0x100,0x103,0x640L,Map.of(),false),
             "odd CALL PC cannot be represented as verified CPU32 source");
@@ -306,6 +321,14 @@ public final class HardwareCallsiteRegisterFlowSelfTest {
             0x600,0x60c,0x640,0x640,OTHER,simcr,0x40ca,16,
             false,false,2),
             "non-STORE operation cannot be constructed as MMIO candidate");
+        rejects(()->new HardwareCallsiteRegisterFlow.Candidate(
+            0x600,0x5fe,0x640,0x640,STORE_INDIRECT,simcr,0x40ca,16,
+            false,false,2),
+            "public one-hop row rejects CALL PC before caller entry");
+        rejects(()->new HardwareCallsiteRegisterFlow.Candidate(
+            0x600,0x60c,0x640,0x63e,STORE_INDIRECT,simcr,0x40ca,16,
+            false,false,2),
+            "public one-hop row rejects STORE PC before callee entry");
         rejects(()->new HardwareCallsiteRegisterFlow.Candidate(
             0x600,0x60c,0x640,0x641,STORE_INDIRECT,simcr,0x40ca,16,
             false,false,2),
