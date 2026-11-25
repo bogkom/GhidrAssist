@@ -29,6 +29,7 @@ jobs:
           javac --release 21 -d "$RUNNER_TEMP/ga12-slice" \
             src/main/java/ghidrassist/hardware/HardwareDataflow.java \
             src/main/java/ghidrassist/hardware/HardwareStageEpochs.java \
+            src/main/java/ghidrassist/hardware/HardwareWeakIdentityMap.java \
             src/main/java/ghidrassist/hardware/HardwareFunctionStageCache.java \
             src/main/java/ghidrassist/hardware/HardwareDurableStageStore.java \
             src/main/java/ghidrassist/hardware/HardwareFunctionProgressCodec.java \
