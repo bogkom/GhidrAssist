@@ -4,6 +4,7 @@ on:
     paths:
       - 'src/main/java/ghidrassist/hardware/HardwareDataflow.java'
       - 'src/main/java/ghidrassist/hardware/HardwareFunctionStageCache.java'
+      - 'src/main/java/ghidrassist/hardware/HardwareWeakIdentityMap.java'
       - 'src/main/java/ghidrassist/hardware/HardwareDurableFunctionStages.java'
       - 'src/main/java/ghidrassist/hardware/HardwareVerifiedBranchReturn.java'
       - 'src/test/java/ghidrassist/hardware/HardwareCallCheckpointIntegrationSelfTest.java'
@@ -32,6 +33,7 @@ jobs:
           javac --release 21 -d "$RUNNER_TEMP/ga02-ga12" \
             src/main/java/ghidrassist/hardware/HardwareDataflow.java \
             src/main/java/ghidrassist/hardware/HardwareStageEpochs.java \
+            src/main/java/ghidrassist/hardware/HardwareWeakIdentityMap.java \
             src/main/java/ghidrassist/hardware/HardwareFunctionStageCache.java \
             src/main/java/ghidrassist/hardware/HardwareDurableStageStore.java \
             src/main/java/ghidrassist/hardware/HardwareFunctionResultCodec.java \
