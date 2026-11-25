@@ -63,9 +63,9 @@ public final class HardwareInterruptVectors {
                     recognizedFunctions<0 || interiorFunctionPointers<0 ||
                     unmapped<0 || outsideMcu24<0 || odd<0 ||
                     unreadable<0 || absent<0 ||
-                    readable+unreadable!=sampledSlots ||
-                    plausibleMapped+unmapped+outsideMcu24+odd+absent!=readable ||
-                    recognizedFunctions+interiorFunctionPointers>plausibleMapped ||
+                    (long)readable+unreadable!=sampledSlots ||
+                    (long)plausibleMapped+unmapped+outsideMcu24+odd+absent!=readable ||
+                    (long)recognizedFunctions+interiorFunctionPointers>plausibleMapped ||
                     displayed==null || displayed.size()>64 ||
                     displayed.size()>readable-absent ||
                     truncated!=(displayed.size()<readable-absent))
@@ -140,7 +140,7 @@ public final class HardwareInterruptVectors {
     public static Summary inspect(long tableAddress, List<Observation> input,
                                   int maximumDisplayed) {
         if(tableAddress<0 || tableAddress>0xffffffffL ||
-                (tableAddress & 3)!=0 || input==null ||
+                (tableAddress & 3)!=0 || input==null || input.size()>254 ||
                 maximumDisplayed<1 || maximumDisplayed>64)
             throw new IllegalArgumentException("Invalid vector table parameters");
         List<Observation> sorted=new ArrayList<>(input);
