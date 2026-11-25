@@ -55,7 +55,63 @@ public final class HardwareInterruptVectors {
                           int interiorFunctionPointers, int unmapped, int outsideMcu24,
                           int odd, int unreadable, int absent,
                           boolean truncated, List<Entry> displayed) {
-        public Summary { displayed=List.copyOf(displayed); }
+        public Summary {
+            if(tableAddress<0 || tableAddress>0xffffffffL ||
+                    (tableAddress&3L)!=0 ||
+                    sampledSlots<0 || sampledSlots>254 ||
+                    readable<0 || plausibleMapped<0 ||
+                    recognizedFunctions<0 || interiorFunctionPointers<0 ||
+                    unmapped<0 || outsideMcu24<0 || odd<0 ||
+                    unreadable<0 || absent<0 ||
+                    (long)readable+unreadable!=sampledSlots ||
+                    (long)plausibleMapped+unmapped+outsideMcu24+odd+absent!=readable ||
+                    (long)recognizedFunctions+interiorFunctionPointers>plausibleMapped ||
+                    displayed==null || displayed.size()>64 ||
+                    displayed.size()>readable-absent ||
+                    (truncated && displayed.isEmpty()) ||
+                    truncated!=(displayed.size()<readable-absent))
+                throw new IllegalArgumentException("Invalid vector evidence summary");
+            displayed=List.copyOf(displayed);
+            int previous=1;
+            int[] counts=new int[Classification.values().length];
+            for(Entry row:displayed){
+                if(row.vectorNumber()<=previous || row.vectorNumber()>255 ||
+                        row.classification()==Classification.UNREADABLE ||
+                        row.classification()==Classification.NULL_OR_ERASED ||
+                        row.pointer()==null || row.classification()==null ||
+                        row.slotAddress()>0xfffffffcL || row.slotAddress()!=
+                            tableAddress+4L*row.vectorNumber())
+                    throw new IllegalArgumentException("Invalid displayed vector evidence");
+                previous=row.vectorNumber();
+                long pointer=row.pointer();
+                if(pointer<=0 || pointer>=0xffffffffL ||
+                        (row.classification()==Classification.OUTSIDE_SELECTED_MCU24_RANGE
+                            ? pointer<=0xffffffL
+                            : ((pointer&1L)!=0)!=(row.classification()==Classification.ODD_POINTER)))
+                    throw new IllegalArgumentException("Invalid displayed vector pointer");
+                // A published handler name must agree with the static
+                // classification, including for manually constructed summaries.
+                boolean functionCandidate = row.classification()==
+                    Classification.RECOGNIZED_FUNCTION_CANDIDATE ||
+                    row.classification()==
+                    Classification.INTERIOR_FUNCTION_POINTER_CANDIDATE;
+                if(functionCandidate ? (row.function()==null ||
+                        row.function().isBlank()) :
+                        (row.function()!=null &&
+                         !"UNKNOWN".equals(row.function())))
+                    throw new IllegalArgumentException(
+                        "Displayed function evidence contradicts classification");
+                counts[row.classification().ordinal()]++;
+            }
+            int[] limits={0,0,odd,unmapped,outsideMcu24,
+                plausibleMapped-recognizedFunctions-interiorFunctionPointers,
+                interiorFunctionPointers,recognizedFunctions};
+            for(Classification state:Classification.values()) {
+                int i=state.ordinal();
+                if(counts[i]>limits[i] || (!truncated && counts[i]!=limits[i]))
+                    throw new IllegalArgumentException("Displayed vector classification contradicts summary");
+            }
+        }
 
         /** Concise source-evidence table with explicit VBR and IRQ ambiguity. */
         public String markdown() {
@@ -114,7 +170,7 @@ public final class HardwareInterruptVectors {
     public static Summary inspect(long tableAddress, List<Observation> input,
                                   int maximumDisplayed) {
         if(tableAddress<0 || tableAddress>0xffffffffL ||
-                (tableAddress & 3)!=0 || input==null ||
+                (tableAddress & 3)!=0 || input==null || input.size()>254 ||
                 maximumDisplayed<1 || maximumDisplayed>64)
             throw new IllegalArgumentException("Invalid vector table parameters");
         List<Observation> sorted=new ArrayList<>(input);
@@ -124,6 +180,15 @@ public final class HardwareInterruptVectors {
                     !seen.add(o.vectorNumber()) ||
                     (o.pointer()!=null &&
                       (o.pointer()<0 || o.pointer()>0xffffffffL)) ||
+                    // An odd, missing or erased pointer cannot also be a
+                    // verified mapped handler. A function name from an
+                    // unmapped target must not appear as handler evidence.
+                    (o.mappedTarget() &&
+                        (o.pointer()==null || o.pointer()==0 ||
+                         o.pointer()==0xffffffffL || (o.pointer()&1L)!=0)) ||
+                    (!o.mappedTarget() && o.containingFunction()!=null) ||
+                    (o.containingFunction()!=null &&
+                        o.containingFunction().isBlank()) ||
                     (o.outsideSelectedMcu24Range() &&
                      (o.pointer()==null || o.pointer()<=0xffffffL ||
                       o.mappedTarget() || o.containingFunction()!=null ||
@@ -193,6 +258,19 @@ public final class HardwareInterruptVectors {
     }
     private static String escape(String word) {
         if(word==null)return "UNKNOWN";
-        return word.replace("|","\\|").replace("\r"," ").replace("\n"," ");
+        StringBuilder escaped=new StringBuilder();
+        for(int at=0;at<word.length();) {
+            int c=word.codePointAt(at);
+            at+=Character.charCount(c);
+            int type=Character.getType(c);
+            if(c=='|')escaped.append("\\|");
+            else if(Character.isISOControl(c) ||
+                    type==Character.FORMAT ||
+                    type==Character.LINE_SEPARATOR ||
+                    type==Character.PARAGRAPH_SEPARATOR)
+                escaped.append(' ');
+            else escaped.appendCodePoint(c);
+        }
+        return escaped.toString();
     }
 }
