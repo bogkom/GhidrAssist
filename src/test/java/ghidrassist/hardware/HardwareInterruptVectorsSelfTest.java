@@ -111,12 +111,10 @@ public final class HardwareInterruptVectorsSelfTest {
         rejects(()->new HardwareInterruptVectors.Summary(0,1,1,1,0,0,
             0,0,0,0,0,false,List.of()),
             "summary cannot advertise a mapped pointer with no displayed row");
-        rejects(()->new HardwareInterruptVectors.Summary(0,1,
-                Integer.MAX_VALUE,Integer.MAX_VALUE,
-                Integer.MAX_VALUE,0,Integer.MAX_VALUE,
-                0,Integer.MAX_VALUE,Integer.MAX_VALUE,
-                0,true,List.of()),
-            "integer overflow cannot forge a small coherent ISR summary");
+        rejects(()->new HardwareInterruptVectors.Summary(0,2,2,
+                Integer.MAX_VALUE,0,0,Integer.MAX_VALUE,
+                4,0,0,0,true,List.of()),
+            "mapped and unmapped totals cannot wrap to a fake two-slot summary");
         rejects(()->HardwareInterruptVectors.inspect(0,
                 java.util.Collections.nCopies(255,
                     new HardwareInterruptVectors.Observation(
