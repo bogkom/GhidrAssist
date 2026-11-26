@@ -905,9 +905,9 @@ public final class HardwareTwoHopRegisterFlowSelfTest {
         // Each forged delta would reach SIMCR if accidentally accepted.
         for(boolean add:new boolean[]{true,false}) {
             String opcode=add?"ADDQ.W":"SUBQ.W";
-            long[] invalid=add?new long[]{0,9,-1}:
+            long[] illegalQuickDeltas=add?new long[]{0,9,-1}:
                 new long[]{0,1,-9};
-            for(long delta:invalid) {
+            for(long delta:illegalQuickDeltas) {
                 var caller=new HardwareCallsiteRegisterFlow.Call(
                     0xe00L,0xe0cL,0x640L,
                     Map.of("A0",simcr-delta,"D0",0x40caL),false);
