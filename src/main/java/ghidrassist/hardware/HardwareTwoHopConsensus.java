@@ -34,6 +34,34 @@ public final class HardwareTwoHopConsensus {
                      (address!=null || word!=null || bits!=0)))
                 throw new IllegalArgumentException("Invalid two-hop proof");
             provenance=List.copyOf(provenance);
+            if(state==State.SAMPLED_AGREEMENT) {
+                // Findings are public typed evidence, not just internal
+                // formatter rows. A forged record must not manufacture
+                // cross-CALL agreement with one caller, duplicate witnesses,
+                // inconsistent values or unknown effects.
+                if(sampledOuterCalls<2 ||
+                        sampledOuterCalls>HardwareTwoHopRegisterFlow.MAX_OUTER_CALLS ||
+                        provenance.size()!=sampledOuterCalls ||
+                        leaf>HardwareDataflow.MASK24 ||
+                        storePc>HardwareDataflow.MASK24 || storePc<leaf ||
+                        (leaf&1L)!=0 || (storePc&1L)!=0 ||
+                        address==null || address<0 ||
+                        address>HardwareDataflow.MASK24 ||
+                        (bits!=8 && bits!=16 && bits!=32))
+                    throw new IllegalArgumentException(
+                        "Agreement requires two independent source witnesses");
+                Set<String> uniqueOuter=new HashSet<>();
+                for(var row:provenance) {
+                    if(row.leafEntry()!=leaf || row.storePc()!=storePc ||
+                            !Objects.equals(row.effectiveAddress(),address) ||
+                            !Objects.equals(row.writtenWord(),word) ||
+                            row.bits()!=bits || row.priorUnknownCall() ||
+                            row.priorUnknownStore() ||
+                            !uniqueOuter.add(row.outerCaller()+":"+row.outerCallPc()))
+                        throw new IllegalArgumentException(
+                            "Agreement contradicts source provenance");
+                }
+            }
         }
         public boolean publishableAsHardwareProof(){return false;}
     }
