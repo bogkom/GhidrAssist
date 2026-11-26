@@ -213,7 +213,7 @@ public final class HardwareInterruptVectorsSelfTest {
             safeMarkdown.contains("\\`code\\`") &&
             !safeMarkdown.contains("<img src=x>") &&
             !safeMarkdown.contains(" [link](https://example.invalid)") &&
-            safeMarkdown.contains("normal\\\\_handler") &&
+            safeMarkdown.contains("normal\\_handler") &&
             !safeMarkdown.contains("normal_handler"),
             "HTML, Markdown links, code markers and underscores must render as inert text");
         ok(adversarial.equals(guarded.displayed().get(0).function()) &&
