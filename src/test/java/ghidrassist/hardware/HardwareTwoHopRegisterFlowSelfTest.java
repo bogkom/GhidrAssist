@@ -594,6 +594,68 @@ public final class HardwareTwoHopRegisterFlowSelfTest {
             pair.rows().get(0).effectiveAddress()==simcr,
             "Unsafe bridge fixtures never alter previously valid caller contexts");
 
+
+        // Reject a second CALL masquerading as harmless register clobber.
+        // Otherwise a false complete bridge could retain A0/D0 arguments
+        // across an unsummarized CPU32 JSR/BSR and invent an MMIO source.
+        for(String hiddenCall:List.of("JSR","BSR.W")){
+            var disguised=new HardwareTwoHopRegisterFlow.Bridge(0x640,
+                List.of(step(0x640,CLOBBER_POINTER,"D7",null,0,
+                        hiddenCall,0x642L),
+                    jsr(0x642,0x648),ret(0x648)),
+                0x642,0x700L,true);
+            var hidden=scan(List.of(left),List.of(disguised),
+                List.of(leaf),48);
+            ok(hidden.rejectedBridge()==1 && hidden.possibleStores()==0 &&
+                hidden.rows().isEmpty(),
+                "No extra hidden CPU32 CALL can be a register clobber: "+hiddenCall);
+        }
+        for(String hiddenControl:List.of("RTE","TRAP","STOP")){
+            var disguised=new HardwareTwoHopRegisterFlow.Bridge(0x640,
+                List.of(step(0x640,CLOBBER_POINTER,"D7",null,0,
+                        hiddenControl,0x642L),
+                    jsr(0x642,0x648),ret(0x648)),
+                0x642,0x700L,true);
+            ok(scan(List.of(left),List.of(disguised),
+                List.of(leaf),48).rejectedBridge()==1,
+                "Terminal/trap opcode cannot be disguised as an A/D clobber: "+
+                    hiddenControl);
+        }
+        var sideEffectNop=new HardwareTwoHopRegisterFlow.Bridge(0x640,
+            List.of(step(0x640,COPY_POINTER,"A1","A0",0,
+                    "MOVEA.L",0x642L),
+                step(0x642,OTHER,null,null,0,"NOP",0x644L)
+                    .withSideEffects(Set.of("D7")),
+                jsr(0x644,0x64a),ret(0x64a)),
+            0x644,0x700L,true);
+        var rejectedNop=scan(List.of(left),List.of(sideEffectNop),
+            List.of(leaf),48);
+        ok(rejectedNop.rejectedBridge()==1 && rejectedNop.rows().isEmpty(),
+            "NOP with unexpected P-code register effects fails closed");
+        var fakeNopRegister=new HardwareTwoHopRegisterFlow.Bridge(0x640,
+            List.of(step(0x640,OTHER,"D7",null,0,"NOP",0x642L),
+                jsr(0x642,0x648),ret(0x648)),
+            0x642,0x700L,true);
+        ok(scan(List.of(left),List.of(fakeNopRegister),
+            List.of(leaf),48).rejectedBridge()==1,
+            "NOP cannot carry a hidden explicit register write");
+        // Clean NOP between a source-preserving MOVEA and the audited
+        // JSR is still allowed; the regression must not block real flow.
+        var cleanNop=new HardwareTwoHopRegisterFlow.Bridge(0x640,
+            List.of(step(0x640,COPY_POINTER,"A1","A0",0,
+                    "MOVEA.L",0x642L),
+                step(0x642,OTHER,null,null,0,"NOP",0x644L),
+                jsr(0x644,0x64a),ret(0x64a)),
+            0x644,0x700L,true);
+        var safeAfterNop=scan(List.of(left),List.of(cleanNop),
+            List.of(leaf),48);
+        ok(safeAfterNop.possibleStores()==1 &&
+            safeAfterNop.rows().size()==1 &&
+            safeAfterNop.rows().get(0).effectiveAddress()==simcr &&
+            safeAfterNop.rows().get(0).writtenWord()==0x40ca &&
+            safeAfterNop.rejectedBridge()==0,
+            "A genuine side-effect-free NOP preserves the known two-hop SIMCR source");
+
         System.out.println("HardwareTwoHopRegisterFlowSelfTest PASS: assertions="+checks);
     }
 }
