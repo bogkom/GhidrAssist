@@ -198,6 +198,22 @@ public final class HardwareTwoHopRegisterFlow {
      */
     private static boolean sourceSuccessors(HardwareDataflow.Step step) {
         int size=step.successors.size();
+        // An extra JSR/BSR disguised as a register clobber would hide an
+        // unsummarized CALL while carrying another register's value into a
+        // seemingly direct two-hop MMIO source. The single audited nested
+        // CALL_BARRIER is the only permitted returning call in the bridge.
+        if(step.kind!=HardwareDataflow.Kind.CALL_BARRIER &&
+                RETURNING_CALL.matcher(step.mnemonic).matches())
+            return false;
+        // Returns, traps and STOP/RESET cannot be reclassified as benign
+        // A/D operations to evade the closed-bridge control-flow boundary.
+        if(step.kind!=HardwareDataflow.Kind.OTHER &&
+                step.kind!=HardwareDataflow.Kind.CALL_BARRIER &&
+                ("RTE".equals(step.mnemonic) || "RTR".equals(step.mnemonic) ||
+                 "RTD".equals(step.mnemonic) || "STOP".equals(step.mnemonic) ||
+                 "RESET".equals(step.mnemonic) ||
+                 step.mnemonic.startsWith("TRAP")))
+            return false;
         // Opcode/kind disagreement must never reinterpret a branch as
         // a linear register clobber or hide a CPU32 return.
         if(step.kind!=HardwareDataflow.Kind.OTHER &&
@@ -220,8 +236,14 @@ public final class HardwareTwoHopRegisterFlow {
                 BRANCH.matcher(step.mnemonic).matches())
             return size==2 && !step.successors.get(0).equals(
                 step.successors.get(1)) && step.sideEffectRegisters.isEmpty();
-        // Every NOP and modeled A/D instruction has exactly one successor
-        // in an acyclic, fully decoded intermediate CALL bridge.
+        // A true NOP has no implicit A/D writes. Even a synthetic OTHER
+        // step labelled NOP must not launder unaccounted P-code effects into
+        // a complete, trusted intermediate bridge.
+        if(step.kind==HardwareDataflow.Kind.OTHER &&
+                "NOP".equals(step.mnemonic))
+            return size==1 && step.sideEffectRegisters.isEmpty() &&
+                step.register==null && step.sourceRegister==null;
+        // All modeled A/D operations still require one exact successor.
         return size==1;
     }
 
