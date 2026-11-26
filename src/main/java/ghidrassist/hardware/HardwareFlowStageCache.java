@@ -192,7 +192,9 @@ public final class HardwareFlowStageCache {
                             if(!sameRevision(program,started) ||
                                     !EPOCHS.current(program,computationEpoch))
                                 throw new CancelledException();
-                            HardwareDurableStageStore.save(directory,beforeWrite,bytes);
+                            if(!EPOCHS.publishIfCurrent(program,computationEpoch,
+                                    ()->HardwareDurableStageStore.save(directory,beforeWrite,bytes)))
+                                throw new CancelledException();
                         }
                     }
                 }catch(IOException|IllegalArgumentException skip){
