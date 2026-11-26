@@ -213,8 +213,9 @@ public final class HardwareInterruptVectorsSelfTest {
             safeMarkdown.contains("\\`code\\`") &&
             !safeMarkdown.contains("<img src=x>") &&
             !safeMarkdown.contains(" [link](https://example.invalid)") &&
-            safeMarkdown.contains("normal_handler"),
-            "HTML, Markdown links and code markers must render as inert text");
+            safeMarkdown.contains("normal\\\\_handler") &&
+            !safeMarkdown.contains("normal_handler"),
+            "HTML, Markdown links, code markers and underscores must render as inert text");
         ok(adversarial.equals(guarded.displayed().get(0).function()) &&
             guarded.displayed().get(1).function().equals("double\\\\|pipe"),
             "escaping is presentation-only and never rewrites original evidence");
