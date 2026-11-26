@@ -248,6 +248,25 @@ public final class HardwareTwoHopRegisterFlow {
         return size==1;
     }
 
+    /**
+     * The decoded ADDA/SUBA source is an immediate, not an arbitrary
+     * unbounded Java long. Ghidra may expose a negative literal as a signed
+     * long or as its unsigned 32-bit sign extension. SUBA is represented as
+     * the negated source because the dataflow solver ADDS the delta.
+     * Reject any other representation before 24-bit bus truncation.
+     */
+    private static boolean cpu32AddressImmediate(String mnemonic,long delta) {
+        long source=mnemonic.startsWith("SUBA")?-delta:delta;
+        if(source< -0x80000000L || source>0xffffffffL)return false;
+        if(mnemonic.endsWith(".L"))return true;
+        if(!mnemonic.endsWith(".W"))return false;
+        // A word immediate is 16-bit signed, or its full 32-bit unsigned
+        // sign extension; raw 0x8000..0xffff cannot stand for a positive
+        // word operand. The decoder uses this same sign-extension rule.
+        return source>= -0x8000L && source<=0x7fffL ||
+            source>=0xffff8000L && source<=0xffffffffL;
+    }
+
     private static boolean safeBridge(Bridge bridge){
         if(!sourcePc(bridge.entry()) || !sourcePc(bridge.innerCallPc()) ||
                 bridge.innerCallPc()<bridge.entry() ||
@@ -328,7 +347,9 @@ public final class HardwareTwoHopRegisterFlow {
                 if(m.startsWith("ADDQ") &&
                         (step.operand<1 || step.operand>8) ||
                         m.startsWith("SUBQ") &&
-                        (step.operand< -8 || step.operand> -1))
+                        (step.operand< -8 || step.operand> -1) ||
+                        (m.startsWith("ADDA") || m.startsWith("SUBA")) &&
+                        !cpu32AddressImmediate(m,step.operand))
                     return false;
             }else if(step.kind==HardwareDataflow.Kind.CLOBBER_POINTER){
                 if(step.register==null || !step.register.matches("[AD][0-7]"))
