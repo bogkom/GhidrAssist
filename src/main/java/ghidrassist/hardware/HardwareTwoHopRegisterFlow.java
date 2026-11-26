@@ -31,8 +31,9 @@ public final class HardwareTwoHopRegisterFlow {
         "JSR|BSR(?:\\.[BWSL])?");
     private static final Pattern UNCONDITIONAL=Pattern.compile(
         "BRA(?:\\.[BWSL])?");
-    private static final Set<String> SET=Set.of("MOVE.L","MOVEA.L","MOVEQ","LEA");
     private static final Set<String> COPY=Set.of("MOVE.L","MOVEA.L");
+    private static final Pattern ADJUST=Pattern.compile(
+        "(?:ADDQ|SUBQ|ADDA|SUBA)\\.[BWL]");
 
     /**
      * Exact decoded intermediate function. The PC is an actual direct CALL
@@ -274,17 +275,42 @@ public final class HardwareTwoHopRegisterFlow {
                         step.successors.size()!=1)return false;
                 calls++;
             }else if(step.kind==HardwareDataflow.Kind.SET_POINTER) {
-                if(!SET.contains(m) || step.register==null ||
-                        !step.register.matches("[AD][0-7]"))return false;
+                if(step.register==null ||
+                        !step.register.matches("[AD][0-7]") ||
+                        step.sourceRegister!=null)return false;
+                // CPU32 MOVEQ addresses only Dn and sign-extends an 8-bit
+                // immediate. LEA/MOVEA address only An; MOVE.L immediate
+                // to Dn must not be disguised as an An assignment.
+                if("MOVEQ".equals(m)){
+                    if(!step.register.startsWith("D") ||
+                            (step.operand&HardwareDataflow.MASK24)!=
+                            (((byte)step.operand)&HardwareDataflow.MASK24))
+                        return false;
+                }else if("LEA".equals(m) || "MOVEA.L".equals(m)){
+                    if(!step.register.startsWith("A"))return false;
+                }else if(!"MOVE.L".equals(m) ||
+                        !step.register.startsWith("D"))return false;
             }else if(step.kind==HardwareDataflow.Kind.COPY_POINTER){
                 if(!COPY.contains(m) || step.sourceRegister==null ||
                         !step.sourceRegister.matches("[AD][0-7]") ||
                         step.register==null ||
-                        !step.register.matches("[AD][0-7]"))return false;
+                        !step.register.matches("[AD][0-7]") ||
+                        ("MOVEA.L".equals(m) != step.register.startsWith("A")))
+                    return false;
             }else if(step.kind==HardwareDataflow.Kind.ADJUST_POINTER){
-                if(step.register==null || !step.register.matches("[AD][0-7]") ||
-                        !(m.startsWith("ADD") || m.startsWith("SUB")) ||
-                        step.writeBits==0)return false;
+                // Dn .B/.W arithmetic preserves its high bits; accepting a
+                // forged full-word writeBits would corrupt the subsequent
+                // indexed MMIO address. ADDA/SUBA only target An; quick
+                // byte arithmetic is never legal with An destinations.
+                if(step.register==null ||
+                        !step.register.matches("[AD][0-7]") ||
+                        !ADJUST.matcher(m).matches() ||
+                        step.writeBits!=HardwareDataflow.registerAdjustWidth(
+                            step.register,m) ||
+                        (m.startsWith("ADDA") || m.startsWith("SUBA")) &&
+                            !step.register.startsWith("A") ||
+                        m.endsWith(".B") && step.register.startsWith("A"))
+                    return false;
             }else if(step.kind==HardwareDataflow.Kind.CLOBBER_POINTER){
                 if(step.register==null || !step.register.matches("[AD][0-7]"))
                     return false;
