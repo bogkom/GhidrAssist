@@ -795,6 +795,59 @@ public final class HardwareTwoHopRegisterFlowSelfTest {
                 List.of(leaf),48).rejectedBridge()==1,
                 "CPU32 address registers have no byte arithmetic: "+invalidAn);
         }
+        // Quick immediates encode only 1..8 (zero encoding is eight).
+        // The source solver adds signed deltas: SUBQ must be negative.
+        // Each forged delta would reach SIMCR if accidentally accepted.
+        for(boolean add:new boolean[]{true,false}) {
+            String opcode=add?"ADDQ.W":"SUBQ.W";
+            long[] invalid=add?new long[]{0,9,-1}:
+                new long[]{0,1,-9};
+            for(long delta:invalid) {
+                var caller=new HardwareCallsiteRegisterFlow.Call(
+                    0xe00L,0xe0cL,0x640L,
+                    Map.of("A0",simcr-delta,"D0",0x40caL),false);
+                var forged=new HardwareTwoHopRegisterFlow.Bridge(
+                    0x640,List.of(
+                        step(0x640,COPY_POINTER,"A1","A0",0,
+                            "MOVEA.L",0x642L),
+                        new HardwareDataflow.Step(0x642,ADJUST_POINTER,
+                            "A1",delta,0,null,32,List.of(0x644L),
+                            opcode),
+                        jsr(0x644,0x64a),ret(0x64a)),
+                    0x644,0x700L,true);
+                var denied=scan(List.of(caller),List.of(forged),
+                    List.of(leaf),48);
+                ok(denied.rejectedBridge()==1 &&
+                    denied.possibleStores()==0 && denied.rows().isEmpty(),
+                    "Unencodable "+opcode+" delta "+delta+
+                        " cannot manufacture a SIMCR candidate");
+            }
+        }
+        // Legal 1 and 8 remain valid at BOTH boundaries, including the
+        // sign of SUBQ. These are source MAY candidates, never execution.
+        for(int delta:new int[]{1,8,-1,-8}) {
+            String opcode=delta>0?"ADDQ.W":"SUBQ.W";
+            var caller=new HardwareCallsiteRegisterFlow.Call(
+                0xe40L,0xe4cL,0x640L,
+                Map.of("A0",simcr-delta,"D0",0x40caL),false);
+            var valid=new HardwareTwoHopRegisterFlow.Bridge(
+                0x640,List.of(
+                    step(0x640,COPY_POINTER,"A1","A0",0,
+                        "MOVEA.L",0x642L),
+                    new HardwareDataflow.Step(0x642,ADJUST_POINTER,
+                        "A1",delta,0,null,32,List.of(0x644L),opcode),
+                    jsr(0x644,0x64a),ret(0x64a)),
+                0x644,0x700L,true);
+            var accepted=scan(List.of(caller),List.of(valid),
+                List.of(leaf),48);
+            ok(accepted.rejectedBridge()==0 &&
+                accepted.possibleStores()==1 &&
+                accepted.rows().size()==1 &&
+                accepted.rows().get(0).effectiveAddress()==simcr &&
+                accepted.rows().get(0).writtenWord()==0x40ca,
+                "Encodable "+opcode+" delta "+delta+
+                    " preserves the exact source MAY candidate");
+        }
         ok(pair.possibleStores()==2 && pair.rows().size()==2 &&
             pair.rows().get(0).effectiveAddress()==simcr,
             "Rejected synthetic opcode/width fixtures never alter accepted contexts");
