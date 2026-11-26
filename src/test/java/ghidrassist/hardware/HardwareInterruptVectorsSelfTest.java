@@ -219,6 +219,42 @@ public final class HardwareInterruptVectorsSelfTest {
             guarded.displayed().get(1).function().equals("double\\\\|pipe"),
             "escaping is presentation-only and never rewrites original evidence");
 
+        // A user-defined Ghidra name must never visually promote source
+        // hypotheses to verified runtime handlers through Markdown emphasis.
+        String formatted="**VERIFIED** _active_ ~~removed~~";
+        String emoji=new String(Character.toChars(0x1f680));
+        String malformed="bad"+(char)0xd800+" middle "+(char)0xdc00+emoji;
+        var formattedRows=HardwareInterruptVectors.inspect(0,List.of(
+            new HardwareInterruptVectors.Observation(42,0x6100L,true,formatted,true),
+            new HardwareInterruptVectors.Observation(43,0x6200L,true,malformed,false),
+            new HardwareInterruptVectors.Observation(44,0x6300L,true,"plain_handler",true)),8);
+        String safeLabels=formattedRows.markdown();
+        ok(safeLabels.contains("\\*\\*VERIFIED\\*\\*") &&
+            safeLabels.contains("\\_active\\_") &&
+            safeLabels.contains("\\~\\~removed\\~\\~") &&
+            !safeLabels.contains("**VERIFIED**") &&
+            !safeLabels.contains("_active_") &&
+            !safeLabels.contains("~~removed~~"),
+            "user names must not impersonate trusted Markdown emphasis or strike-through");
+        ok(!safeLabels.contains(String.valueOf((char)0xd800)) &&
+            !safeLabels.contains(String.valueOf((char)0xdc00)) &&
+            safeLabels.contains(emoji),
+            "invalid isolated UTF-16 surrogates are neutralized; valid Unicode remains");
+        int formattedVectorRows=0;
+        for(String line:safeLabels.split("\n")) {
+            if(line.startsWith("| 42 |") || line.startsWith("| 43 |") ||
+                    line.startsWith("| 44 |")) {
+                ok(markdownColumns(line)==6,
+                    "emphasis, malformed Unicode and normal labels preserve six cells");
+                formattedVectorRows++;
+            }
+        }
+        ok(formattedVectorRows==3 && formattedRows.recognizedFunctions()==2 &&
+            formattedRows.interiorFunctionPointers()==1 &&
+            formattedRows.displayed().get(0).function().equals(formatted) &&
+            formattedRows.displayed().get(1).function().equals(malformed),
+            "presentation escaping preserves exact raw candidate names and classifications");
+
         var moved=HardwareInterruptVectors.inspect(0x800L,input,16);
         ok(moved.sampledSlots()==s.sampledSlots() &&
             moved.plausibleMapped()==s.plausibleMapped() &&
