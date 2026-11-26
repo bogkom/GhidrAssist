@@ -278,13 +278,22 @@ public final class HardwareTwoHopRegisterFlow {
                 if(step.register==null ||
                         !step.register.matches("[AD][0-7]") ||
                         step.sourceRegister!=null)return false;
-                // CPU32 MOVEQ addresses only Dn and sign-extends an 8-bit
-                // immediate. LEA/MOVEA address only An; MOVE.L immediate
-                // to Dn must not be disguised as an An assignment.
+                // The decoder supplies at most a 32-bit CPU32 operand.
+                // Truncating a forged larger constant to the 24-bit MMIO
+                // bus before checking it could produce a false source.
+                if(step.operand< -0x80000000L ||
+                        step.operand>0xffffffffL)return false;
+                // MOVEQ sign-extends an *8-bit* immediate to Dn. The
+                // read-only solver permits the decoded signed Long, 24-bit
+                // bus representation or 32-bit register representation,
+                // but never an arbitrary high word with the same low24.
+                // LEA/MOVEA address only An, MOVE.L immediate only Dn.
                 if("MOVEQ".equals(m)){
+                    long signed=(byte)step.operand;
                     if(!step.register.startsWith("D") ||
-                            (step.operand&HardwareDataflow.MASK24)!=
-                            (((byte)step.operand)&HardwareDataflow.MASK24))
+                            step.operand!=signed &&
+                            step.operand!=(signed&HardwareDataflow.MASK24) &&
+                            step.operand!=(signed&0xffffffffL))
                         return false;
                 }else if("LEA".equals(m) || "MOVEA.L".equals(m)){
                     if(!step.register.startsWith("A"))return false;
