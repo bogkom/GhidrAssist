@@ -263,7 +263,16 @@ public final class HardwareInterruptVectors {
             int c=word.codePointAt(at);
             at+=Character.charCount(c);
             int type=Character.getType(c);
-            if(c=='|')escaped.append("\\|");
+            // Names originate in an editable Ghidra symbol table, not in
+            // trusted Markdown. Escape backslashes before pipes, otherwise
+            // an existing backslash can cancel the pipe escape and inject a
+            // new table column. Also neutralize HTML and inline link/code
+            // delimiters without changing the original static evidence.
+            if(c=='\\' || c=='|' || c=='[' || c==']' || c=='`')
+                escaped.append('\\').appendCodePoint(c);
+            else if(c=='&')escaped.append("&amp;");
+            else if(c=='<')escaped.append("&lt;");
+            else if(c=='>')escaped.append("&gt;");
             else if(Character.isISOControl(c) ||
                     type==Character.FORMAT ||
                     type==Character.LINE_SEPARATOR ||
