@@ -14,6 +14,17 @@ public final class HardwareInterruptVectorsSelfTest {
         catch(IllegalArgumentException expected){denied=true;}
         ok(denied,message);
     }
+    /** Table separators, excluding a pipe escaped by an odd slash run. */
+    private static int markdownColumns(String row) {
+        int separators=0;
+        for(int i=0;i<row.length();i++) {
+            if(row.charAt(i)!='|')continue;
+            int slashes=0;
+            for(int j=i-1;j>=0 && row.charAt(j)=='\\';j--)slashes++;
+            if((slashes&1)==0)separators++;
+        }
+        return separators-1;
+    }
     public static void main(String[] args) {
         var input=new ArrayList<HardwareInterruptVectors.Observation>();
         input.add(new HardwareInterruptVectors.Observation(26,0x3000L,true,"isr_timer",true));
@@ -172,6 +183,41 @@ public final class HardwareInterruptVectorsSelfTest {
             !bidi.markdown().contains("\u202E") &&
             !bidi.markdown().contains("\u2028"),
             "format and line-separator controls cannot spoof vector report rows");
+
+        // Editable function names must not inject extra Markdown columns,
+        // executable HTML, links or code delimiters into GA-11 static evidence.
+        String adversarial="one\\|two <img src=x> & [link](https://example.invalid) `code`";
+        var guarded=HardwareInterruptVectors.inspect(0,List.of(
+            new HardwareInterruptVectors.Observation(2,0x1000L,true,adversarial,true),
+            new HardwareInterruptVectors.Observation(3,0x2000L,true,
+                "double\\\\|pipe",false),
+            new HardwareInterruptVectors.Observation(4,0x3000L,true,
+                "normal_handler",true)),8);
+        String safeMarkdown=guarded.markdown();
+        String[] reportLines=safeMarkdown.split("\n");
+        int vectorRows=0;
+        for(String line:reportLines) {
+            if(line.startsWith("| 2 |") || line.startsWith("| 3 |") ||
+                    line.startsWith("| 4 |")) {
+                ok(markdownColumns(line)==6,
+                    "one or two input backslashes must not create extra table cells");
+                vectorRows++;
+            }
+        }
+        ok(vectorRows==3 && guarded.recognizedFunctions()==2 &&
+            guarded.interiorFunctionPointers()==1,
+            "adversarial names cannot alter rows or source-only classification");
+        ok(safeMarkdown.contains("&lt;img src=x&gt;") &&
+            safeMarkdown.contains("&amp;") &&
+            safeMarkdown.contains("\\[link\\](https://example.invalid)") &&
+            safeMarkdown.contains("\\`code\\`") &&
+            !safeMarkdown.contains("<img src=x>") &&
+            !safeMarkdown.contains(" [link](https://example.invalid)") &&
+            safeMarkdown.contains("normal_handler"),
+            "HTML, Markdown links and code markers must render as inert text");
+        ok(adversarial.equals(guarded.displayed().get(0).function()) &&
+            guarded.displayed().get(1).function().equals("double\\\\|pipe"),
+            "escaping is presentation-only and never rewrites original evidence");
 
         var moved=HardwareInterruptVectors.inspect(0x800L,input,16);
         ok(moved.sampledSlots()==s.sampledSlots() &&
