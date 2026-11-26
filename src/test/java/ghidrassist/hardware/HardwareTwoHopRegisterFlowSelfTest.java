@@ -900,6 +900,75 @@ public final class HardwareTwoHopRegisterFlowSelfTest {
                 List.of(leaf),48).rejectedBridge()==1,
                 "CPU32 address registers have no byte arithmetic: "+invalidAn);
         }
+        // ADDA/SUBA immediate operands must be actually encodable as
+        // signed .W/.L CPU32 sources. A caller-supplied 64-bit or raw
+        // unsigned .W operand must never create a SIMCR MAY source merely
+        // because its low 24 bits alias the tracked register.
+        String[] invalidAddressOpcodes={
+            "ADDA.W","ADDA.W","SUBA.W","SUBA.W",
+            "ADDA.L","SUBA.L","ADDA.L","SUBA.L"
+        };
+        long[] invalidAddressDeltas={
+            0x8000L,0x10000L,-0x8000L,-0x10000L,
+            0x100000000L,-0x100000000L,-0x80000001L,0x80000001L
+        };
+        for(int i=0;i<invalidAddressDeltas.length;i++) {
+            String opcode=invalidAddressOpcodes[i];
+            long delta=invalidAddressDeltas[i];
+            var caller=new HardwareCallsiteRegisterFlow.Call(
+                0xf00L,0xf0cL,0x640L,
+                Map.of("A0",(simcr-delta)&HardwareDataflow.MASK24,
+                    "D0",0x40caL),false);
+            var forged=new HardwareTwoHopRegisterFlow.Bridge(
+                0x640,List.of(
+                    step(0x640,COPY_POINTER,"A1","A0",0,
+                        "MOVEA.L",0x642L),
+                    new HardwareDataflow.Step(0x642,ADJUST_POINTER,
+                        "A1",delta,0,null,32,List.of(0x644L),opcode),
+                    jsr(0x644,0x64a),ret(0x64a)),
+                0x644,0x700L,true);
+            var denied=scan(List.of(caller),List.of(forged),
+                List.of(leaf),48);
+            ok(denied.rejectedBridge()==1 &&
+                denied.possibleStores()==0 && denied.rows().isEmpty(),
+                "Noncanonical CPU32 "+opcode+" delta "+delta+
+                    " cannot fabricate static SIMCR evidence");
+        }
+        // Keep both legitimate signed and 32-bit sign-extended
+        // representations, including SUBA's negated solver delta.
+        String[] validAddressOpcodes={
+            "ADDA.W","ADDA.W","SUBA.W","SUBA.W",
+            "ADDA.L","SUBA.L","ADDA.L","SUBA.L"
+        };
+        long[] validAddressDeltas={
+            -1L,0xffffffffL,1L,-0xffffffffL,
+            0xffffffffL,-0xffffffffL,-0x80000000L,0x80000000L
+        };
+        for(int i=0;i<validAddressDeltas.length;i++) {
+            String opcode=validAddressOpcodes[i];
+            long delta=validAddressDeltas[i];
+            var caller=new HardwareCallsiteRegisterFlow.Call(
+                0xf40L,0xf4cL,0x640L,
+                Map.of("A0",(simcr-delta)&HardwareDataflow.MASK24,
+                    "D0",0x40caL),false);
+            var legal=new HardwareTwoHopRegisterFlow.Bridge(
+                0x640,List.of(
+                    step(0x640,COPY_POINTER,"A1","A0",0,
+                        "MOVEA.L",0x642L),
+                    new HardwareDataflow.Step(0x642,ADJUST_POINTER,
+                        "A1",delta,0,null,32,List.of(0x644L),opcode),
+                    jsr(0x644,0x64a),ret(0x64a)),
+                0x644,0x700L,true);
+            var accepted=scan(List.of(caller),List.of(legal),
+                List.of(leaf),48);
+            ok(accepted.rejectedBridge()==0 &&
+                accepted.possibleStores()==1 &&
+                accepted.rows().size()==1 &&
+                accepted.rows().get(0).effectiveAddress()==simcr &&
+                accepted.rows().get(0).writtenWord()==0x40ca,
+                "Encodable CPU32 "+opcode+" delta "+delta+
+                    " still yields the correct static MAY source");
+        }
         // Quick immediates encode only 1..8 (zero encoding is eight).
         // The source solver adds signed deltas: SUBQ must be negative.
         // Each forged delta would reach SIMCR if accidentally accepted.
