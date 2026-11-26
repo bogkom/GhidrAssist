@@ -759,6 +759,18 @@ public final class HardwareTwoHopRegisterFlowSelfTest {
         ok(scan(List.of(left),List.of(hugeData),
             List.of(leaf),48).rejectedBridge()==1,
             "Impossible >32-bit MOVE.L cannot forge the written word");
+        var negativeOverflowAddress=new HardwareTwoHopRegisterFlow.Bridge(
+            0x640,List.of(
+                step(0x640,SET_POINTER,"A1",null,-0x100000000L,
+                    "LEA",0x642L),
+                jsr(0x642,0x648),ret(0x648)),
+            0x642,0x700L,true);
+        var refusedNegative=scan(List.of(left),List.of(negativeOverflowAddress),
+            List.of(leaf),48);
+        ok(refusedNegative.rejectedBridge()==1 &&
+            refusedNegative.possibleStores()==0 &&
+            refusedNegative.rows().isEmpty(),
+            "Unrepresentable negative 64-bit LEA cannot wrap onto SIMCR");
         // Both canonical 24-bit bus and 32-bit register sign-extensions
         // remain allowed, including the signed Java Long representation.
         for(long validImmediate:new long[]{
