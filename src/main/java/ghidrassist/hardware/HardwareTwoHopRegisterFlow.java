@@ -311,6 +311,16 @@ public final class HardwareTwoHopRegisterFlow {
                             !step.register.startsWith("A") ||
                         m.endsWith(".B") && step.register.startsWith("A"))
                     return false;
+                // CPU32 encodes ADDQ/SUBQ with a 3-bit quick immediate
+                // (zero encoding means eight), never an arbitrary delta.
+                // The solver adds step.operand, so SUBQ must supply the
+                // NEGATIVE signed delta. Otherwise a forged source tuple
+                // could manufacture an MMIO address across the inner CALL.
+                if(m.startsWith("ADDQ") &&
+                        (step.operand<1 || step.operand>8) ||
+                        m.startsWith("SUBQ") &&
+                        (step.operand< -8 || step.operand> -1))
+                    return false;
             }else if(step.kind==HardwareDataflow.Kind.CLOBBER_POINTER){
                 if(step.register==null || !step.register.matches("[AD][0-7]"))
                     return false;
