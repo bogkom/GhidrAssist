@@ -21,7 +21,49 @@ public final class HardwareWeakIdentityMapSelfTest {
         }
         @Override public int hashCode(){return 7;}
     }
-    public static void main(String[] args){
+    private static void publicationFence() throws Exception {
+        var epochs=new HardwareStageEpochs<EqualOwner>();
+        var owner=new EqualOwner(10);
+        var other=new EqualOwner(11);
+        long generation=epochs.begin(owner);
+        long otherGeneration=epochs.begin(other);
+        var entered=new java.util.concurrent.CountDownLatch(1);
+        var release=new java.util.concurrent.CountDownLatch(1);
+        var clearing=new java.util.concurrent.CountDownLatch(1);
+        var order=new java.util.concurrent.atomic.AtomicInteger();
+        try(var executor=java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()){
+            var writer=executor.submit(()->epochs.publishIfCurrent(owner,generation,()->{
+                entered.countDown();
+                if(!release.await(5,java.util.concurrent.TimeUnit.SECONDS))
+                    throw new AssertionError("publication release timeout");
+                if(!order.compareAndSet(0,1))throw new AssertionError("clear overtook publication");
+            }));
+            try {
+                check(entered.await(5,java.util.concurrent.TimeUnit.SECONDS),"writer entered fence");
+                var clear=executor.submit(()->{
+                    clearing.countDown();
+                    epochs.invalidate(owner);
+                    if(!order.compareAndSet(1,2))throw new AssertionError("clear overtook writer");
+                });
+                check(clearing.await(5,java.util.concurrent.TimeUnit.SECONDS),"clear requested");
+                release.countDown();
+                check(writer.get(5,java.util.concurrent.TimeUnit.SECONDS),"current publication accepted");
+                clear.get(5,java.util.concurrent.TimeUnit.SECONDS);
+            } finally {release.countDown();}
+        }
+        check(order.get()==2,"clear follows accepted publication");
+        check(!epochs.publishIfCurrent(owner,generation,()->{
+            throw new AssertionError("stale publication executed");
+        }),"clear rejects old generation without side effects");
+        check(epochs.publishIfCurrent(other,otherGeneration,()->{}),"equal owner remains independent");
+        check(epochs.publishIfCurrent(owner,epochs.begin(owner),()->{}),"fresh generation accepted");
+        try {
+            epochs.publishIfCurrent(owner,epochs.begin(owner),()->{throw new java.io.IOException("synthetic");});
+            throw new AssertionError("publication exception swallowed");
+        } catch(java.io.IOException expected){check("synthetic".equals(expected.getMessage()),"IO failure propagated");}
+    }
+    public static void main(String[] args) throws Exception {
+        publicationFence();
         var first=new EqualOwner(1);
         var second=new EqualOwner(2);
         var unseen=new EqualOwner(3);

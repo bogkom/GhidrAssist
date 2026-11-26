@@ -64,6 +64,18 @@ public final class HardwareStageEpochs<K> {
         else epoch.put(key,next);
     }
 
+    /** Atomically reject stale publication or execute it before invalidation. */
+    @FunctionalInterface
+    public interface Publication<E extends Exception> {
+        void run() throws E;
+    }
+    public synchronized <E extends Exception> boolean publishIfCurrent(
+            K owner,long generation,Publication<E> publication) throws E {
+        if(!current(owner,generation))return false;
+        publication.run();
+        return true;
+    }
+
     public synchronized boolean current(K owner,long generation) {
         if(owner==null || generation<0)return false;
         discardCollectedOwners();
