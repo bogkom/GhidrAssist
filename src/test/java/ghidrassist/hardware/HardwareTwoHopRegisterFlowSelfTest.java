@@ -656,6 +656,149 @@ public final class HardwareTwoHopRegisterFlowSelfTest {
             safeAfterNop.rejectedBridge()==0,
             "A genuine side-effect-free NOP preserves the known two-hop SIMCR source");
 
+        // GA-02/03: CPU32 register/opcode/width consistency is a source
+        // acceptance boundary even for synthetic caller-supplied bridge
+        // steps. MOVEQ cannot write An, LEA/MOVEA cannot write Dn, and
+        // MOVE.L to An must not masquerade as a MOVEA instruction.
+        for(var fake:new HardwareDataflow.Step[]{
+            step(0x640,SET_POINTER,"A1",null,simcr,"MOVEQ",0x642L),
+            step(0x640,SET_POINTER,"D1",null,simcr,"LEA",0x642L),
+            step(0x640,SET_POINTER,"D1",null,simcr,"MOVEA.L",0x642L),
+            step(0x640,SET_POINTER,"A1",null,simcr,"MOVE.L",0x642L),
+            step(0x640,COPY_POINTER,"D1","A0",0,"MOVEA.L",0x642L),
+            step(0x640,COPY_POINTER,"A1","D0",0,"MOVE.L",0x642L)
+        }) {
+            var forged=new HardwareTwoHopRegisterFlow.Bridge(0x640,
+                List.of(fake,jsr(0x642,0x648),ret(0x648)),
+                0x642,0x700L,true);
+            var refused=scan(List.of(left),List.of(forged),
+                List.of(leaf),48);
+            ok(refused.rejectedBridge()==1 &&
+                refused.possibleStores()==0 && refused.rows().isEmpty(),
+                "Wrong CPU32 opcode/destination class rejected: "+
+                    fake.mnemonic+" "+fake.register);
+        }
+        // The immediate for MOVEQ is a signed 8-bit constant. Decoded
+        // -1 must be 0xFFFFFF, not the unsigned 0x0000FF value.
+        var fakeUnsignedMoveq=new HardwareTwoHopRegisterFlow.Bridge(
+            0x640,List.of(
+                step(0x640,COPY_POINTER,"A1","A0",0,
+                    "MOVEA.L",0x642L),
+                step(0x642,SET_POINTER,"D1",null,0xff,
+                    "MOVEQ",0x644L),
+                jsr(0x644,0x64a),ret(0x64a)),
+            0x644,0x700L,true);
+        ok(scan(List.of(left),List.of(fakeUnsignedMoveq),
+            List.of(indexedLeaf),48).rejectedBridge()==1,
+            "Unsigned MOVEQ #-1 cannot be accepted as a signed D-register constant");
+        var realNegativeMoveq=new HardwareTwoHopRegisterFlow.Bridge(
+            0x640,List.of(
+                step(0x640,COPY_POINTER,"A1","A0",0,
+                    "MOVEA.L",0x642L),
+                step(0x642,SET_POINTER,"D1",null,0xffffff,
+                    "MOVEQ",0x644L),
+                jsr(0x644,0x64a),ret(0x64a)),
+            0x644,0x700L,true);
+        var signedMoveq=scan(List.of(left),List.of(realNegativeMoveq),
+            List.of(indexedLeaf),48);
+        ok(signedMoveq.rejectedBridge()==0 &&
+            signedMoveq.possibleStores()==1 &&
+            signedMoveq.rows().size()==1 &&
+            signedMoveq.rows().get(0).effectiveAddress()==simcr &&
+            signedMoveq.rows().get(0).writtenWord()==0x40ca,
+            "Correct signed MOVEQ D1=-1 preserves indexed two-hop SIMCR source");
+
+        // Dn .W arithmetic must preserve its upper bits without carrying
+        // across the word boundary; the .L index in the leaf makes the
+        // distinction observable in the final tracked MMIO address.
+        var partialD1Caller=new HardwareCallsiteRegisterFlow.Call(
+            0xd00L,0xd0cL,0x640L,
+            Map.of("A0",simcr,"D0",0x40caL,"D1",0xffffL),false);
+        var indexedLongLeaf=new HardwareCallsiteRegisterFlow.Callee(
+            0x700,List.of(new HardwareDataflow.Step(
+                0x700,"A1","D0","D1",32,1,0,null,16,
+                List.of(0x704L),"MOVE.W"),ret(0x704)),true);
+        var validPartial=new HardwareTwoHopRegisterFlow.Bridge(
+            0x640,List.of(
+                step(0x640,COPY_POINTER,"A1","A0",0,
+                    "MOVEA.L",0x642L),
+                new HardwareDataflow.Step(0x642,ADJUST_POINTER,
+                    "D1",1,0,null,16,List.of(0x644L),"ADDQ.W"),
+                jsr(0x644,0x64a),ret(0x64a)),
+            0x644,0x700L,true);
+        var partialResult=scan(List.of(partialD1Caller),
+            List.of(validPartial),List.of(indexedLongLeaf),48);
+        ok(partialResult.rejectedBridge()==0 &&
+            partialResult.possibleStores()==1 &&
+            partialResult.rows().size()==1 &&
+            partialResult.rows().get(0).effectiveAddress()==simcr &&
+            partialResult.rows().get(0).writtenWord()==0x40ca,
+            "Legal ADDQ.W D1 preserves full-width indexed MMIO source without carry");
+        for(int invalidBits:new int[]{8,32}) {
+            var forged=new HardwareTwoHopRegisterFlow.Bridge(
+                0x640,List.of(
+                    step(0x640,COPY_POINTER,"A1","A0",0,
+                        "MOVEA.L",0x642L),
+                    new HardwareDataflow.Step(0x642,ADJUST_POINTER,
+                        "D1",1,0,null,invalidBits,List.of(0x644L),
+                        "ADDQ.W"),
+                    jsr(0x644,0x64a),ret(0x64a)),
+                0x644,0x700L,true);
+            var refused=scan(List.of(partialD1Caller),List.of(forged),
+                List.of(indexedLongLeaf),48);
+            ok(refused.rejectedBridge()==1 && refused.rows().isEmpty(),
+                "Forged ADDQ.W Dn width cannot resolve index: "+invalidBits);
+        }
+        for(String invalidMnemonic:List.of("ADDA.W","ADD.W","SUBA.L")) {
+            var forged=new HardwareTwoHopRegisterFlow.Bridge(
+                0x640,List.of(
+                    step(0x640,COPY_POINTER,"A1","A0",0,
+                        "MOVEA.L",0x642L),
+                    new HardwareDataflow.Step(0x642,ADJUST_POINTER,
+                        "D1",1,0,null,16,List.of(0x644L),
+                        invalidMnemonic),
+                    jsr(0x644,0x64a),ret(0x64a)),
+                0x644,0x700L,true);
+            ok(scan(List.of(partialD1Caller),List.of(forged),
+                List.of(indexedLongLeaf),48).rejectedBridge()==1,
+                "Illegal/unsupported Dn arithmetic opcode rejected: "+
+                    invalidMnemonic);
+        }
+        var addressQuickCaller=new HardwareCallsiteRegisterFlow.Call(
+            0xd40L,0xd4cL,0x640L,
+            Map.of("A0",simcr-2,"D0",0x40caL),false);
+        var validAddressQuick=new HardwareTwoHopRegisterFlow.Bridge(
+            0x640,List.of(
+                step(0x640,COPY_POINTER,"A1","A0",0,
+                    "MOVEA.L",0x642L),
+                new HardwareDataflow.Step(0x642,ADJUST_POINTER,
+                    "A1",2,0,null,32,List.of(0x644L),"ADDQ.W"),
+                jsr(0x644,0x64a),ret(0x64a)),
+            0x644,0x700L,true);
+        var addressResult=scan(List.of(addressQuickCaller),
+            List.of(validAddressQuick),List.of(leaf),48);
+        ok(addressResult.rejectedBridge()==0 &&
+            addressResult.possibleStores()==1 &&
+            addressResult.rows().get(0).effectiveAddress()==simcr,
+            "ADDQ.W An uses a full 32-bit address register increment");
+        for(String invalidAn:new String[]{"ADDQ.B","ADDA.B"}) {
+            var forged=new HardwareTwoHopRegisterFlow.Bridge(
+                0x640,List.of(
+                    step(0x640,COPY_POINTER,"A1","A0",0,
+                        "MOVEA.L",0x642L),
+                    new HardwareDataflow.Step(0x642,ADJUST_POINTER,
+                        "A1",2,0,null,32,List.of(0x644L),
+                        invalidAn),
+                    jsr(0x644,0x64a),ret(0x64a)),
+                0x644,0x700L,true);
+            ok(scan(List.of(addressQuickCaller),List.of(forged),
+                List.of(leaf),48).rejectedBridge()==1,
+                "CPU32 address registers have no byte arithmetic: "+invalidAn);
+        }
+        ok(pair.possibleStores()==2 && pair.rows().size()==2 &&
+            pair.rows().get(0).effectiveAddress()==simcr,
+            "Rejected synthetic opcode/width fixtures never alter accepted contexts");
+
         System.out.println("HardwareTwoHopRegisterFlowSelfTest PASS: assertions="+checks);
     }
 }
