@@ -73,6 +73,68 @@ public final class HardwareTwoHopConsensusSelfTest {
             "Independent outer, bridge, nested and leaf PCs retained");
         ok(!agreement.publishableAsHardwareProof(),
             "Sampled two-hop agreement is never runtime MMIO proof");
+        // The public Finding constructor must enforce the same independent
+        // source-witness requirements as the consensus solver. A consumer
+        // must not be able to inject a false SAMPLED_AGREEMENT by assembling
+        // incompatible or duplicate typed rows.
+        var typedAgreement=new HardwareTwoHopConsensus.Finding(
+            HardwareTwoHopConsensus.State.SAMPLED_AGREEMENT,
+            agreement.leaf(),agreement.storePc(),2,agreement.address(),
+            agreement.word(),agreement.bits(),agreement.provenance());
+        ok(typedAgreement.equals(agreement) &&
+            !typedAgreement.publishableAsHardwareProof(),
+            "Authentic independent two-CALL finding remains constructible");
+        var firstWitness=agreement.provenance().get(0);
+        var secondWitness=agreement.provenance().get(1);
+        denied(()->new HardwareTwoHopConsensus.Finding(
+            HardwareTwoHopConsensus.State.SAMPLED_AGREEMENT,
+            0x700L,0x700L,1,simcr,0x40ca,16,List.of(firstWitness)),
+            "Single CALL may not construct sampled cross-CALL agreement");
+        denied(()->new HardwareTwoHopConsensus.Finding(
+            HardwareTwoHopConsensus.State.SAMPLED_AGREEMENT,
+            0x700L,0x700L,2,simcr,0x40ca,16,
+            List.of(firstWitness,firstWitness)),
+            "Duplicated CALL provenance cannot fake independence");
+        denied(()->new HardwareTwoHopConsensus.Finding(
+            HardwareTwoHopConsensus.State.SAMPLED_AGREEMENT,
+            0x700L,0x700L,2,cs,0x40ca,16,agreement.provenance()),
+            "Claimed MMIO address must match both source witnesses");
+        denied(()->new HardwareTwoHopConsensus.Finding(
+            HardwareTwoHopConsensus.State.SAMPLED_AGREEMENT,
+            0x700L,0x702L,2,simcr,0x40ca,16,agreement.provenance()),
+            "Claimed STORE site cannot borrow evidence from another PC");
+        denied(()->new HardwareTwoHopConsensus.Finding(
+            HardwareTwoHopConsensus.State.SAMPLED_AGREEMENT,
+            0x700L,0x700L,2,null,0x40ca,16,agreement.provenance()),
+            "Unknown address cannot be displayed as source agreement");
+        denied(()->new HardwareTwoHopConsensus.Finding(
+            HardwareTwoHopConsensus.State.SAMPLED_AGREEMENT,
+            0x700L,0x700L,2,simcr,0x40ca,0,agreement.provenance()),
+            "Unknown STORE width cannot become a typed agreement");
+        denied(()->new HardwareTwoHopConsensus.Finding(
+            HardwareTwoHopConsensus.State.SAMPLED_AGREEMENT,
+            0x700L,0x700L,3,simcr,0x40ca,16,agreement.provenance()),
+            "Claimed caller count must agree with the actual source inventory");
+        var unknownCallWitness=new HardwareTwoHopRegisterFlow.Candidate(
+            secondWitness.outerCaller(),secondWitness.outerCallPc(),
+            secondWitness.bridgeEntry(),secondWitness.innerCallPc(),
+            secondWitness.leafEntry(),secondWitness.storePc(),
+            secondWitness.effectiveAddress(),secondWitness.writtenWord(),
+            secondWitness.bits(),secondWitness.knownEntryRegisters(),
+            secondWitness.knownInnerRegisters(),true,false);
+        denied(()->new HardwareTwoHopConsensus.Finding(
+            HardwareTwoHopConsensus.State.SAMPLED_AGREEMENT,
+            0x700L,0x700L,2,simcr,0x40ca,16,
+            List.of(firstWitness,unknownCallWitness)),
+            "Unknown nested CALL effect invalidates apparent agreement");
+        var nonProof=new HardwareTwoHopConsensus.Finding(
+            HardwareTwoHopConsensus.State.INCOMPLETE,0x700L,0x700L,
+            1,null,null,0,List.of(firstWitness));
+        ok(nonProof.state()==HardwareTwoHopConsensus.State.INCOMPLETE &&
+            nonProof.address()==null && !nonProof.publishableAsHardwareProof(),
+            "Incomplete source evidence remains representable without proof");
+
+
         var singleton=inspect(List.of(a),16);
         ok(singleton.state()==HardwareTwoHopConsensus.State.INCOMPLETE &&
                 singleton.sampledOuterCalls()==1 &&
