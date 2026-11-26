@@ -708,6 +708,99 @@ public final class HardwareTwoHopRegisterFlowSelfTest {
             signedMoveq.rows().get(0).writtenWord()==0x40ca,
             "Correct signed MOVEQ D1=-1 preserves indexed two-hop SIMCR source");
 
+        // MOVEQ is an *8-bit* signed immediate, not an arbitrary 32-bit
+        // value whose low 24 bits happen to alias a valid Dn value.
+        // Each forged tuple would manufacture SIMCR using the indexed leaf
+        // if the bridge silently truncated it before source validation.
+        for(long forgedValue:new long[]{
+                0x01000001L,0x01ffffffL,0x100000000L,0x100000001L}) {
+            int signed=(byte)forgedValue;
+            var caller=new HardwareCallsiteRegisterFlow.Call(
+                0xe80L,0xe8cL,0x640L,
+                Map.of("A0",simcr-signed-1L,"D0",0x40caL),false);
+            var forgedBridge=new HardwareTwoHopRegisterFlow.Bridge(
+                0x640,List.of(
+                    step(0x640,COPY_POINTER,"A1","A0",0,
+                        "MOVEA.L",0x642L),
+                    step(0x642,SET_POINTER,"D1",null,forgedValue,
+                        "MOVEQ",0x644L),
+                    jsr(0x644,0x64a),ret(0x64a)),
+                0x644,0x700L,true);
+            var refused=scan(List.of(caller),List.of(forgedBridge),
+                List.of(indexedLeaf),48);
+            ok(refused.rejectedBridge()==1 &&
+                refused.possibleStores()==0 && refused.rows().isEmpty(),
+                "Noncanonical MOVEQ high bits must not forge a SIMCR source: "+
+                    forgedValue);
+        }
+        // 24-bit bus truncation is NOT a license to accept a >32-bit
+        // decoded immediate for LEA, MOVEA.L or MOVE.L.
+        for(String opcode:new String[]{"LEA","MOVEA.L"}) {
+            var forged=new HardwareTwoHopRegisterFlow.Bridge(
+                0x640,List.of(
+                    step(0x640,SET_POINTER,"A1",null,0x100fffa00L,
+                        opcode,0x642L),
+                    jsr(0x642,0x648),ret(0x648)),
+                0x642,0x700L,true);
+            var denied=scan(List.of(left),List.of(forged),
+                List.of(leaf),48);
+            ok(denied.rejectedBridge()==1 &&
+                denied.possibleStores()==0 && denied.rows().isEmpty(),
+                "Impossible >32-bit "+opcode+" cannot alias SIMCR");
+        }
+        var hugeData=new HardwareTwoHopRegisterFlow.Bridge(
+            0x640,List.of(
+                step(0x640,COPY_POINTER,"A1","A0",0,
+                    "MOVEA.L",0x642L),
+                step(0x642,SET_POINTER,"D0",null,0x1000040caL,
+                    "MOVE.L",0x644L),
+                jsr(0x644,0x64a),ret(0x64a)),
+            0x644,0x700L,true);
+        ok(scan(List.of(left),List.of(hugeData),
+            List.of(leaf),48).rejectedBridge()==1,
+            "Impossible >32-bit MOVE.L cannot forge the written word");
+        // Both canonical 24-bit bus and 32-bit register sign-extensions
+        // remain allowed, including the signed Java Long representation.
+        for(long validImmediate:new long[]{
+                0x7fL,0xffff80L,0xffffff80L,-128L}) {
+            long signed=(byte)validImmediate;
+            var caller=new HardwareCallsiteRegisterFlow.Call(
+                0xec0L,0xeccL,0x640L,
+                Map.of("A0",simcr-signed-1,"D0",0x40caL),false);
+            var valid=new HardwareTwoHopRegisterFlow.Bridge(
+                0x640,List.of(
+                    step(0x640,COPY_POINTER,"A1","A0",0,
+                        "MOVEA.L",0x642L),
+                    step(0x642,SET_POINTER,"D1",null,validImmediate,
+                        "MOVEQ",0x644L),
+                    jsr(0x644,0x64a),ret(0x64a)),
+                0x644,0x700L,true);
+            var accepted=scan(List.of(caller),List.of(valid),
+                List.of(indexedLeaf),48);
+            ok(accepted.rejectedBridge()==0 &&
+                accepted.possibleStores()==1 &&
+                accepted.rows().size()==1 &&
+                accepted.rows().get(0).effectiveAddress()==simcr &&
+                accepted.rows().get(0).writtenWord()==0x40ca,
+                "Canonical signed MOVEQ preserves SIMCR MAY source: "+
+                    validImmediate);
+        }
+        // A legitimate 32-bit decoded CPU32 address may still be
+        // represented as a 24-bit bus alias; this is only source evidence.
+        var valid32BitAddress=new HardwareTwoHopRegisterFlow.Bridge(
+            0x640,List.of(
+                step(0x640,SET_POINTER,"A1",null,0xfffffa00L,
+                    "MOVEA.L",0x642L),
+                jsr(0x642,0x648),ret(0x648)),
+            0x642,0x700L,true);
+        var validAlias=scan(List.of(left),List.of(valid32BitAddress),
+            List.of(leaf),48);
+        ok(validAlias.rejectedBridge()==0 &&
+            validAlias.possibleStores()==1 &&
+            validAlias.rows().size()==1 &&
+            validAlias.rows().get(0).effectiveAddress()==simcr,
+            "Real 32-bit MOVEA.L bus alias remains a static MAY source");
+
         // Dn .W arithmetic must preserve its upper bits without carrying
         // across the word boundary; the .L index in the leaf makes the
         // distinction observable in the final tracked MMIO address.
