@@ -266,15 +266,19 @@ public final class HardwareInterruptVectors {
             // Names originate in an editable Ghidra symbol table, not in
             // trusted Markdown. Escape backslashes before pipes, otherwise
             // an existing backslash can cancel the pipe escape and inject a
-            // new table column. Also neutralize HTML and inline link/code
-            // delimiters without changing the original static evidence.
-            if(c=='\\' || c=='|' || c=='[' || c==']' || c=='`')
+            // new table column. Neutralize HTML, links, inline code, emphasis,
+            // and strike-through without altering the source evidence.
+            if(c=='\\' || c=='|' || c=='[' || c==']' || c=='`' ||
+                    c=='*' || c=='_' || c=='~')
                 escaped.append('\\').appendCodePoint(c);
             else if(c=='&')escaped.append("&amp;");
             else if(c=='<')escaped.append("&lt;");
             else if(c=='>')escaped.append("&gt;");
+            // Isolated UTF-16 surrogates must not escape into the rendered
+            // report or its JSON/HTML transport; paired Unicode stays intact.
             else if(Character.isISOControl(c) ||
                     type==Character.FORMAT ||
+                    type==Character.SURROGATE ||
                     type==Character.LINE_SEPARATOR ||
                     type==Character.PARAGRAPH_SEPARATOR)
                 escaped.append(' ');
