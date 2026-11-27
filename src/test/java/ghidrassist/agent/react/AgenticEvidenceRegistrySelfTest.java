@@ -26,6 +26,8 @@ public final class AgenticEvidenceRegistrySelfTest {
         findings.addFinding("source first","byte-range 0x100","listing",9);
         findings.addFinding("source second","byte-range 0x200","listing",6);
         String run=registry.begin(programA,17L,"a".repeat(64),findings);
+        denies(()->registry.begin(programA,17L,"a".repeat(64),findings),
+            "reused mutable findings cannot replace an active run");
         var first=registry.page(programA,17L,"a".repeat(64),0,1,null,null);
         yes(first.state().equals("RUNNING") && !first.complete() &&
             first.findings().hasMore() &&
@@ -98,12 +100,15 @@ public final class AgenticEvidenceRegistrySelfTest {
         String second=registry.begin(programA,17L,"a".repeat(64),newer);
         yes(!second.equals(run),"every analysis has a distinct opaque run token");
         registry.finish(programA,findings,"SUCCESS");
+        registry.finish(programA,newer,run,"SUCCESS");
+        registry.finish(programA,newer,null,"SUCCESS");
+        registry.finish(programA,newer,"not-the-current-run","SUCCESS");
         var fresh=registry.page(programA,17L,"a".repeat(64),0,1,null,null);
         yes(fresh.run().equals(second) && fresh.state().equals("RUNNING"),
             "late completion callback cannot mutate the next run");
         denies(()->registry.page(programA,17L,"a".repeat(64),1,1,
             run,fresh.findings().revision()),"stale run cannot stitch into newer analysis");
-        registry.finish(programA,newer,"CANCELLED");
+        registry.finish(programA,newer,second,"CANCELLED");
         var cancelled=registry.page(programA,17L,"a".repeat(64),0,10,null,null);
         yes(cancelled.state().equals("CANCELLED") && !cancelled.complete(),
             "cancelled work is not completed evidence");
@@ -193,9 +198,11 @@ public final class AgenticEvidenceRegistrySelfTest {
         registry.invalidate(programA);
         denies(()->registry.page(programA,17L,"a".repeat(64),0,1,null,null),
             "explicit Program invalidation removes prior evidence");
+        denies(()->registry.begin(programA,17L,"a".repeat(64),newer),
+            "invalidated cache cannot be reused while old callback may run");
         denies(()->registry.begin(null,0,"a",newer),
             "null Program must not register evidence");
-        registry.begin(programA,17L,"a".repeat(64),newer);
+        registry.begin(programA,17L,"a".repeat(64),new FindingsCache());
         denies(()->registry.page(programA,17L,"a".repeat(64),
             0,FindingsCache.MAX_PAGE_SIZE+1,null,null),
             "oversized bounded pages must be rejected");
@@ -225,6 +232,8 @@ public final class AgenticEvidenceRegistrySelfTest {
             0,1,otherLive,null),"B pages must disappear after B invalidation");
         registry.invalidate(programA);
         registry.invalidate(programA);
+        denies(()->registry.begin(equalButDifferent,17L,"a".repeat(64),active),
+            "cache from invalidated owner cannot migrate to an equal Program");
         yes(cancelCount.get()==1,
             "Program switch cancels exactly one live registered investigation");
         denies(()->registry.page(programA,17L,"a".repeat(64),0,1,null,null),
@@ -255,9 +264,19 @@ public final class AgenticEvidenceRegistrySelfTest {
                     page.state().equals("RUNNING"),
                     "synchronous old-run cancellation cannot overwrite replacement");
             });
+        denies(()->registry.begin(programA,17L,"a".repeat(64),oldCache),
+            "refused same-cache replacement cannot cancel the currently running provider");
+        yes(replacedCalls.get()==0 &&
+            registry.page(programA,17L,"a".repeat(64),0,1,null,null)
+                .run().equals(oldRun),
+            "cache-reuse refusal happens before binding replacement and cancellation");
         String newRun=registry.begin(programA,17L,"a".repeat(64),newCache);
         yes(!oldRun.equals(newRun) && replacedCalls.get()==1,
             "replacing a running analysis cancels the old run exactly once");
+        registry.finish(programA,newCache,oldRun,"SUCCESS");
+        yes(registry.page(programA,17L,"a".repeat(64),0,1,null,null)
+                .state().equals("RUNNING"),
+            "stale run token cannot finish a replacement even when it names current cache");
         denies(()->registry.page(programA,17L,"a".repeat(64),1,1,
             oldRun,0L),"replaced run token must never access new evidence");
         registry.finish(programA,newCache,"SUCCESS");

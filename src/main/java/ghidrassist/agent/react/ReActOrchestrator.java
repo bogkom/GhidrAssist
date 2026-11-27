@@ -371,7 +371,7 @@ public class ReActOrchestrator {
                 // through a strong cancellation closure.
                 var ownerRef=new java.lang.ref.WeakReference<>(this);
                 var runRef=new java.lang.ref.WeakReference<>(resultFuture);
-                AgenticEvidenceRegistry.shared().begin(evidenceProgram,
+                final String evidenceRun=AgenticEvidenceRegistry.shared().begin(evidenceProgram,
                     evidenceProgram.getModificationNumber(),
                     evidenceProgram.getExecutableSHA256(),findings,
                     () -> {
@@ -381,7 +381,7 @@ public class ReActOrchestrator {
                     });
                 resultFuture.whenComplete((result,error) ->
                     AgenticEvidenceRegistry.shared().finish(
-                        evidenceProgram,findings,
+                        evidenceProgram,findings,evidenceRun,
                         error!=null || result==null ? "ERROR" :
                             result.getStatus().name()));
             }

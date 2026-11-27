@@ -68,6 +68,8 @@ jobs:
           assert summary["ghidra_version"]=="12.1.4",summary
           for key in (
               "agentic_real_program_bounded_pages",
+              "agentic_real_program_exact_run_gate",
+              "agentic_real_program_cache_single_use",
               "agentic_real_program_revision_guard",
               "agentic_source_incomplete_remains_explicit",
               "agentic_read_only_revision_unchanged"):

@@ -548,3 +548,30 @@ saved-checkpoint imports enforce the same per-row boundary before preparing
 new proposals; no old plan, policy, tool permissions or Apply/Undo authority
 is inherited. Deterministic Python and Java25/Ghidra 12.1.4 PUBLIC CI are
 required on exact source SHA. No local host Supervisor runs are resumed.
+
+
+## 2026-11-27 — GA-12/15 exact Agentic run terminal binding
+
+A terminal ReAct provider callback now carries the **opaque run token**
+returned by the Program-bound `AgenticEvidenceRegistry.begin`. The
+registry accepts `finish(owner, findings, expectedRun, outcome)` only
+while the same exact owner, mutable findings instance and generation
+are still RUNNING. Null, stale, or mismatched tokens are no-ops; the
+first valid terminal outcome remains immutable.
+
+In addition, each mutable `FindingsCache` may be bound to this registry
+only **once**. Rebinding a cached object is refused before overwriting
+current evidence or invoking cancellation, including after explicit
+Program invalidation and across equals-equivalent Program wrappers.
+A weak-key allocation ledger does not own the cache or Program lifetime.
+The deprecated legacy three-argument `finish` overload is retained for
+existing in-process consumers only under the single-use-cache guarantee;
+new asynchronous callbacks must use the run-token overload.
+
+Deterministic Java 21 regressions cover active and post-invalidate
+cache reuse, cross-owner cache migration, old-run callback against a
+new run's actual cache, unknown/null run tokens and valid terminal
+completion. Require exact-head Java 25 full extension build and real
+synthetic Ghidra 12.1.4 PUBLIC CI before merging. GA-12/15 remain
+PARTIAL; this is not a claim of complete Agentic tool evidence or of
+executed MCU instructions.
