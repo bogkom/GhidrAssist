@@ -56,8 +56,10 @@ public final class HardwareCallsiteConsensus {
                     throw new IllegalArgumentException(
                         "Unattributed sampled CALL agreement");
                 Set<String> unique=new HashSet<>();
+                var firstKind=provenance.get(0).kind();
                 for(var hit:provenance)
                     if(!unique.add(hit.caller()+":"+hit.callPc()) ||
+                            hit.kind()!=firstKind ||
                             !Objects.equals(hit.address(),address) ||
                             !Objects.equals(hit.writtenWord(),word) ||
                             hit.writeBits()!=bits ||
