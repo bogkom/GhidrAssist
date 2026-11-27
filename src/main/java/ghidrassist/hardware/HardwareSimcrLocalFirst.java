@@ -20,10 +20,13 @@ public final class HardwareSimcrLocalFirst {
     public static final int MAX_SOURCE_EDGES=200_000;
     public static final int MAX_SOURCE_NODES=50_000;
     public static final int MAX_LOCAL_FUNCTIONS=75;
+    // Keep this source-only module compilable without the Ghidra/dataflow
+    // runtime: the explicitly selected MC68332 exposes a 24-bit bus.
+    private static final long MCU24_MAX=0xffffffL;
     public enum Effect { NONE, WORD_LITERAL, UNKNOWN_WORD, ALIAS_OR_CALL_BARRIER }
     public record Node(long pc,List<Long> successors,Effect effect,Integer word) {
         public Node {
-            if(pc<0 || pc>HardwareDataflow.MASK24 ||
+            if(pc<0 || pc>MCU24_MAX ||
                     successors==null || successors.size()>MAX_SOURCE_EDGES ||
                     effect==null ||
                     effect==Effect.WORD_LITERAL &&
@@ -32,7 +35,7 @@ public final class HardwareSimcrLocalFirst {
                 throw new IllegalArgumentException("Invalid local CFG SIMCR node");
             for(Long successor:successors)
                 if(successor==null || successor<0 ||
-                        successor>HardwareDataflow.MASK24)
+                        successor>MCU24_MAX)
                     throw new IllegalArgumentException(
                         "Foreign source CFG successor");
             successors=List.copyOf(successors);
@@ -40,7 +43,7 @@ public final class HardwareSimcrLocalFirst {
     }
     public record FirstSite(long pc,int word) {
         public FirstSite {
-            if(pc<0 || pc>HardwareDataflow.MASK24 ||
+            if(pc<0 || pc>MCU24_MAX ||
                     word<0 || word>0xffff)
                 throw new IllegalArgumentException("Invalid first SIMCR source");
         }
@@ -50,7 +53,7 @@ public final class HardwareSimcrLocalFirst {
             boolean cyclesOrIncompleteEdges,boolean workLimitReached,
             int visitedNodes) {
         public Result {
-            if(function<0 || function>HardwareDataflow.MASK24 ||
+            if(function<0 || function>MCU24_MAX ||
                     literalCandidates==null ||
                     literalCandidates.size()>MAX_SOURCE_NODES ||
                     visitedNodes<0 || visitedNodes>MAX_SOURCE_NODES ||
@@ -71,8 +74,8 @@ public final class HardwareSimcrLocalFirst {
     }
     public static Result inspect(long function,long entry,
             Collection<Node> graph,boolean otherUncertainty,int visitBudget) {
-        if(function<0 || function>HardwareDataflow.MASK24 ||
-                entry<0 || entry>HardwareDataflow.MASK24 ||
+        if(function<0 || function>MCU24_MAX ||
+                entry<0 || entry>MCU24_MAX ||
                 graph==null || visitBudget<1 ||
                 graph.size()>MAX_SOURCE_NODES)
             throw new IllegalArgumentException("Invalid first-site search budget");
