@@ -2720,7 +2720,20 @@ public final class Ga11VectorHeadlessMain {
                         bridge.page(full,rev+1,importSha,0,1,null,null);
                     } catch(IllegalStateException expected) { refused=true; }
                     check(refused,"Changed Ghidra Program revision must reject evidence");
-                    bridge.finish(full,evidence,"SUCCESS");
+                    // A forged or delayed completion cannot certify the
+                    // current Ghidra Program's Agentic evidence generation.
+                    bridge.finish(full,evidence,"incorrect-run-token","SUCCESS");
+                    check(bridge.page(full,rev,importSha,0,2,null,null)
+                        .state().equals("RUNNING"),
+                        "Foreign run token incorrectly completed real Program evidence");
+                    boolean reused=false;
+                    try {
+                        bridge.begin(full,rev,importSha,evidence);
+                    } catch(IllegalArgumentException expected) { reused=true; }
+                    check(reused && bridge.page(full,rev,importSha,0,2,null,null)
+                            .run().equals(run),
+                        "Reusing mutable real-Program findings must not replace run");
+                    bridge.finish(full,evidence,run,"SUCCESS");
                     check(bridge.page(full,rev,importSha,0,2,null,null).complete(),
                         "Completed real Program source may export retained evidence");
                     evidence.addFinding("later high relevance observation",
@@ -2742,8 +2755,29 @@ public final class Ga11VectorHeadlessMain {
                             .complete(),
                         "Unread tool source is not complete Agentic evidence");
                     bridge.invalidate(full);
+                    reused=false;
+                    try {
+                        bridge.begin(full,rev,importSha,evidence);
+                    } catch(IllegalArgumentException expected) { reused=true; }
+                    check(reused,"Invalidated findings must not be reused in real Program");
+                    var nextCache=new ghidrassist.agent.react.FindingsCache();
+                    nextCache.addFinding("new static function candidate",
+                        "synthetic Listing at PC 0x100","listing",7);
+                    String nextRun=bridge.begin(full,rev,importSha,nextCache);
+                    bridge.finish(full,nextCache,run,"SUCCESS");
+                    bridge.finish(full,nextCache,null,"SUCCESS");
+                    var resumed=bridge.page(full,rev,importSha,0,1,null,null);
+                    check(!nextRun.equals(run) && resumed.state().equals("RUNNING") &&
+                        resumed.run().equals(nextRun) && !resumed.complete(),
+                        "Stale callback token may not finish new real Program evidence");
+                    bridge.finish(full,nextCache,nextRun,"SUCCESS");
+                    check(bridge.page(full,rev,importSha,0,1,null,null).complete(),
+                        "Valid exact-run terminal callback must finish new evidence");
+                    bridge.invalidate(full);
                     check(full.getModificationNumber()==rev,
                         "Agentic evidence bridge must not mutate real Ghidra Program");
+                    result.addProperty("agentic_real_program_exact_run_gate",true);
+                    result.addProperty("agentic_real_program_cache_single_use",true);
                     result.addProperty("agentic_real_program_bounded_pages",true);
                     result.addProperty("agentic_real_program_revision_guard",true);
                     result.addProperty("agentic_source_incomplete_remains_explicit",true);

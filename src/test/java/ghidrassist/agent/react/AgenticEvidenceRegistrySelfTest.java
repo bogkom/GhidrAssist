@@ -264,6 +264,12 @@ public final class AgenticEvidenceRegistrySelfTest {
                     page.state().equals("RUNNING"),
                     "synchronous old-run cancellation cannot overwrite replacement");
             });
+        denies(()->registry.begin(programA,17L,"a".repeat(64),oldCache),
+            "refused same-cache replacement cannot cancel the currently running provider");
+        yes(replacedCalls.get()==0 &&
+            registry.page(programA,17L,"a".repeat(64),0,1,null,null)
+                .run().equals(oldRun),
+            "cache-reuse refusal happens before binding replacement and cancellation");
         String newRun=registry.begin(programA,17L,"a".repeat(64),newCache);
         yes(!oldRun.equals(newRun) && replacedCalls.get()==1,
             "replacing a running analysis cancels the old run exactly once");
