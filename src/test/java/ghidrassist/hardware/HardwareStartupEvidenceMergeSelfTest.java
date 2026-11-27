@@ -77,12 +77,12 @@ public final class HardwareStartupEvidenceMergeSelfTest {
         // The reconciliation must preserve original source strings while
         // preventing newlines, pipe cells, HTML and oversized names from
         // being published as hardware evidence.
-        String label="SIMCR\\r\\n| CLAIM_ACTIVE <b>"+"Z".repeat(100000);
+        String label="SIMCR\r\n| CLAIM_ACTIVE <b>"+"Z".repeat(100000);
         var unsafe=HardwareStartupEvidenceMerge.reconcile(List.of(
             site(0x2bca,0xfffa00,label,cfg,true,16,0x40ca,false)));
         String safe=unsafe.markdown(true);
         ok(unsafe.rows().get(0).candidateRegister().equals(label) &&
-            safe.contains("[U+005C]") && safe.contains("[U+007C]") &&
+            safe.contains("[U+000D]") && safe.contains("[U+000A]") && safe.contains("[U+007C]") &&
             safe.contains("[U+003C]") && safe.contains("[ABBREVIATED LABEL]") &&
             !safe.contains("<b>") && !safe.contains("| CLAIM_ACTIVE") &&
             safe.length()<1900,
