@@ -444,29 +444,56 @@ public final class HardwareDataflow {
         return mayTouchSimcrMmLowByte(address,step.writeBits);
     }
 
+    /**
+     * Source-value projection for the selected MCU's 24-bit external bus.
+     * Only canonical CPU32 signed values whose meaning is independently
+     * fixed by their decoded mnemonic may be interpreted as bus candidates:
+     * MOVEA.W sign-extends 16 bits; MOVEQ sign-extends 8 bits; MOVEA.L/LEA
+     * can encode an already sign-extended negative 16-bit address. This
+     * is a possible address source, never proof of execution/MM/VBR.
+     *
+     * An arbitrary 32-bit word with matching low bits (0x01000800,
+     * 0x01FFFA00) is deliberately UNKNOWN. For MOVEC VBR_CONSTANT the
+     * separate full-width gate in transfer() still refuses high sources.
+     * The GA-12 independent replay calls THIS helper, so it cannot
+     * disagree with live CFG semantics on a completed checkpoint.
+     */
+    static Long boundedSourceConstant(Step step) {
+        if(step==null || step.register==null)return null;
+        long word=step.operand;
+        if(word>=0 && word<=MASK24)return word;
+        String opcode=step.mnemonic;
+        if("MOVEQ".equals(opcode) && step.register.startsWith("D")) {
+            long signed=(byte)word;
+            if(word==signed || word==(signed&0xffffffL) ||
+                    word==(signed&0xffffffffL))
+                return signed&MASK24;
+        }
+        if(step.register.startsWith("A") && "MOVEA.W".equals(opcode) &&
+                (word>=-0x8000L && word<0 ||
+                 word>=0xffff8000L && word<=0xffffffffL))
+            return word&MASK24;
+        // Existing CPU32 Listing fixtures include full-width canonical
+        // negative MOVEA.L/LEA source addresses (e.g. 0xFFFFFA00).
+        // Do not generalize this exception to 0x01FFFA00, any Dn MOVEC
+        // source or arbitrary high 32-bit constants.
+        if(step.register.startsWith("A") &&
+                ("MOVEA.L".equals(opcode) || "LEA".equals(opcode)) &&
+                word>=0xffff8000L && word<=0xffffffffL)
+            return word&MASK24;
+        return null;
+    }
+
     private static State transfer(Step step,State in,Set<Long> targets){
         State s=in.copy();
         switch(step.kind) {
             case SET_POINTER -> {
                 if(step.register!=null) {
-                    // SET_POINTER is a CPU32 32-bit *source* constant. It
-                    // cannot be downcast to a known MC68332 24-bit MMIO
-                    // destination or MOVEC/VBR source by discarding high
-                    // bits. Preserve UNKNOWN, not a fabricated alias.
-                    // A canonical MOVEA.W sign-extends a negative 16-bit
-                    // source to 32 bits before An is used as an external
-                    // address. Only this explicit instruction may be
-                    // projected to the 24-bit MC68332 bus. A high MOVEA.L
-                    // or MOVE.L source is NOT an inferred low address.
-                    long source=step.operand;
-                    boolean signedWordAddress=step.register.startsWith("A") &&
-                        "MOVEA.W".equals(step.mnemonic) &&
-                        (source>=-0x8000L && source<0 ||
-                         source>=0xffff8000L && source<=0xffffffffL);
-                    if(signedWordAddress)
-                        source&=MASK24;
-                    if(source<0 || source>MASK24)
-                        s.pointers.remove(step.register);
+                    // Project only bounded source words and explicitly
+                    // decoded canonical sign extensions. An arbitrary high
+                    // CPU32 value MUST NOT silently alias MCU24 MMIO.
+                    Long source=boundedSourceConstant(step);
+                    if(source==null)s.pointers.remove(step.register);
                     else s.pointers.put(step.register,source);
                 }
             }
