@@ -20,16 +20,26 @@ public final class HardwareCfgStorePaths {
     private HardwareCfgStorePaths(){}
     public static final int MAX_SITES_PER_FUNCTION=12;
     public static final int MAX_DISPLAYED_RELATIONS=90;
+    public static final int MAX_SOURCE_NODES=50_000;
+    public static final int MAX_SOURCE_EDGES=200_000;
+    public static final int MAX_SOURCE_STORES=50_000;
+    private static final long MAX_CPU32_ADDRESS=0xffffffffL;
     public record Node(long pc,List<Long> successors) {
         public Node {
-            if(pc<0 || successors==null)
+            if(pc<0 || pc>MAX_CPU32_ADDRESS || successors==null ||
+                    successors.size()>MAX_SOURCE_EDGES)
                 throw new IllegalArgumentException("Invalid CFG node");
+            for(Long next:successors)
+                if(next==null || next<0 || next>MAX_CPU32_ADDRESS)
+                    throw new IllegalArgumentException(
+                        "Invalid CPU32 successor source identity");
             successors=List.copyOf(successors);
         }
     }
     public record Store(long pc,String register){
         public Store {
-            if(pc<0 || register==null || register.isBlank())
+            if(pc<0 || pc>MAX_CPU32_ADDRESS ||
+                    register==null || register.isBlank())
                 throw new IllegalArgumentException("Invalid candidate store");
         }
     }
@@ -86,14 +96,24 @@ public final class HardwareCfgStorePaths {
     public static Report analyze(long function,Collection<Node> nodes,
                                  Collection<Store> stores,boolean functionUncertain,
                                  int visitBudget) {
-        if(function<0 || nodes==null || stores==null || visitBudget<1 ||
-                nodes.size()>50000)
+        if(function<0 || function>MAX_CPU32_ADDRESS ||
+                nodes==null || stores==null || visitBudget<1 ||
+                nodes.size()>MAX_SOURCE_NODES ||
+                stores.size()>MAX_SOURCE_STORES)
             throw new IllegalArgumentException("Invalid bounded CFG evidence");
         Map<Long,Node> graph=new HashMap<>();
         boolean gaps=false;
+        long edges=0;
         for(Node n:nodes) {
             if(n==null || graph.putIfAbsent(n.pc(),n)!=null)
                 throw new IllegalArgumentException("Duplicate/invalid CFG nodes");
+            // A visit budget limits explored nodes, not adjacency fan-out.
+            // Refuse oversized source edge inventories before entry walks,
+            // pair searches or publication can imply complete provenance.
+            edges+=n.successors().size();
+            if(edges>MAX_SOURCE_EDGES)
+                throw new IllegalArgumentException(
+                    "Oversized source CFG edge inventory");
         }
         // A function must own its decoded entry, every modeled source and
         // every outgoing branch target. Off-graph successors at/after entry
