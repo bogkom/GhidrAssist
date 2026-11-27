@@ -442,3 +442,25 @@ PUBLIC extension CI gate integration. No register renames, inferred
 SIMCR/MM activation, PIT interrupt firing, physical MMIO map, original
 ECU411 firmware modification or unattended Apply is introduced.
 GA-06/10/16 remain PARTIAL.
+
+## 2026-11-27 — match printed publisher folio structurally, not by body substring
+
+The 15 SIMCR/SYNCR field-heading and nearby-description witnesses remain
+static, source-only claims. `HardwareManualFieldExcerptEvidence` now calls
+the existing bounded `ManualPrintedPage.fromText` on the **original
+line-preserving extracted PDF page** and requires an unambiguous
+`PDF_TEXT_HEADER_CANDIDATE` matching the reviewed D-5/D-6/D-7 folio.
+Only after that identity gate does it use canonicalized page text to
+correlate reviewed headings and nearby meaning.
+
+Previously `text.contains("D-6")` could match a cross-reference in the
+body of a physical page with a D-5 header, falsely accepting the page
+identity. Java 21 negative controls now insert exactly that spoofed body
+reference, conflicting headers, and an independent valid D-6 footer.
+The official SHA-pinned MC68332UM PDF workflow compiles the shared
+printed-folio validator and exercises the real 265-page publisher source.
+A matching text header is not itself authentication: GitHub Actions'
+independent whole-PDF SHA-256, physical-page and excerpt checks still
+define the bounded external evidence. No firmware execution,
+SIMCR/MM latch, physical chip select or Review/Apply inference follows.
+GA-06/10/16 remain PARTIAL until their separate criteria are accepted.
