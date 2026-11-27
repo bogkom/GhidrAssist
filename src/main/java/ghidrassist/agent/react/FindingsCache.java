@@ -5,6 +5,7 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -82,8 +83,9 @@ public class FindingsCache {
             } else updateRelevance(relevance);
         }
         private void updateRelevance(int relevance) {
-            if(this.relevance!=relevance) {
-                this.relevance=relevance;
+            int boundedScore=Math.max(0,Math.min(10,relevance));
+            if(this.relevance!=boundedScore) {
+                this.relevance=boundedScore;
                 if(retained && onRelevanceChange!=null)onRelevanceChange.run();
             }
         }
@@ -335,7 +337,9 @@ public class FindingsCache {
      * Returns highest matching keyword category score.
      */
     private int calculateRelevance(String text) {
-        String lowerText = text.toLowerCase();
+        // Stable keyword classification across host default locales, even
+        // when Ghidra runs under a Turkish or Lithuanian UI locale.
+        String lowerText = text.toLowerCase(Locale.ROOT);
 
         // Check for high-relevance keywords first
         for (String keyword : HIGH_KEYWORDS) {
