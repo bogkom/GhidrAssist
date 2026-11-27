@@ -1,3 +1,8 @@
+## GA-11 — 2026-11-27: bounded static vector symbol presentation merged (#365)
+
+- **PR #365 MERGED**: source head `aedb2edb86289f80f5a82b6288d1288297ec631d`; squash merge `278a473cb941783b03bca960d363ae37d8bbc53e`; **28/28 exact-head GitHub Actions SUCCESS**. Java 21 vector evidence regression, complete Java 25 extension build and actual isolated synthetic Ghidra 12.1.4 PUBLIC were verified, including [headless GA-11 run 45938379309](https://github.com/bogkom/GhidrAssist/actions/runs/45938379309) and [Hardware Analysis run 45938379184](https://github.com/bogkom/GhidrAssist/actions/runs/45938379184).
+- Report formatting bounds untrusted Ghidra handler names to 256 Unicode code points, escaping markup and annotating abbreviations; 100,000-character and 64-row adversarial regressions retain full raw source names, original classifications and counters without oversized table output. No runtime VBR/ISR, physical MCU decode or executable firmware path is proven. **GA-11 remains PARTIAL** until the remaining roadmap acceptance conditions are met.
+
 ## GA-02/03 / GA-12 — 2026-11-25: verified source-cycle and cache-owner isolation (PR #355, #356)
 
 - **PR #355 MERGED:** exact source head `8c3fc13220c3c457dce152da0a8b6a2cdc70796b`, 27/27 GitHub Actions SUCCESS (Java 21, Java 25 complete extension, genuine synthetic Ghidra); squash `208d28e4eb1610e769e1d7276ad1a6a05678da3c`. One-hop CALL/STORE PCs must lie at or after their function entries; source-only self-recursive CALL and two-hop outer/bridge/outer cycles cannot generate MMIO Candidate rows. GA-02/03 still PARTIAL.
