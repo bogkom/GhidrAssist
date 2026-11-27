@@ -31,8 +31,13 @@ public final class HardwareTwoHopRegisterFlow {
         "JSR|BSR(?:\\.[BWSL])?");
     private static final Pattern UNCONDITIONAL=Pattern.compile(
         "BRA(?:\\.[BWSL])?");
-    private static final Set<String> SET=Set.of("MOVE.L","MOVEA.L","MOVEQ","LEA");
+    // DBcc changes Dn AND branches. It must never pass as a linear
+    // CLOBBER_POINTER step with a fabricated fallthrough successor.
+    private static final Pattern DECREMENT_BRANCH=Pattern.compile(
+        "DB(?:CC|CS|EQ|NE|GE|GT|HI|LE|LS|LT|MI|PL|VC|VS|F|T|RA)(?:\\.W)?");
     private static final Set<String> COPY=Set.of("MOVE.L","MOVEA.L");
+    private static final Pattern ADJUST=Pattern.compile(
+        "(?:ADDQ|SUBQ|ADDA|SUBA)\\.[BWL]");
 
     /**
      * Exact decoded intermediate function. The PC is an actual direct CALL
@@ -214,12 +219,19 @@ public final class HardwareTwoHopRegisterFlow {
                  "RESET".equals(step.mnemonic) ||
                  step.mnemonic.startsWith("TRAP")))
             return false;
-        // Opcode/kind disagreement must never reinterpret a branch as
-        // a linear register clobber or hide a CPU32 return.
+        // Opcode/kind disagreement must never reinterpret control flow
+        // as a linear A/D clobber. In particular DBcc mutates Dn while
+        // conditionally branching, and JMP/exception instructions cannot
+        // be carried across the exact inner CALL by a fake fallthrough.
         if(step.kind!=HardwareDataflow.Kind.OTHER &&
                 step.kind!=HardwareDataflow.Kind.CALL_BARRIER &&
                 ("RTS".equals(step.mnemonic) ||
-                 BRANCH.matcher(step.mnemonic).matches()))
+                 "JMP".equals(step.mnemonic) ||
+                 "ILLEGAL".equals(step.mnemonic) ||
+                 "BKPT".equals(step.mnemonic) ||
+                 "TRAPV".equals(step.mnemonic) ||
+                 BRANCH.matcher(step.mnemonic).matches() ||
+                 DECREMENT_BRANCH.matcher(step.mnemonic).matches()))
             return false;
         if("RTS".equals(step.mnemonic))return
             step.kind==HardwareDataflow.Kind.OTHER && size==0 &&
@@ -245,6 +257,32 @@ public final class HardwareTwoHopRegisterFlow {
                 step.register==null && step.sourceRegister==null;
         // All modeled A/D operations still require one exact successor.
         return size==1;
+    }
+
+    /**
+     * The decoded ADDA/SUBA source is an immediate, not an arbitrary
+     * unbounded Java long. Ghidra may expose a negative literal as a signed
+     * long or as its unsigned 32-bit sign extension. SUBA is represented as
+     * the negated source because the dataflow solver ADDS the delta.
+     * Reject any other representation before 24-bit bus truncation.
+     */
+    private static boolean cpu32AddressImmediate(String mnemonic,long delta) {
+        long source=mnemonic.startsWith("SUBA")?-delta:delta;
+        if(source< -0x80000000L || source>0xffffffffL)return false;
+        if(mnemonic.endsWith(".L"))return true;
+        if(!mnemonic.endsWith(".W"))return false;
+        return cpu32SignedWord(source);
+    }
+
+    /**
+     * CPU32 MOVEA.W and ADDA/SUBA.W sign-extend a 16-bit word into An.
+     * The decoder can represent a negative value as a signed Java long
+     * or a zero-extended unsigned 32-bit *sign-extended* register word.
+     * A raw unsigned 0x8000..0xffff is not a canonical full-width value.
+     */
+    private static boolean cpu32SignedWord(long value) {
+        return value>= -0x8000L && value<=0x7fffL ||
+            value>=0xffff8000L && value<=0xffffffffL;
     }
 
     private static boolean safeBridge(Bridge bridge){
@@ -274,17 +312,69 @@ public final class HardwareTwoHopRegisterFlow {
                         step.successors.size()!=1)return false;
                 calls++;
             }else if(step.kind==HardwareDataflow.Kind.SET_POINTER) {
-                if(!SET.contains(m) || step.register==null ||
-                        !step.register.matches("[AD][0-7]"))return false;
+                if(step.register==null ||
+                        !step.register.matches("[AD][0-7]") ||
+                        step.sourceRegister!=null)return false;
+                // The decoder supplies at most a 32-bit CPU32 operand.
+                // Truncating a forged larger constant to the 24-bit MMIO
+                // bus before checking it could produce a false source.
+                if(step.operand< -0x80000000L ||
+                        step.operand>0xffffffffL)return false;
+                // MOVEQ sign-extends an *8-bit* immediate to Dn. The
+                // read-only solver permits the decoded signed Long, 24-bit
+                // bus representation or 32-bit register representation,
+                // but never an arbitrary high word with the same low24.
+                // LEA/MOVEA address only An, MOVE.L immediate only Dn.
+                if("MOVEQ".equals(m)){
+                    long signed=(byte)step.operand;
+                    if(!step.register.startsWith("D") ||
+                            step.operand!=signed &&
+                            step.operand!=(signed&HardwareDataflow.MASK24) &&
+                            step.operand!=(signed&0xffffffffL))
+                        return false;
+                }else if("MOVEA.W".equals(m)){
+                    // The real decoder sign-extends MOVEA.W to the full
+                    // address register. Allow this legitimate source, but
+                    // reject truncated/raw 16-bit or oversized forgeries.
+                    if(!step.register.startsWith("A") ||
+                            !cpu32SignedWord(step.operand))return false;
+                }else if("LEA".equals(m) || "MOVEA.L".equals(m)){
+                    if(!step.register.startsWith("A"))return false;
+                }else if(!"MOVE.L".equals(m) ||
+                        !step.register.startsWith("D"))return false;
             }else if(step.kind==HardwareDataflow.Kind.COPY_POINTER){
                 if(!COPY.contains(m) || step.sourceRegister==null ||
                         !step.sourceRegister.matches("[AD][0-7]") ||
                         step.register==null ||
-                        !step.register.matches("[AD][0-7]"))return false;
+                        !step.register.matches("[AD][0-7]") ||
+                        ("MOVEA.L".equals(m) != step.register.startsWith("A")))
+                    return false;
             }else if(step.kind==HardwareDataflow.Kind.ADJUST_POINTER){
-                if(step.register==null || !step.register.matches("[AD][0-7]") ||
-                        !(m.startsWith("ADD") || m.startsWith("SUB")) ||
-                        step.writeBits==0)return false;
+                // Dn .B/.W arithmetic preserves its high bits; accepting a
+                // forged full-word writeBits would corrupt the subsequent
+                // indexed MMIO address. ADDA/SUBA only target An; quick
+                // byte arithmetic is never legal with An destinations.
+                if(step.register==null ||
+                        !step.register.matches("[AD][0-7]") ||
+                        !ADJUST.matcher(m).matches() ||
+                        step.writeBits!=HardwareDataflow.registerAdjustWidth(
+                            step.register,m) ||
+                        (m.startsWith("ADDA") || m.startsWith("SUBA")) &&
+                            !step.register.startsWith("A") ||
+                        m.endsWith(".B") && step.register.startsWith("A"))
+                    return false;
+                // CPU32 encodes ADDQ/SUBQ with a 3-bit quick immediate
+                // (zero encoding means eight), never an arbitrary delta.
+                // The solver adds step.operand, so SUBQ must supply the
+                // NEGATIVE signed delta. Otherwise a forged source tuple
+                // could manufacture an MMIO address across the inner CALL.
+                if(m.startsWith("ADDQ") &&
+                        (step.operand<1 || step.operand>8) ||
+                        m.startsWith("SUBQ") &&
+                        (step.operand< -8 || step.operand> -1) ||
+                        (m.startsWith("ADDA") || m.startsWith("SUBA")) &&
+                        !cpu32AddressImmediate(m,step.operand))
+                    return false;
             }else if(step.kind==HardwareDataflow.Kind.CLOBBER_POINTER){
                 if(step.register==null || !step.register.matches("[AD][0-7]"))
                     return false;
