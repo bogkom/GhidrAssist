@@ -58,12 +58,12 @@ public final class HardwareStartupConfigSelfTest {
         ok(readonly,"immutable output");
         // Adversarial Ghidra register labels are retained as raw evidence,
         // but cannot inject Markdown rows, HTML or unbounded text.
-        String forged="SIMCR\\n| ACTIVE_MM <script>"+"X".repeat(100000);
+        String forged="SIMCR\n| ACTIVE_MM <script>"+"X".repeat(100000);
         var hostile=HardwareStartupConfig.analyze(true,true,Set.of(0x2bc0L),
             false,List.of(at(0x2bc0,0x2bca,forged,true,0x40ca)));
         String safe=hostile.markdown();
         ok(hostile.groups().get(0).register().equals(forged) &&
-            safe.contains("[U+005C]") && safe.contains("[U+007C]") &&
+            safe.contains("[U+000A]") && safe.contains("[U+007C]") &&
             safe.contains("[U+003C]") && safe.contains("[ABBREVIATED LABEL]") &&
             !safe.contains("<script>") && !safe.contains("| ACTIVE_MM") &&
             safe.length()<2100,"source label display is bounded; raw evidence retained");
@@ -72,7 +72,8 @@ public final class HardwareStartupConfigSelfTest {
             .markdown().contains("[U+007C]"),
             "generic CPU32 hides all unverified MCU register names");
         var unicode=HardwareStartupConfig.analyze(true,true,Set.of(0x2bc0L),
-            false,List.of(at(0x2bc0,0x2bca,"A\\u202EB\\uD83D\\uDE00",true,0x40ca)));
+            false,List.of(at(0x2bc0,0x2bca,"A"+new String(Character.toChars(0x202e))+
+                "B"+new String(Character.toChars(0x1f600)),true,0x40ca)));
         ok(unicode.markdown().contains("[U+202E]") &&
             unicode.markdown().contains("[U+1F600]"),
             "Unicode bidi and supplementary code points are encoded atomically");
