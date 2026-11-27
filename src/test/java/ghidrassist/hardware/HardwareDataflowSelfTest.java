@@ -490,6 +490,27 @@ public final class HardwareDataflowSelfTest {
         ok(inRangeVbr.snapshots.size()==1 &&
             inRangeVbr.snapshots.get(0).vbr==0x800L,
             "legitimate source within 24-bit range is still preserved");
+        // Explicit CPU32 MOVEA.W sign extension is different from an
+        // arbitrary high MOVEA.L source: only the former is a canonical
+        // signed word projected onto the selected MCU24 external bus.
+        var signedAddress=HardwareDataflow.analyze(0,List.of(
+            new HardwareDataflow.Step(0,SET_POINTER,"A0",0xfffffa00L,
+                0,null,32,List.of(2L),"MOVEA.W"),
+            st(2,STORE_INDIRECT,"A0",0,0,0x40ca,16)
+        ),Set.of(simcr),100);
+        ok(signedAddress.snapshots.size()==1 &&
+            signedAddress.snapshots.get(0).effectiveAddress==simcr &&
+            signedAddress.snapshots.get(0).knownPeripheralWords.get(simcr)==0x40ca,
+            "MOVEA.W canonical sign extension preserves a real MCU24 bus MAY");
+        var noncanonicalLongAddress=HardwareDataflow.analyze(0,List.of(
+            new HardwareDataflow.Step(0,SET_POINTER,"A0",0x01fffa00L,
+                0,null,32,List.of(2L),"MOVEA.L"),
+            st(2,STORE_INDIRECT,"A0",0,0,0x40ca,16)
+        ),Set.of(simcr),100);
+        ok(noncanonicalLongAddress.snapshots.size()==1 &&
+            noncanonicalLongAddress.snapshots.get(0).effectiveAddress==null &&
+            noncanonicalLongAddress.snapshots.get(0).knownPeripheralWords.isEmpty(),
+            "arbitrary high MOVEA.L must remain UNKNOWN despite low24 SIMCR");
         System.out.println("HardwareDataflowSelfTest OK");
     }
 }
