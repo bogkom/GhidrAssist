@@ -95,16 +95,6 @@ public final class HardwareDurableFunctionStages {
         return word>=0 && word<=HardwareDataflow.MASK24?word:null;
     }
 
-    private static Long sourcePointer(HardwareDataflow.Step step) {
-        long word=step.operand;
-        if(step.register!=null && step.register.startsWith("A") &&
-                "MOVEA.W".equals(step.mnemonic) &&
-                (word>=-0x8000L && word<0 ||
-                 word>=0xffff8000L && word<=0xffffffffL))
-            word&=HardwareDataflow.MASK24;
-        return boundedSource(word);
-    }
-
     private static Long sourceAddress(HardwareDataflow.Step step,
             Map<String,Long> pointers) {
         if(step.kind==HardwareDataflow.Kind.STORE_DIRECT)
@@ -233,7 +223,7 @@ public final class HardwareDurableFunctionStages {
             switch(step.kind) {
                 case SET_POINTER -> {
                     if(step.register!=null) {
-                        Long word=sourcePointer(step);
+                        Long word=HardwareDataflow.boundedSourceConstant(step);
                         if(word==null)out.remove(step.register);
                         else out.put(step.register,word);
                     }
