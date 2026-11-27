@@ -148,6 +148,16 @@ public final class HardwareSimcrLocalFirstSelfTest {
             "foreign successor cannot be treated as a complete source path");
         rejects(()->node(0,none,null,-2),
             "negative successor invalid even if otherwise disconnected");
+        var lastMcuPc=HardwareSimcrLocalFirst.inspect(
+            0xfffffeL,0xfffffeL,
+            List.of(node(0xfffffeL,word,0x40ca)),false,1);
+        ok(lastMcuPc.literalCandidates().size()==1 &&
+            lastMcuPc.literalCandidates().get(0).pc()==0xfffffeL &&
+            !lastMcuPc.unknownFirstPossible(),
+            "last aligned MC68332 24-bit source remains valid");
+        rejects(()->new HardwareSimcrLocalFirst.Node(
+            0,java.util.Arrays.asList(0L,(Long)null),none,null),
+            "unknown CFG successor cannot silently disappear from source inventory");
         rejects(()->HardwareSimcrLocalFirst.inspect(
             0x1000000L,0,List.of(node(0,none,null)),false,2),
             "foreign 32-bit function metadata not publishable as local MC68332");
