@@ -269,6 +269,26 @@ public final class HardwareDurableFunctionStagesSelfTest {
                 HardwareDurableFunctionStages.load(
                     temp,key,0x100,100,mixedVbrSteps,targets).isPresent(),
                 "mixed invalid high/valid VBR checkpoints preserve source distinction");
+            // Independent on-disk GA-12 audit must use exactly the same
+            // canonical MOVEQ source and signed D1.W indexed address as
+            // the live read-only two-hop CALL solver.
+            var signedIndexSteps=List.of(
+                step(0x100,SET_POINTER,"A0",0xfffa7fL,32,0x102L),
+                new HardwareDataflow.Step(0x102,SET_POINTER,"D1",
+                    0xffffff80L,0,null,32,List.of(0x104L),"MOVEQ"),
+                new HardwareDataflow.Step(0x104,"A0",null,"D1",
+                    16,1,1,0x40ca,16,List.of(0x106L),"MOVE.W"),
+                step(0x106,OTHER,null,0,0));
+            var signedIndexResult=HardwareDataflow.analyze(
+                0x100,signedIndexSteps,targets,100);
+            check(signedIndexResult.snapshots.size()==1 &&
+                signedIndexResult.snapshots.get(0).effectiveAddress==0xfffa00L &&
+                HardwareDurableFunctionStages.save(
+                    temp,key,0x100,100,signedIndexSteps,targets,
+                    signedIndexResult) &&
+                HardwareDurableFunctionStages.load(
+                    temp,key,0x100,100,signedIndexSteps,targets).isPresent(),
+                "MOVEQ signed .W index replay matches the source CFG on restart");
             System.out.println("HardwareDurableFunctionStagesSelfTest OK");
         }finally{
             try(var files=Files.list(temp)){

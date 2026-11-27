@@ -461,18 +461,25 @@ public final class HardwareDataflow {
     static Long boundedSourceConstant(Step step) {
         if(step==null || step.register==null)return null;
         long word=step.operand;
-        if(word>=0 && word<=MASK24)return word;
         String opcode=step.mnemonic;
+        // MOVEQ has an 8-bit signed source, even if caller-supplied
+        // synthetic Steps or Ghidra P-code represent it in 24/32 bits.
+        // A raw unsigned negative byte (0x80..0xFF) is not canonical.
         if("MOVEQ".equals(opcode) && step.register.startsWith("D")) {
             long signed=(byte)word;
-            if(word==signed || word==(signed&0xffffffL) ||
-                    word==(signed&0xffffffffL))
-                return signed&MASK24;
+            return word==signed || word==(signed&0xffffffL) ||
+                    word==(signed&0xffffffffL) ?
+                signed&MASK24:null;
         }
-        if(step.register.startsWith("A") && "MOVEA.W".equals(opcode) &&
-                (word>=-0x8000L && word<0 ||
-                 word>=0xffff8000L && word<=0xffffffffL))
-            return word&MASK24;
+        // MOVEA.W always sign-extends a 16-bit input. Do not accept a
+        // forged unsigned negative 0x8000..0xFFFF as a complete An value.
+        if(step.register.startsWith("A") && "MOVEA.W".equals(opcode)) {
+            if(word>=-0x8000L && word<=0x7fffL ||
+                    word>=0xffff8000L && word<=0xffffffffL)
+                return word&MASK24;
+            return null;
+        }
+        if(word>=0 && word<=MASK24)return word;
         // Existing CPU32 Listing fixtures include full-width canonical
         // negative MOVEA.L/LEA source addresses (e.g. 0xFFFFFA00).
         // Do not generalize this exception to 0x01FFFA00, any Dn MOVEC

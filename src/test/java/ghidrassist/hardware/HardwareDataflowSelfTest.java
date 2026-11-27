@@ -511,6 +511,50 @@ public final class HardwareDataflowSelfTest {
             noncanonicalLongAddress.snapshots.get(0).effectiveAddress==null &&
             noncanonicalLongAddress.snapshots.get(0).knownPeripheralWords.isEmpty(),
             "arbitrary high MOVEA.L must remain UNKNOWN despite low24 SIMCR");
+        // Canonical 8-bit MOVEQ sign extensions are valid signed Dn.W
+        // index sources on the 24-bit bus, but neither unsigned raw bytes
+        // nor arbitrary high CPU32 words can silently impersonate them.
+        for(long q:new long[]{-128L,0xffff80L,0xffffff80L}) {
+            var indexed=HardwareDataflow.analyze(0,List.of(
+                new HardwareDataflow.Step(0,SET_POINTER,"D1",q,
+                    0,null,32,List.of(2L),"MOVEQ"),
+                st(2,SET_POINTER,"A0",simcr+127L,0,null,32,4L),
+                new HardwareDataflow.Step(4,"A0",null,"D1",
+                    16,1,1,0x40ca,16,List.of(),"MOVE.W")
+            ),Set.of(simcr),100);
+            ok(indexed.snapshots.size()==1 &&
+                indexed.snapshots.get(0).effectiveAddress==simcr &&
+                indexed.snapshots.get(0).writtenWord==0x40ca,
+                "signed MOVEQ .W index must remain a precise MCU24 MAY");
+        }
+        for(long q:new long[]{0x80L,0xffL,0x01000080L}) {
+            var invalid=HardwareDataflow.analyze(0,List.of(
+                new HardwareDataflow.Step(0,SET_POINTER,"D1",q,
+                    0,null,32,List.of(2L),"MOVEQ"),
+                st(2,SET_POINTER,"A0",simcr+127L,0,null,32,4L),
+                new HardwareDataflow.Step(4,"A0",null,"D1",
+                    16,1,1,0x40ca,16,List.of(),"MOVE.W")
+            ),Set.of(simcr),100);
+            ok(invalid.snapshots.size()==1 &&
+                invalid.snapshots.get(0).effectiveAddress==null &&
+                invalid.snapshots.get(0).knownPeripheralWords.isEmpty(),
+                "unsigned/noncanonical MOVEQ may not forge an MMIO alias");
+        }
+        var legacySignedLong=HardwareDataflow.analyze(0,List.of(
+            new HardwareDataflow.Step(0,SET_POINTER,"A0",0xfffffa00L,
+                0,null,32,List.of(2L),"MOVEA.L"),
+            st(2,STORE_INDIRECT,"A0",0,0,0x40ca,16)
+        ),Set.of(simcr),100);
+        ok(legacySignedLong.snapshots.size()==1 &&
+            legacySignedLong.snapshots.get(0).effectiveAddress==simcr,
+            "canonical negative MOVEA.L source remains a bus MAY");
+        var rawWord=HardwareDataflow.analyze(0,List.of(
+            new HardwareDataflow.Step(0,SET_POINTER,"A0",0x8000L,
+                0,null,32,List.of(2L),"MOVEA.W"),
+            st(2,STORE_INDIRECT,"A0",0,0,0x40ca,16)
+        ),Set.of(simcr),100);
+        ok(rawWord.snapshots.get(0).effectiveAddress==null,
+            "unsigned negative MOVEA.W is not a canonical CPU32 source");
         System.out.println("HardwareDataflowSelfTest OK");
     }
 }
