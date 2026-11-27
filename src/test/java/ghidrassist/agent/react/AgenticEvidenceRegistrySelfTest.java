@@ -349,6 +349,36 @@ public final class AgenticEvidenceRegistrySelfTest {
             "c".repeat(64),0,1,null,null),
             "invalidation removes exact colliding key only");
 
+        // Deterministically emulate an enqueued, cleared weak owner key:
+        // never depend on System.gc() timing for identity-map cleanup tests.
+        var cleanup=new AgenticEvidenceRegistry<Object>();
+        var disposableOwner=new Object();
+        var disposableFindings=new FindingsCache();
+        disposableFindings.addFinding("temporary","disposable source","listing",5);
+        cleanup.begin(disposableOwner,1L,"d".repeat(64),disposableFindings);
+        try {
+            var field=AgenticEvidenceRegistry.class.getDeclaredField("programs");
+            field.setAccessible(true);
+            var entries=(java.util.Map<?,?>)field.get(cleanup);
+            yes(entries.size()==1,"weak identity map stores one live owner");
+            var weak=(java.lang.ref.Reference<?>)entries.keySet().iterator().next();
+            weak.clear();
+            yes(weak.enqueue(),"synthetic weak owner can be queued exactly once");
+            var survivor=new Object();
+            var survivorFindings=new FindingsCache();
+            survivorFindings.addFinding("survivor","source","listing",6);
+            cleanup.begin(survivor,1L,"d".repeat(64),survivorFindings);
+            yes(entries.size()==1 && cleanup.page(survivor,1L,
+                "d".repeat(64),0,1,null,null)
+                    .findings().rows().get(0).fact().equals("survivor"),
+                "queued weak identity is discarded without deleting live owner");
+            denies(()->cleanup.page(disposableOwner,1L,
+                "d".repeat(64),0,1,null,null),
+                "cleared weak owner cannot be retrieved as current evidence");
+        } catch(ReflectiveOperationException e) {
+            throw new AssertionError("Identity-map queue regression setup failed",e);
+        }
+
         System.out.println("AGENTIC REGISTRY PASS assertions="+assertions);
     }
 }
