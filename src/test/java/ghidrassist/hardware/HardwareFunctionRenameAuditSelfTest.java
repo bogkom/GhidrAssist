@@ -234,6 +234,20 @@ public final class HardwareFunctionRenameAuditSelfTest {
         check(unverifiedRow.count(
                 HardwareFunctionRenameAudit.State.SOURCE_UNVERIFIED)==1,
             "older unknown receipts remain viewable with unverified state");
+        var damagedName=new HardwareFunctionRenameAudit.Observation(
+            original.optionKey(),original.serialized(),
+            "current"+String.valueOf((char)0xd800),"USER_DEFINED");
+        String repairedAudit=HardwareFunctionRenameAudit.inspect(
+            List.of(damagedName),43L,"a".repeat(64)).csv();
+        check(repairedAudit.contains("INCOMPLETE_AUDIT_SOURCE") &&
+            repairedAudit.contains("EXPORT_INCOMPLETE") &&
+            repairedAudit.contains("1 rows lost source text") &&
+            repairedAudit.lines().count()==3 &&
+            !repairedAudit.contains(String.valueOf((char)0xd800)),
+            "mutable live name with malformed UTF-16 cannot masquerade as complete saved audit");
+        check(audit.csv().lines().count()==3 &&
+            !audit.csv().contains("INCOMPLETE_AUDIT_SOURCE"),
+            "unaltered real receipt audit does not invent source-loss markers");
         System.out.println("HardwareFunctionRenameAuditSelfTest PASS assertions="+assertions);
     }
 }

@@ -87,6 +87,41 @@ public final class HardwareFunctionRenameReceiptSelfTest {
                 original.afterName(),original.role(),original.registers(),3))
                 .equals(serialized),
             "approved analysis revision is part of persisted receipt");
+        // An ill-formed surrogate and a literal '?' produce identical Java
+        // default UTF-8 bytes. Such distinct names must not create the
+        // same supposedly source-identifying saved checksum/receipt.
+        String high=String.valueOf((char)0xd800);
+        String low=String.valueOf((char)0xdc00);
+        check(Arrays.equals(
+                ("NAME"+high).getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                "NAME?".getBytes(java.nio.charset.StandardCharsets.UTF_8)),
+            "reproduce old lossy UTF-8 rename-source collision");
+        for(String invalid:java.util.List.of(high,low)) {
+            reject(()->new HardwareFunctionRenameReceipt.Entry(
+                0x5a0L,73L,original.sourceSha256(),"NAME"+invalid,
+                original.afterName(),original.role(),original.registers(),3),
+                "malformed original name cannot become an approval receipt");
+            reject(()->new HardwareFunctionRenameReceipt.Entry(
+                0x5a0L,73L,original.sourceSha256(),original.beforeName(),
+                "NEW"+invalid,original.role(),original.registers(),3),
+                "malformed approved name cannot share canonical digest");
+            reject(()->new HardwareFunctionRenameReceipt.Entry(
+                0x5a0L,73L,original.sourceSha256(),original.beforeName(),
+                original.afterName(),original.role(),"A0"+invalid,3),
+                "malformed register evidence cannot share canonical digest");
+            reject(()->new HardwareFunctionRenameReceipt.Entry(
+                0x5a0L,73L,"import"+invalid,original.beforeName(),
+                original.afterName(),original.role(),original.registers(),3),
+                "malformed source import metadata cannot become canonical");
+        }
+        String smile=new String(Character.toChars(0x1f680));
+        var validUnicode=new HardwareFunctionRenameReceipt.Entry(
+            0x5a0L,73L,original.sourceSha256(),original.beforeName(),
+            original.afterName()+smile,original.role(),
+            original.registers()+" "+smile,3);
+        check(HardwareFunctionRenameReceipt.decode(
+                HardwareFunctionRenameReceipt.encode(validUnicode)).equals(validUnicode),
+            "well-formed supplementary Unicode persists canonically");
         System.out.println("HardwareFunctionRenameReceiptSelfTest PASS: assertions="+assertions);
     }
 }

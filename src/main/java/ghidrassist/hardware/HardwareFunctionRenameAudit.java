@@ -90,6 +90,7 @@ public final class HardwareFunctionRenameAudit {
                 "reviewed_modification,program_modification,import_sha256,"+
                 "current_import_sha256,role,register_evidence,write_sites,"+
                 "ghidra_source_type,audit_state,operation_origin\n");
+            int sourceLossRows=0;
             for(Row r:rows) {
                 var e=r.receipt();
                 List<String> cells=List.of(
@@ -101,11 +102,29 @@ public final class HardwareFunctionRenameAudit {
                         programSourceSha256,e.role(),e.registers(),
                         Integer.toString(e.writeSites()),r.sourceType(),
                         r.state().name(),r.origin());
+                if(cells.stream().anyMatch(HardwareChangeProvenance::losesSource))
+                    sourceLossRows++;
                 for(int col=0;col<cells.size();col++) {
                     if(b.length()>64_000_000)
                         throw new IllegalStateException("Unbounded audit CSV");
                     if(col>0)b.append(',');
                     b.append(HardwareChangeProvenance.cell(cells.get(col)));
+                }
+                b.append('\n');
+            }
+            if(sourceLossRows>0) {
+                // A receipt that lost bytes to a Unicode repair or cell
+                // limit cannot be presented as a complete approval history.
+                // Preserve all 14 columns and never turn this CSV into
+                // input for Apply or an authenticated actor journal.
+                List<String> incomplete=List.of(
+                    "INCOMPLETE_AUDIT_SOURCE",
+                    "", "", "", "", "", "", "", "", "",
+                    Integer.toString(sourceLossRows)+" rows lost source text",
+                    "UNKNOWN","EXPORT_INCOMPLETE","LOCAL_READ_ONLY_CSV");
+                for(int col=0;col<incomplete.size();col++) {
+                    if(col>0)b.append(',');
+                    b.append(HardwareChangeProvenance.cell(incomplete.get(col)));
                 }
                 b.append('\n');
             }
