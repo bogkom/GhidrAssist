@@ -26,7 +26,7 @@ def page(offset, limit, *, state="SUCCESS", incomplete=False, evicted=0,
          "toolUsed": "xrefs", "relevance": 3, "timestamp": 3},
     ]
     subset=rows[offset:offset+limit]
-    return {"agentic": {
+    return {"read_only": True, "agentic": {
         "run": run, "programRevision": 12, "importSha256":"a"*64,
         "state":state,"complete": offset==0 and offset+limit>=3
             and state=="SUCCESS" and not incomplete and evicted==0,
@@ -396,6 +396,115 @@ class LocalAgenticCheckpoint(unittest.TestCase):
                     self.assertFalse(saved["complete"])
                     self.assertFalse(
                         cli.verify_agentic_checkpoint(target)["complete"])
+
+    def test_capture_rejects_page_spoofing_and_readonly_receipt_gaps(self):
+        """Wrong offsets, false terminal claims and missing RPC authority
+        must never create a complete locally hashed evidence checkpoint."""
+        cases = [
+            ("first page read_only missing",
+             lambda p: p.pop("read_only")),
+            ("first page read_only false",
+             lambda p: p.update(read_only=False)),
+            ("first page lies about offset",
+             lambda p: p["agentic"]["findings"].update(offset=1)),
+            ("first page lies about page size",
+             lambda p: p["agentic"]["findings"].update(limit=100)),
+            ("first page omits source rows while falsely claiming end",
+             lambda p: p["agentic"]["findings"].update(hasMore=False)),
+            ("first page overreports coverage",
+             lambda p: p["agentic"]["findings"].update(retainedCount=2)),
+            ("first page loses rows without advancing",
+             lambda p: p["agentic"]["findings"].update(rows=[])),
+            ("first page masquerades bool as integer cursor",
+             lambda p: p["agentic"]["findings"].update(offset=False)),
+            ("first page contradicts eviction accounting",
+             lambda p: p["agentic"]["findings"].update(evictedCount=1)),
+            ("first page corrupts evidence timestamp",
+             lambda p: p["agentic"]["findings"]["rows"][0].update(
+                 timestamp="unknown")),
+        ]
+        with tempfile.TemporaryDirectory() as work:
+            root=Path(work)
+            for index, (name, mutate) in enumerate(cases):
+                target=root/("bad-first-%d.json" % index)
+                def fake(_session,_method,args):
+                    response=page(args["offset"], args["limit"])
+                    if args["offset"] == 0:
+                        mutate(response)
+                    return response
+                with self.subTest(name=name),patch.object(cli,"rpc",fake):
+                    with self.assertRaises(ValueError):
+                        cli.capture_agentic_checkpoint({},target,2)
+                    self.assertFalse(target.exists())
+            for stage in ("later", "terminal"):
+                for mismatch in ("read_only","offset","limit","hasMore",
+                                 "run","revision","rows","state"):
+                    target=root/(stage+"-"+mismatch+".json")
+                    target_offset=2 if stage=="later" else 3
+                    def fake(_session,_method,args):
+                        response=page(args["offset"],args["limit"])
+                        if args["offset"] == target_offset:
+                            a=response["agentic"]
+                            f=a["findings"]
+                            if mismatch=="read_only":
+                                response["read_only"]=False
+                            elif mismatch=="offset":
+                                f["offset"]=0
+                            elif mismatch=="limit":
+                                f["limit"]=1
+                            elif mismatch=="hasMore":
+                                f["hasMore"]=not f["hasMore"]
+                            elif mismatch=="run":
+                                a["run"]="replacement-run"
+                            elif mismatch=="revision":
+                                f["revision"]=8
+                            elif mismatch=="rows":
+                                f["rows"]=[{"fact":"inserted","evidence":"fake",
+                                    "toolUsed":"listing","relevance":3,
+                                    "timestamp":1}]
+                            elif mismatch=="state":
+                                a["state"]="CANCELLED"
+                        return response
+                    with self.subTest(stage=stage,mismatch=mismatch),patch.object(
+                            cli,"rpc",fake):
+                        with self.assertRaises(ValueError):
+                            cli.capture_agentic_checkpoint({},target,2)
+                        self.assertFalse(target.exists())
+
+    def test_capture_terminal_fence_rechecks_single_page_and_empty_source(self):
+        for limit in (2,100):
+            calls=[]
+            def fake(_session,method,args):
+                self.assertEqual(method,"agentic.findings.page")
+                calls.append(dict(args))
+                return page(args["offset"],args["limit"])
+            with tempfile.TemporaryDirectory() as work,patch.object(cli,"rpc",fake):
+                info=cli.capture_agentic_checkpoint(
+                    {},Path(work)/"checked.json",limit)
+                self.assertTrue(info["complete"])
+                self.assertEqual(calls[-1]["offset"],3)
+                self.assertEqual(calls[-1]["expected_run"],"test-opaque-run")
+                self.assertEqual(calls[-1]["expected_findings_revision"],7)
+                self.assertEqual(calls[-1]["expected_program_revision"],12)
+                self.assertGreaterEqual(len(calls),2)
+        with tempfile.TemporaryDirectory() as work:
+            def empty(_session,method,args):
+                response=page(args["offset"],args["limit"])
+                f=response["agentic"]["findings"]
+                f["retainedCount"]=0
+                f["acceptedCount"]=0
+                f["evictedCount"]=0
+                f["rows"]=[]
+                f["hasMore"]=False
+                f["complete"]=True
+                response["agentic"]["complete"]=False
+                return response
+            with patch.object(cli,"rpc",empty):
+                target=Path(work)/"empty.json"
+                result=cli.capture_agentic_checkpoint({},target,25)
+                self.assertFalse(result["complete"])
+                self.assertEqual(result["retained_count"],0)
+                self.assertFalse(cli.verify_agentic_checkpoint(target)["complete"])
 
     def test_cache_revision_change_refuses_partial_checkpoint(self):
         def rpc(_session,_method,args):
