@@ -57,9 +57,44 @@ public final class HardwareResetHandlerWitnessSelfTest {
         var frontier=HardwareResetHandlerWitness.inspect(0x100,false,
             List.of(n(0x100L,0x130L),n(0x130L,0x999L)),targets);
         check(frontier.incomplete() && !frontier.frontiers().isEmpty() &&
+            frontier.omittedFrontierEdges()==0 &&
             frontier.rows().get(3).status()==
                 HardwareResetHandlerWitness.Status.UNKNOWN_FRONTIER,
             "missing CALL target propagates uncertainty");
+        // The bounded frontier list is a DISPLAY, never an exhaustive
+        // 200k-edge proof. Missing definitions from one RESET node must
+        // be counted even after the 100-path receipt cap has been reached.
+        var manyMissing=new java.util.ArrayList<Long>();
+        for(int i=0;i<150;i++)manyMissing.add(0x200L+i*2L);
+        var capped=HardwareResetHandlerWitness.inspect(0x100,false,
+            List.of(new HardwareCallEffects.FunctionNode(
+                0x100,false,false,false,manyMissing)),
+            List.of(new HardwareVectorResetCorrelation.Target(
+                50,0x200L,0x200L,true)));
+        check(capped.incomplete() && capped.inspected()==1 &&
+            capped.frontiers().size()==HardwareResetHandlerWitness.MAX_NODES &&
+            capped.omittedFrontierEdges()==50 &&
+            capped.rows().get(0).status()==
+                HardwareResetHandlerWitness.Status.UNKNOWN_FRONTIER &&
+            capped.markdown().contains("omitted frontier edges 50") &&
+            capped.markdown().contains("INCOMPLETE FRONTIER INVENTORY") &&
+            capped.markdown().contains("omitted targets remain UNKNOWN"),
+            "frontier cap declares every omitted direct-CALL edge");
+        var reverseMissing=new java.util.ArrayList<>(manyMissing);
+        java.util.Collections.reverse(reverseMissing);
+        check(HardwareResetHandlerWitness.inspect(0x100,false,
+            List.of(new HardwareCallEffects.FunctionNode(
+                0x100,false,false,false,reverseMissing)),
+            List.of(new HardwareVectorResetCorrelation.Target(
+                50,0x200L,0x200L,true))).equals(capped),
+            "canonical decoded edges produce deterministic omitted receipts");
+        var exactlyCapped=HardwareResetHandlerWitness.inspect(0x100,false,
+            List.of(new HardwareCallEffects.FunctionNode(0x100,
+                false,false,false,manyMissing.subList(0,100))),List.of());
+        check(exactlyCapped.frontiers().size()==100 &&
+            exactlyCapped.omittedFrontierEdges()==0 &&
+            !exactlyCapped.markdown().contains("INCOMPLETE FRONTIER INVENTORY"),
+            "exactly the display cap is not falsely called a dropped source");
         // A known cycle is not an uninspected frontier; a depth cutoff is.
         var cycle=HardwareResetHandlerWitness.inspect(0x100,false,
             List.of(n(0x100L,0x130L),n(0x130L,0x100L)),targets);
@@ -168,7 +203,62 @@ public final class HardwareResetHandlerWitnessSelfTest {
             List.of(),List.of(List.of(0x100L)),List.of()));
         bad(()->new HardwareResetHandlerWitness.Report(
             0x101,true,false,1,List.of(),List.of(),List.of()));
-        check(HardwareResetHandlerWitness.inspect(0x100,false,
+        // Public report records are externally reconstructible. A caller
+        // must not fabricate COMPLETE with unresolved CALLs, invent source
+        // chains beyond inspected nodes, or claim a definite negative
+        // handler relationship while a RESET frontier remains open.
+        bad(()->new HardwareResetHandlerWitness.Report(
+            0x100,false,false,1,List.of(),List.of(),
+            List.of(List.of(0x100L))));
+        bad(()->new HardwareResetHandlerWitness.Report(
+            0x100,false,false,1,List.of(),
+            List.of(List.of(0x100L,0x200L)),List.of()));
+        bad(()->new HardwareResetHandlerWitness.Report(
+            0x100,true,false,1,
+            List.of(new HardwareResetHandlerWitness.Row(
+                40,0x200L,HardwareResetHandlerWitness.Status.NOT_OBSERVED_WITHIN_BOUND,
+                List.of())),
+            List.of(List.of(0x100L,0x200L)),List.of()));
+        bad(()->new HardwareResetHandlerWitness.Report(
+            0x100,false,false,1,
+            List.of(new HardwareResetHandlerWitness.Row(
+                40,0x200L,HardwareResetHandlerWitness.Status.UNKNOWN_FRONTIER,
+                List.of())),List.of(),List.of()));
+        bad(()->new HardwareResetHandlerWitness.Report(
+            0x100,true,false,1,
+            List.of(new HardwareResetHandlerWitness.Row(
+                40,0x200L,HardwareResetHandlerWitness.Status.UNKNOWN_RESET_ROOT,
+                List.of())),List.of(),List.of()));
+        bad(()->new HardwareResetHandlerWitness.Report(
+            0x500,true,true,0,
+            List.of(new HardwareResetHandlerWitness.Row(
+                40,0x200L,HardwareResetHandlerWitness.Status.UNKNOWN_FRONTIER,
+                List.of())),List.of(),List.of()));
+        bad(()->new HardwareResetHandlerWitness.Report(
+            0x100,true,false,1,
+            List.of(new HardwareResetHandlerWitness.Row(
+                40,0x130L,HardwareResetHandlerWitness.Status.OBSERVED_STATIC_PATH,
+                List.of(0x100L,0x130L))),List.of(),List.of()));
+        bad(()->new HardwareResetHandlerWitness.Report(
+            0x100,true,false,1,List.of(),List.of(),
+            List.of(List.of(0x100L,0x130L))));
+        bad(()->new HardwareResetHandlerWitness.Report(
+            0x100,true,false,3,List.of(),List.of(),
+            List.of(List.of(0x100L,0x130L,0x100L))));
+        bad(()->new HardwareResetHandlerWitness.Report(
+            0x100,true,false,1,List.of(),
+            List.of(List.of(0x100L,0x200L)),List.of(),
+            List.of(),List.of(),1));
+        bad(()->new HardwareResetHandlerWitness.Report(
+            0x100,true,false,1,List.of(),List.of(),List.of(),
+            List.of(),List.of(),HardwareResetHandlerWitness.MAX_SOURCE_EDGES+1));
+        bad(()->new HardwareResetHandlerWitness.Row(
+            40,0x100L,HardwareResetHandlerWitness.Status.OBSERVED_STATIC_PATH,
+            List.of(0x100L,0x130L,0x100L)));
+        check(unknown.omittedFrontierEdges()==0 &&
+            a.omittedFrontierEdges()==0 &&
+            effects.omittedFrontierEdges()==0 &&
+            HardwareResetHandlerWitness.inspect(0x100,false,
             graph,targets).equals(a),
             "source guard rejects forgeries without modifying positive witness");
         System.out.println("RESET_HANDLER_WITNESS_SOURCE_PASS");

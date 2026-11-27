@@ -29,6 +29,7 @@ public final class HardwareResetHandlerWitness {
                     chain.size()>MAX_DEPTH+1 ||
                     chain.stream().anyMatch(x->x==null || x<0 ||
                         x>0xffffffffL || (x&1)!=0) ||
+                    new HashSet<>(chain).size()!=chain.size() ||
                     (status==Status.OBSERVED_STATIC_PATH)!=(!chain.isEmpty()) ||
                     !chain.isEmpty() && chain.get(chain.size()-1)!=handler)
                 throw new IllegalArgumentException("Invalid RESET witness");
@@ -38,7 +39,8 @@ public final class HardwareResetHandlerWitness {
     public record Report(long resetEntry, boolean incomplete, boolean missingRoot,
             int inspected, List<Row> rows, List<List<Long>> frontiers,
             List<List<Long>> unresolvedCallSources,
-            List<List<Long>> memoryStoreSources, List<List<Long>> vbrWriteSources) {
+            List<List<Long>> memoryStoreSources, List<List<Long>> vbrWriteSources,
+            int omittedFrontierEdges) {
         public Report {
             if(resetEntry<0 || resetEntry>0xffffffffL ||
                     (resetEntry&1)!=0 || inspected<0 || inspected>MAX_NODES ||
@@ -47,22 +49,44 @@ public final class HardwareResetHandlerWitness {
                     frontiers==null || unresolvedCallSources==null ||
                     memoryStoreSources==null || vbrWriteSources==null ||
                     missingRoot && (!incomplete || inspected!=0) ||
-                    !missingRoot && inspected==0)
+                    !missingRoot && inspected==0 ||
+                    omittedFrontierEdges<0 ||
+                    omittedFrontierEdges>MAX_SOURCE_EDGES ||
+                    (long)frontiers.size()+omittedFrontierEdges>MAX_SOURCE_EDGES ||
+                    omittedFrontierEdges>0 && frontiers.size()!=MAX_NODES ||
+                    !incomplete && (!frontiers.isEmpty() ||
+                        !unresolvedCallSources.isEmpty() ||
+                        omittedFrontierEdges!=0))
                 throw new IllegalArgumentException("Invalid RESET report");
             Set<Integer> slots=new HashSet<>();
-            for(Row row:rows)
+            for(Row row:rows) {
+                Status status=row.status();
                 if(!slots.add(row.vector()) ||
+                        row.chain().size()>inspected ||
                         !row.chain().isEmpty() &&
-                            row.chain().get(0)!=resetEntry)
+                            row.chain().get(0)!=resetEntry ||
+                        // A missing RESET definition cannot have an
+                        // inspected handler path. Interior vector pointers
+                        // remain a separate negative identity finding.
+                        missingRoot && status!=Status.INTERIOR_NOT_ENTRY &&
+                            status!=Status.UNKNOWN_RESET_ROOT ||
+                        !missingRoot && status==Status.UNKNOWN_RESET_ROOT ||
+                        // An unvisited handler cannot be labelled
+                        // definitely disconnected while any RESET call
+                        // source or frontier remains uninspected.
+                        incomplete && (status==Status.NOT_OBSERVED_WITHIN_BOUND ||
+                            status==Status.UNKNOWN_HANDLER_NOT_IN_GRAPH) ||
+                        !incomplete && status==Status.UNKNOWN_FRONTIER)
                     throw new IllegalArgumentException(
-                        "Conflicting vector slot or RESET path origin");
+                        "Conflicting vector slot, RESET status or source path");
+            }
             // Public records may be reconstructed by an API caller. No
             // arbitrary unbounded/foreign source chain may be printed or
             // passed to downstream STORE/VBR correlation.
-            verifyPaths(frontiers,resetEntry,MAX_DEPTH+2,true);
-            verifyPaths(unresolvedCallSources,resetEntry,MAX_DEPTH+1,false);
-            verifyPaths(memoryStoreSources,resetEntry,MAX_DEPTH+1,false);
-            verifyPaths(vbrWriteSources,resetEntry,MAX_DEPTH+1,false);
+            verifyPaths(frontiers,resetEntry,MAX_DEPTH+2,true,inspected);
+            verifyPaths(unresolvedCallSources,resetEntry,MAX_DEPTH+1,false,inspected);
+            verifyPaths(memoryStoreSources,resetEntry,MAX_DEPTH+1,false,inspected);
+            verifyPaths(vbrWriteSources,resetEntry,MAX_DEPTH+1,false,inspected);
             if(missingRoot && (!frontiers.isEmpty() ||
                     !unresolvedCallSources.isEmpty() ||
                     !memoryStoreSources.isEmpty() || !vbrWriteSources.isEmpty() ||
@@ -77,7 +101,7 @@ public final class HardwareResetHandlerWitness {
             vbrWriteSources=vbrWriteSources.stream().map(List::copyOf).toList();
         }
         private static void verifyPaths(List<List<Long>> paths,long root,
-                int maxLength,boolean frontier) {
+                int maxLength,boolean frontier,int inspected) {
             if(paths.size()>MAX_NODES)
                 throw new IllegalArgumentException("Oversized RESET path inventory");
             for(List<Long> chain:paths) {
@@ -85,7 +109,12 @@ public final class HardwareResetHandlerWitness {
                         chain.size()>(frontier?MAX_DEPTH+2:maxLength) ||
                         chain.size()>maxLength ||
                         chain.get(0)==null || chain.get(0)!=root ||
-                        frontier && chain.size()<2)
+                        frontier && chain.size()<2 ||
+                        // Only a frontier's LAST endpoint was not
+                        // inspected. All STORE/VBR/unknown source nodes
+                        // belong to the already visited subset.
+                        chain.size()-(frontier?1:0)>inspected ||
+                        new HashSet<>(chain).size()!=chain.size())
                     throw new IllegalArgumentException("Invalid RESET source chain");
                 for(int i=0;i<chain.size();i++) {
                     Long pc=chain.get(i);
@@ -99,11 +128,19 @@ public final class HardwareResetHandlerWitness {
                 }
             }
         }
+        /** Existing nine-field source-report clients default to zero omission. */
+        public Report(long resetEntry, boolean incomplete, boolean missingRoot,
+                int inspected, List<Row> rows, List<List<Long>> frontiers,
+                List<List<Long>> unresolvedCallSources,
+                List<List<Long>> memoryStoreSources, List<List<Long>> vbrWriteSources) {
+            this(resetEntry,incomplete,missingRoot,inspected,rows,frontiers,
+                unresolvedCallSources,memoryStoreSources,vbrWriteSources,0);
+        }
         public Report(long resetEntry, boolean incomplete, boolean missingRoot,
                 int inspected, List<Row> rows, List<List<Long>> frontiers,
                 List<List<Long>> unresolvedCallSources) {
             this(resetEntry,incomplete,missingRoot,inspected,rows,frontiers,
-                unresolvedCallSources,List.of(),List.of());
+                unresolvedCallSources,List.of(),List.of(),0);
         }
         public Report(long resetEntry, boolean incomplete, boolean missingRoot,
                 int inspected, List<Row> rows, List<List<Long>> frontiers) {
@@ -116,8 +153,16 @@ public final class HardwareResetHandlerWitness {
                 .append("; incomplete ").append(incomplete)
                 .append("; missing root ").append(missingRoot)
                 .append("; unresolved CALL source nodes ").append(unresolvedCallSources.size())
-                .append("; uninspected frontiers ").append(frontiers.size())
+                .append("; retained uninspected frontiers ").append(frontiers.size())
+                .append("; omitted frontier edges ").append(omittedFrontierEdges)
                 .append(". STATIC ONLY: no executed path, active VBR, IRQ or physical mapping is established.\n\n");
+            if(omittedFrontierEdges>0)
+                b.append("- **INCOMPLETE FRONTIER INVENTORY:** ")
+                    .append(omittedFrontierEdges)
+                    .append(" further decoded direct CALL frontier edges were ")
+                    .append("omitted by the fixed ").append(MAX_NODES)
+                    .append("-path display cap; omitted targets remain UNKNOWN, ")
+                    .append("not absent or unreachable.\n");
             b.append("| Vector | Handler | Status | Direct CALL function-entry chain |\n")
                 .append("|---|---|---|---|\n");
             for(Row r:rows) {
@@ -180,6 +225,7 @@ public final class HardwareResetHandlerWitness {
         Set<Long> seen=new HashSet<>();
         ArrayDeque<Step> q=new ArrayDeque<>();
         List<List<Long>> frontiers=new ArrayList<>();
+        int omittedFrontierEdges=0;
         List<List<Long>> unresolvedCallSources=new ArrayList<>();
         List<List<Long>> memoryStoreSources=new ArrayList<>();
         List<List<Long>> vbrWriteSources=new ArrayList<>();
@@ -211,6 +257,7 @@ public final class HardwareResetHandlerWitness {
                     f.add(next);
                     // One source witness per observed frontier edge, bounded.
                     if(frontiers.size()<MAX_NODES)frontiers.add(List.copyOf(f));
+                    else omittedFrontierEdges++;
                     continue;
                 }
                 seen.add(next);
@@ -235,6 +282,7 @@ public final class HardwareResetHandlerWitness {
             rows.add(new Row(t.vectorNumber(),t.functionEntry(),status,chain));
         }
         return new Report(resetEntry,incomplete,missingRoot,inspected,rows,frontiers,
-            unresolvedCallSources,memoryStoreSources,vbrWriteSources);
+            unresolvedCallSources,memoryStoreSources,vbrWriteSources,
+            omittedFrontierEdges);
     }
 }
