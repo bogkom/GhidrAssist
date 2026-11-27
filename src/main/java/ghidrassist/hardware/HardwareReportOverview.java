@@ -12,14 +12,37 @@ public final class HardwareReportOverview {
 
     public record Site(String register, boolean writeCandidate, boolean literalKnown) {}
 
+    private static final String OVERVIEW_TITLE=
+        "# Hardware Analyze — three-part overview (READ ONLY)\n\n";
+    private static final String[] CANONICAL_HEADINGS={
+        "## 1. Initialization candidates\n\n",
+        "## 2. Register write history — static evidence\n\n",
+        "## 3. Chip Select map — conditional hypothesis\n\n"
+    };
+
+    // Section labels are publication anchors, not arbitrary substrings
+    // scattered through a source or adversarial report. A duplicate or
+    // out-of-order section would make GUI / export / RAG disagree about
+    // where evidence came from, even if all three words were present.
+    private static void requireCanonicalSections(String overview) {
+        if(overview==null || !overview.startsWith(OVERVIEW_TITLE))
+            throw new IllegalArgumentException("Invalid hardware overview title");
+        int previous=OVERVIEW_TITLE.length();
+        for(String heading:CANONICAL_HEADINGS) {
+            int at=overview.indexOf(heading);
+            if(at<previous || (at>0 && overview.charAt(at-1)!='\n') ||
+                    overview.indexOf(heading,at+heading.length())>=0)
+                throw new IllegalArgumentException(
+                    "Missing, duplicated or reordered hardware overview section");
+            previous=at+heading.length();
+        }
+    }
+
     /** Canonical evidence payload shared by GUI, Markdown export and RAG. */
     public static String combine(String overview, String details) {
-        if(overview==null || details==null || details.isBlank() ||
-                !overview.startsWith("# Hardware Analyze — three-part overview (READ ONLY)") ||
-                !overview.contains("## 1. Initialization candidates") ||
-                !overview.contains("## 2. Register write history") ||
-                !overview.contains("## 3. Chip Select map"))
-            throw new IllegalArgumentException("Incomplete hardware report sections");
+        if(details==null || details.isBlank())
+            throw new IllegalArgumentException("Missing hardware detail evidence");
+        requireCanonicalSections(overview);
         return overview+"\n\n---\n\n"+details;
     }
 
@@ -34,8 +57,10 @@ public final class HardwareReportOverview {
         // then String.replace silently did nothing. This would present a
         // supposedly unified Overview without its reconciled Listing/CFG
         // source counts. Fail closed instead of dropping source provenance.
-        if(listingOverview==null || merged==null ||
-                !listingOverview.contains(marker) ||
+        if(merged==null)
+            throw new IllegalArgumentException("Missing reconciled source evidence");
+        requireCanonicalSections(listingOverview);
+        if(!listingOverview.contains(marker) ||
                 listingOverview.indexOf(marker)!=listingOverview.lastIndexOf(marker))
             throw new IllegalArgumentException(
                 "Missing or ambiguous exact overview provenance insertion point");
