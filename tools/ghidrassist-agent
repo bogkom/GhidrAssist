@@ -1120,8 +1120,8 @@ def capture_agentic_checkpoint(session, output, page_size=100, parent=None):
     if len(data)>8*1024*1024:
         raise ValueError("Agentic checkpoint exceeds local 8 MiB cap")
     dest=Path(output).expanduser()
-    if not dest.parent.is_dir():
-        raise ValueError("Agentic checkpoint destination directory must exist")
+    if not dest.parent.is_dir() or dest.parent.is_symlink():
+        raise ValueError("Agentic checkpoint requires a real existing directory")
     temp=None
     try:
         fd,temp=tempfile.mkstemp(prefix=".ghidrassist-agentic-",dir=dest.parent)
@@ -1336,8 +1336,8 @@ def create_agentic_review_draft(session, source, destination, query, ancestors=N
     if len(data) > 128*1024:
         raise ValueError("Oversized reviewed analysis draft")
     dest = Path(destination).expanduser()
-    if not dest.parent.is_dir():
-        raise ValueError("Review draft output directory must exist")
+    if not dest.parent.is_dir() or dest.parent.is_symlink():
+        raise ValueError("Review draft requires a real existing directory")
     temporary = None
     try:
         fd, temporary = tempfile.mkstemp(prefix=".ghidrassist-review-",dir=dest.parent)
