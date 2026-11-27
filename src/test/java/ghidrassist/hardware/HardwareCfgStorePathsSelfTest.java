@@ -19,7 +19,7 @@ public final class HardwareCfgStorePathsSelfTest {
         var graph=List.of(n(0,1,2),n(1,3),n(2,3),n(3,4),n(4,3),n(5));
         var observations=List.of(s(1,"SIMCR"),s(2,"CSBAR0"),
             s(3,"CSOR0"),s(4,"TRAMBAR"));
-        var r=HardwareCfgStorePaths.analyze(0x2bc0,graph,observations,false,100);
+        var r=HardwareCfgStorePaths.analyze(0,graph,observations,false,100);
         ok(r.relations().size()==6 && !r.truncated() && !r.unknownFlow(),
             "candidate pairs bounded and complete");
         ok(r.relations().stream().anyMatch(p->p.aPc()==1 && p.bPc()==2 &&
@@ -36,7 +36,7 @@ public final class HardwareCfgStorePathsSelfTest {
             md.contains("NOT whether both writes") &&
             md.contains("never combined into an active hardware map"),
             "forbidden feasibility/runtime claim");
-        var budget=HardwareCfgStorePaths.analyze(0x2bc0,graph,
+        var budget=HardwareCfgStorePaths.analyze(0,graph,
             List.of(s(1,"SIMCR"),s(4,"TRAMBAR")),false,1);
         ok(budget.truncated() &&
             budget.relations().get(0).relation()==
@@ -93,11 +93,11 @@ public final class HardwareCfgStorePathsSelfTest {
         ok(orphan.truncated() && orphan.unknownFlow() &&
             orphan.relations().isEmpty(),"unreachable STORE fail closed");
         var unsafe=new HardwareCfgStorePaths.Pair(10,12,14,
-            "SIMCR\\n- ACTIVE VBR|<b>", "CSBAR0" + "X".repeat(100000),
+            "SIMCR\n- ACTIVE VBR|<b>", "CSBAR0" + "X".repeat(100000),
             HardwareCfgStorePaths.Relationship.A_MAY_PRECEDE_B,true);
         String escaped=HardwareCfgStorePaths.markdown(List.of(unsafe),0);
         ok(!escaped.contains("<b>") && !escaped.contains("|<b>") &&
-            !escaped.contains("\\n- ACTIVE VBR") &&
+            !escaped.contains("\n- ACTIVE VBR") &&
             escaped.contains("[U+007C]") &&
             escaped.contains("[ABBREVIATED LABEL]") &&
             escaped.length()<1400 && unsafe.bRegister().length()>100000,
