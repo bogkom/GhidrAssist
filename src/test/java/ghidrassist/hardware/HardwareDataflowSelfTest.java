@@ -515,29 +515,29 @@ public final class HardwareDataflowSelfTest {
         // index sources on the 24-bit bus, but neither unsigned raw bytes
         // nor arbitrary high CPU32 words can silently impersonate them.
         for(long q:new long[]{-128L,0xffff80L,0xffffff80L}) {
-            var indexed=HardwareDataflow.analyze(0,List.of(
+            var signedIndexedMoveq=HardwareDataflow.analyze(0,List.of(
                 new HardwareDataflow.Step(0,SET_POINTER,"D1",q,
                     0,null,32,List.of(2L),"MOVEQ"),
                 st(2,SET_POINTER,"A0",simcr+127L,0,null,32,4L),
                 new HardwareDataflow.Step(4,"A0",null,"D1",
                     16,1,1,0x40ca,16,List.of(),"MOVE.W")
             ),Set.of(simcr),100);
-            ok(indexed.snapshots.size()==1 &&
-                indexed.snapshots.get(0).effectiveAddress==simcr &&
-                indexed.snapshots.get(0).writtenWord==0x40ca,
+            ok(signedIndexedMoveq.snapshots.size()==1 &&
+                signedIndexedMoveq.snapshots.get(0).effectiveAddress==simcr &&
+                signedIndexedMoveq.snapshots.get(0).writtenWord==0x40ca,
                 "signed MOVEQ .W index must remain a precise MCU24 MAY");
         }
         for(long q:new long[]{0x80L,0xffL,0x01000080L}) {
-            var invalid=HardwareDataflow.analyze(0,List.of(
+            var noncanonicalMoveqFlow=HardwareDataflow.analyze(0,List.of(
                 new HardwareDataflow.Step(0,SET_POINTER,"D1",q,
                     0,null,32,List.of(2L),"MOVEQ"),
                 st(2,SET_POINTER,"A0",simcr+127L,0,null,32,4L),
                 new HardwareDataflow.Step(4,"A0",null,"D1",
                     16,1,1,0x40ca,16,List.of(),"MOVE.W")
             ),Set.of(simcr),100);
-            ok(invalid.snapshots.size()==1 &&
-                invalid.snapshots.get(0).effectiveAddress==null &&
-                invalid.snapshots.get(0).knownPeripheralWords.isEmpty(),
+            ok(noncanonicalMoveqFlow.snapshots.size()==1 &&
+                noncanonicalMoveqFlow.snapshots.get(0).effectiveAddress==null &&
+                noncanonicalMoveqFlow.snapshots.get(0).knownPeripheralWords.isEmpty(),
                 "unsigned/noncanonical MOVEQ may not forge an MMIO alias");
         }
         var legacySignedLong=HardwareDataflow.analyze(0,List.of(
