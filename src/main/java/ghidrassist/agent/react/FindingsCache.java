@@ -50,6 +50,9 @@ public class FindingsCache {
         /** Cache-owned findings invalidate page revisions on public score edits. */
         private final Runnable onRelevanceChange;
         private final Object ownerLock;
+        // A caller may retain a Finding after eviction/clear. Its score
+        // is no longer part of this run and must not bump a new page epoch.
+        private boolean retained=true;
 
         public Finding(String fact, String evidence, String toolUsed, int relevance) {
             this(fact,evidence,toolUsed,relevance,null,null);
@@ -81,7 +84,7 @@ public class FindingsCache {
         private void updateRelevance(int relevance) {
             if(this.relevance!=relevance) {
                 this.relevance=relevance;
-                if(onRelevanceChange!=null)onRelevanceChange.run();
+                if(retained && onRelevanceChange!=null)onRelevanceChange.run();
             }
         }
     }
@@ -365,7 +368,8 @@ public class FindingsCache {
 
         // Remove lowest relevance findings
         while (findings.size() > maxFindings) {
-            findings.remove(findings.size() - 1);
+            Finding removed=findings.remove(findings.size() - 1);
+            removed.retained=false;
             evictedFindings++;
         }
     }
@@ -516,6 +520,9 @@ public class FindingsCache {
      */
     public synchronized void clear() {
         findingsRevision++;
+        // References returned by getAllFindings() may outlive this cache
+        // generation. Detach before the list is emptied under our lock.
+        for(Finding old:findings)old.retained=false;
         findings.clear();
         iterationSummaries.clear();
         totalIterationSummaries=0;
