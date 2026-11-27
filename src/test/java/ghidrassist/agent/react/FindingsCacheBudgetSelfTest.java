@@ -476,6 +476,61 @@ public final class FindingsCacheBudgetSelfTest {
             text.contains("EVIDENCE INCOMPLETE:") &&
             !combinedLoss.page(0,1).complete(),
             "raw truncation and retention/provenance loss remain separately disclosed");
+        // ReAct top-N text previews are not paginated full evidence. Do not
+        // make 10/20 shown rows look like the only findings, and do not
+        // change the source-complete flag for an honest short preview.
+        var preview=new FindingsCache(25);
+        for(int i=0;i<20;i++)
+            preview.addFinding("retained fact "+i,"listing pc "+i,"listing",6);
+        var fullPage=preview.page(0,20);
+        yes(fullPage.complete() && fullPage.rows().size()==20 &&
+            !fullPage.sourceIncomplete(),
+            "lossless retained findings are still complete in versioned pages");
+        String promptTen=preview.formatForPrompt();
+        String detailedFive=preview.formatDetailed(5,false);
+        String summaryFifteen=preview.summarize();
+        yes(promptTen.startsWith(
+                "PREVIEW ONLY: showing 10 of 20 retained findings; 10 retained findings omitted") &&
+            detailedFive.startsWith(
+                "PREVIEW ONLY: showing 5 of 20 retained findings; 15 retained findings omitted") &&
+            summaryFifteen.startsWith(
+                "PREVIEW ONLY: showing 15 of 20 retained findings; 5 retained findings omitted"),
+            "every bounded text renderer declares exact retained-view coverage");
+        yes(!promptTen.contains("SOURCE INCOMPLETE") &&
+            !detailedFive.contains("EVIDENCE INCOMPLETE") &&
+            preview.page(0,20,fullPage.revision()).complete(),
+            "preview truncation never falsifies source completeness or revision");
+        yes(preview.formatForPrompt(20).startsWith("• ") &&
+            preview.formatDetailed(20,false).startsWith("## Key Findings") &&
+            !preview.formatForPrompt(20).contains("PREVIEW ONLY") &&
+            !preview.summarize().contains("SOURCE INCOMPLETE"),
+            "full retained text view has no spurious preview or source loss warning");
+        String zeroPreview=preview.formatForPrompt(-1);
+        yes(zeroPreview.startsWith("PREVIEW ONLY: showing 0 of 20") &&
+            !zeroPreview.contains("• ") &&
+            preview.formatDetailed(0,false).contains(
+                "PREVIEW ONLY: showing 0 of 20"),
+            "zero-width previews still disclose all omitted retained evidence");
+        preview.addFinding("new evidence","new pc","listing",7);
+        yes(preview.formatForPrompt().contains(
+                "PREVIEW ONLY: showing 10 of 21 retained findings; 11 retained findings omitted") &&
+            preview.page(0,21).complete(),
+            "preview coverage updates after an accepted finding without changing source semantics");
+        preview.clear();
+        preview.addFinding("only new fact","source","listing",5);
+        yes(!preview.formatForPrompt().contains("PREVIEW ONLY") &&
+            !preview.formatDetailed().contains("PREVIEW ONLY") &&
+            !preview.summarize().contains("PREVIEW ONLY"),
+            "new source generation resets bounded-preview coverage");
+        var mixedPreview=new FindingsCache(2);
+        mixedPreview.addFinding("missing attribution",null,"listing",1);
+        mixedPreview.addFinding("retained A","source A","listing",9);
+        mixedPreview.addFinding("retained B","source B","listing",8);
+        String mixedText=mixedPreview.formatForPrompt(1);
+        yes(mixedText.contains("EVIDENCE INCOMPLETE:") &&
+            mixedText.contains("PREVIEW ONLY: showing 1 of 2") &&
+            !mixedPreview.page(0,2).complete(),
+            "source loss and presentation-only omissions are independently disclosed");
         System.out.println("FindingsCacheBudgetSelfTest OK");
     }
 }
