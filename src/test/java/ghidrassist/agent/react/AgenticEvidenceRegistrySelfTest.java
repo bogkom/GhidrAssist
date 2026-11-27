@@ -406,6 +406,30 @@ public final class AgenticEvidenceRegistrySelfTest {
             throw new AssertionError("Identity-map queue regression setup failed",e);
         }
 
+        // A terminal SUCCESS is not evidence completeness if the same
+        // findings cache silently discarded ReAct iteration history after
+        // its initial page was issued (even with all findings retained).
+        var historyOwner=new Object();
+        var historyCache=new FindingsCache();
+        historyCache.addFinding("source fact","bounded listing","listing",9);
+        String historyRun=registry.begin(historyOwner,42L,
+            "e".repeat(64),historyCache);
+        registry.finish(historyOwner,historyCache,historyRun,"SUCCESS");
+        var completeBeforeHistoryLoss=registry.page(historyOwner,42L,
+            "e".repeat(64),0,10,null,null);
+        yes(completeBeforeHistoryLoss.complete(),
+            "complete short Agentic history starts with true source coverage");
+        historyCache.addIterationSummary("S".repeat(
+            FindingsCache.MAX_ITERATION_SUMMARY_CHARS+1));
+        var incompleteAfterHistoryLoss=registry.page(historyOwner,42L,
+            "e".repeat(64),0,10,null,null);
+        yes(!incompleteAfterHistoryLoss.complete() &&
+            incompleteAfterHistoryLoss.state().equals("SUCCESS") &&
+            incompleteAfterHistoryLoss.findings().sourceIncomplete(),
+            "terminal SUCCESS cannot launder lost iteration source history");
+        denies(()->registry.page(historyOwner,42L,"e".repeat(64),1,1,
+            historyRun,completeBeforeHistoryLoss.findings().revision()),
+            "pagination from before summary truncation must be rejected");
         System.out.println("AGENTIC REGISTRY PASS assertions="+assertions);
     }
 }

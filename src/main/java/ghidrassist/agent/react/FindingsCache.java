@@ -215,6 +215,9 @@ public class FindingsCache {
 
     private final List<Finding> findings;
     private final List<String> iterationSummaries;
+    // Unlike a bounded display, discarded investigation history must
+    // never be upgraded to complete evidence, even after terminal SUCCESS.
+    private boolean iterationHistoryIncomplete;
     private final int maxFindings;
 
     public FindingsCache() {
@@ -510,6 +513,7 @@ public class FindingsCache {
         findings.clear();
         iterationSummaries.clear();
         totalIterationSummaries=0;
+        iterationHistoryIncomplete=false;
         acceptedFindings=0;
         evictedFindings=0;
         unattributedFindings=0;
@@ -529,12 +533,28 @@ public class FindingsCache {
      * This captures the LLM's analytical summary after each iteration.
      */
     public synchronized void addIterationSummary(String summary) {
-        if (summary != null && !summary.trim().isEmpty()) {
-            iterationSummaries.add(bounded(summary.trim(),
-                MAX_ITERATION_SUMMARY_CHARS));
-            totalIterationSummaries++;
-            if(iterationSummaries.size()>MAX_ITERATION_SUMMARIES)
-                iterationSummaries.remove(0);
+        if(summary==null)return;
+        // Avoid a full-length trim() copy of untrusted model text. Examine
+        // a bounded prefix after finding the exact legacy trim boundaries.
+        int first=0,end=summary.length();
+        while(first<end && summary.charAt(first)<=' ')first++;
+        while(end>first && summary.charAt(end-1)<=' ')end--;
+        if(first==end)return;
+        int size=end-first;
+        String boundedInput=summary.substring(first,
+            first+Math.min(size,MAX_ITERATION_SUMMARY_CHARS+1));
+        if(size>MAX_ITERATION_SUMMARY_CHARS ||
+                malformedUtf16(boundedInput,boundedInput.length())) {
+            iterationHistoryIncomplete=true;
+            markSourceIncomplete();
+        }
+        iterationSummaries.add(bounded(boundedInput,
+            MAX_ITERATION_SUMMARY_CHARS));
+        totalIterationSummaries++;
+        if(iterationSummaries.size()>MAX_ITERATION_SUMMARIES) {
+            iterationSummaries.remove(0);
+            iterationHistoryIncomplete=true;
+            markSourceIncomplete();
         }
     }
 
@@ -550,16 +570,22 @@ public class FindingsCache {
      * Format iteration summaries with custom limit.
      */
     public synchronized String formatIterationSummaries(int maxIterations) {
+        if(maxIterations<=0)return "";
         if (iterationSummaries.isEmpty()) {
-            return "No iteration summaries available.";
+            return iterationHistoryIncomplete ?
+                "SOURCE INCOMPLETE: iteration history was shortened or omitted." :
+                "No iteration summaries available.";
         }
 
         // Get last N iterations (most recent)
         int startIdx = Math.max(0, iterationSummaries.size() -
-            Math.max(0,Math.min(maxIterations,MAX_ITERATION_SUMMARIES)));
+            Math.min(maxIterations,MAX_ITERATION_SUMMARIES));
         List<String> recent = iterationSummaries.subList(startIdx, iterationSummaries.size());
 
         StringBuilder sb = new StringBuilder();
+        if(iterationHistoryIncomplete)
+            sb.append("SOURCE INCOMPLETE: iteration summaries were shortened ")
+              .append("or older history was omitted.\n");
         for (int i = 0; i < recent.size(); i++) {
             sb.append("### Iteration ")
                 .append(totalIterationSummaries-iterationSummaries.size()+startIdx+i+1)
