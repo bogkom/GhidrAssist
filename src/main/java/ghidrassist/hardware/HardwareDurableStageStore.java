@@ -119,6 +119,26 @@ public final class HardwareDurableStageStore {
         }
     }
     /**
+     * The second Ghidra fingerprint is a consistency check, not a replacement
+     * identity. Never write a completed report under a key first captured
+     * AFTER the source CFG analysis. In particular, changed Listing/P-code,
+     * source import, engine, language, project or MCU profile must not turn
+     * stale evidence into a new restart checkpoint. The two Key records are
+     * immutable and compare every field; this check does not authenticate
+     * a hostile local writer or replace the independent generation/epoch gate.
+     *
+     * A mismatched/absent capture is a no-write cache miss. A matching
+     * capture uses the existing atomic file replacement and permission gate.
+     */
+    static boolean saveIfSameSource(Path directory,Key atStart,Key atEnd,
+            byte[] completeStage) throws IOException {
+        if(atStart==null || atEnd==null || !atStart.equals(atEnd))
+            return false;
+        save(directory,atEnd,completeStage);
+        return true;
+    }
+
+    /**
      * Read a file opened by the caller with an absolute byte limit. This
      * second bound is required even when an earlier file-size stat succeeded:
      * an external writer can grow/replace the checkpoint between stat/open.

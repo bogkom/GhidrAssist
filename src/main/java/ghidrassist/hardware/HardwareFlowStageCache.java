@@ -120,11 +120,16 @@ public final class HardwareFlowStageCache {
         // Persistent use is explicit opt-in only, and never keyed by the
         // original executable SHA alone. Missing/unreadable input is a miss.
         Path directory=diskDirectory();
+        HardwareDurableStageStore.Key initialInputKey=null;
         HardwareDurableStageStore.Key durableKey=null;
-        if(directory!=null && !skipDisk){
-            durableKey=HardwareGhidraInputFingerprint.capture(
+        if(directory!=null){
+            // Always capture the exact source BEFORE computation, even after
+            // explicit clear skipped the old disk read. Analysis must never
+            // publish under an identity first observed only after it ran.
+            initialInputKey=HardwareGhidraInputFingerprint.capture(
                 program,monitor,started.mc68332Selected()).orElse(null);
-            if(durableKey!=null){
+            if(!skipDisk && initialInputKey!=null){
+                durableKey=initialInputKey;
                 var loaded=HardwareDurableStageStore.load(directory,durableKey)
                     .flatMap(HardwareDurableCfgReport::decode);
                 if(loaded.isPresent() &&
@@ -149,6 +154,9 @@ public final class HardwareFlowStageCache {
                 }
             }
         }
+        // Exact pre-analysis identity, never an after-the-fact key invented
+        // for evidence computed under another Listing/source snapshot.
+        final HardwareDurableStageStore.Key analysisInputKey=initialInputKey;
         // No lock held during the expensive Ghidra CFG walk.
         GhidraHardwareFlowService.Report calculated=
             new GhidraHardwareFlowService().analyze(
@@ -175,7 +183,7 @@ public final class HardwareFlowStageCache {
             }
             // Store only complete evidence: never turn a limited/unfinished
             // CFG capture into an apparently complete restart checkpoint.
-            if(directory!=null &&
+            if(directory!=null && analysisInputKey!=null &&
                     HardwareDurableCfgReport.eligibleForCompletedRestore(
                         snapshot(calculated))){
                 try{
@@ -193,7 +201,8 @@ public final class HardwareFlowStageCache {
                                     !EPOCHS.current(program,computationEpoch))
                                 throw new CancelledException();
                             if(!EPOCHS.publishIfCurrent(program,computationEpoch,
-                                    ()->HardwareDurableStageStore.save(directory,beforeWrite,bytes)))
+                                    ()->HardwareDurableStageStore.saveIfSameSource(
+                                        directory,analysisInputKey,beforeWrite,bytes)))
                                 throw new CancelledException();
                         }
                     }
