@@ -340,6 +340,54 @@ public final class HardwareCallsiteRegisterFlowSelfTest {
             -1,0,0,0,0,0,0,0,0,false,List.of()),
             "negative public source counters cannot be published");
 
+        // Regress a hostile but 24-bit/aligned callee CFG that branches
+        // backwards into the body of a different function, where an
+        // invented SET_POINTER would create a false MMIO source.
+        var forgedPreEntry=List.of(
+            new HardwareDataflow.Step(0x640,OTHER,null,0,0,null,0,
+                List.of(0x63eL),"BRA"),
+            set(0x63e,"A0",simcr,0x646),
+            new HardwareDataflow.Step(0x646,STORE_INDIRECT,"A0","D0",
+                0,0,null,16,List.of(0x648L),"MOVE.W"),
+            ret(0x648));
+        var smuggled=HardwareDataflow.analyzeWithEntryRegisters(
+            0x640,forgedPreEntry,Set.of(simcr),500,
+            Map.of("D0",0x40caL));
+        ok(smuggled.snapshots.size()==1 &&
+            simcr==smuggled.snapshots.get(0).effectiveAddress &&
+            smuggled.snapshots.get(0).writtenWord==0x40ca,
+            "untrusted pre-entry predecessor WOULD create a false contextual "+
+            "MMIO source without strict callee scope");
+        rejects(()->new HardwareCallsiteRegisterFlow.Callee(
+            0x640,forgedPreEntry,true),
+            "foreign predecessor must never seed a one-hop callee MMIO");
+        rejects(()->new HardwareCallsiteRegisterFlow.Callee(
+            0x640,List.of(new HardwareDataflow.Step(
+                0x640,OTHER,null,0,0,null,0,List.of(0x63eL),"BRA")),true),
+            "successor before exact function entry is not a closed callee edge");
+        rejects(()->new HardwareCallsiteRegisterFlow.Callee(
+            0x640,List.of(new HardwareDataflow.Step(
+                0x640,OTHER,null,0,0,null,0,List.of(0x1000000L),"BRA")),true),
+            "callee cannot branch to foreign 25-bit instruction");
+        ok(HardwareCallsiteRegisterFlow.analyze(
+            List.of(left),List.of(callee),Set.of(simcr),8).possibleStoreSites()==1,
+            "valid exact-entry callee keeps positive source CALL evidence");
+        rejects(()->new HardwareCallsiteRegisterFlow.Candidate(
+            0x600,0x60c,0x640,0x640,STORE_INDIRECT,simcr,0x40ca,16,
+            false,false,0),
+            "reported source STORE requires actual agreed non-stack registers");
+        rejects(()->new HardwareCallsiteRegisterFlow.Summary(
+            1,1,1,1,1,0,0,0,0,false,List.of()),
+            "mutually exclusive rejection counters cannot exceed sampled CALLs");
+        rejects(()->new HardwareCallsiteRegisterFlow.Summary(
+            1,1,1,0,0,0,0,0,
+            HardwareCallsiteRegisterFlow.MAX_CALLEE_STEPS+1,true,List.of()),
+            "one CALL cannot claim more distinct STORE sites than bounded callee CFG");
+        rejects(()->new HardwareCallsiteRegisterFlow.Summary(
+            1,1,0,0,0,0,0,1,0,false,List.of()),
+            "unresolved STORE aliases need a contextual analyzed CALL");
+        ok(results.possibleStoreSites()==2 && results.candidates().size()==2,
+            "rejected forged source records do not alter existing evidence");
         System.out.println("HardwareCallsiteRegisterFlowSelfTest PASS: assertions="+assertions);
     }
 }

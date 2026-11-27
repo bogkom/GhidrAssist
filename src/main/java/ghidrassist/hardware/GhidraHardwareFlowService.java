@@ -514,8 +514,14 @@ public final class GhidraHardwareFlowService {
             }
             if(!safe)break;
             HardwareDataflow.Step translated=translate(insn,callee);
+            // A Ghidra function body may be discontiguous and include
+            // a branch into a lower-addressed chunk. That may be valid
+            // Listing data, but not the CLOSED one-hop CALL source proof:
+            // discard the unsafe callee before constructing the strict
+            // Callee record, rather than throwing during full analysis.
             if(translated.successors.stream().anyMatch(
-                    successor->!HardwareCallsiteRegisterFlow.sourcePc(successor))){
+                    successor->!HardwareCallsiteRegisterFlow.sourcePc(successor) ||
+                        successor<entry)){
                 safe=false;break;
             }
             steps.add(translated);
@@ -1175,7 +1181,36 @@ public final class GhidraHardwareFlowService {
                         words.put(hit.instruction,word);
                 }
                 if(foundSimcr){
-                    if(steps.size()>50000 || localFirstPaths.size()>=75)
+                    // A concrete MC68332 source report must never borrow
+                    // instruction/edge coordinates before a function entry
+                    // or outside the MCU24 aperture. Do not let malformed
+                    // Listing/P-code crash the whole read-only scan: record
+                    // the function as omitted/UNKNOWN instead.
+                    long localEntry=fun.getEntryPoint().getOffset();
+                    boolean validLocalGraph=
+                        HardwareCallsiteRegisterFlow.sourcePc(localEntry);
+                    long localEdges=0;
+                    if(validLocalGraph)for(HardwareDataflow.Step step:steps) {
+                        if(!HardwareCallsiteRegisterFlow.sourcePc(step.address) ||
+                                step.address<localEntry) {
+                            validLocalGraph=false;break;
+                        }
+                        localEdges+=step.successors.size();
+                        if(localEdges>HardwareSimcrLocalFirst.MAX_SOURCE_EDGES) {
+                            validLocalGraph=false;break;
+                        }
+                        for(Long successor:step.successors)
+                            if(successor==null ||
+                                    !HardwareCallsiteRegisterFlow.sourcePc(successor) ||
+                                    successor<localEntry) {
+                                validLocalGraph=false;break;
+                            }
+                        if(!validLocalGraph)break;
+                    }
+                    if(steps.size()>HardwareSimcrLocalFirst.MAX_SOURCE_NODES ||
+                            localFirstPaths.size()>=
+                                HardwareSimcrLocalFirst.MAX_LOCAL_FUNCTIONS ||
+                            !validLocalGraph)
                         localFirstOmittedFunctions++;
                     else {
                         List<HardwareSimcrLocalFirst.Node> graph=new ArrayList<>();

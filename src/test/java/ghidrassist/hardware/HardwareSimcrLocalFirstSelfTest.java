@@ -9,6 +9,12 @@ public final class HardwareSimcrLocalFirstSelfTest {
         for(long x:successors)next.add(x);
         return new HardwareSimcrLocalFirst.Node(pc,next,effect,word);
     }
+    private static void rejects(Runnable action,String message) {
+        boolean denied=false;
+        try {action.run();}
+        catch(IllegalArgumentException expected){denied=true;}
+        ok(denied,message);
+    }
     public static void main(String[] args){
         var none=HardwareSimcrLocalFirst.Effect.NONE;
         var word=HardwareSimcrLocalFirst.Effect.WORD_LITERAL;
@@ -134,6 +140,63 @@ public final class HardwareSimcrLocalFirstSelfTest {
         ok(diamond.literalCandidates().size()==1 &&
             !diamond.unknownFirstPossible(),
             "rejected oversized graph never poisons independent first-SIMCR result");
+        // Source-only SIMCR first effects require bounded MCU24 program
+        // coordinates. A host 32-bit address is not a proven MC68332 write.
+        rejects(()->node(0x1000000L,none,null),
+            "foreign function source PC cannot seed MC68332 SIMCR");
+        rejects(()->node(0,none,null,0x1000000L),
+            "foreign successor cannot be treated as a complete source path");
+        rejects(()->node(0,none,null,-2),
+            "negative successor invalid even if otherwise disconnected");
+        var lastMcuPc=HardwareSimcrLocalFirst.inspect(
+            0xfffffeL,0xfffffeL,
+            List.of(node(0xfffffeL,word,0x40ca)),false,1);
+        ok(lastMcuPc.literalCandidates().size()==1 &&
+            lastMcuPc.literalCandidates().get(0).pc()==0xfffffeL &&
+            !lastMcuPc.unknownFirstPossible(),
+            "last aligned MC68332 24-bit source remains valid");
+        rejects(()->new HardwareSimcrLocalFirst.Node(
+            0,java.util.Arrays.asList(0L,(Long)null),none,null),
+            "unknown CFG successor cannot silently disappear from source inventory");
+        rejects(()->HardwareSimcrLocalFirst.inspect(
+            0x1000000L,0,List.of(node(0,none,null)),false,2),
+            "foreign 32-bit function metadata not publishable as local MC68332");
+        rejects(()->HardwareSimcrLocalFirst.inspect(
+            0,0x1000000L,List.of(node(0,none,null)),false,2),
+            "foreign first-SIMCR entry metadata not publishable as local MC68332");
+        rejects(()->new HardwareSimcrLocalFirst.FirstSite(0,0x10000),
+            "out-of-range 17-bit SIMCR word cannot masquerade as source literal");
+        rejects(()->new HardwareSimcrLocalFirst.FirstSite(0x1000000L,0x40ca),
+            "foreign physical register source location cannot be displayed");
+        rejects(()->new HardwareSimcrLocalFirst.Result(
+            0,List.of(new HardwareSimcrLocalFirst.FirstSite(2,0x40ca)),
+            false,false,false,false,0),
+            "a source result cannot have first sites without visited decoded nodes");
+        rejects(()->new HardwareSimcrLocalFirst.Result(
+            0,List.of(new HardwareSimcrLocalFirst.FirstSite(2,0x40ca)),
+            false,false,true,false,1),
+            "cycles or CFG gaps must imply unknown first-SIMCR effects");
+        rejects(()->new HardwareSimcrLocalFirst.Result(
+            0,List.of(new HardwareSimcrLocalFirst.FirstSite(2,0x40ca),
+                new HardwareSimcrLocalFirst.FirstSite(2,0x4848)),
+            false,false,false,false,2),
+            "duplicate first source PC cannot claim contradictory words");
+        rejects(()->new HardwareSimcrLocalFirst.Result(
+            0,List.of(new HardwareSimcrLocalFirst.FirstSite(4,0x40ca),
+                new HardwareSimcrLocalFirst.FirstSite(2,0x4848)),
+            false,false,false,false,2),
+            "public first-SIMCR result rows must have deterministic PC order");
+        rejects(()->HardwareSimcrLocalFirst.markdown(
+            java.util.Collections.nCopies(
+                HardwareSimcrLocalFirst.MAX_LOCAL_FUNCTIONS+1,diamond),0),
+            "unsupported report function count cannot be presented as complete source");
+        rejects(()->HardwareSimcrLocalFirst.markdown(
+            java.util.Arrays.asList(diamond,null),0),
+            "null function source cannot be omitted silently");
+        ok(diamond.literalCandidates().size()==1 &&
+            !diamond.unknownFirstPossible() &&
+            fork.literalCandidates().size()==2,
+            "valid branch and convergence results survive strict source gates");
         System.out.println("HardwareSimcrLocalFirstSelfTest OK");
     }
 }
