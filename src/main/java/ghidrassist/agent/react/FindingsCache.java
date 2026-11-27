@@ -171,10 +171,46 @@ public class FindingsCache {
         }
     }
 
+    /**
+     * Copy a bounded, well-formed UTF-16 prefix. An invalid isolated surrogate
+     * is omitted, and a valid pair is NEVER split at the display boundary.
+     * Callers retaining source evidence must separately record any loss.
+     */
+    private static String safePrefix(String input,int max) {
+        int end=Math.min(input.length(),max);
+        StringBuilder result=new StringBuilder(end);
+        for(int i=0;i<end;i++) {
+            char c=input.charAt(i);
+            if(Character.isHighSurrogate(c)) {
+                if(i+1<end && Character.isLowSurrogate(input.charAt(i+1)))
+                    result.append(c).append(input.charAt(++i));
+            } else if(!Character.isLowSurrogate(c)) {
+                result.append(c);
+            }
+        }
+        return result.toString();
+    }
+
+    private static boolean malformedUtf16(String input,int maximumScan) {
+        if(input==null)return false;
+        int end=Math.min(input.length(),maximumScan);
+        for(int i=0;i<end;i++) {
+            char c=input.charAt(i);
+            if(Character.isHighSurrogate(c)) {
+                if(i+1>=end || !Character.isLowSurrogate(input.charAt(i+1)))
+                    return true;
+                i++;
+            } else if(Character.isLowSurrogate(c)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private static String bounded(String input,int max) {
         if(input==null)return null;
-        if(input.length()<=max)return input;
-        return input.substring(0,max-15)+" [TRUNCATED]";
+        if(input.length()<=max)return safePrefix(input,max);
+        return safePrefix(input,max-15)+" [TRUNCATED]";
     }
 
     private final List<Finding> findings;
@@ -202,7 +238,10 @@ public class FindingsCache {
         // loss independently of the finding relevance budget and pagination.
         if(fact.length()>MAX_FACT_CHARS ||
                 (evidence!=null && evidence.length()>MAX_EVIDENCE_CHARS) ||
-                (toolUsed!=null && toolUsed.length()>128))
+                (toolUsed!=null && toolUsed.length()>128) ||
+                malformedUtf16(fact,MAX_FACT_CHARS) ||
+                malformedUtf16(evidence,MAX_EVIDENCE_CHARS) ||
+                malformedUtf16(toolUsed,128))
             sourceIncomplete=true;
         acceptedFindings++;
         if(evidence==null || evidence.isBlank() ||
@@ -240,6 +279,9 @@ public class FindingsCache {
         // tool transcript in every finding. Extraction is intentionally
         // bounded and cannot claim to have inspected omitted source bytes.
         int length=Math.min(MAX_TOOL_TEXT_SCAN,output.length());
+        // Even malformed UTF-16 inside a skipped short/long line is missing
+        // source evidence. Never silently present the retained prefix as whole.
+        if(malformedUtf16(output,length))markSourceIncomplete();
         String[] lines=output.substring(0,length).split("\n");
         int scanned=0;
         boolean omittedLongLine=false;
@@ -356,8 +398,8 @@ public class FindingsCache {
                 // Apply character limit if specified
                 if (maxCharsPerFinding > 0 && fact.length() > maxCharsPerFinding) {
                     fact = maxCharsPerFinding>3 ?
-                        fact.substring(0,maxCharsPerFinding-3)+"..." :
-                        fact.substring(0,maxCharsPerFinding);
+                        safePrefix(fact,maxCharsPerFinding-3)+"..." :
+                        safePrefix(fact,maxCharsPerFinding);
                 }
                 return "• " + fact;
             })
@@ -409,7 +451,7 @@ public class FindingsCache {
                 sb.append("\n");
                 if (f.getEvidence() != null && !f.getEvidence().isEmpty()) {
                     String truncated = f.getEvidence().length() > 200
-                        ? f.getEvidence().substring(0, 200) + "..."
+                        ? safePrefix(f.getEvidence(), 200) + "..."
                         : f.getEvidence();
                     sb.append("Evidence: ").append(truncated).append("\n");
                 }

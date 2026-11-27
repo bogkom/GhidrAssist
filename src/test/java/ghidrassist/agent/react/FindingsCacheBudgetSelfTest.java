@@ -14,6 +14,17 @@ public final class FindingsCacheBudgetSelfTest {
         catch(IllegalArgumentException expected){failed=true;}
         yes(failed,why);
     }
+    private static boolean validUtf16(String input) {
+        for(int i=0;i<input.length();i++) {
+            char c=input.charAt(i);
+            if(Character.isHighSurrogate(c)) {
+                if(i+1>=input.length() ||
+                        !Character.isLowSurrogate(input.charAt(i+1)))return false;
+                i++;
+            } else if(Character.isLowSurrogate(c))return false;
+        }
+        return true;
+    }
     public static void main(String[] args){
         rejects(()->new FindingsCache(0),"zero capacity rejected");
         rejects(()->new FindingsCache(-1),"negative capacity rejected");
@@ -73,6 +84,72 @@ public final class FindingsCacheBudgetSelfTest {
         yes(!individuallyTruncated.isSourceIncomplete() &&
             individuallyTruncated.page(0,5).complete(),
             "clean bounded evidence remains complete after explicit reset");
+
+        // GA-15: surrogate safety applies to retained findings, prompts,
+        // detailed evidence and even ignored tool lines, not just LLM text.
+        char orphanHigh=(char)0xd83d, orphanLow=(char)0xde80;
+        String rocket=new String(Character.toChars(0x1f680));
+        var malformed=new FindingsCache();
+        malformed.addFinding("bad"+orphanHigh+"fact",
+            "proof"+orphanLow+"info","li"+orphanHigh+"sting",9);
+        var damaged=malformed.page(0,10);
+        yes(damaged.sourceIncomplete() && !damaged.complete() &&
+            damaged.rows().get(0).fact().equals("badfact") &&
+            damaged.rows().get(0).evidence().equals("proofinfo") &&
+            damaged.rows().get(0).toolUsed().equals("listing") &&
+            validUtf16(malformed.formatDetailed()) &&
+            malformed.formatForPrompt().startsWith("SOURCE INCOMPLETE:"),
+            "malformed source fields are sanitized and cannot certify completeness");
+        malformed.clear();
+        malformed.addFinding("clear evidence","source","listing",5);
+        yes(malformed.page(0,10).complete() &&
+            validUtf16(malformed.page(0,10).rows().get(0).fact()),
+            "clean new source generation regains completeness after explicit reset");
+
+        var clippedPair=new FindingsCache();
+        String atBoundary="F".repeat(FindingsCache.MAX_FACT_CHARS-16)+
+            rocket+"Z".repeat(40);
+        clippedPair.addFinding(atBoundary,"proof","listing",5);
+        String clipped=clippedPair.page(0,10).rows().get(0).fact();
+        yes(clippedPair.isSourceIncomplete() &&
+            clipped.contains("[TRUNCATED]") && clipped.length()<=
+                FindingsCache.MAX_FACT_CHARS &&
+            validUtf16(clipped) && !clipped.contains(rocket),
+            "UTF-16 pair crossing retained cap is removed without orphan code unit");
+        var insidePair=new FindingsCache();
+        String completePair="Q".repeat(FindingsCache.MAX_FACT_CHARS-2)+rocket;
+        insidePair.addFinding(completePair,"proof","listing",5);
+        yes(insidePair.page(0,10).complete() &&
+            insidePair.page(0,10).rows().get(0).fact().equals(completePair),
+            "complete pair ending exactly at source cap is never falsely shortened");
+
+        var promptPair=new FindingsCache();
+        promptPair.addFinding(rocket+"EXTRA","proof","listing",8);
+        yes(validUtf16(promptPair.formatForPrompt(1,4)) &&
+            promptPair.formatForPrompt(1,4).contains("...") &&
+            !promptPair.isSourceIncomplete(),
+            "prompt-only preview cap never splits stored Unicode without mutating evidence");
+        var evidencePair=new FindingsCache();
+        evidencePair.addFinding("fact","E".repeat(199)+rocket+"TAIL","listing",8);
+        String detailed=evidencePair.formatDetailed(1,false);
+        yes(validUtf16(detailed) && detailed.contains("Evidence: "+
+                "E".repeat(199)+"...") &&
+            evidencePair.page(0,10).complete(),
+            "200-char detailed evidence preview cannot split a valid pair");
+        var malformedSkipped=new FindingsCache();
+        malformedSkipped.extractFromToolOutput("listing","tiny"+orphanLow);
+        yes(malformedSkipped.getCount()==0 &&
+            malformedSkipped.page(0,10).sourceIncomplete() &&
+            !malformedSkipped.page(0,10).complete() &&
+            malformedSkipped.formatForPrompt().startsWith("SOURCE INCOMPLETE:"),
+            "skipped malformed raw tool line cannot masquerade as complete source");
+        var summaryPair=new FindingsCache();
+        summaryPair.addIterationSummary(
+            "S".repeat(FindingsCache.MAX_ITERATION_SUMMARY_CHARS-16)+
+            rocket+"T".repeat(40));
+        yes(validUtf16(summaryPair.formatIterationSummaries(1)) &&
+            validUtf16(summaryPair.getIterationSummaries().get(0)),
+            "bounded iteration history never serializes half an emoji");
 
         // Tool-output extraction scans only a finite prefix and MUST label
         // missing source; it must never pretend to have read its omitted tail.
