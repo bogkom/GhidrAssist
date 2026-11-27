@@ -222,6 +222,112 @@ public final class HardwareCallsiteConsensusSelfTest {
                 List.of(a,b),summary,0,49,revision,()->revision),
             "Oversized report budget rejected");
 
+        // GA-02/03: a public producer can fabricate the same CALL-site
+        // address and word with a mismatched number of source A/D values.
+        // It must never be a two-caller sampled agreement.
+        var good=analyze(List.of(a,b),8);
+        var firstSource=good.candidates().get(0);
+        var mismatched=new HardwareCallsiteRegisterFlow.Candidate(
+            firstSource.caller(),firstSource.callPc(),firstSource.callee(),
+            firstSource.storePc(),firstSource.kind(),
+            firstSource.address(),firstSource.writtenWord(),
+            firstSource.writeBits(),firstSource.priorUnknownCall(),
+            firstSource.priorUnknownStore(),1);
+        var badEvidence=List.of(mismatched,good.candidates().get(1));
+        var forgedSummary=new HardwareCallsiteRegisterFlow.Summary(
+            good.sampledCalls(),good.directCalls(),good.contextCalls(),
+            good.rejectedIncomplete(),good.rejectedMissingCallee(),
+            good.rejectedNestedOrBadCfg(),good.truncatedCalls(),
+            good.unresolvedAliases(),good.possibleStoreSites(),
+            false,badEvidence);
+        var rejectedContext=HardwareCallsiteConsensus.inspect(
+            List.of(a,b),forgedSummary,0x500L,0x500L);
+        check(rejectedContext.state()==HardwareCallsiteConsensus.State.INCOMPLETE &&
+                rejectedContext.address()==null && rejectedContext.word()==null,
+            "forged source-register count cannot become sampled MMIO agreement");
+        var forgedContextCount=new HardwareCallsiteRegisterFlow.Summary(
+            good.sampledCalls(),good.directCalls(),1,
+            good.rejectedIncomplete(),good.rejectedMissingCallee(),
+            good.rejectedNestedOrBadCfg(),good.truncatedCalls(),
+            good.unresolvedAliases(),good.possibleStoreSites(),
+            false,good.candidates());
+        check(HardwareCallsiteConsensus.inspect(List.of(a,b),
+            forgedContextCount,0x500L,0x500L).state()==
+                HardwareCallsiteConsensus.State.INCOMPLETE,
+            "sampled CALL context coverage must match source inventory");
+        var forgedDirectCount=new HardwareCallsiteRegisterFlow.Summary(
+            good.sampledCalls(),1,1,
+            good.rejectedIncomplete(),good.rejectedMissingCallee(),
+            good.rejectedNestedOrBadCfg(),good.truncatedCalls(),
+            good.unresolvedAliases(),good.possibleStoreSites(),
+            false,good.candidates());
+        check(HardwareCallsiteConsensus.inspect(List.of(a,b),
+            forgedDirectCount,0x500L,0x500L).state()==
+                HardwareCallsiteConsensus.State.INCOMPLETE,
+            "direct CALL counter cannot substitute for source inventory");
+        // Source-bearing public Finding records are also used by report
+        // consumers; constructor must reject an invented known conclusion.
+        rejects(()->new HardwareCallsiteConsensus.Finding(
+            HardwareCallsiteConsensus.State.SAMPLED_AGREEMENT,
+            0x500,0x500,2,0xfffa00L,0x40ca,16,List.of()),
+            "agreement without both CALL receipts is forbidden");
+        rejects(()->new HardwareCallsiteConsensus.Finding(
+            HardwareCallsiteConsensus.State.SAMPLED_AGREEMENT,
+            0x500,0x500,2,0xfffa00L,0x40ca,16,
+            List.of(good.candidates().get(0),good.candidates().get(0))),
+            "replaying one caller cannot fabricate independent agreement");
+        rejects(()->new HardwareCallsiteConsensus.Finding(
+            HardwareCallsiteConsensus.State.SAMPLED_AGREEMENT,
+            0x500,0x500,2,0xfffa00L,0x4848,16,good.candidates()),
+            "public receipt must match exact word from both callers");
+        var secondSource=good.candidates().get(1);
+        var alternateKind=new HardwareCallsiteRegisterFlow.Candidate(
+            secondSource.caller(),secondSource.callPc(),
+            secondSource.callee(),secondSource.storePc(),STORE_DIRECT,
+            secondSource.address(),secondSource.writtenWord(),
+            secondSource.writeBits(),false,false,
+            secondSource.sourceRegisterCount());
+        rejects(()->new HardwareCallsiteConsensus.Finding(
+            HardwareCallsiteConsensus.State.SAMPLED_AGREEMENT,
+            0x500,0x500,2,0xfffa00L,0x40ca,16,
+            List.of(good.candidates().get(0),alternateKind)),
+            "direct/indirect write source kinds cannot forge unanimity");
+        var differingKind=new HardwareCallsiteRegisterFlow.Summary(
+            good.sampledCalls(),good.directCalls(),good.contextCalls(),
+            good.rejectedIncomplete(),good.rejectedMissingCallee(),
+            good.rejectedNestedOrBadCfg(),good.truncatedCalls(),
+            good.unresolvedAliases(),good.possibleStoreSites(),
+            false,List.of(good.candidates().get(0),alternateKind));
+        check(HardwareCallsiteConsensus.inspect(List.of(a,b),
+            differingKind,0x500L,0x500L).state()==
+                HardwareCallsiteConsensus.State.SAMPLED_DIVERGENCE,
+            "sampled source kinds disagree even with identical address/word");
+        var withStack=new HardwareCallsiteRegisterFlow.Call(
+            a.caller(),a.callPc(),a.directCallee(),
+            Map.of("A0",0xfffa00L,"D0",0x40caL,"A7",0xfff7fcL),false);
+        var stackSafe=HardwareCallsiteConsensus.inspect(
+            List.of(withStack,b),analyze(List.of(withStack,b),8),
+            0x500L,0x500L);
+        check(stackSafe.state()==
+                HardwareCallsiteConsensus.State.SAMPLED_AGREEMENT &&
+            stackSafe.provenance().get(0).sourceRegisterCount()==2,
+            "A7 is never part of the passed A/D register context");
+        rejects(()->new HardwareCallsiteConsensus.Finding(
+            HardwareCallsiteConsensus.State.NO_SAMPLED_CALLS,
+            0x500,0x500,0,null,null,0,good.candidates()),
+            "no sampled calls cannot conceal retained provenances");
+        rejects(()->new HardwareCallsiteConsensus.Finding(
+            HardwareCallsiteConsensus.State.STALE_REVISION,
+            0x500,0x500,1,null,null,0,List.of()),
+            "stale snapshot cannot advertise one current CALL");
+        rejects(()->new HardwareCallsiteConsensus.Finding(
+            HardwareCallsiteConsensus.State.INCOMPLETE,
+            0x500,0x500,2,0xfffa00L,null,0,good.candidates()),
+            "incomplete CALL evidence must suppress exact MMIO address");
+        check(HardwareCallsiteConsensus.inspect(List.of(a,b),good,
+            0x500,0x500).state()==
+                HardwareCallsiteConsensus.State.SAMPLED_AGREEMENT,
+            "fully sourced two-CALL control case still agrees");
         System.out.println("HardwareCallsiteConsensusSelfTest PASS: assertions="+
             assertions);
     }

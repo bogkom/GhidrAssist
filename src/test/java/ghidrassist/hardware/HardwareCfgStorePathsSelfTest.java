@@ -102,6 +102,93 @@ public final class HardwareCfgStorePathsSelfTest {
             escaped.contains("[ABBREVIATED LABEL]") &&
             escaped.length()<1400 && unsafe.bRegister().length()>100000,
             "untrusted labels cannot forge report evidence and raw witness remains");
+        // GA-02/03/12: bounded source contracts, not merely bounded output.
+        // A single adversarial CALL fanout cannot make every pair search
+        // inspect arbitrarily many edges after the visit budget has passed.
+        var oversizedEdges=new java.util.ArrayList<Long>(
+            java.util.Collections.nCopies(
+                HardwareCfgStorePaths.MAX_SOURCE_EDGES+1,12L));
+        boolean denied=false;
+        try {
+            new HardwareCfgStorePaths.Node(10,oversizedEdges);
+        }catch(IllegalArgumentException expected){denied=true;}
+        ok(denied,"one CFG node cannot contain unbounded successor references");
+        var edgeAtLimit=new HardwareCfgStorePaths.Node(
+            10,java.util.Collections.nCopies(
+                HardwareCfgStorePaths.MAX_SOURCE_EDGES,12L));
+        ok(edgeAtLimit.successors().size()==HardwareCfgStorePaths.MAX_SOURCE_EDGES,
+            "bounded maximum input adjacency remains supported");
+        denied=false;
+        try {
+            HardwareCfgStorePaths.analyze(10,
+                List.of(edgeAtLimit,n(12,14),n(14,12)),
+                ownedStores,false,10);
+        }catch(IllegalArgumentException expected){denied=true;}
+        ok(denied,"total CFG edges reject without partial write-path publication");
+        denied=false;
+        try {
+            HardwareCfgStorePaths.analyze(10,valid,
+                java.util.Collections.nCopies(
+                    HardwareCfgStorePaths.MAX_SOURCE_STORES+1,
+                    s(12,"SIMCR")),false,10);
+        }catch(IllegalArgumentException expected){denied=true;}
+        ok(denied,"oversized store input fails before list copy or sorting");
+        denied=false;
+        try {
+            HardwareCfgStorePaths.analyze(10,
+                java.util.Collections.nCopies(
+                    HardwareCfgStorePaths.MAX_SOURCE_NODES+1,n(10)),
+                ownedStores,false,10);
+        }catch(IllegalArgumentException expected){denied=true;}
+        ok(denied,"oversized source nodes fail closed before graph construction");
+        for(Runnable malformed:List.<Runnable>of(
+                ()->new HardwareCfgStorePaths.Node(0x100000000L,List.of()),
+                ()->new HardwareCfgStorePaths.Node(10,
+                    java.util.Arrays.asList(12L,null)),
+                ()->new HardwareCfgStorePaths.Node(10,
+                    List.of(0x100000000L)),
+                ()->new HardwareCfgStorePaths.Store(0x100000000L,"SIMCR"),
+                ()->HardwareCfgStorePaths.analyze(0x100000000L,valid,
+                    ownedStores,false,10))) {
+            boolean invalid=false;
+            try {malformed.run();}
+            catch(IllegalArgumentException expected){invalid=true;}
+            ok(invalid,"unsigned 32-bit source identity cannot be forged");
+        }
+        var safeMissing=HardwareCfgStorePaths.analyzeOrUnknown(10,
+            List.of(n(12,14),n(14)),ownedStores,false,10);
+        ok(safeMissing.truncated() && safeMissing.unknownFlow() &&
+            safeMissing.relations().isEmpty(),
+            "missing entry must not publish a path in production report adapter");
+        var safeEdges=HardwareCfgStorePaths.analyzeOrUnknown(10,
+            List.of(edgeAtLimit,n(12,14),n(14,12)),
+            ownedStores,false,10);
+        ok(safeEdges.truncated() && safeEdges.unknownFlow() &&
+            safeEdges.relations().isEmpty(),
+            "oversized total source edges become UNKNOWN without partial report");
+        var safeStores=HardwareCfgStorePaths.analyzeOrUnknown(10,valid,
+            java.util.Collections.nCopies(
+                HardwareCfgStorePaths.MAX_SOURCE_STORES+1,s(12,"SIMCR")),
+            false,10);
+        ok(safeStores.truncated() && safeStores.unknownFlow() &&
+            safeStores.relations().isEmpty(),
+            "oversized STORE inventory becomes UNKNOWN, not a global failure");
+        var safeValid=HardwareCfgStorePaths.analyzeOrUnknown(
+            10,valid,ownedStores,false,100);
+        ok(safeValid.equals(owned) &&
+            safeValid.relations().size()==1,
+            "valid complete source preserves exact same CFG path witness");
+        // A valid high CPU32 address remains legal in the generic source
+        // model. No unsupported 24-bit physical bus alias is invented.
+        var high=HardwareCfgStorePaths.analyze(0xfffffff0L,
+            List.of(n(0xfffffff0L,0xfffffff2L),
+                    n(0xfffffff2L,0xfffffff4L),n(0xfffffff4L)),
+            List.of(s(0xfffffff2L,"SIMCR"),s(0xfffffff4L,"CSBAR0")),
+            true,10);
+        ok(high.relations().size()==1 && high.unknownFlow() &&
+            high.relations().get(0).relation()==
+                HardwareCfgStorePaths.Relationship.A_MAY_PRECEDE_B,
+            "bounded source graph preserves generic CPU32 high addresses");
         System.out.println("HardwareCfgStorePathsSelfTest OK");
     }
 }

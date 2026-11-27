@@ -41,3 +41,49 @@ Deterministic Java 21 tests cover positive ownership, missing entry, foreign
 source/branch, orphaned STORE, budget limits, and adversarial label display.
 Full Java 25 extension and genuine isolated Ghidra 12.1.4 PUBLIC CI must
 pass at the exact commit before integration. GA-01/02/03/07 remain PARTIAL.
+
+
+## 2026-11-27 — GA-02/03/12 source-bound CFG and sampled CALL evidence
+
+The source CFG path analyzer now checks the total number of successor
+references (200,000), raw STORE observations (50,000), and decoded
+nodes (50,000) **before** entry reachability or pair searches. Public
+node, successor and STORE coordinates must be unsigned CPU32 32-bit
+values; invalid/null successors and oversized individual adjacency
+lists are rejected rather than silently skipped. A valid generic CPU32
+high address remains eligible; this check never asserts an MC68332
+physical-bus alias.
+
+Sampled CALL-site reconciliation verifies that the reported direct and
+context-bearing CALL counts match its actual input inventory and that
+each retained candidate's count of non-A7 source registers equals the
+specific caller's predecessor-agreed input. A mismatch produces
+`INCOMPLETE` with UNKNOWN address, word and width, **not** an
+apparently unanimous MMIO source. Public sampled-agreement records
+must retain two distinct matching CALL provenance receipts, identical
+address, width and word candidates, and no source uncertainty; forged
+known-address records are refused. All claims remain static MAY
+candidates, never executed writes, active SIMCR/MM, VBR/ISR, physical
+CS maps or Review/Apply instructions.
+
+Deterministic Java 21 tests cover boundary caps, oversized hostile
+graphs, invalid successor/STORE source coordinates, positive valid
+high CPU32 paths, invented sampled counts, forged source-register
+contexts, duplicate CALL provenance, and preserved clean agreement.
+Require complete Java 25 Ghidra 12.1.4 PUBLIC build and isolated
+synthetic Ghidra tests on the exact SHA. GA-02/03/12 remain PARTIAL.
+
+
+### GUI/Ghidra scan boundary for unsafe per-function sources
+
+`HardwareCfgStorePaths.analyzeOrUnknown` is the explicit **read-only
+report adapter**. It converts rejected or oversized CFG inputs to an
+empty, truncated, unknown-flow report for that function, while
+`analyze` retains strict fail-closed input exceptions. The production
+`GhidraHardwareFlowService` consumes the adapter and also contains
+invalid Node construction: malformed source successor references or
+oversized function inputs increment the existing omitted/limited
+function count rather than interrupting other functions' evidence.
+No partial STORE path relation is carried across that boundary.
+Deterministic Java 21 tests cover accepted real input, missing entry,
+excess edges and excess STORE records.

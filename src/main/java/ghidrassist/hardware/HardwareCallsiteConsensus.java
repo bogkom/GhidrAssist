@@ -29,11 +29,48 @@ public final class HardwareCallsiteConsensus {
             int sampledCallSites,Long address,Integer word,int bits,
             List<HardwareCallsiteRegisterFlow.Candidate> provenance) {
         public Finding {
-            if(state==null || callee<0 || storePc<0 || sampledCallSites<0 ||
+            if(state==null || !HardwareCallsiteRegisterFlow.sourcePc(callee) ||
+                    !HardwareCallsiteRegisterFlow.sourcePc(storePc) ||
+                    sampledCallSites<0 ||
+                    sampledCallSites>HardwareCallsiteRegisterFlow.MAX_CALL_SITES ||
                     provenance==null ||
+                    provenance.size()>HardwareCallsiteRegisterFlow.MAX_CALL_SITES ||
+                    provenance.stream().anyMatch(Objects::isNull) ||
+                    provenance.stream().anyMatch(c ->
+                        c.callee()!=callee || c.storePc()!=storePc) ||
                     (state!=State.SAMPLED_AGREEMENT &&
-                        (address!=null || word!=null || bits!=0)))
+                        (address!=null || word!=null || bits!=0)) ||
+                    (state==State.NO_SAMPLED_CALLS ||
+                        state==State.STALE_REVISION) &&
+                        (sampledCallSites!=0 || !provenance.isEmpty()))
                 throw new IllegalArgumentException("Invalid CALL reconciliation");
+            if(state==State.SAMPLED_AGREEMENT) {
+                // A public record must never fabricate a known MMIO address
+                // without distinct fully matching source CALL-site receipts.
+                if(sampledCallSites<2 || provenance.size()!=sampledCallSites ||
+                        address==null || address<0 ||
+                        address>HardwareDataflow.MASK24 ||
+                        storePc<callee ||
+                        (bits!=8 && bits!=16 && bits!=32) ||
+                        (word!=null && (word<0 || word>0xffff)))
+                    throw new IllegalArgumentException(
+                        "Unattributed sampled CALL agreement");
+                Set<String> unique=new HashSet<>();
+                var firstKind=provenance.get(0).kind();
+                for(var hit:provenance)
+                    if(!unique.add(hit.caller()+":"+hit.callPc()) ||
+                            hit.kind()!=firstKind ||
+                            !Objects.equals(hit.address(),address) ||
+                            !Objects.equals(hit.writtenWord(),word) ||
+                            hit.writeBits()!=bits ||
+                            hit.priorUnknownCall() || hit.priorUnknownStore())
+                        throw new IllegalArgumentException(
+                            "Conflicting CALL agreement provenance");
+            }
+            if(state==State.SAMPLED_DIVERGENCE &&
+                    (sampledCallSites<2 || provenance.size()!=sampledCallSites))
+                throw new IllegalArgumentException(
+                    "Unattributed sampled CALL divergence");
             provenance=List.copyOf(provenance);
         }
         public boolean publishableAsHardwareProof(){return false;}
@@ -201,7 +238,21 @@ public final class HardwareCallsiteConsensus {
                 HardwareCallsiteRegisterFlow.Candidate::caller)
             .thenComparingLong(HardwareCallsiteRegisterFlow.Candidate::callPc));
 
+        // Global counters are part of provenance, not decorative labels:
+        // a caller with no sampled direct target or no predecessor-agreed
+        // A/D arguments cannot be silently recast as an analyzed context.
+        long directInventory=0,contextInventory=0;
+        for(var call:calls) {
+            if(call.directCallee()==null)continue;
+            directInventory++;
+            if(!call.callerIncomplete() &&
+                    call.agreedRegisters().keySet().stream()
+                        .anyMatch(register->!"A7".equals(register)))
+                contextInventory++;
+        }
         boolean incomplete=summary.sampledCalls()!=calls.size() ||
+            summary.directCalls()!=directInventory ||
+            summary.contextCalls()!=contextInventory ||
             summary.omittedRows() ||
             summary.possibleStoreSites()!=summary.candidates().size() ||
             summary.rejectedIncomplete()!=0 ||
@@ -219,7 +270,10 @@ public final class HardwareCallsiteConsensus {
             for(var hit:evidence) {
                 if(hit.caller()==call.caller() && hit.callPc()==call.callPc()){
                     rows++;
-                    if(hit.address()==null ||
+                    int actualRegisters=call.agreedRegisters().size()-
+                        (call.agreedRegisters().containsKey("A7")?1:0);
+                    if(hit.sourceRegisterCount()!=actualRegisters ||
+                            hit.address()==null ||
                             (hit.writeBits()!=8 && hit.writeBits()!=16 &&
                              hit.writeBits()!=32) ||
                             hit.priorUnknownCall() || hit.priorUnknownStore())
