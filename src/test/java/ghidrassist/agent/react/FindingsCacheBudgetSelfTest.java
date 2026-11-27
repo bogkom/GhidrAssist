@@ -381,6 +381,62 @@ public final class FindingsCacheBudgetSelfTest {
             droppedSummaries.formatIterationSummaries(2).contains(
                 "### Iteration "+(FindingsCache.MAX_ITERATION_SUMMARIES+1)),
             "ring eviction never hides missing early investigation history");
+        // GA-15: keyword-based source ranking must not silently change
+        // with the operating system/UI default locale. Turkish dotted/dotless
+        // I exposes the bug in String.toLowerCase() without Locale.ROOT.
+        var previousLocale=java.util.Locale.getDefault();
+        try {
+            java.util.Locale.setDefault(java.util.Locale.forLanguageTag("tr-TR"));
+            var turkish=new FindingsCache();
+            turkish.extractFromToolOutput("listing",
+                "INJECTION observed at MCU register address");
+            turkish.extractFromToolOutput("listing",
+                "IMPORT table at CPU32 address");
+            var ranked=turkish.page(0,10);
+            yes(ranked.rows().size()==2 &&
+                ranked.rows().get(0).relevance()==FindingsCache.RELEVANCE_HIGH &&
+                ranked.rows().get(1).relevance()==FindingsCache.RELEVANCE_MEDIUM &&
+                ranked.rows().get(0).fact().startsWith("INJECTION"),
+                "source keyword ranking must be invariant under Turkish locale");
+            java.util.Locale.setDefault(java.util.Locale.ROOT);
+            var rootLocale=new FindingsCache();
+            rootLocale.extractFromToolOutput("listing",
+                "INJECTION observed at MCU register address");
+            rootLocale.extractFromToolOutput("listing",
+                "IMPORT table at CPU32 address");
+            yes(rootLocale.page(0,10).rows().stream()
+                    .map(FindingsCache.FindingView::relevance).toList()
+                    .equals(ranked.rows().stream()
+                        .map(FindingsCache.FindingView::relevance).toList()),
+                "identical keyword scores across locales without assuming timestamps");
+        } finally {
+            java.util.Locale.setDefault(previousLocale);
+        }
+
+        // Public mutable score edits are subject to the SAME 0..10
+        // scale as addFinding. Out-of-range edits cannot hijack ranking,
+        // and redundant clamped edits must not advance the page epoch.
+        var boundedScore=new FindingsCache(2);
+        boundedScore.addFinding("first source","address 0x100","listing",6);
+        boundedScore.addFinding("second source","address 0x200","listing",8);
+        var firstScore=boundedScore.getAllFindings().get(0);
+        firstScore.setRelevance(Integer.MAX_VALUE);
+        var upper=boundedScore.page(0,2);
+        yes(firstScore.getRelevance()==10 &&
+            upper.rows().get(0).fact().equals("first source"),
+            "public score setter clamps positive overflow to ten");
+        firstScore.setRelevance(11);
+        yes(boundedScore.page(0,2,upper.revision()).revision()==upper.revision(),
+            "second out-of-range edit with unchanged clamped score preserves cursor");
+        firstScore.setRelevance(Integer.MIN_VALUE);
+        var lower=boundedScore.page(0,2);
+        yes(firstScore.getRelevance()==0 &&
+            lower.rows().get(0).fact().equals("second source") &&
+            lower.revision()>upper.revision(),
+            "public negative score clamps to zero and updates current ordering");
+        firstScore.setRelevance(-1);
+        yes(boundedScore.page(0,2,lower.revision()).revision()==lower.revision(),
+            "redundant clamped negative score does not falsely invalidate pages");
         System.out.println("FindingsCacheBudgetSelfTest OK");
     }
 }
