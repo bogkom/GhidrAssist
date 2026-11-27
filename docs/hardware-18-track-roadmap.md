@@ -1,3 +1,9 @@
+## GA-15/04 — 2026-11-27: canonical CS table provenance validation candidate
+
+**CANDIDATE (pending exact-head CI):** a source-scoped CSBOOT/CS0–CS10 table in the local RAG context must now be internally consistent with the same 12-row `ChipSelectTable` decoder used by Analyze. `HardwareContextSelector` validates every decoded row by reconstructing independent CSBAR/CSOR words and shared CSPAR0/1 from exactly one source, refuses conflicting shared pins, mismatched declared known-word counts, counterfeit address windows and impossible assertion/status values, and compares all twelve rows against a canonical re-render. A forged but syntactically complete table becomes UNKNOWN, never a trustworthy AI source; other valid source tables remain selectable. Known whole-word values from multiple PC/MM contexts are never merged; the report remains untrusted data, not executable ECU state.
+
+Java21 deterministic negative and positive regressions are added to `HardwareContextSelectorSelfTest`. Required gates: Java21 source-only, full Ghidra 12.1.4 PUBLIC/Java25 extension and relevant real synthetic CodeBrowser CI, exact SHA review and merge. This is a safety improvement to retained GA-04 static capabilities, not retroactive revocation of formal GA-04 DONE and not proof of physical hardware. No original firmware, local Wyse/Precision, Supervisor or user Program used.
+
 ## GA-07/09 — formalny odbiór zakresu GUI/raport/API DONE (2026-11-27)
 
 **GA-07 i GA-09: DONE wyłącznie według jawnych kryteriów odbioru** z historycznej sekcji `GA-07 / GA-09 — pakiet odbiorowy: spójny report, MMIO GUI i Automation API (2026-11-06)`. Zakończono i scalono wszystkie wymienione bramki Java 21, Java 25 Ghidra 12.1.4 PUBLIC, rzeczywistej *syntetycznej* Ghidry CodeBrowser/Xvfb, finalnych SHA i ograniczeń. Historyczne nagłówki PARTIAL i kandydackie wyniki pozostają niezmienione i dotyczą **wcześniejszych dat**, nie obecnego stanu.

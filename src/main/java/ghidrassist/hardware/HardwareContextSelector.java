@@ -100,8 +100,42 @@ public final class HardwareContextSelector {
         }
         if(source==null || pc>0xffffffL || (pc&1)!=0 ||
                 contexts<1 || contexts>350 || wordCount>26 ||
-                !columns || !complete || rows.size()!=12)return null;
+                !columns || !complete || rows.size()!=12 ||
+                !canonicalCsRows(rows,wordCount))return null;
         return new CsTable(source,pc,mm,List.copyOf(rows));
+    }
+
+    /**
+     * A twelve-row shape is not proof that the row's range, CSOR, pin
+     * eligibility, or known-word count came from ONE decoded CFG state.
+     * Reconstruct the unique full words, refusing contradictory shared
+     * CSPAR values, and rerender with the production MCU decoder.
+     * Only byte-for-byte canonical rows can enter an AI source excerpt.
+     * This authenticates internal report consistency, NOT the MCU/bus.
+     */
+    private static boolean canonicalCsRows(List<String> rows,int knownWords) {
+        Map<String,Integer> reconstructed=new LinkedHashMap<>();
+        for(int i=0;i<rows.size();i++) {
+            String[] fields=rows.get(i).split("\\|",-1);
+            if(fields.length!=10)return false;
+            String suffix=i==0?"BT":Integer.toString(i-1);
+            String pin=i<=6?"CSPAR0":"CSPAR1";
+            String[] keys={"CSBAR"+suffix,"CSOR"+suffix,pin};
+            for(int c=0;c<keys.length;c++) {
+                String cell=fields[5+c].strip();
+                if("UNKNOWN".equals(cell))continue;
+                if(!cell.matches("0x[0-9A-F]{4}"))return false;
+                int value=Integer.parseInt(cell.substring(2),16);
+                Integer prior=reconstructed.putIfAbsent(keys[c],value);
+                if(prior!=null && prior!=value)return false;
+            }
+        }
+        if(reconstructed.size()!=knownWords)return false;
+        String canonical=ChipSelectTable.markdown(reconstructed,true);
+        List<String> decoded=new ArrayList<>();
+        for(String line:canonical.split("\\R"))
+            if(line.startsWith("| CS"))decoded.add(line);
+        return decoded.size()==12 && decoded.equals(rows);
     }
 
     private static int rowIndex(String name) {

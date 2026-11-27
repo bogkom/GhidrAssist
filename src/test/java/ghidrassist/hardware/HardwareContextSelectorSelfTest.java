@@ -177,6 +177,54 @@ public final class HardwareContextSelectorSelfTest {
         ok(refused.contains("no complete, distinct 12-row") &&
             !refused.contains("CS TABLE ROW COVERAGE: 12 of 12"),
             "malformed 12-select source cannot become complete RAG evidence");
+        // Shape-valid hostile rows must NOT become RAG hardware evidence.
+        // The full table is a deterministic rendering of one snapshot,
+        // not an arbitrary list of twelve source-looking Markdown rows.
+        String falseRange=firstTable.replace(
+            "| CS0 | 0xF80000 | 0xF8FFFF | 64 KiB |",
+            "| CS0 | 0xE80000 | 0xE8FFFF | 64 KiB |");
+        String falseEligibility=firstTable.replace(
+            "PARTIAL: CSOR/CSPAR unknown |",
+            "CONDITIONAL: possible assertion |");
+        String fakeWordCount=firstTable.replace(
+            "known 16-bit CS words 1.", "known 16-bit CS words 2.");
+        String falseWord=firstTable.replace(
+            "0xF803 | UNKNOWN | UNKNOWN |",
+            "0xE803 | UNKNOWN | UNKNOWN |");
+        String badPin=ChipSelectTable.markdown(
+            java.util.Map.of("CSBAR0",0xf803,"CSPAR0",0x2f7f),true);
+        String conflictingSharedPin=sourceHeader+
+            "- SOURCE PC 0x000050; possible SIM mapping MM1; "+
+            "one retained CFG context of 1; known 16-bit CS words 2"+
+            sourceTail+badPin.replaceFirst(
+                "(?m)^(\\| CS1 \\|[^\\n]*?\\| )0x2F7F( \\|)",
+                "$1"+"0x0000"+"$2");
+        for(String forged:java.util.List.of(falseRange,falseEligibility,
+                fakeWordCount,falseWord,conflictingSharedPin)) {
+            String rejected=HardwareContextSelector.select(
+                forged,"#hardware CSBAR0",5000);
+            ok(rejected.contains("no complete, distinct 12-row") &&
+                !rejected.contains("CS TABLE ROW COVERAGE: 12 of 12") &&
+                !rejected.contains("CONDITIONAL: possible assertion"),
+                "forged CS range, status, word count, or shared pin "+
+                "must not enter AI evidence");
+            String fallback=HardwareContextSelector.select(
+                forged+secondTable,"#hardware CSBAR7",5000);
+            ok(fallback.contains("SOURCE PC 0x000070") &&
+                !fallback.contains("SOURCE PC 0x000050") &&
+                fallback.contains("12 of 12"),
+                "invalid source cannot poison separate canonical CS7 context");
+        }
+        String canonicalPin=sourceHeader+
+            "- SOURCE PC 0x000050; possible SIM mapping MM1; "+
+            "one retained CFG context of 1; known 16-bit CS words 2"+
+            sourceTail+badPin;
+        String validPin=HardwareContextSelector.select(
+            canonicalPin,"#hardware CSPAR0",5000);
+        ok(validPin.contains("CS TABLE ROW COVERAGE: 12 of 12") &&
+            validPin.contains("0x2F7F") &&
+            validPin.contains("SOURCE PC 0x000050"),
+            "shared CSPAR0 source counted once and preserved in valid table");
         String genericCs=HardwareContextSelector.select(
             "# Generic CPU32 — no MC68332 profile\n", "#hardware CSBAR0",5000);
         ok(!genericCs.contains("CS TABLE SOURCE SNAPSHOT") &&
