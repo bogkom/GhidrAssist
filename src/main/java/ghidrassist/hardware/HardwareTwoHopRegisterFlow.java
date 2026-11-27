@@ -271,11 +271,18 @@ public final class HardwareTwoHopRegisterFlow {
         if(source< -0x80000000L || source>0xffffffffL)return false;
         if(mnemonic.endsWith(".L"))return true;
         if(!mnemonic.endsWith(".W"))return false;
-        // A word immediate is 16-bit signed, or its full 32-bit unsigned
-        // sign extension; raw 0x8000..0xffff cannot stand for a positive
-        // word operand. The decoder uses this same sign-extension rule.
-        return source>= -0x8000L && source<=0x7fffL ||
-            source>=0xffff8000L && source<=0xffffffffL;
+        return cpu32SignedWord(source);
+    }
+
+    /**
+     * CPU32 MOVEA.W and ADDA/SUBA.W sign-extend a 16-bit word into An.
+     * The decoder can represent a negative value as a signed Java long
+     * or a zero-extended unsigned 32-bit *sign-extended* register word.
+     * A raw unsigned 0x8000..0xffff is not a canonical full-width value.
+     */
+    private static boolean cpu32SignedWord(long value) {
+        return value>= -0x8000L && value<=0x7fffL ||
+            value>=0xffff8000L && value<=0xffffffffL;
     }
 
     private static boolean safeBridge(Bridge bridge){
@@ -325,6 +332,12 @@ public final class HardwareTwoHopRegisterFlow {
                             step.operand!=(signed&HardwareDataflow.MASK24) &&
                             step.operand!=(signed&0xffffffffL))
                         return false;
+                }else if("MOVEA.W".equals(m)){
+                    // The real decoder sign-extends MOVEA.W to the full
+                    // address register. Allow this legitimate source, but
+                    // reject truncated/raw 16-bit or oversized forgeries.
+                    if(!step.register.startsWith("A") ||
+                            !cpu32SignedWord(step.operand))return false;
                 }else if("LEA".equals(m) || "MOVEA.L".equals(m)){
                     if(!step.register.startsWith("A"))return false;
                 }else if(!"MOVE.L".equals(m) ||
