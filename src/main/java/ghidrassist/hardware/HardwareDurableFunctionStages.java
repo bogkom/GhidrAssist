@@ -87,6 +87,24 @@ public final class HardwareDurableFunctionStages {
      * It cannot independently prove that an upstream register value
      * was derived correctly; that requires the original CFG solve.
      */
+    // Reconstruct signed source semantics from the immutable Step, not the
+    // serialized register map. A generic high CPU32 source is UNKNOWN; only
+    // an explicit canonical MOVEA.W signed 16-bit value has a proven
+    // 24-bit external bus projection on the selected MCU.
+    private static Long boundedSource(long word) {
+        return word>=0 && word<=HardwareDataflow.MASK24?word:null;
+    }
+
+    private static Long sourcePointer(HardwareDataflow.Step step) {
+        long word=step.operand;
+        if(step.register!=null && step.register.startsWith("A") &&
+                "MOVEA.W".equals(step.mnemonic) &&
+                (word>=-0x8000L && word<0 ||
+                 word>=0xffff8000L && word<=0xffffffffL))
+            word&=HardwareDataflow.MASK24;
+        return boundedSource(word);
+    }
+
     private static Long sourceAddress(HardwareDataflow.Step step,
             Map<String,Long> pointers) {
         if(step.kind==HardwareDataflow.Kind.STORE_DIRECT)
@@ -139,8 +157,7 @@ public final class HardwareDurableFunctionStages {
                 !Objects.equals(sourceWord(step,pointers),snapshot.writtenWord))
             return false;
         if(step.kind==HardwareDataflow.Kind.VBR_CONSTANT &&
-                !Objects.equals(snapshot.vbr,
-                    step.operand&HardwareDataflow.MASK24))
+                !Objects.equals(snapshot.vbr,boundedSource(step.operand)))
             return false;
         if(step.kind==HardwareDataflow.Kind.VBR_FROM_REGISTER &&
                 !Objects.equals(snapshot.vbr,step.register==null?
@@ -215,9 +232,11 @@ public final class HardwareDurableFunctionStages {
             var out=new HashMap<>(at.get(pc));
             switch(step.kind) {
                 case SET_POINTER -> {
-                    if(step.register!=null)
-                        out.put(step.register,
-                            step.operand&HardwareDataflow.MASK24);
+                    if(step.register!=null) {
+                        Long word=sourcePointer(step);
+                        if(word==null)out.remove(step.register);
+                        else out.put(step.register,word);
+                    }
                 }
                 case COPY_POINTER -> {
                     if(step.register!=null) {
@@ -250,9 +269,11 @@ public final class HardwareDurableFunctionStages {
                 }
                 case CALL_BARRIER -> {
                     out.clear();
-                    for(var constant:step.verifiedCallReturns.entrySet())
-                        out.put(constant.getKey(),constant.getValue()&
-                            HardwareDataflow.MASK24);
+                    for(var constant:step.verifiedCallReturns.entrySet()) {
+                        Long word=boundedSource(constant.getValue());
+                        if(word==null)out.remove(constant.getKey());
+                        else out.put(constant.getKey(),word);
+                    }
                 }
                 default -> {
                     // STORE/VBR/OTHER do not assign A/D source registers.
@@ -362,7 +383,7 @@ public final class HardwareDurableFunctionStages {
                 }
             }
             case VBR_CONSTANT ->
-                after.vbr=step.operand&HardwareDataflow.MASK24;
+                after.vbr=boundedSource(step.operand);
             case VBR_FROM_REGISTER ->
                 after.vbr=step.register==null?
                     null:registers.get(step.register);
