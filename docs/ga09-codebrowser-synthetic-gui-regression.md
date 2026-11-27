@@ -267,3 +267,32 @@ Conservative status always: `trusted_ghidra_provenance_verified=false`,
 until a separately authorized visual reader, host attestation and native
 ACK actually exist. Old PR56 BLOCKED and PR96 CLOSED_FAILED remain
 historical, not retroactively PASS.
+
+## 2026-11-27 — GA-07/12/13/18 real GUI report-page publication witness
+
+The real Ghidra 12.1.4 PUBLIC CodeBrowser/Xvfb harness now checks the
+`HardwareAnalysisTab.automationReportManifest()` generated **in the
+same EDT snapshot** as the visible Overview and Full Evidence. It
+independently compares exact UTF-16 character counts and SHA-256
+UTF-8 digests of all three retained report formats (Markdown, source
+configuration CSV, naming CSV) to the per-format manifest metadata.
+All three formats are reassembled through 1,024-character
+`automationReport` pages using the exact revision/generation tokens.
+The assembled bytes must match the original retained strings, including
+the complete published Overview + Full Evidence Markdown. Every page
+must preserve the same format-specific generation, revision, static-only
+scope, total size and correct terminal `more` marker.
+
+Negative controls require rejection of a forged generation and of
+subsequent-page requests missing revision/generation tokens.
+The Python runner now makes the existing Overview/Full Evidence/RAG
+parity and new manifest/page assertion booleans mandatory for a real
+CodeBrowser PASS. This adds executable source publication evidence;
+it does not claim that any firmware instructions executed or that
+SIMCR/MM, VBR/ISR or a physical CS map were active.
+
+This verification is synthetic and disposable only. It is **not**
+independent manual visual inspection, a formal Supervisor GUI PASS, or
+authorization to modify a user's Program. Exact-head full Java 25
+extension build and real CodeBrowser/Xvfb Actions must pass before
+merging; GA-07 remains PARTIAL pending remaining acceptance.
