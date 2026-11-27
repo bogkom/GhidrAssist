@@ -514,8 +514,14 @@ public final class GhidraHardwareFlowService {
             }
             if(!safe)break;
             HardwareDataflow.Step translated=translate(insn,callee);
+            // A Ghidra function body may be discontiguous and include
+            // a branch into a lower-addressed chunk. That may be valid
+            // Listing data, but not the CLOSED one-hop CALL source proof:
+            // discard the unsafe callee before constructing the strict
+            // Callee record, rather than throwing during full analysis.
             if(translated.successors.stream().anyMatch(
-                    successor->!HardwareCallsiteRegisterFlow.sourcePc(successor))){
+                    successor->!HardwareCallsiteRegisterFlow.sourcePc(successor) ||
+                        successor<entry)){
                 safe=false;break;
             }
             steps.add(translated);
