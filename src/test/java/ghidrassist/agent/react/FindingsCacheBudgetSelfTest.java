@@ -44,10 +44,12 @@ public final class FindingsCacheBudgetSelfTest {
             yes(prompt!=null && prompt.length()<1000,
                 "bounded short prompt formatting cannot throw for limit "+size);
         }
-        yes(findings.formatForPrompt(-1).isBlank(),
-            "negative requested finding count yields no records");
-        yes(findings.formatDetailed(-5,false).startsWith("## Key Findings"),
-            "negative detailed output limit does not throw");
+        yes(findings.formatForPrompt(-1).startsWith("EVIDENCE INCOMPLETE:") &&
+            !findings.formatForPrompt(-1).contains("• "),
+            "zero displayed findings must still disclose omitted evidence");
+        yes(findings.formatDetailed(-5,false).startsWith("EVIDENCE INCOMPLETE:") &&
+            findings.formatDetailed(-5,false).contains("## Key Findings"),
+            "negative detailed output limit retains evidence-loss warning");
         var longFact="A".repeat(FindingsCache.MAX_FACT_CHARS+400);
         var longEvidence="E".repeat(FindingsCache.MAX_EVIDENCE_CHARS+400);
         var large=new FindingsCache(5);
@@ -437,6 +439,43 @@ public final class FindingsCacheBudgetSelfTest {
         firstScore.setRelevance(-1);
         yes(boundedScore.page(0,2,lower.revision()).revision()==lower.revision(),
             "redundant clamped negative score does not falsely invalidate pages");
+        // The versioned JSON page always disclosed these provenance gaps,
+        // but the text passed to ReAct synthesis previously hid them.
+        var provenanceLoss=new FindingsCache(1);
+        provenanceLoss.addFinding("uncited first fact",null,"listing",4);
+        provenanceLoss.addFinding("retained verified fact","raw p-code","listing",9);
+        var incompletePage=provenanceLoss.page(0,1);
+        yes(!incompletePage.complete() && !incompletePage.sourceIncomplete() &&
+            incompletePage.evictedCount()==1 &&
+            incompletePage.rows().get(0).fact().equals("retained verified fact"),
+            "pure retention/provenance omissions are separate from raw text truncation");
+        for(String display:List.of(provenanceLoss.formatForPrompt(),
+                provenanceLoss.formatDetailed(),provenanceLoss.summarize(),
+                provenanceLoss.toCompactString())) {
+            yes(display.contains("EVIDENCE INCOMPLETE:") &&
+                display.contains("1 accepted findings evicted") &&
+                display.contains("1 accepted findings lacked evidence"),
+                "all synthesis surfaces retain historical loss/provenance receipts");
+        }
+        provenanceLoss.clear();
+        provenanceLoss.addFinding("new verified fact","source","listing",5);
+        yes(provenanceLoss.page(0,1).complete() &&
+            !provenanceLoss.formatForPrompt().contains("EVIDENCE INCOMPLETE") &&
+            !provenanceLoss.formatDetailed().contains("EVIDENCE INCOMPLETE") &&
+            !provenanceLoss.summarize().contains("EVIDENCE INCOMPLETE") &&
+            !provenanceLoss.toCompactString().contains("EVIDENCE INCOMPLETE"),
+            "explicit cache reset restores clean generation without stale omission warning");
+
+        var combinedLoss=new FindingsCache(1);
+        combinedLoss.addFinding("long source",
+            "E".repeat(FindingsCache.MAX_EVIDENCE_CHARS+10),"listing",4);
+        combinedLoss.addFinding("retained uncited",null,"listing",9);
+        var text=combinedLoss.formatForPrompt();
+        yes(combinedLoss.page(0,1).sourceIncomplete() &&
+            text.startsWith("SOURCE INCOMPLETE:") &&
+            text.contains("EVIDENCE INCOMPLETE:") &&
+            !combinedLoss.page(0,1).complete(),
+            "raw truncation and retention/provenance loss remain separately disclosed");
         System.out.println("FindingsCacheBudgetSelfTest OK");
     }
 }
