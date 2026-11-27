@@ -1,17 +1,20 @@
 package ghidrassist.agent.react;
 
+import java.lang.ref.Reference;
+import java.lang.ref.ReferenceQueue;
 import java.lang.ref.WeakReference;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
-import java.util.WeakHashMap;
 
 /**
  * GA-12/15: read-only bridge between a real ReAct findings cache and the
  * authenticated, process-local Automation API. Never runs a model, accepts
  * a remote finding, resumes an LLM conversation or authorizes Apply.
  *
- * Weak owner keys and an independent owner-identity check avoid returning
- * stale evidence from a different (but equals()-equivalent) Program.
+ * Weak identity keys permit independent evidence for distinct Program
+ * objects even when their equals()/hashCode() methods compare equal.
+ * Collected owners are removed without retaining their Programs.
  */
 public final class AgenticEvidenceRegistry<K> {
     private static final AgenticEvidenceRegistry<Object> SHARED =
@@ -44,7 +47,42 @@ public final class AgenticEvidenceRegistry<K> {
     public record EvidencePage(String run,long programRevision,String importSha256,
             String state,boolean complete,FindingsCache.FindingsPage findings) {}
 
-    private final Map<K,Bound<K>> programs=new WeakHashMap<>();
+
+    /**
+     * WeakHashMap indexes by equals(), which collides across independent
+     * Program wrappers. A stored key is weak, but hashes and compares by
+     * referent identity. Temporary lookup keys are never retained.
+     */
+    private static final class OwnerKey<T> extends WeakReference<T> {
+        private final int hash;
+        OwnerKey(T owner,ReferenceQueue<T> queue) {
+            super(owner,queue);
+            hash=System.identityHashCode(owner);
+        }
+        @Override public int hashCode() { return hash; }
+        @Override public boolean equals(Object candidate) {
+            if(this==candidate)return true;
+            if(!(candidate instanceof OwnerKey<?> other))return false;
+            Object owner=get();
+            return owner!=null && owner==other.get();
+        }
+    }
+
+    private final ReferenceQueue<K> collectedOwners=new ReferenceQueue<>();
+    private final Map<OwnerKey<K>,Bound<K>> programs=new HashMap<>();
+
+    /** Called only while the registry monitor is held. */
+    private void discardCollectedOwners() {
+        Reference<? extends K> key;
+        while((key=collectedOwners.poll())!=null)
+            programs.remove(key);
+    }
+
+    /** Called only while the registry monitor is held. */
+    private Bound<K> ownerBinding(K owner) {
+        discardCollectedOwners();
+        return programs.get(new OwnerKey<>(owner,null));
+    }
 
     public String begin(K owner,long revision,String importSha,
                         FindingsCache findings) {
@@ -63,15 +101,12 @@ public final class AgenticEvidenceRegistry<K> {
         Runnable previousCancellation=null;
         String run;
         synchronized(this) {
-            Bound<K> existing=programs.get(owner);
-            if(existing!=null && existing.owner.get()!=owner)
-                throw new IllegalStateException(
-                    "Equal-but-distinct Program cannot share Agentic evidence");
-            // Publishing the new generation first prevents re-entrant completion
-            // of the replaced run from overwriting its state or findings.
+            Bound<K> existing=ownerBinding(owner);
+            // Publish a new generation only for the same exact owner.
+            // Equals-equivalent Programs retain independent run bindings.
             Bound<K> bound=new Bound<>(owner,revision,
                 importSha==null?"UNKNOWN":importSha,findings,onInvalidated);
-            programs.put(owner,bound);
+            programs.put(new OwnerKey<>(owner,collectedOwners),bound);
             run=bound.run;
             if(existing!=null && "RUNNING".equals(existing.state))
                 previousCancellation=existing.onInvalidated;
@@ -85,7 +120,7 @@ public final class AgenticEvidenceRegistry<K> {
     /** Finish only the exact previously registered cache, never a later run. */
     public synchronized void finish(K owner,FindingsCache findings,String outcome) {
         if(owner==null || findings==null)return;
-        Bound<K> bound=programs.get(owner);
+        Bound<K> bound=ownerBinding(owner);
         if(bound!=null && bound.owner.get()==owner && bound.findings==findings &&
                 "RUNNING".equals(bound.state))
             bound.state=switch(outcome==null?"":outcome) {
@@ -101,7 +136,7 @@ public final class AgenticEvidenceRegistry<K> {
             int offset,int limit,String expectedRun,Long expectedFindingsRevision) {
         if(owner==null || revision<0)
             throw new IllegalArgumentException("No active Program to inspect");
-        Bound<K> bound=programs.get(owner);
+        Bound<K> bound=ownerBinding(owner);
         if(bound==null || bound.owner.get()!=owner)
             throw new IllegalStateException("No Agentic findings for current Program");
         String sha=importSha==null?"UNKNOWN":importSha;
@@ -125,11 +160,11 @@ public final class AgenticEvidenceRegistry<K> {
         Runnable callback=null;
         synchronized(this) {
             if(owner!=null) {
-                Bound<K> bound=programs.get(owner);
+                Bound<K> bound=ownerBinding(owner);
                 // Do not delete or cancel an equals()-equivalent but
                 // different Program. This guard also protects key identity.
                 if(bound!=null && bound.owner.get()==owner) {
-                    programs.remove(owner);
+                    programs.remove(new OwnerKey<>(owner,null));
                     if("RUNNING".equals(bound.state))
                         callback=bound.onInvalidated;
                 }
