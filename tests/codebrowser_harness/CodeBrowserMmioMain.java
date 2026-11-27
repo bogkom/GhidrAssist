@@ -566,6 +566,8 @@ public final class CodeBrowserMmioMain {
                 .getAddress(0x20);
             Address clockSite=first.getAddressFactory().getDefaultAddressSpace()
                 .getAddress(0x30);
+            Address csbarSite=first.getAddressFactory().getDefaultAddressSpace()
+                .getAddress(0x50);
             // The fixture, never a private project, is the ONLY write target.
             int tx=first.startTransaction("TEST-ONLY decode synthetic MMIO");
             try {
@@ -593,6 +595,18 @@ public final class CodeBrowserMmioMain {
                         clockSite,clockSite.add(9)),
                     ghidra.program.model.symbol.SourceType.ANALYSIS)!=null,
                     "Failed to create separate SYNCR synthetic function");
+                require(new DisassembleCommand(csbarSite,null,false)
+                    .applyTo(first,TaskMonitor.DUMMY),
+                    "Failed to decode synthetic MC68332 CSBAR0 MOVE.W");
+                require(new DisassembleCommand(csbarSite.add(8),null,false)
+                    .applyTo(first,TaskMonitor.DUMMY),
+                    "Failed to decode synthetic CSBAR0 RTS");
+                require(first.getFunctionManager().createFunction(
+                    "FUN_00000050",csbarSite,
+                    new ghidra.program.model.address.AddressSet(
+                        csbarSite,csbarSite.add(9)),
+                    ghidra.program.model.symbol.SourceType.ANALYSIS)!=null,
+                    "Failed to create exact CSBAR0 source function");
                 // Isolated 68000/CPU32 sources for real register propagation
                 // and unknown-memory-alias effects, exercised across two JVMs.
                 for(long[] cfg:new long[][]{
@@ -948,6 +962,44 @@ public final class CodeBrowserMmioMain {
                         ghidrassist.hardware.HardwareReportOverview.combine(
                             overview,full)),
                     "Displayed Overview/Full Evidence differ from export/RAG payload");
+                // GA-04/07/18: an ACTUAL Ghidra Listing source (not a
+                // Java-only synthetic Step) must yield the selected-MCU
+                // 12-select conditional table in the visible CodeBrowser.
+                // Isolate exactly one displayed table to prevent matching
+                // rows spliced together from unrelated functions.
+                String csHeader=
+                    "#### Function-local MC68332 CSBOOT/CS0–CS10 source snapshot";
+                int csStart=full.indexOf(csHeader);
+                int csEnd=csStart<0?-1:full.indexOf(
+                    "Ranges are **hypotheses conditional on MC68332 interpretation**.",
+                    csStart);
+                require(csStart>=0 && csEnd>csStart,
+                    "Real CodeBrowser did not show an MC68332 source-scoped CS table");
+                String csTable=full.substring(csStart,csEnd);
+                require(csTable.contains("SOURCE PC 0x000050") &&
+                        csTable.contains("possible SIM mapping MM1") &&
+                        csTable.contains("known 16-bit CS words 1") &&
+                        csTable.contains(
+                            "| CS0 | 0xF80000 | 0xF8FFFF | 64 KiB | "+
+                            "0xF803 | UNKNOWN | UNKNOWN | "+
+                            "PARTIAL: CSOR/CSPAR unknown |") &&
+                        csTable.contains(
+                            "Selection uses source coverage/PC only, "+
+                            "NOT execution order"),
+                    "Real synthetic CSBAR0 was not decoded into the "+
+                    "bounded, conditional 12-row source table");
+                for(int cs=-1;cs<=10;cs++) {
+                    String label=cs<0?"CSBOOT":"CS"+cs;
+                    require(csTable.lines().filter(line->
+                            line.startsWith("| "+label+" |")).count()==1,
+                        "Missing/duplicated real CodeBrowser CS select "+label);
+                }
+                require(csTable.contains("| CS10 | UNKNOWN | UNKNOWN | UNKNOWN |") &&
+                        !csTable.contains("CONDITIONAL: possible assertion") &&
+                        published.contains(csTable),
+                    "A CSBAR-only source may not invent CSOR, pin, "+
+                    "physical assertion, or a different export report");
+                result.addProperty("ga04_real_cs_table_source_verified",true);
                 // GA-07/12/13/18: actual Swing evidence, all three published
                 // report formats, the per-format generation and the paginated
                 // Automation API must agree byte-for-byte at one revision.

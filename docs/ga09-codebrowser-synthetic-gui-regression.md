@@ -296,3 +296,31 @@ independent manual visual inspection, a formal Supervisor GUI PASS, or
 authorization to modify a user's Program. Exact-head full Java 25
 extension build and real CodeBrowser/Xvfb Actions must pass before
 merging; GA-07 remains PARTIAL pending remaining acceptance.
+
+
+## 2026-11-27 — GA-04 genuine CodeBrowser 12-select source-table witness
+
+The disposable `synthetic-mmio.bin` CodeBrowser fixture now contains
+a real CPU32/68000 `MOVE.W #$F803,($00FFFA4C).L; RTS` at PC
+`0x00000050`, decoded into an actual Ghidra Function before
+**Analyze** runs with explicit MC68332 selection. This is a
+source-level **CSBAR0-only** candidate, not an executed bus write.
+No CSOR0/CSPAR source is supplied, and the default unchecked
+guard-program fixture remains separate.
+
+The Xvfb/Swing CodeBrowser regression must show exactly 12
+independent rows, CSBOOT and CS0–CS10, in the *actual visible Full
+Evidence* table from PC 0x50 and MM1. The CS0 hypothesis has
+conditional `0xF80000..0xF8FFFF`, 64 KiB range from source
+word `0xF803`; CSOR0, shared CSPAR0 and unknown CS10 must stay
+`UNKNOWN`, with no possible physical assertion claimed. The
+test isolates one table section and counts all twelve distinct
+rows to prevent passing via unrelated function/report fragments.
+
+The new `ga04_real_cs_table_source_verified` result is mandatory
+in the real Python CodeBrowser runner, in addition to existing
+Overview/Full Evidence/paginated Markdown manifest SHA and GUI-RAG
+checks. It is a synthetic **Xvfb/Swing CodeBrowser CI** witness,
+not independent manual GUI, runtime MCU execution, or formal
+Supervisor PASS. GA-04/07 remain PARTIAL until the rest of the
+roadmap's acceptance criteria are satisfied.
