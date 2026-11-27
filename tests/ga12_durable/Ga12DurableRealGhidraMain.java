@@ -109,7 +109,7 @@ public final class Ga12DurableRealGhidraMain {
                 require(full.getModificationNumber()==before,
                     "Read-only CFG checkpoint modified Program");
             String proof="{\"phase\":\""+phase+"\",\"reused\":"+
-                result.reused()+",\"synthetic_only\":true,"+
+                result.reused()+",\"same_jvm_reused_after_clear\":"+secondReused+",\"synthetic_only\":true,"+
                 "\"program_modification_unchanged\":"+
                 (full.getModificationNumber()==before)+
                 ",\"ghidra_real\":true,\"checkpoint_exists\":true}";
