@@ -98,7 +98,7 @@ public final class HardwareDurableFunctionStages {
     private static Long sourceAddress(HardwareDataflow.Step step,
             Map<String,Long> pointers) {
         if(step.kind==HardwareDataflow.Kind.STORE_DIRECT)
-            return step.operand&HardwareDataflow.MASK24;
+            return HardwareDataflow.possibleExternalAddress(step.operand);
         if(step.kind!=HardwareDataflow.Kind.STORE_INDIRECT)
             return null;
         Long base=step.register==null?null:pointers.get(step.register);

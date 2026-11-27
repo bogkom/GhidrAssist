@@ -555,6 +555,33 @@ public final class HardwareDataflowSelfTest {
         ),Set.of(simcr),100);
         ok(rawWord.snapshots.get(0).effectiveAddress==null,
             "unsigned negative MOVEA.W is not a canonical CPU32 source");
+        // The direct-STORE lane must use the same full-width gate as
+        // P-code STORE and the independently restored GA-12 function
+        // snapshot. High address claims are UNKNOWN, not a low24 alias.
+        var highDirectStore=HardwareDataflow.analyze(0,List.of(
+            st(0,STORE_DIRECT,null,simcr,0,0x40ca,16,2L),
+            st(2,STORE_DIRECT,null,0x01fffa00L,0,0x4848,16,4L),
+            st(4,STORE_DIRECT,null,cs7,0,0x1234,16)
+        ),Set.of(simcr,cs7),100);
+        ok(highDirectStore.snapshots.size()==3 &&
+            highDirectStore.snapshots.get(1).effectiveAddress==null &&
+            highDirectStore.snapshots.get(1).knownPeripheralWords.isEmpty() &&
+            highDirectStore.snapshots.get(2).knownPeripheralWords.get(cs7)==0x1234 &&
+            !highDirectStore.snapshots.get(2).knownPeripheralWords.containsKey(simcr),
+            "high STORE_DIRECT remains unknown and invalidates stale MMIO words");
+        var signedDirectStore=HardwareDataflow.analyze(0,List.of(
+            st(0,STORE_DIRECT,null,0xfffffa00L,0,0x40ca,16)
+        ),Set.of(simcr),100);
+        ok(signedDirectStore.snapshots.size()==1 &&
+            signedDirectStore.snapshots.get(0).effectiveAddress==simcr &&
+            signedDirectStore.snapshots.get(0).knownPeripheralWords.get(simcr)==0x40ca,
+            "canonical negative 16-bit direct address retains conditional MAY");
+        var unknownDirectBoundary=HardwareDataflow.analyze(0,List.of(
+            st(0,STORE_DIRECT,null,0x01000000L,0,0x40ca,16)
+        ),Set.of(0L),100);
+        ok(unknownDirectBoundary.snapshots.size()==1 &&
+            unknownDirectBoundary.snapshots.get(0).effectiveAddress==null,
+            "high direct source cannot become MCU24 zero via modulo wrap");
         System.out.println("HardwareDataflowSelfTest OK");
     }
 }

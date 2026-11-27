@@ -139,7 +139,7 @@ public final class GhidraHardwareFlowService {
         if(objects==null)return null;
         for(Object o:objects)if(o instanceof Register)return null;
         for(Object o:objects)if(o instanceof Address a)
-            return a.getOffset()&HardwareDataflow.MASK24;
+            return HardwareDataflow.possibleExternalAddress(a.getOffset());
         return null;
     }
     private static Long value(Varnode v,Map<Varnode,Long> constants){
@@ -212,11 +212,11 @@ public final class GhidraHardwareFlowService {
             }
             if(directMemoryOutput(out)) {
                 long address=out.getAddress().getOffset();
-                // Require a genuine 32-bit CPU32 memory address: direct
-                // accesses carry an address, not a P-code pointer varnode.
-                // Only the physical external-bus candidate wraps to 24 bit.
-                destinations.add(address<0 || address>0xffffffffL
-                    ?null:address&HardwareDataflow.MASK24);
+                // Direct RAM destinations and indirect P-code STOREs
+                // must pass the SAME full-width MCU24 source gate.
+                // Do not promote 0x01FFFA00 simply because low24 is SIMCR.
+                destinations.add(HardwarePcodeConstantMath.externalAddress(
+                    address,4));
             }
             if(k!=PcodeOp.STORE){
                 HardwarePcodeConstantMath.Operation operation=switch(k){
