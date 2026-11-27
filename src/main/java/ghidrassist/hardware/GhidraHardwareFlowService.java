@@ -1250,20 +1250,30 @@ public final class GhidraHardwareFlowService {
                     if(uniqueStores.putIfAbsent(store.pc(),store)!=null)
                         cfgPathLimitedFunctions++;
                 pathStores=new ArrayList<>(uniqueStores.values());
-                if(pathStores.size()>1 && steps.size()>50000){
+                if(pathStores.size()>1 &&
+                        (steps.size()>HardwareCfgStorePaths.MAX_SOURCE_NODES ||
+                         pathStores.size()>HardwareCfgStorePaths.MAX_SOURCE_STORES)){
                     cfgPathLimitedFunctions++;
                 }else if(pathStores.size()>1 && cfgStoreRelations.size()<500){
-                    List<HardwareCfgStorePaths.Node> pathNodes=new ArrayList<>();
-                    for(HardwareDataflow.Step node:steps)
-                        pathNodes.add(new HardwareCfgStorePaths.Node(
-                            node.address,node.successors));
-                    var pairs=HardwareCfgStorePaths.analyze(
-                        fun.getEntryPoint().getOffset(),pathNodes,pathStores,
-                        uncertainFlow || result.truncated,1500);
-                    if(pairs.truncated())cfgPathLimitedFunctions++;
-                    if(cfgStoreRelations.size()+pairs.relations().size()<=500)
-                        cfgStoreRelations.addAll(pairs.relations());
-                    else cfgPathLimitedFunctions++;
+                    // A single malformed/foreign successor or overloaded CFG
+                    // invalidates this function's STORE-path provenance. It
+                    // must not abort every other read-only Ghidra source.
+                    // Do not retain partial pairs from an unknown function.
+                    try {
+                        List<HardwareCfgStorePaths.Node> pathNodes=new ArrayList<>();
+                        for(HardwareDataflow.Step node:steps)
+                            pathNodes.add(new HardwareCfgStorePaths.Node(
+                                node.address,node.successors));
+                        var pairs=HardwareCfgStorePaths.analyzeOrUnknown(
+                            fun.getEntryPoint().getOffset(),pathNodes,pathStores,
+                            uncertainFlow || result.truncated,1500);
+                        if(pairs.truncated())cfgPathLimitedFunctions++;
+                        if(cfgStoreRelations.size()+pairs.relations().size()<=500)
+                            cfgStoreRelations.addAll(pairs.relations());
+                        else cfgPathLimitedFunctions++;
+                    }catch(IllegalArgumentException invalidSource) {
+                        cfgPathLimitedFunctions++;
+                    }
                 }else if(pathStores.size()>1)cfgPathLimitedFunctions++;
             }
             List<HardwareDataflow.Snapshot> found=new ArrayList<>();
