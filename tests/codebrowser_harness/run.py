@@ -47,6 +47,11 @@ def fixture(path, with_simcr):
         # Real CPU32: MOVEA.L #$00FFFA00,A0; MOVE.W #$40CA,(A0); RTS
         # This is a real two-instruction register-to-MMIO dataflow.
         data[0x40:0x4c]=bytes.fromhex("207c00fffa0030bc40ca4e75")
+        # GA-04/07 real 68000 instruction: MOVE.W #$F803,
+        # ($00FFFA4C).L; RTS. CSBAR0 only, no CSOR0 or CSPAR0 source.
+        # The one-word MC68332 MM1 snapshot may decode a conditional
+        # 64 KiB CS0 range, but NEVER asserts hardware activation.
+        data[0x50:0x5a]=bytes.fromhex("33fcf80300fffa4c4e75")
         # Same pointer, then unknown A1 STORE; later A0 write.
         # An unresolved address must poison earlier MMIO state, not
         # masquerade as a second confirmed SIMCR configuration.
@@ -1585,6 +1590,7 @@ def main():
                 raise RuntimeError("Synthetic screenshot cannot claim human visual verification")
             expected=("synthetic_simcr_site","hardware_analyze_gui",
                       "overview_full_export_rag_consistent",
+                      "ga04_real_cs_table_source_verified",
                       "ga07_report_manifest_pages_consistent",
                       "listing_navigation","stale_go_to_rejected",
                       "stale_double_click_rejected",
