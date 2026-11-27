@@ -45,6 +45,14 @@ public final class AgenticEvidenceRegistrySelfTest {
             "changed imported firmware SHA refuses old evidence");
         denies(()->registry.page(equalButDifferent,17L,"a".repeat(64),
             0,1,null,null),"unregistered equal-but-distinct Program has no evidence");
+        // Explicitly reject shared mutable source caches across distinct
+        // owners, even when the owners happen to compare equal.
+        denies(()->registry.begin(equalButDifferent,17L,
+            "a".repeat(64),findings),
+            "same findings object cannot be published under different Programs");
+        yes(registry.page(programA,17L,
+            "a".repeat(64),0,1,null,null).run().equals(run),
+            "refused cache alias leaves original source unchanged");
         // Equals-equivalent Ghidra Programs must coexist with distinct runs,
         // independent source identities, pages, revisions and outcomes.
         var otherFindings=new FindingsCache();
