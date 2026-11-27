@@ -285,6 +285,58 @@ public final class FindingsCacheBudgetSelfTest {
         yes(truncatedPage.page(0,100).sourceIncomplete() &&
             !truncatedPage.page(0,100).complete(),
             "complete-looking page never hides omitted tool source bytes");
+        // GA-15: bounded ReAct iteration history is provenance too.
+        // Before this gate, summary truncation/eviction looked complete
+        // to Agentic pagination after a successful terminal callback.
+        var history=new FindingsCache();
+        history.addFinding("identified register","verified Listing","listing",9);
+        var cleanHistoryPage=history.page(0,10);
+        history.addIterationSummary("  short complete summary  ");
+        yes(history.page(0,10,cleanHistoryPage.revision()).complete() &&
+            history.getIterationSummaries().equals(
+                List.of("short complete summary")),
+            "normal complete summary neither loses source nor changes findings page");
+        history.addIterationSummary("X".repeat(
+            FindingsCache.MAX_ITERATION_SUMMARY_CHARS+2));
+        yes(history.isSourceIncomplete() &&
+            !history.page(0,10).complete() &&
+            history.formatForPrompt().startsWith("SOURCE INCOMPLETE:") &&
+            history.formatIterationSummaries(2).startsWith("SOURCE INCOMPLETE:") &&
+            history.getIterationSummaries().get(1).length()<=
+                FindingsCache.MAX_ITERATION_SUMMARY_CHARS,
+            "oversized iteration summary poisons completeness and stays bounded");
+        boolean previousHistoryStale=false;
+        try{history.page(0,10,cleanHistoryPage.revision());}
+        catch(IllegalStateException expected){previousHistoryStale=true;}
+        yes(previousHistoryStale,
+            "source-loss event invalidates pre-summary paginated evidence");
+        history.clear();
+        history.addFinding("same register","fresh Listing","listing",9);
+        history.addIterationSummary("short");
+        yes(history.page(0,10).complete() &&
+            !history.formatIterationSummaries(1).contains("SOURCE INCOMPLETE"),
+            "new analysis clears summary loss receipts without losing bounded mode");
+
+        var invalidSummary=new FindingsCache();
+        invalidSummary.addFinding("fact","evidence","listing",8);
+        invalidSummary.addIterationSummary("valid"+(char)0xd800+"broken");
+        yes(invalidSummary.isSourceIncomplete() &&
+            !invalidSummary.page(0,10).complete() &&
+            invalidSummary.getIterationSummaries().get(0).equals("validbroken"),
+            "malformed UTF-16 summary cannot certify a complete response");
+        var droppedSummaries=new FindingsCache();
+        droppedSummaries.addFinding("fact","evidence","listing",8);
+        for(int i=0;i<=FindingsCache.MAX_ITERATION_SUMMARIES;i++)
+            droppedSummaries.addIterationSummary("history "+i);
+        yes(droppedSummaries.getIterationSummaries().size()==
+                FindingsCache.MAX_ITERATION_SUMMARIES &&
+            droppedSummaries.isSourceIncomplete() &&
+            !droppedSummaries.page(0,10).complete() &&
+            droppedSummaries.formatIterationSummaries(2).contains(
+                "SOURCE INCOMPLETE") &&
+            droppedSummaries.formatIterationSummaries(2).contains(
+                "### Iteration "+(FindingsCache.MAX_ITERATION_SUMMARIES+1)),
+            "ring eviction never hides missing early investigation history");
         System.out.println("FindingsCacheBudgetSelfTest OK");
     }
 }
