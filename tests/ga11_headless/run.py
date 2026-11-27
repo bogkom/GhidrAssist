@@ -482,6 +482,7 @@ def main():
                         "provenance_csv_formula_escaped",
                         "provenance_csv_read_only"),
                     "vbr-relocation":(
+                        "ga11_high_cpu32_vbr_no_alias",
                         "vbr_relocation_real_movec_decoded",
                         "vbr_relocation_exact_and_interior",
                         "vbr_relocation_edit_invalidates",

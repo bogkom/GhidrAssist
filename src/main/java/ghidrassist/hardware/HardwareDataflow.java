@@ -448,7 +448,15 @@ public final class HardwareDataflow {
         State s=in.copy();
         switch(step.kind) {
             case SET_POINTER -> {
-                if(step.register!=null)s.pointers.put(step.register,step.operand&MASK24);
+                if(step.register!=null) {
+                    // SET_POINTER is a CPU32 32-bit *source* constant. It
+                    // cannot be downcast to a known MC68332 24-bit MMIO
+                    // destination or MOVEC/VBR source by discarding high
+                    // bits. Preserve UNKNOWN, not a fabricated alias.
+                    if(step.operand<0 || step.operand>MASK24)
+                        s.pointers.remove(step.register);
+                    else s.pointers.put(step.register,step.operand);
+                }
             }
             case COPY_POINTER -> {
                 if(step.register!=null){
@@ -516,7 +524,11 @@ public final class HardwareDataflow {
                     }
                 }
             }
-            case VBR_CONSTANT -> s.vbr=step.operand&MASK24;
+            case VBR_CONSTANT ->
+                // A high CPU32 value cannot become a plausible 24-bit
+                // relocated source table merely by masking.
+                s.vbr=step.operand>=0 && step.operand<=MASK24?
+                    step.operand:null;
             case VBR_FROM_REGISTER -> s.vbr=s.pointers.get(step.register);
             case CALL_BARRIER -> {
                 // A call may change any peripheral or register; no summary
@@ -525,8 +537,15 @@ public final class HardwareDataflow {
                 s.crossedUnknownCall=true;
                 // Register evidence is reintroduced only after the generic
                 // CALL barrier, and only from a strictly verified leaf.
-                for(var proved:step.verifiedCallReturns.entrySet())
-                    s.pointers.put(proved.getKey(),proved.getValue()&MASK24);
+                for(var proved:step.verifiedCallReturns.entrySet()) {
+                    // A trustworthy callee can return a full CPU32 word,
+                    // but an out-of-scope value is NOT a proved MCU24
+                    // pointer. Never silently alias a high return to SIMCR.
+                    long value=proved.getValue();
+                    if(value<0 || value>MASK24)
+                        s.pointers.remove(proved.getKey());
+                    else s.pointers.put(proved.getKey(),value);
+                }
             }
             default -> {}
         }

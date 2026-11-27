@@ -446,6 +446,50 @@ public final class HardwareDataflowSelfTest {
             !HardwareDataflow.mayTouchTrackedAddress(
                 0xffffffL,8,Set.of(0L)),
             "tracked byte-level overlap at modulo-24 boundary");
+
+        // GA-01/11: do NOT downcast valid CPU32 high source constants
+        // to a plausible MC68332 24-bit VBR or SIMCR. This matters for
+        // MOVE.L #$01000800,D0; MOVEC D0,VBR in actual Ghidra Listing.
+        var highRegisterVbr=HardwareDataflow.analyze(0,List.of(
+            st(0,SET_POINTER,"D0",0x01000800L,0,null,32,2L),
+            st(2,VBR_FROM_REGISTER,"D0",0,0,null,0)
+        ),Set.of(simcr),100);
+        ok(highRegisterVbr.snapshots.size()==1 &&
+            highRegisterVbr.snapshots.get(0).vbr==null,
+            "32-bit MOVEC source must be UNKNOWN instead of aliased 0x000800");
+        var highLiteralVbr=HardwareDataflow.analyze(0,List.of(
+            st(0,VBR_CONSTANT,null,0x01000800L,0,null,32)
+        ),Set.of(simcr),100);
+        ok(highLiteralVbr.snapshots.size()==1 &&
+            highLiteralVbr.snapshots.get(0).vbr==null,
+            "high direct VBR constant must not silently become 0x000800");
+        var highPointerStore=HardwareDataflow.analyze(0,List.of(
+            st(0,STORE_DIRECT,null,simcr,0,0x40ca,16,2L),
+            st(2,SET_POINTER,"A0",0x01fffa00L,0,null,32,4L),
+            st(4,STORE_INDIRECT,"A0",0,0,0x4848,16)
+        ),Set.of(simcr),100);
+        ok(highPointerStore.snapshots.size()==2 &&
+            highPointerStore.snapshots.get(1).effectiveAddress==null &&
+            highPointerStore.snapshots.get(1).knownPeripheralWords.isEmpty() &&
+            highPointerStore.snapshots.get(1).priorUnknownStore==false,
+            "foreign high CPU32 pointer is UNKNOWN, clears stale MMIO words");
+        var highLeaf=HardwareDataflow.analyze(0,List.of(
+            st(0,CALL_BARRIER,null,0,0,null,0,2L)
+                .withVerifiedCallReturns(Map.of("A0",0x01fffa00L)),
+            st(2,STORE_INDIRECT,"A0",0,0,0x4848,16,4L),
+            st(4,VBR_FROM_REGISTER,"A0",0,0,null,0)
+        ),Set.of(simcr),100);
+        ok(highLeaf.snapshots.size()==2 &&
+            highLeaf.snapshots.get(0).effectiveAddress==null &&
+            highLeaf.snapshots.get(1).vbr==null,
+            "out-of-range verified callee result must not alias any MC68332 source");
+        var inRangeVbr=HardwareDataflow.analyze(0,List.of(
+            st(0,SET_POINTER,"D0",0x00000800L,0,null,32,2L),
+            st(2,VBR_FROM_REGISTER,"D0",0,0,null,0)
+        ),Set.of(simcr),100);
+        ok(inRangeVbr.snapshots.size()==1 &&
+            inRangeVbr.snapshots.get(0).vbr==0x800L,
+            "legitimate source within 24-bit range is still preserved");
         System.out.println("HardwareDataflowSelfTest OK");
     }
 }
