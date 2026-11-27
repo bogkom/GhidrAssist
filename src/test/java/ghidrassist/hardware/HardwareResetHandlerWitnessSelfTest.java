@@ -134,6 +134,43 @@ public final class HardwareResetHandlerWitnessSelfTest {
             List.of(n(0x100L),n(0x100L)),targets));
         bad(()->HardwareResetHandlerWitness.inspect(0x100,false,graph,
             List.of(targets.get(0),targets.get(0))));
+        // The BFS visits at most 100 nodes, but all 50k source entries
+        // could otherwise carry an unbounded number of direct CALL edges.
+        // Count raw edges *before* admitting an apparently complete graph.
+        var maxEdges=List.copyOf(java.util.Collections.nCopies(
+            HardwareResetHandlerWitness.MAX_SOURCE_EDGES,0x130L));
+        var legal=HardwareResetHandlerWitness.inspect(0x100,false,
+            List.of(new HardwareCallEffects.FunctionNode(
+                0x100,false,false,false,maxEdges),n(0x130L)),
+            List.of());
+        check(!legal.incomplete() && legal.inspected()==2 &&
+            legal.frontiers().isEmpty(),
+            "exact 200k observed direct-edge input remains bounded and valid");
+        var tooManyEdges=new java.util.ArrayList<Long>(maxEdges);
+        tooManyEdges.add(0x130L);
+        bad(()->HardwareResetHandlerWitness.inspect(0x100,false,
+            List.of(new HardwareCallEffects.FunctionNode(
+                0x100,false,false,false,tooManyEdges),n(0x130L)),
+            List.of()));
+        // Public report cannot pass a null, foreign, oversized, or
+        // wrong-root chain through later evidence publication.
+        bad(()->new HardwareResetHandlerWitness.Report(
+            0x100,false,false,1,List.of(),List.of(),
+            List.of(),List.of(List.of(0x200L)),List.of()));
+        bad(()->new HardwareResetHandlerWitness.Report(
+            0x100,false,false,1,List.of(),List.of(),
+            List.of(),List.of(List.of(0x100L,0x100000000L)),List.of()));
+        bad(()->new HardwareResetHandlerWitness.Report(
+            0x100,false,false,1,List.of(),List.of(),
+            List.of(),List.of(List.of(0x100L,0x131L)),List.of()));
+        bad(()->new HardwareResetHandlerWitness.Report(
+            0x100,true,true,0,List.of(),List.of(),
+            List.of(),List.of(List.of(0x100L)),List.of()));
+        bad(()->new HardwareResetHandlerWitness.Report(
+            0x101,true,false,1,List.of(),List.of(),List.of()));
+        check(HardwareResetHandlerWitness.inspect(0x100,false,
+            graph,targets).equals(a),
+            "source guard rejects forgeries without modifying positive witness");
         System.out.println("RESET_HANDLER_WITNESS_SOURCE_PASS");
     }
 }
