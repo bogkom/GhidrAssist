@@ -168,6 +168,38 @@ public final class HardwareDurableFunctionStagesSelfTest {
             check(HardwareDurableFunctionStages.load(
                 temp,key,0x100,100,signedMinusOne,targets).isPresent(),
                 "current exact signed-source checkpoint can be restored");
+            // This is the same lossy UTF-8 '?' / isolated-surrogate
+            // collision exercised against actual disk checkpoint envelopes.
+            var ordinaryLabel=List.of(steps.get(0),steps.get(1),
+                new HardwareDataflow.Step(0x104,OTHER,null,0,0,null,0,
+                    List.of(),"?"));
+            var malformedLabel=List.of(steps.get(0),steps.get(1),
+                new HardwareDataflow.Step(0x104,OTHER,null,0,0,null,0,
+                    List.of(),String.valueOf((char)0xd800)));
+            var ordinaryProof=HardwareDataflow.analyze(
+                0x100,ordinaryLabel,targets,100);
+            check(HardwareDurableFunctionStages.save(
+                    temp,key,0x100,100,ordinaryLabel,targets,ordinaryProof),
+                "well-formed mnemonic may publish a real durable fixed point");
+            check(HardwareDurableFunctionStages.load(
+                    temp,key,0x100,100,ordinaryLabel,targets).isPresent(),
+                "legitimate '?' label can recover the same fixed point");
+            check(HardwareDurableFunctionStages.load(
+                    temp,key,0x100,100,malformedLabel,targets).isEmpty() &&
+                !HardwareDurableFunctionStages.save(
+                    temp,key,0x100,100,malformedLabel,targets,ordinaryProof),
+                "unpaired surrogate cannot reuse or replace durable source");
+            var oversizedLabel=List.of(steps.get(0),steps.get(1),
+                new HardwareDataflow.Step(0x104,OTHER,null,0,0,null,0,
+                    List.of(),"X".repeat(
+                        HardwareFunctionStageCache.MAX_SIGNATURE_TEXT_CHARS+1)));
+            check(HardwareDurableFunctionStages.load(
+                    temp,key,0x100,100,oversizedLabel,targets).isEmpty() &&
+                !HardwareDurableFunctionStages.save(
+                    temp,key,0x100,100,oversizedLabel,targets,ordinaryProof) &&
+                HardwareDurableFunctionStages.load(
+                    temp,key,0x100,100,ordinaryLabel,targets).isPresent(),
+                "oversized malformed source never destroys valid durable slot");
             System.out.println("HardwareDurableFunctionStagesSelfTest OK");
         }finally{
             try(var files=Files.list(temp)){
