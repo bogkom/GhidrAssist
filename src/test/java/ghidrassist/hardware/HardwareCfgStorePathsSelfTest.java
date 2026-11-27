@@ -121,7 +121,7 @@ public final class HardwareCfgStorePathsSelfTest {
         denied=false;
         try {
             HardwareCfgStorePaths.analyze(10,
-                List.of(n(10,12),edgeAtLimit,n(12,14),n(14)),
+                List.of(edgeAtLimit,n(12,14),n(14,12)),
                 ownedStores,false,10);
         }catch(IllegalArgumentException expected){denied=true;}
         ok(denied,"total CFG edges reject without partial write-path publication");
