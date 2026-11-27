@@ -74,6 +74,38 @@ public final class HardwareStartupEvidenceMergeSelfTest {
         try{HardwareStartupEvidenceMerge.reconcile(null);}
         catch(IllegalArgumentException expected){rejected=true;}
         ok(rejected,"null not empty success");
+        // The reconciliation must preserve original source strings while
+        // preventing newlines, pipe cells, HTML and oversized names from
+        // being published as hardware evidence.
+        String label="SIMCR\r\n| CLAIM_ACTIVE <b>"+"Z".repeat(100000);
+        var unsafe=HardwareStartupEvidenceMerge.reconcile(List.of(
+            site(0x2bca,0xfffa00,label,cfg,true,16,0x40ca,false)));
+        String safe=unsafe.markdown(true);
+        ok(unsafe.rows().get(0).candidateRegister().equals(label) &&
+            safe.contains("[U+000D]") && safe.contains("[U+000A]") && safe.contains("[U+007C]") &&
+            safe.contains("[U+003C]") && safe.contains("[ABBREVIATED LABEL]") &&
+            !safe.contains("<b>") && !safe.contains("| CLAIM_ACTIVE") &&
+            safe.length()<1900,
+            "raw merged source preserved, static report label sanitized");
+        ok(!unsafe.markdown(false).contains("[U+007C]") &&
+            unsafe.markdown(false).contains("UNVERIFIED_MCU_REGISTER"),
+            "generic CPU32 report never leaks selected MCU register claim");
+        var many=new ArrayList<HardwareStartupEvidenceMerge.Observation>();
+        for(int i=0;i<106;i++)
+            many.add(site(0x2bca+2L*i,0xfffa00+2L*i,"SIMCR",
+                cfg,true,16,0x40ca,false));
+        var capped=HardwareStartupEvidenceMerge.reconcile(many);
+        ok(capped.rows().size()==106 &&
+            capped.markdown(true).lines().filter(l->l.startsWith("| 0x")).count()==100 &&
+            capped.markdown(true).contains("6 more sites omitted by display cap"),
+            "bounded 100-row publication retains all reconciled source records");
+        boolean oversized=false;
+        try{HardwareStartupEvidenceMerge.reconcile(
+            java.util.Collections.nCopies(
+                HardwareStartupEvidenceMerge.MAX_SOURCE_OBSERVATIONS+1,
+                site(0x2bca,0xfffa00,"SIMCR",cfg,true,16,0x40ca,false)));}
+        catch(IllegalArgumentException expected){oversized=true;}
+        ok(oversized,"oversized Listing/CFG input cannot publish partial summary");
         System.out.println("HardwareStartupEvidenceMergeSelfTest OK");
     }
 }

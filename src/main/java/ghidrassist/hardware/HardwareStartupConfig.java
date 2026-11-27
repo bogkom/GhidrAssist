@@ -9,6 +9,31 @@ import java.util.*;
  */
 public final class HardwareStartupConfig {
     private HardwareStartupConfig() {}
+    public static final int MAX_SOURCE_SITES=200000;
+    public static final int MAX_DISPLAYED_LITERAL_WORDS=16;
+    private static final int MAX_DISPLAYED_LABEL_CODEPOINTS=64;
+
+    /**
+     * Source names stay intact in immutable evidence records. Only the
+     * Markdown presentation is bounded and encoded: no newlines, table
+     * separators, HTML or bidirectional controls can forge an MCU claim.
+     */
+    static String boundedRegisterLabel(String source) {
+        if(source==null || source.isBlank())return "UNKNOWN";
+        StringBuilder safe=new StringBuilder();
+        int offset=0,points=0;
+        while(offset<source.length() && points<MAX_DISPLAYED_LABEL_CODEPOINTS) {
+            int cp=source.codePointAt(offset);
+            if((cp>='A' && cp<='Z') || (cp>='a' && cp<='z') ||
+                    (cp>='0' && cp<='9') || cp=='_')
+                safe.appendCodePoint(cp);
+            else safe.append(String.format(Locale.ROOT,"[U+%04X]",cp));
+            offset+=Character.charCount(cp);
+            points++;
+        }
+        if(offset<source.length())safe.append("[ABBREVIATED LABEL]");
+        return safe.toString();
+    }
     public record Site(long function,long pc,String register,boolean write,
                        Integer word,boolean uncertain) {
         // Preserve all existing five-field synthetic callers.
@@ -53,15 +78,20 @@ public final class HardwareStartupConfig {
                 Group g=groups.get(i);
                 out.append("| ").append(String.format(Locale.ROOT,"0x%08X",g.function()))
                     .append(" | ").append(mc68332Selected?
-                        g.register():"UNVERIFIED_MCU_REGISTER")
+                        boundedRegisterLabel(g.register()):"UNVERIFIED_MCU_REGISTER")
                     .append(" | ").append(g.path())
                     .append(" | ").append(g.alternatives()).append(" | ");
                 if(g.possibleWords().isEmpty())out.append("UNKNOWN");
-                for(int j=0;j<g.possibleWords().size();j++){
+                int shownWords=Math.min(g.possibleWords().size(),
+                    MAX_DISPLAYED_LITERAL_WORDS);
+                for(int j=0;j<shownWords;j++){
                     if(j>0)out.append(", ");
                     out.append(String.format(Locale.ROOT,"0x%04X",
                         g.possibleWords().get(j)));
                 }
+                if(shownWords<g.possibleWords().size())
+                    out.append(" [").append(g.possibleWords().size()-shownWords)
+                        .append(" MORE LITERAL ALTERNATIVES OMITTED]");
                 out.append(" | ").append(g.unknownWrites()).append(" | ")
                     .append(!mc68332Selected || g.simcrMmCandidate()==null?
                         "UNKNOWN":g.simcrMmCandidate()+" (literal only)")
@@ -83,11 +113,16 @@ public final class HardwareStartupConfig {
         List<Site> sourceSites){
         if(directCallCandidateFunctions==null || sourceSites==null)
             throw new IllegalArgumentException("Missing graph/inventory evidence");
+        if(sourceSites.size()>MAX_SOURCE_SITES)
+            throw new IllegalArgumentException(
+                "Oversized startup source inventory: completeness unknown");
         Map<String,Grouping> grouped=new TreeMap<>();
         int sites=0,writes=0,unknown=0;
         for(Site s:sourceSites){
             if(s==null || s.function()<0 || s.pc()<0 ||
-                    s.register()==null || s.register().isBlank())continue;
+                    s.register()==null || s.register().isBlank())
+                throw new IllegalArgumentException(
+                    "Malformed startup source site: cannot silently omit evidence");
             sites++;
             Path path=rootRecognized &&
                 directCallCandidateFunctions.contains(s.function())?

@@ -17,6 +17,7 @@ import java.util.Set;
  */
 public final class HardwareStartupEvidenceMerge {
     private HardwareStartupEvidenceMerge(){}
+    public static final int MAX_SOURCE_OBSERVATIONS=200000;
     public enum Source { LISTING_REFERENCE, CFG_PCODE }
     public enum Status {
         REFERENCE_ONLY, FULL_WORD_LITERAL_CANDIDATE,
@@ -84,7 +85,8 @@ public final class HardwareStartupEvidenceMerge {
                 Row r=rows.get(i);
                 out.append("| ").append(hex(r.function())).append(" | ")
                     .append(hex(r.pc())).append(" | ")
-                    .append(selectedMc68332?r.candidateRegister():
+                    .append(selectedMc68332?
+                        HardwareStartupConfig.boundedRegisterLabel(r.candidateRegister()):
                         "UNVERIFIED_MCU_REGISTER")
                     .append(" | ").append(hex(r.registerAddress()))
                     .append(" | ").append(r.sources())
@@ -133,6 +135,9 @@ public final class HardwareStartupEvidenceMerge {
     }
     public static Report reconcile(List<Observation> observations){
         if(observations==null)throw new IllegalArgumentException("Null source set");
+        if(observations.size()>MAX_SOURCE_OBSERVATIONS)
+            throw new IllegalArgumentException(
+                "Oversized Listing/CFG source inventory: completeness unknown");
         Map<Identity,Mutable> grouped=new LinkedHashMap<>();
         int raw=0,duplicates=0,unbound=0;
         Set<Long> aliasFunctions=new LinkedHashSet<>();

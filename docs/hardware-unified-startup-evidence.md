@@ -37,3 +37,28 @@ unknown alias memory writes) are represented as `UNKNOWN` in reports
 and CSV; they must not abort the entire analysis or become a 16-bit
 literal. Only genuinely unsupported contradictory width codes fail
 closed in the deterministic evidence validator.
+
+## 2026-11-27 — bounded source intake and display integrity (GA-01/02/03/07)
+
+The read-only Listing/CFG reconciliation refuses more than 200,000 raw
+observations rather than producing a partial count that looks complete.
+The per-function startup alternatives model likewise refuses more than
+200,000 sites and rejects malformed rows (missing, negative address or
+blank register) instead of silently dropping source observations.
+
+Both selected-MC68332 Markdown reports share a presentation-only,
+64-Unicode-code-point register-label encoder. Special Unicode/control
+code points, HTML delimiters and table separators are printed as
+`[U+XXXX]` tokens; long names carry an explicit abbreviation marker.
+Original register strings remain unchanged in the immutable source
+records, and generic CPU32 output still suppresses MCU-specific names.
+
+The alternatives report retains the complete sorted candidate-word list
+in the data model but prints at most 16 words per register group, with
+an exact omitted-alternatives count. All source sites and counts remain
+static MAY evidence: no confirmed execution, first SIMCR/MM latch,
+active VBR/ISR, or physical chip-select configuration is inferred.
+Deterministic Java 21 positive/negative regressions, full Java 25
+Ghidra 12.1.4 PUBLIC extension build and isolated synthetic Ghidra
+checks must pass on the exact PR head before integration. GA-01/02/03/07
+remain PARTIAL pending their full roadmap criteria.

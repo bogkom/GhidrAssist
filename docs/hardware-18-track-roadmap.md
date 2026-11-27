@@ -1,3 +1,12 @@
+## GA-01/02/03/07/12/13/18 — 2026-11-27: validated CFG and startup publication checkpoint
+
+- **PR #373 MERGED:** exact tested head `39923bc1a42786a444012a5ce866babf854f2c65`, 27/27 GitHub Actions SUCCESS, squash `edb7e4e526222ebd0e15dc8baa109dfd8ace402c`. Function-entry-anchored static MMIO CFG write paths refuse foreign and orphaned source sites, and untrusted report labels are bounded. No runtime path inferred.
+- **PR #374 MERGED:** exact tested head `033371789c94efd4e39b05ef2cf40328d6cc29f2`, 27/27 SUCCESS, squash `df45a824a901fecd77e5e2ef57f969845cc1f379`. GUI/export/RAG Overview requires complete unique headings in canonical order before publication.
+- **PR #375 MERGED:** exact tested head `4c78ed0e588254ed6411d7f24f9275ee0e9e9e15`, 28/28 SUCCESS, squash `4152b9047c2d28366c1a3efeb628f037d23a3ea1`. Java21 source regressions, full Java25 extension and genuine isolated Ghidra verify bounded source intake, preserved raw labels, safe Markdown and omitted-literal counts.
+- **PR #376 CANDIDATE:** real Xvfb/CodeBrowser verifies Automation API revision/generation manifest and exact reconstruction of three paginated report formats against Swing/export/RAG evidence. Original candidate branch predates the merged #375, so a **new combined-head** full Java25/Ghidra GUI CI gate and code review are required; old-head checks alone are not sufficient acceptance. No formal GUI Supervisor PASS or host-manual verification is claimed.
+
+These source and GUI witnesses use disposable synthetic Ghidra 12.1.4 PUBLIC only. No ECU411 firmware, production Program, Wyse/Precision, Supervisor, native Codex Goal or private data was touched. GA-01/02/03/07/12/13/18 remain **PARTIAL** pending their remaining roadmap acceptance criteria. Instruction presence is not execution; MM latch, active VBR/ISR and physical CS wiring remain UNKNOWN.
+
 ## GA-11 — 2026-11-27: bounded static vector symbol presentation merged (#365)
 
 - **PR #365 MERGED**: source head `aedb2edb86289f80f5a82b6288d1288297ec631d`; squash merge `278a473cb941783b03bca960d363ae37d8bbc53e`; **28/28 exact-head GitHub Actions SUCCESS**. Java 21 vector evidence regression, complete Java 25 extension build and actual isolated synthetic Ghidra 12.1.4 PUBLIC were verified, including [headless GA-11 run 45938379309](https://github.com/bogkom/GhidrAssist/actions/runs/45938379309) and [Hardware Analysis run 45938379184](https://github.com/bogkom/GhidrAssist/actions/runs/45938379184).
