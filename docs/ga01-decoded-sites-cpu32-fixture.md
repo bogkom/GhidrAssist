@@ -105,3 +105,34 @@ required.
 The GA-01/02/03/11 workflow now contains a **separate** `genuine-cpu32-headless` job. Unlike the Java 21 and mock-launcher job, this job obtains the official 12.1.4 PUBLIC archive, records its SHA-256, builds the extension from the exact checkout with Java 25, records the extension ZIP SHA-256, installs the ZIP in a disposable Ghidra installation, and runs the real CPU32 preparer and verifier using the isolated headless runner. It uploads the persisted Ghidra evidence log and hashes even if the run fails. A successful source regression job **does not** substitute for this job.
 
 This is a **CI implementation candidate**, not a claim that genuine Ghidra passed. Inspect the job log and uploaded artifact on the **exact commit**; require the structured preparer, verifier, and final headless PASS markers and verify that the loaded extension is the freshly built artifact. If Ghidra does not discover the extension after ZIP extraction, treat the run as FAIL and correct installation rather than weakening assertions. A passing CI job alone does not establish executed firmware effects or active MM/VBR/ISR.
+
+
+## 2026-11-27 — GA-01/11 bounded RESET to STORE/MOVEC evidence integrity
+
+Static RESET-to-function direct-CALL witnesses have an explicit
+`MAX_SOURCE_EDGES=200000` input budget, independent of the 100-node
+BFS visit and 8-level depth caps. The canonical `FunctionNode`
+adjacency is consumed without a redundant per-node sorting copy.
+Public witness rows, origins, chain entries, source counts and
+missing-root assertions reject malformed or foreign CPU32 identities
+before Markdown/export presentation.
+
+`HardwareResetEffectSites.correlate` treats incoming public
+`HardwareResetHandlerWitness.Report` as untrusted **display evidence**:
+it replays the bounded source traversal against the current supplied
+function-node inventory, comparing inspected count, root/incompleteness,
+frontiers, unresolved call sources and exact STORE/MOVEC chains before
+correlating instruction sites. A hand-built chain naming an unrelated
+reachable-looking STORE, a changed CFG edge, or a forged VBR effect must
+not be promoted into an observed RESET static path. Positive known
+CALL chains and conservative UNKNOWN when upstream RESET was incomplete
+are retained. This does not infer executed instructions, runtime VBR/ISR
+or SIMCR MM latch; original firmware and production Ghidra Programs are
+never modified.
+
+Java 21 pure-source regressions cover exactly-at and over the edge
+ceiling, wrong-root/oversized/malformed provenance and independent
+verification of unchanged vs changed inventories. The existing
+`hardware-vector-reset-correlation.yml` workflow also builds the
+Java25 Ghidra 12.1.4 PUBLIC extension and runs the disposable,
+synthetic CPU32 headless integration. GA-01/11 remain PARTIAL.

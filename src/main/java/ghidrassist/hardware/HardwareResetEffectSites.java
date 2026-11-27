@@ -76,6 +76,25 @@ public final class HardwareResetEffectSites {
         for(var node:inventory)
             if(node==null || functions.putIfAbsent(node.entry(),node)!=null)
                 throw new IllegalArgumentException("Invalid function inventory");
+        // The public witness Report is a display object, not an
+        // authenticated CFG certificate. Recompute its bounded direct-CALL
+        // source subset from the *supplied* node inventory and refuse any
+        // stale or forged STORE/MOVEC/frontier/unresolved provenance. Simply
+        // checking a chain's first/last identity would promote a disconnected
+        // function into apparently reachable RESET hardware evidence.
+        var verified=HardwareResetHandlerWitness.inspect(
+            witness.resetEntry(),witness.incomplete(),inventory,List.of());
+        if(witness.missingRoot()!=verified.missingRoot() ||
+                witness.inspected()!=verified.inspected() ||
+                witness.incomplete()!=verified.incomplete() ||
+                !witness.frontiers().equals(verified.frontiers()) ||
+                !witness.unresolvedCallSources().equals(
+                    verified.unresolvedCallSources()) ||
+                !witness.memoryStoreSources().equals(
+                    verified.memoryStoreSources()) ||
+                !witness.vbrWriteSources().equals(verified.vbrWriteSources()))
+            throw new IllegalArgumentException(
+                "RESET source graph and STORE/VBR witness do not match");
         Map<Long,List<Long>> stores=new HashMap<>(),vbr=new HashMap<>();
         for(var chain:witness.memoryStoreSources())
             put(stores,chain,witness.resetEntry());
