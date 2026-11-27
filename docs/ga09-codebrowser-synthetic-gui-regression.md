@@ -324,3 +324,27 @@ checks. It is a synthetic **Xvfb/Swing CodeBrowser CI** witness,
 not independent manual GUI, runtime MCU execution, or formal
 Supervisor PASS. GA-04/07 remain PARTIAL until the rest of the
 roadmap's acceptance criteria are satisfied.
+
+
+## 2026-11-27 — GA-09 real multirow sorted view/model navigation
+
+The previously recorded GUI Go To Listing test filtered to just one SIMCR
+row before sorting. This could not catch a future bug that used the JTable
+VIEW row index as a model index. The existing actual CodeBrowser/Xvfb
+fixture already has independent, decoded CPU32 SIMCR, SYNCR and CSBAR0
+source functions. It now first leaves the real MMIO Explorer unfiltered,
+asserts **at least two source rows**, reverses the PC sort and requires
+`convertRowIndexToModel(0) > 0`. It verifies the selected view PC
+agrees with that distinct underlying model row, clicks the real
+production **Go To Listing** action and asserts that the CodeBrowser
+Listing reaches that exact non-first source PC. Only then does the
+fixture apply its existing one-row SIMCR filter and retain the old
+navigation, stale Program-switch, wrong-row, API and Undo guards.
+
+The Python runner requires marker
+`ga09_sorted_view_model_goto_verified`, so a future regression cannot
+pass solely by sorting a single source row. This is a genuine
+**synthetic CodeBrowser GUI CI** witness, not firmware execution,
+manual GUI attestation, Supervisor PASS or evidence of an active MCU.
+Java 25 complete extension build and exact-head Xvfb/Automation
+workflow checks remain required for integration.

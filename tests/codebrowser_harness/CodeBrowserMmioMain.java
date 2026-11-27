@@ -1149,6 +1149,45 @@ public final class CodeBrowserMmioMain {
                 "No real synthetic SIMCR table row");
             JTextField filter=child(dialog.getContentPane(),JTextField.class);
             require(filter!=null,"No real MMIO filter");
+            // GA-09: the prior one-row SIMCR filter could not verify that
+            // Go To Listing converts sorted JTable VIEW indices back to
+            // the underlying, immutable source evidence MODEL index.
+            // Use two or more actual decoded CPU32 MMIO observations,
+            // reverse sorting, and choose a nonzero model index.
+            JButton sortedGo=button(dialog.getContentPane(),"Go To Listing");
+            require(sortedGo!=null,"No sorted MMIO Go To Listing button");
+            long[] sortedSourcePc={-1};
+            edt(()->{
+                require(table.getRowCount()>=2,
+                    "Real synthetic MMIO table requires multiple source rows");
+                require(table.getRowSorter()!=null,
+                    "MMIO source table must support real view sorting");
+                table.getRowSorter().setSortKeys(java.util.List.of(
+                    new javax.swing.RowSorter.SortKey(0,
+                        javax.swing.SortOrder.DESCENDING)));
+                int modelIndex=table.convertRowIndexToModel(0);
+                require(modelIndex>0 && modelIndex<table.getModel().getRowCount(),
+                    "Descending sort did not produce a nontrivial VIEW/MODEL row index");
+                String viewPc=String.valueOf(table.getValueAt(0,0));
+                require(viewPc.equals(String.valueOf(
+                        table.getModel().getValueAt(modelIndex,0))),
+                    "Sorted source row differs from underlying model value");
+                sortedSourcePc[0]=Long.parseUnsignedLong(
+                    viewPc.replaceFirst("(?i)^0x",""),16);
+                require(sortedSourcePc[0]!=0x20L,
+                    "Sorted selected row must differ from unfiltered first source");
+                table.setRowSelectionInterval(0,0);
+                try {
+                    tool[0].getService(GoToService.class)
+                        .goTo(site.add(4),first);
+                    sortedGo.doClick();
+                }catch(Exception e){throw new RuntimeException(e);}
+            });
+            until(()->{
+                try{return evalEdt(()->at(viewer,sortedSourcePc[0]));}
+                catch(Exception e){throw new RuntimeException(e);}
+            },15);
+            result.addProperty("ga09_sorted_view_model_goto_verified",true);
             edt(()->filter.setText("SIMCR"));
             require(table.getRowCount()==1,"SIMCR filter did not isolate fixture");
             edt(()->{
