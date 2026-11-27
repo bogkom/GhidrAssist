@@ -44,7 +44,7 @@ jobs:
           bash tools/ci/ghidra-gradle-ci-network.sh "$GHIDRA_INSTALL_DIR"
           "$GHIDRA_INSTALL_DIR/support/gradle/gradlew" \
             --no-daemon --stacktrace buildExtension
-      - name: Verify 3 CFG and 10 JSR MOVEC V2/V1 Review-binding JVM phases
+      - name: Verify 4 CFG and 10 JSR MOVEC V2/V1 Review-binding JVM phases
         shell: bash
         run: |
           set -euo pipefail
@@ -62,7 +62,9 @@ jobs:
           p=json.load(open(sys.argv[1],encoding="utf-8"))
           expected={
               "status":"PASSED_SYNTHETIC_REAL_GHIDRA_HEADLESS",
-              "restart_processes":3,
+              "restart_processes":4,
+              "explicit_clear_cold_recomputed":True,
+              "explicit_clear_same_jvm_reused":True,
               "v2_source_processes":10,
               "v2_resealed_forged_may_mm_pages_refused":True,
               "v2_forged_claim_cleared_then_live_source_replayed":True,
@@ -86,7 +88,7 @@ jobs:
           }
           for k,v in expected.items():
               assert p.get(k)==v, (k,p.get(k),v)
-          print("GA12 REAL GHIDRA V2 SOURCE RESTART PASS: phases=13 native_pairs=2 omissions=1")
+          print("GA12 REAL GHIDRA V2 SOURCE RESTART PASS: phases=14 native_pairs=2 omissions=1")
           PY
       - name: Bounded diagnostic tail for synthetic-only failures
         if: failure()
