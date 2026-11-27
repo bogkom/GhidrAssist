@@ -13,6 +13,7 @@ on:
       - 'src/main/java/ghidrassist/hardware/HardwareBitfieldPageWitness.java'
       - 'src/main/java/ghidrassist/hardware/HardwareBitfieldLayoutWitness.java'
       - 'src/main/java/ghidrassist/hardware/HardwareManualFieldExcerptEvidence.java'
+      - 'src/main/java/ghidrassist/hardware/ManualPrintedPage.java'
       - 'src/main/java/ghidrassist/core/RAGEngine.java'
       - 'src/main/java/ghidrassist/core/RAGIndexedPdfPageEvidence.java'
       - 'src/main/java/ghidrassist/core/RAGManualFieldCitationView.java'
@@ -96,6 +97,7 @@ jobs:
           javac --release 21 -d "$RUNNER_TEMP/mc68332-field-witness" \
             src/main/java/ghidrassist/hardware/HardwareProfiles.java \
             src/main/java/ghidrassist/hardware/ManualPdfPageClaim.java \
+            src/main/java/ghidrassist/hardware/ManualPrintedPage.java \
             src/main/java/ghidrassist/hardware/HardwareBitfieldSourceLedger.java \
             src/main/java/ghidrassist/hardware/HardwareSimProtectionTimerWitness.java \
             src/main/java/ghidrassist/hardware/HardwareSimProtectionTimerPublisherPins.java \

@@ -93,6 +93,42 @@ public final class HardwareManualFieldExcerptEvidenceSelfTest {
         check(find(wrong,"SYNCR/STEXT").state()==
                 HardwareManualFieldExcerptEvidence.State.FOLIO_OR_MODEL_HEADER_MISMATCH,
             "Wrong physical page with valid field token not a citation");
+        // A physical page that has the right D-6 *body token* but the
+        // wrong printed header must not become a positive field citation.
+        // The former text.contains("D-6") accepted this fabricated source.
+        var bodyFolioSpoof=new HashMap<>(synthetic());
+        bodyFolioSpoof.put(220,bodyFolioSpoof.get(220).replace(
+            "MC68332 USER'S MANUAL D-6",
+            "MC68332 USER'S MANUAL D-5")+
+            "\nSee printed folio D-6 in a cross-reference; not this page.\n");
+        var falseFolio=HardwareManualFieldExcerptEvidence.inspect(
+            profile,bodyFolioSpoof,P);
+        check(find(falseFolio,"SIMCR/MM").state()==
+                HardwareManualFieldExcerptEvidence.State.FOLIO_OR_MODEL_HEADER_MISMATCH &&
+            !falseFolio.allReviewedTextCandidatesMatch(),
+            "correct field and D-6 body token cannot override wrong D-5 header");
+
+        var contradictoryFolio=new HashMap<>(synthetic());
+        contradictoryFolio.put(220,contradictoryFolio.get(220)+
+            "\nMC68332 USER'S MANUAL D-7\n");
+        var conflicting=HardwareManualFieldExcerptEvidence.inspect(
+            profile,contradictoryFolio,P);
+        check(find(conflicting,"SYNCR/W").state()==
+                HardwareManualFieldExcerptEvidence.State.FOLIO_OR_MODEL_HEADER_MISMATCH &&
+            !conflicting.allReviewedTextCandidatesMatch(),
+            "two conflicting printed manual headers cannot be resolved by a body token");
+
+        var footerFolio=new HashMap<>(synthetic());
+        footerFolio.put(220,footerFolio.get(220).replace(
+            "MC68332 USER'S MANUAL D-6",
+            "MC68332 USER'S MANUAL")+
+            "\nMC68332 USER'S MANUAL D-6\n");
+        var bottomPage=HardwareManualFieldExcerptEvidence.inspect(
+            profile,footerFolio,P);
+        check(bottomPage.allReviewedTextCandidatesMatch() &&
+            find(bottomPage,"SIMCR/MM").state()==
+                HardwareManualFieldExcerptEvidence.State.MATCHED_TEXT_CANDIDATE,
+            "unambiguous matching footer folio remains eligible");
         var spoofed=new HashMap<>(synthetic());
         spoofed.put(220,spoofed.get(220).replace(
             "MM — Module Mapping","MM — fabricated meaning"));

@@ -197,11 +197,19 @@ public final class HardwareManualFieldExcerptEvidence {
             throw new IllegalStateException(impossible);
         }
     }
-    private static boolean pageIdentity(String text,int page,String printed){
-        // This is still content of untrusted PDFTextStripper output.
-        // The publisher CI separately authenticates exact PDF bytes.
-        return text.contains("MC68332") && text.contains("USER'S MANUAL") &&
-            text.contains(printed) &&
+    private static boolean pageIdentity(String normalized,String raw,
+            int page,String printed){
+        // A D-5/D-6/D-7 token somewhere in the BODY is not the publisher's
+        // printed folio. The existing independent header/footer inspector
+        // must recognize exactly the expected folio on this physical page.
+        // Keep the original line boundaries until AFTER this test: the
+        // canonicalized heading/meaning text has no line layout evidence.
+        // This still inspects untrusted text; the separate Actions lane
+        // authenticates the PDF bytes and page count.
+        ManualPrintedPage.Hint folio=ManualPrintedPage.fromText(raw);
+        return normalized.contains("MC68332") &&
+            "PDF_TEXT_HEADER_CANDIDATE".equals(folio.confidence()) &&
+            printed.equals(folio.label()) &&
             ((page==219 && "D-5".equals(printed)) ||
              (page==220 && "D-6".equals(printed)) ||
              (page==221 && "D-7".equals(printed)));
@@ -269,7 +277,8 @@ public final class HardwareManualFieldExcerptEvidence {
                 state=State.PUBLISHER_PIN_UNMATCHED;
             else if(source==null || source.isBlank())
                 state=State.PAGE_TEXT_MISSING;
-            else if(!pageIdentity(source,r.descriptionPage(),r.printedFolio()))
+            else if(!pageIdentity(source,rawPages.get(r.descriptionPage()),
+                    r.descriptionPage(),r.printedFolio()))
                 state=State.FOLIO_OR_MODEL_HEADER_MISMATCH;
             else {
                 String heading=canonical(r.heading());
