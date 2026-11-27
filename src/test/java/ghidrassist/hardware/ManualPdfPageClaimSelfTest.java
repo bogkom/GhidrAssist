@@ -61,6 +61,15 @@ public final class ManualPdfPageClaimSelfTest {
         check(!ManualPdfPageClaim.hasSingleConsistentClaim(
                 "PDF page 215"+" ".repeat(257)),
             "unbounded PDF label denied");
+        for(char invalid:new char[]{(char)0xd800,(char)0xdc00}) {
+            String forged="D-1 (PDF page 215) "+invalid;
+            check(!ManualPdfPageClaim.hasSingleConsistentClaim(forged) &&
+                ManualPdfPageClaim.physicalRange(forged)==null,
+                "isolated UTF-16 surrogate cannot validate PDF page claims");
+        }
+        check(ManualPdfPageClaim.hasSingleConsistentClaim(
+                "D-1 (PDF page 215) "+new String(Character.toChars(0x1f680))),
+            "well-formed supplementary Unicode remains valid source metadata");
         System.out.println("ManualPdfPageClaimSelfTest PASS: assertions="+assertions);
     }
 }
