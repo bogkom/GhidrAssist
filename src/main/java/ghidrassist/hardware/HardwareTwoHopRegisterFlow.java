@@ -31,6 +31,10 @@ public final class HardwareTwoHopRegisterFlow {
         "JSR|BSR(?:\\.[BWSL])?");
     private static final Pattern UNCONDITIONAL=Pattern.compile(
         "BRA(?:\\.[BWSL])?");
+    // DBcc changes Dn AND branches. It must never pass as a linear
+    // CLOBBER_POINTER step with a fabricated fallthrough successor.
+    private static final Pattern DECREMENT_BRANCH=Pattern.compile(
+        "DB(?:CC|CS|EQ|NE|GE|GT|HI|LE|LS|LT|MI|PL|VC|VS|F|T|RA)(?:\\.W)?");
     private static final Set<String> COPY=Set.of("MOVE.L","MOVEA.L");
     private static final Pattern ADJUST=Pattern.compile(
         "(?:ADDQ|SUBQ|ADDA|SUBA)\\.[BWL]");
@@ -215,12 +219,19 @@ public final class HardwareTwoHopRegisterFlow {
                  "RESET".equals(step.mnemonic) ||
                  step.mnemonic.startsWith("TRAP")))
             return false;
-        // Opcode/kind disagreement must never reinterpret a branch as
-        // a linear register clobber or hide a CPU32 return.
+        // Opcode/kind disagreement must never reinterpret control flow
+        // as a linear A/D clobber. In particular DBcc mutates Dn while
+        // conditionally branching, and JMP/exception instructions cannot
+        // be carried across the exact inner CALL by a fake fallthrough.
         if(step.kind!=HardwareDataflow.Kind.OTHER &&
                 step.kind!=HardwareDataflow.Kind.CALL_BARRIER &&
                 ("RTS".equals(step.mnemonic) ||
-                 BRANCH.matcher(step.mnemonic).matches()))
+                 "JMP".equals(step.mnemonic) ||
+                 "ILLEGAL".equals(step.mnemonic) ||
+                 "BKPT".equals(step.mnemonic) ||
+                 "TRAPV".equals(step.mnemonic) ||
+                 BRANCH.matcher(step.mnemonic).matches() ||
+                 DECREMENT_BRANCH.matcher(step.mnemonic).matches()))
             return false;
         if("RTS".equals(step.mnemonic))return
             step.kind==HardwareDataflow.Kind.OTHER && size==0 &&
