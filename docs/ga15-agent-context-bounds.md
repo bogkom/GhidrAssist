@@ -190,3 +190,21 @@ affected row was already pruned; it is not a claim of actual firmware
 execution, authenticated tool provenance or model correctness. Deterministic
 Java 21 regressions check every text renderer against the paginated evidence
 completeness boundary, including combined losses and fresh-generation reset.
+
+## 2026-11-27 — retained evidence preview coverage
+
+ReAct prompt and synthesis text are bounded presentations, not proof that
+all retained findings were shown. The default top-10 prompt, configurable
+detailed view and fixed top-15 summary now identify exactly how many
+retained rows are displayed and how many are omitted when the preview
+does not cover the whole ranked cache. A zero-item request still emits
+a coverage receipt rather than appearing to have no findings.
+
+The **PREVIEW ONLY** receipt is separate from historical accepted-finding
+evictions and missing attribution (**EVIDENCE INCOMPLETE**) and from
+truncated source transcript (**SOURCE INCOMPLETE**). A lossless preview
+does **not** advance source revision, mark a valid full evidence page
+incomplete, or grant Review/Apply permissions. The caller can retrieve
+complete version-pinned pages before making completeness claims.
+The Java 21 regression tests 0, partial and full presentations, changing
+retained counts, cache reset, and simultaneous preview/source loss.
