@@ -695,6 +695,71 @@ public final class HardwareTwoHopRegisterFlowSelfTest {
             validClobberSource.rows().get(0).writtenWord()==0x40ca,
             "Ordinary CLR.L D7 preserves independent SIMCR source context");
 
+        // MOVEA.W writes the entire 32-bit An with a sign-extended
+        // 16-bit immediate. Genuine signed and 32-bit sign-extended
+        // representations are a valid two-hop source; a raw unsigned
+        // 16-bit negative spelling is NOT an address register value.
+        // A legitimate ADDA.L adjustment makes every tested value reach
+        // the exact same synthetic SIMCR target, so a rejection never
+        // passes merely because the resulting address is not tracked.
+        for(long canonicalWord:new long[]{
+                -0x8000L,0xffff8000L,-0x600L,0xfffffa00L,
+                -1L,0xffffffffL,0x7fffL,0L}) {
+            long wordAdjustment=(simcr-
+                (canonicalWord&HardwareDataflow.MASK24))&
+                HardwareDataflow.MASK24;
+            var wordBridge=new HardwareTwoHopRegisterFlow.Bridge(0x640,
+                List.of(step(0x640,SET_POINTER,"A1",null,canonicalWord,
+                        "MOVEA.W",0x642L),
+                    new HardwareDataflow.Step(0x642,ADJUST_POINTER,
+                        "A1",wordAdjustment,0,null,32,List.of(0x644L),
+                        "ADDA.L"),
+                    jsr(0x644,0x64aL),ret(0x64aL)),
+                0x644,0x700L,true);
+            var wordEvidence=scan(List.of(left),List.of(wordBridge),
+                List.of(leaf),48);
+            ok(wordEvidence.rejectedBridge()==0 &&
+                wordEvidence.possibleStores()==1 &&
+                wordEvidence.rows().size()==1 &&
+                wordEvidence.rows().get(0).effectiveAddress()==simcr &&
+                wordEvidence.rows().get(0).writtenWord()==0x40ca,
+                "Canonical CPU32 MOVEA.W "+canonicalWord+
+                    " preserves a precise static SIMCR MAY candidate");
+        }
+        for(long invalidWord:new long[]{
+                -0x8001L,0x8000L,0xfa00L,0xffffL,
+                0x10000L,0x00fffa00L,0xffff7fffL,0x100000000L}) {
+            long wordAdjustment=(simcr-
+                (invalidWord&HardwareDataflow.MASK24))&
+                HardwareDataflow.MASK24;
+            var invalidWordBridge=new HardwareTwoHopRegisterFlow.Bridge(
+                0x640,List.of(
+                    step(0x640,SET_POINTER,"A1",null,invalidWord,
+                        "MOVEA.W",0x642L),
+                    new HardwareDataflow.Step(0x642,ADJUST_POINTER,
+                        "A1",wordAdjustment,0,null,32,List.of(0x644L),
+                        "ADDA.L"),
+                    jsr(0x644,0x64aL),ret(0x64aL)),
+                0x644,0x700L,true);
+            var invalidWordEvidence=scan(List.of(left),
+                List.of(invalidWordBridge),List.of(leaf),48);
+            ok(invalidWordEvidence.rejectedBridge()==1 &&
+                invalidWordEvidence.possibleStores()==0 &&
+                invalidWordEvidence.rows().isEmpty(),
+                "Noncanonical CPU32 MOVEA.W "+invalidWord+
+                    " cannot fabricate a SIMCR MAY candidate");
+        }
+        // MOVEA.W can never encode a destination Dn; this is not MOVE.W.
+        var forgedWordDestination=new HardwareTwoHopRegisterFlow.Bridge(
+            0x640,List.of(
+                step(0x640,SET_POINTER,"D1",null,0xfffffa00L,
+                    "MOVEA.W",0x642L),
+                jsr(0x642,0x648L),ret(0x648L)),
+            0x642,0x700L,true);
+        ok(scan(List.of(left),List.of(forgedWordDestination),
+            List.of(leaf(0x700,"D1")),48).rejectedBridge()==1,
+            "CPU32 MOVEA.W may write only address registers");
+
         // GA-02/03: CPU32 register/opcode/width consistency is a source
         // acceptance boundary even for synthetic caller-supplied bridge
         // steps. MOVEQ cannot write An, LEA/MOVEA cannot write Dn, and
