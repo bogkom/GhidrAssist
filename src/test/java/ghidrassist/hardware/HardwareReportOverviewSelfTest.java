@@ -79,6 +79,36 @@ public final class HardwareReportOverviewSelfTest {
             catch(IllegalArgumentException expected){refused=true;}
             require(refused,"incomplete GUI overview must not be published to RAG");
         }
+        // Merely containing the three heading substrings is not enough:
+        // require unique complete lines in the canonical order, both when
+        // publishing and when inserting Listing/CFG reconciliation counts.
+        String reordered=selected.replace(
+            "## 1. Initialization candidates","__SWAP_HEADING__")
+            .replace("## 3. Chip Select map — conditional hypothesis",
+                "## 1. Initialization candidates")
+            .replace("__SWAP_HEADING__",
+                "## 3. Chip Select map — conditional hypothesis");
+        for(String forged:new String[]{
+                reordered,
+                selected+"\n## 1. Initialization candidates\n\n",
+                selected+"\n## 3. Chip Select map — conditional hypothesis\n\n",
+                selected.replace("## 1. Initialization candidates",
+                    "prefix ## 1. Initialization candidates"),
+                selected.replace("## 2. Register write history — static evidence",
+                    "## 2. Register write history"),
+                selected.replace("## 3. Chip Select map — conditional hypothesis",
+                    "## 3. Chip Select map")
+        }) {
+            boolean rejected=false;
+            try {HardwareReportOverview.combine(forged,details);}
+            catch(IllegalArgumentException expected){rejected=true;}
+            require(rejected,"forged/reordered/duplicate overview must not publish");
+            rejected=false;
+            try {HardwareReportOverview.withUnifiedSources(forged,
+                HardwareStartupEvidenceMerge.reconcile(List.of()));}
+            catch(IllegalArgumentException expected){rejected=true;}
+            require(rejected,"forged overview must not inherit reconciled source counts");
+        }
         boolean noDetails=false;
         try {HardwareReportOverview.combine(selected," ");}
         catch(IllegalArgumentException expected){noDetails=true;}

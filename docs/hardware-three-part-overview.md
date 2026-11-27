@@ -22,3 +22,18 @@ CI: deterministic overview model test and entire Ghidra 12.1.4
 extension build. Isolated-Ghidra acceptance must confirm both tab
 contents, the export/RAG parity, navigation and no database changes.
 No CI success is a substitute for local GUI acceptance.
+
+## 2026-11-27 — GA-07 ordered canonical publication gate
+
+Overview/Full Evidence publication and Listing/CFG reconciliation now
+require three **unique, exact, line-started** section headings in order:
+initialization candidates, write history and conditional Chip Select map.
+A missing, reordered, duplicated or partly altered heading fails closed,
+including when all three loose substrings are still present. Source totals
+are never inserted into an ambiguous pseudo-overview and cannot be
+silently misrepresented in the GUI, exported Markdown or RAG payload.
+Deterministic Java 21 regressions cover positive canonical/unified text
+and adversarial duplicates, reordered/mid-line headings and suffix changes.
+This is an integrity gate for static source reporting only, not firmware
+execution, active SIMCR MM or physical CS evidence. GA-07 remains PARTIAL
+until all roadmap acceptance tests are met.
