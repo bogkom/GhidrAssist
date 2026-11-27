@@ -186,6 +186,22 @@ public class FindingsCache {
             SOURCE_INCOMPLETE_WARNING+"\n"+omitted;
     }
 
+    /** A top-N view is not the whole retained snapshot, even if the
+     * paginated run can still be fully source-complete. Keep this
+     * distinct from actual source omission and stale-page receipts.
+     */
+    private String previewCoverage(int shown) {
+        int omitted=findings.size()-shown;
+        return omitted>0 ? "PREVIEW ONLY: showing "+shown+" of "+
+            findings.size()+" retained findings; "+omitted+
+            " retained findings omitted from this text view." : "";
+    }
+
+    private static String combineWarnings(String warnings,String preview) {
+        if(preview.isEmpty())return warnings;
+        return warnings.isEmpty() ? preview : warnings+"\n"+preview;
+    }
+
     /**
      * Record discarded provider bytes independently from ranked findings.
      * A tiny result budget must never evict the only evidence of source loss.
@@ -423,9 +439,10 @@ public class FindingsCache {
                 textWarnings();
         }
 
+        int shown=Math.max(0,Math.min(maxShow,findings.size()));
         String formatted=findings.stream()
             .sorted(Comparator.comparingInt(Finding::getRelevance).reversed())
-            .limit(Math.max(0,Math.min(maxShow,maxFindings)))
+            .limit(shown)
             .map(f -> {
                 String fact = f.getFact();
                 // Apply character limit if specified
@@ -437,7 +454,8 @@ public class FindingsCache {
                 return "• " + fact;
             })
             .collect(Collectors.joining("\n"));
-        String warnings=textWarnings();
+        String warnings=combineWarnings(textWarnings(),previewCoverage(shown));
+        if(formatted.isEmpty())return warnings;
         return warnings.isEmpty() ? formatted : warnings+"\n"+formatted;
     }
 
@@ -458,7 +476,8 @@ public class FindingsCache {
      */
     public synchronized String formatDetailed(int maxFindings, boolean includeIterationSummaries) {
         StringBuilder sb = new StringBuilder();
-        String warnings=textWarnings();
+        int shown=Math.max(0,Math.min(maxFindings,findings.size()));
+        String warnings=combineWarnings(textWarnings(),previewCoverage(shown));
         if(!warnings.isEmpty())sb.append(warnings).append("\n\n");
 
         // Add iteration summaries first (provides context)
@@ -476,7 +495,7 @@ public class FindingsCache {
         sb.append("## Key Findings\n\n");
         findings.stream()
             .sorted(Comparator.comparingInt(Finding::getRelevance).reversed())
-            .limit(Math.max(0,Math.min(maxFindings,this.maxFindings)))
+            .limit(shown)
             .forEach(f -> {
                 sb.append("**").append(f.getFact()).append("**");
                 if (f.getToolUsed() != null) {
@@ -512,7 +531,8 @@ public class FindingsCache {
             .collect(Collectors.toList());
 
         StringBuilder sb = new StringBuilder();
-        String warnings=textWarnings();
+        String warnings=combineWarnings(textWarnings(),
+            previewCoverage(topFindings.size()));
         if(!warnings.isEmpty())sb.append(warnings).append("\n");
         sb.append("Key Findings Summary:\n");
         for (Finding f : topFindings) {
