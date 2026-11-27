@@ -85,6 +85,73 @@ public final class ChipSelectTableSelfTest {
                 noLiteral.singleLiteralCandidates(),true)
                 .contains("| CS0 | UNKNOWN | UNKNOWN | UNKNOWN |"),
             "unknown source write preserves UNKNOWN select window");
+        // GA-04: one bounded CFG state is the only permitted source of
+        // a decoded twelve-select table. MM0 and MM1, different CALL
+        // contexts or distinct instructions cannot be merged.
+        var mm1=Map.<Long,Integer>of(
+            0xfffa48L,0x0006,0xfffa4aL,0x6830,
+            0xfffa4cL,0xf803,0xfffa4eL,0x3870,0xfffa44L,0x2f7f);
+        var scoped=ChipSelectTable.sourceWordsAtSnapshot(mm1,0xfff000L);
+        check(scoped.size()==5 && scoped.get("CSBARBT")==0x0006 &&
+                scoped.get("CSBAR0")==0xf803 &&
+                scoped.get("CSPAR0")==0x2f7f,
+            "MC68332 MM1 one-source words decoded without cross-PC merging");
+        String scopedTable=ChipSelectTable.markdown(scoped,true);
+        check(scopedTable.lines().filter(x->x.matches(
+                "\\| CS(?:BOOT|[0-9]+) \\|.*")).count()==12 &&
+                scopedTable.contains("| CS0 | 0xF80000 | 0xF8FFFF | 64 KiB |") &&
+                scopedTable.contains("| CS10 | UNKNOWN | UNKNOWN | UNKNOWN |"),
+            "one source snapshot renders twelve independent rows with UNKNOWNs");
+        var otherMm=Map.<Long,Integer>of(0x7ffa4cL,0xe803);
+        check(ChipSelectTable.sourceWordsAtSnapshot(
+                otherMm,0xfff000L).isEmpty() &&
+                ChipSelectTable.sourceWordsAtSnapshot(
+                    otherMm,0x7ff000L).get("CSBAR0")==0xe803,
+            "no implicit aliasing between MC68332 MM0 and MM1 mappings");
+        var one=new ChipSelectTable.Snapshot(0x100L,0xfff000L,mm1);
+        var two=new ChipSelectTable.Snapshot(0x200L,0x7ff000L,otherMm);
+        var chosen=ChipSelectTable.chooseSource(java.util.List.of(two,one));
+        check(chosen.pc()==0x100L && chosen.simBase()==0xfff000L &&
+                chosen.words().size()==5 && chosen.candidateContexts()==2,
+            "a richer SINGLE CFG snapshot is selected, not combined");
+        var equalA=new ChipSelectTable.Snapshot(
+            0x200L,0xfff000L,Map.of(0xfffa4cL,0xf803));
+        var equalB=new ChipSelectTable.Snapshot(
+            0x100L,0x7ff000L,Map.of(0x7ffa4cL,0xe803));
+        check(ChipSelectTable.chooseSource(java.util.List.of(equalA,equalB))
+                .pc()==0x100L &&
+                ChipSelectTable.chooseSource(java.util.List.of(equalB,equalA))
+                    .pc()==0x100L,
+            "ties use deterministic source PC independent of Listing order");
+        boolean chosenImmutable=false;
+        try {chosen.words().put("CSBAR10",0x1000);}
+        catch(UnsupportedOperationException expected){chosenImmutable=true;}
+        check(chosenImmutable && chosen.words().size()==5,
+            "snapshot chooser returns immutable source words");
+        for(Runnable invalid:java.util.List.<Runnable>of(
+            ()->ChipSelectTable.sourceWordsAtSnapshot(null,0xfff000L),
+            ()->ChipSelectTable.sourceWordsAtSnapshot(mm1,0L),
+            ()->ChipSelectTable.sourceWordsAtSnapshot(
+                Map.of(0xfffa4cL,0x10000),0xfff000L),
+            ()->new ChipSelectTable.Snapshot(0x101L,0xfff000L,mm1),
+            ()->new ChipSelectTable.Snapshot(0x1000000L,0xfff000L,mm1),
+            ()->ChipSelectTable.chooseSource(java.util.List.of(one,one)),
+            ()->ChipSelectTable.chooseSource(java.util.List.of()),
+            ()->ChipSelectTable.chooseSource(
+                java.util.Collections.nCopies(
+                    ChipSelectTable.MAX_CONTEXT_SNAPSHOTS+1,one)))) {
+            boolean denied=false;
+            try {invalid.run();}
+            catch(IllegalArgumentException expected){denied=true;}
+            check(denied,"unsafe/duplicate/oversized source snapshot rejected");
+        }
+        var huge=new java.util.HashMap<Long,Integer>();
+        for(long i=0;i<=ChipSelectTable.MAX_SNAPSHOT_WORDS;i++)
+            huge.put(i,1);
+        boolean deniedHuge=false;
+        try {ChipSelectTable.sourceWordsAtSnapshot(huge,0xfff000L);}
+        catch(IllegalArgumentException expected){deniedHuge=true;}
+        check(deniedHuge,"unbounded raw CFG words never become sampled CS state");
         System.out.println("ChipSelectTableSelfTest OK");
     }
 }
