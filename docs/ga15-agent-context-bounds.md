@@ -133,3 +133,22 @@ without a Ghidra session; every page rechecks the bounded file and
 SHA-256 and retains incomplete-source counters. The complete flag only describes the source
 coverage **within the retained cache** and the ReAct outcome; it
 does not prove comprehensive analysis of a firmware image.
+
+## 2026-11-27 — detached findings cannot mutate active page revisions
+
+The public `getAllFindings()` method returns a new list, but its
+`Finding` elements remain mutable. Previously, an element retained by a
+caller could be pruned from the relevance budget or dropped by `clear()`,
+yet a subsequent `setRelevance()` still advanced the live cache revision.
+This falsely invalidated an otherwise unchanged GA-15 paginated evidence
+receipt from the new generation or the remaining retained findings.
+
+Cache-owned findings are now detached under the same cache lock at eviction
+and reset. Score edits to detached references remain local to that object
+and can no longer change live pagination revisions; score edits to retained
+findings still advance the revision and reject stale page stitching.
+The pure-Java 21 budget regression exercises both eviction and reset,
+plus the positive retained-finding control. This is an offline correctness
+change, not model execution, recovered omitted evidence, or an extension
+to source-completeness guarantees. Full Java 25 extension and any required
+real Ghidra integration are separate exact-SHA acceptance gates.

@@ -280,6 +280,40 @@ public final class FindingsCacheBudgetSelfTest {
             paged.page(0,10).acceptedCount()==0 &&
             paged.page(0,10).evictedCount()==0,
             "new analysis clears discarded-source receipts");
+        // A public Finding reference can survive its budget eviction.
+        // It is no longer in the ranked evidence; editing its score must
+        // never invalidate new pages or reorder the retained item.
+        var evictionEpoch=new FindingsCache(1);
+        evictionEpoch.addFinding("evicted low","source-low","listing",1);
+        var oldEvicted=evictionEpoch.getAllFindings().get(0);
+        evictionEpoch.addFinding("retained high","source-high","listing",9);
+        var stableAfterEviction=evictionEpoch.page(0,1);
+        oldEvicted.setRelevance(10);
+        yes(evictionEpoch.page(0,1,stableAfterEviction.revision()).rows()
+                .get(0).fact().equals("retained high") &&
+            evictionEpoch.page(0,1).revision()==stableAfterEviction.revision(),
+            "editing evicted Finding cannot invalidate retained pages");
+        // Same behavior after a whole cache reset. The detached reference
+        // must not change the revision of an unrelated fresh investigation.
+        var orphaned=evictionEpoch.getAllFindings().get(0);
+        evictionEpoch.clear();
+        evictionEpoch.addFinding("fresh after reset","source-new","listing",5);
+        var newGeneration=evictionEpoch.page(0,1);
+        orphaned.setRelevance(1);
+        oldEvicted.setRelevance(0);
+        yes(evictionEpoch.page(0,1,newGeneration.revision()).rows()
+                .get(0).fact().equals("fresh after reset") &&
+            evictionEpoch.page(0,1).revision()==newGeneration.revision(),
+            "score edits from previous cache generation cannot poison new pages");
+        var currentFinding=evictionEpoch.getAllFindings().get(0);
+        currentFinding.setRelevance(8);
+        boolean currentEditInvalidated=false;
+        try {evictionEpoch.page(0,1,newGeneration.revision());}
+        catch(IllegalStateException expected){currentEditInvalidated=true;}
+        yes(currentEditInvalidated &&
+            evictionEpoch.page(0,1).rows().get(0).relevance()==8,
+            "retained score update still invalidates and updates live evidence");
+
         var truncatedPage=new FindingsCache(1);
         truncatedPage.extractFromToolOutput("mcp",("buffer overflow x\n").repeat(10000));
         yes(truncatedPage.page(0,100).sourceIncomplete() &&
