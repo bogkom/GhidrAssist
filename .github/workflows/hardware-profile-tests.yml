@@ -132,6 +132,7 @@ jobs:
             src/main/java/ghidrassist/hardware/HardwareAutoUpdateRegisters.java \
             src/main/java/ghidrassist/hardware/HardwarePcodeStoreSafety.java \
             src/main/java/ghidrassist/hardware/HardwareIndexedAddress.java \
+            src/main/java/ghidrassist/hardware/ChipSelectTable.java \
             src/main/java/ghidrassist/hardware/HardwareContextSelector.java \
             src/main/java/ghidrassist/hardware/HardwareBitfieldSourceLedger.java \
             src/main/java/ghidrassist/hardware/ManualPdfPageClaim.java \

@@ -77,6 +77,7 @@ jobs:
             src/test/java/ghidrassist/hardware/HardwareSimChipSelectTableWitnessSelfTest.java \
             src/test/java/ghidrassist/hardware/HardwareBitfieldLayoutWitnessSelfTest.java \
             src/test/java/ghidrassist/hardware/HardwareBitfieldPageWitnessSelfTest.java \
+            src/main/java/ghidrassist/hardware/ChipSelectTable.java \
             src/main/java/ghidrassist/hardware/HardwareContextSelector.java \
             src/test/java/ghidrassist/hardware/HardwareBitfieldSourceLedgerSelfTest.java \
             src/test/java/ghidrassist/hardware/HardwareContextSelectorSelfTest.java \
