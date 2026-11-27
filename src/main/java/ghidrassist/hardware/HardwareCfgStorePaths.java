@@ -166,6 +166,21 @@ public final class HardwareCfgStorePaths {
         }
         return new Report(pairs,limited,uncertainty);
     }
+    /**
+     * Production report boundary: an invalid or oversized untrusted CFG
+     * input is UNKNOWN evidence for this function, not a reason to cancel
+     * every other read-only hardware source in the Ghidra Program. Strict
+     * callers should use analyze() to receive the underlying validation
+     * error. This adapter never retains partial STORE pairs.
+     */
+    public static Report analyzeOrUnknown(long function,Collection<Node> nodes,
+            Collection<Store> stores,boolean functionUncertain,int visitBudget) {
+        try {
+            return analyze(function,nodes,stores,functionUncertain,visitBudget);
+        } catch(IllegalArgumentException invalidSource) {
+            return unknownOwnership();
+        }
+    }
     public static String markdown(List<Pair> relations,int limitedFunctions) {
         if(relations==null || limitedFunctions<0)
             throw new IllegalArgumentException("Invalid path report");
