@@ -19,7 +19,7 @@ public final class HardwareCfgStorePathsSelfTest {
         var graph=List.of(n(0,1,2),n(1,3),n(2,3),n(3,4),n(4,3),n(5));
         var observations=List.of(s(1,"SIMCR"),s(2,"CSBAR0"),
             s(3,"CSOR0"),s(4,"TRAMBAR"));
-        var r=HardwareCfgStorePaths.analyze(0x2bc0,graph,observations,false,100);
+        var r=HardwareCfgStorePaths.analyze(0,graph,observations,false,100);
         ok(r.relations().size()==6 && !r.truncated() && !r.unknownFlow(),
             "candidate pairs bounded and complete");
         ok(r.relations().stream().anyMatch(p->p.aPc()==1 && p.bPc()==2 &&
@@ -36,23 +36,24 @@ public final class HardwareCfgStorePathsSelfTest {
             md.contains("NOT whether both writes") &&
             md.contains("never combined into an active hardware map"),
             "forbidden feasibility/runtime claim");
-        var budget=HardwareCfgStorePaths.analyze(0x2bc0,graph,
+        var budget=HardwareCfgStorePaths.analyze(0,graph,
             List.of(s(1,"SIMCR"),s(4,"TRAMBAR")),false,1);
         ok(budget.truncated() &&
             budget.relations().get(0).relation()==
             HardwareCfgStorePaths.Relationship.SEARCH_LIMIT_UNKNOWN,
             "budget prevents false path-negative conclusion");
-        var gap=HardwareCfgStorePaths.analyze(0x2bc0,
-            List.of(n(1,2,100),n(2)),List.of(s(1,"SIMCR"),s(2,"CSBAR0")),true,10);
+        var gap=HardwareCfgStorePaths.analyze(0,
+            List.of(n(0,1),n(1,2,100),n(2)),
+            List.of(s(1,"SIMCR"),s(2,"CSBAR0")),true,10);
         ok(gap.unknownFlow() && gap.relations().get(0).unknownFunctionControlFlow(),
             "unknown call or CFG gap remains explicit");
         var many=new java.util.ArrayList<HardwareCfgStorePaths.Node>();
         var manyStores=new java.util.ArrayList<HardwareCfgStorePaths.Store>();
         for(int i=0;i<20;i++){
-            many.add(n(i));
+            many.add(i<19?n(i,i+1):n(i));
             manyStores.add(s(i,"CSBAR0"));
         }
-        var capped=HardwareCfgStorePaths.analyze(0x2bc0,many,manyStores,false,100);
+        var capped=HardwareCfgStorePaths.analyze(0,many,manyStores,false,100);
         ok(capped.truncated() &&
             capped.relations().size()==66,
             "site-count cap is deterministic");
@@ -65,6 +66,42 @@ public final class HardwareCfgStorePathsSelfTest {
         try{HardwareCfgStorePaths.analyze(0,graph,List.of(s(100,"SIMCR")),false,100);}
         catch(IllegalArgumentException e){failed=true;}
         ok(failed,"missing node rejected");
+        // Negative ownership witnesses: no foreign/pre-entry source,
+        // dangling backward branch or disconnected STORE may be promoted
+        // to an intra-function hardware write relation.
+        var valid=List.of(n(10,12),n(12,14),n(14));
+        var ownedStores=List.of(s(12,"SIMCR"),s(14,"CSBAR0"));
+        var owned=HardwareCfgStorePaths.analyze(10,valid,ownedStores,false,100);
+        ok(owned.relations().size()==1 && !owned.truncated(),
+            "entry-anchored positive CFG evidence");
+        var missing=HardwareCfgStorePaths.analyze(8,valid,ownedStores,false,100);
+        ok(missing.truncated() && missing.unknownFlow() &&
+            missing.relations().isEmpty(),"missing function entry fail closed");
+        var foreign=HardwareCfgStorePaths.analyze(10,
+            List.of(n(8),n(10,12),n(12,14),n(14)),
+            ownedStores,false,100);
+        ok(foreign.truncated() && foreign.unknownFlow() &&
+            foreign.relations().isEmpty(),"pre-entry CFG node fail closed");
+        var backward=HardwareCfgStorePaths.analyze(10,
+            List.of(n(10,8,12),n(12,14),n(14)),
+            ownedStores,false,100);
+        ok(backward.truncated() && backward.unknownFlow() &&
+            backward.relations().isEmpty(),"pre-entry successor fail closed");
+        var orphan=HardwareCfgStorePaths.analyze(10,
+            List.of(n(10,12),n(12),n(14)),
+            ownedStores,false,100);
+        ok(orphan.truncated() && orphan.unknownFlow() &&
+            orphan.relations().isEmpty(),"unreachable STORE fail closed");
+        var unsafe=new HardwareCfgStorePaths.Pair(10,12,14,
+            "SIMCR\n- ACTIVE VBR|<b>", "CSBAR0" + "X".repeat(100000),
+            HardwareCfgStorePaths.Relationship.A_MAY_PRECEDE_B,true);
+        String escaped=HardwareCfgStorePaths.markdown(List.of(unsafe),0);
+        ok(!escaped.contains("<b>") && !escaped.contains("|<b>") &&
+            !escaped.contains("\n- ACTIVE VBR") &&
+            escaped.contains("[U+007C]") &&
+            escaped.contains("[ABBREVIATED LABEL]") &&
+            escaped.length()<1400 && unsafe.bRegister().length()>100000,
+            "untrusted labels cannot forge report evidence and raw witness remains");
         System.out.println("HardwareCfgStorePathsSelfTest OK");
     }
 }

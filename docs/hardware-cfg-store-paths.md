@@ -23,3 +23,21 @@ This package has pure Java tests for branch forks, cycles, uncertain
 gaps, iteration limits, duplicate sites and bounded reporting. Full
 Ghidra 12.1.4 build and operator-approved real-Ghidra test on an
 isolated project are required before merging.
+
+## 2026-11-27 — local CFG owner and report-boundary hardening
+
+The bounded model now requires an actual graph node at the selected function
+entry; it rejects pre-entry instruction nodes, successors targeting pre-entry
+code, and MMIO STORE sites unreachable from the function entry. All these
+cases produce an empty, explicitly truncated/unknown report rather than a
+falsely attributed path relation or an exception that aborts other functions.
+Off-graph forward successors still flag uncertain flow; no claim about
+runtime reachability, actual MM mode, or a physical bus map is introduced.
+
+Untrusted register descriptions in the read-only Markdown display have
+non-alphanumeric characters encoded and are bounded to 64 UTF-16 units
+with an abbreviation indicator; raw evidence records are not changed.
+Deterministic Java 21 tests cover positive ownership, missing entry, foreign
+source/branch, orphaned STORE, budget limits, and adversarial label display.
+Full Java 25 extension and genuine isolated Ghidra 12.1.4 PUBLIC CI must
+pass at the exact commit before integration. GA-01/02/03/07 remain PARTIAL.

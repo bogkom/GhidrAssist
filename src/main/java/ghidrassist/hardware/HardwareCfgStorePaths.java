@@ -65,6 +65,24 @@ public final class HardwareCfgStorePaths {
         }
         return Reach.NO_MODELED_PATH;
     }
+    // A foreign/disconnected instruction graph cannot substantiate a local
+    // write-path relation. Retain uncertainty without aborting other functions.
+    private static Report unknownOwnership() {
+        return new Report(List.of(),true,true);
+    }
+    private static Set<Long> reachableFromEntry(Map<Long,Node> graph,long entry) {
+        Set<Long> seen=new HashSet<>();
+        ArrayDeque<Long> queue=new ArrayDeque<>();
+        seen.add(entry);
+        queue.addLast(entry);
+        while(!queue.isEmpty()) {
+            Node node=graph.get(queue.removeFirst());
+            for(Long next:node.successors()) {
+                if(graph.containsKey(next) && seen.add(next))queue.addLast(next);
+            }
+        }
+        return seen;
+    }
     public static Report analyze(long function,Collection<Node> nodes,
                                  Collection<Store> stores,boolean functionUncertain,
                                  int visitBudget) {
@@ -77,9 +95,17 @@ public final class HardwareCfgStorePaths {
             if(n==null || graph.putIfAbsent(n.pc(),n)!=null)
                 throw new IllegalArgumentException("Duplicate/invalid CFG nodes");
         }
-        for(Node node:graph.values())
-            for(long next:node.successors())
+        // A function must own its decoded entry, every modeled source and
+        // every outgoing branch target. Off-graph successors at/after entry
+        // remain possible unknown exits; a target before entry is foreign.
+        if(!graph.containsKey(function))return unknownOwnership();
+        for(Node node:graph.values()) {
+            if(node.pc()<function)return unknownOwnership();
+            for(long next:node.successors()) {
+                if(next<function)return unknownOwnership();
                 if(!graph.containsKey(next))gaps=true;
+            }
+        }
         List<Store> selected=new ArrayList<>();
         Set<Long> distinctPcs=new HashSet<>();
         for(Store s:stores) {
@@ -90,6 +116,13 @@ public final class HardwareCfgStorePaths {
             selected.add(s);
         }
         selected.sort(Comparator.comparingLong(Store::pc));
+        // Seeing a STORE node in a function's decoded list is insufficient:
+        // orphaned/tail-merged blocks cannot create a relation in that
+        // function. Traverse at most the supplied 50,000 bounded nodes once.
+        Set<Long> entryReach=reachableFromEntry(graph,function);
+        for(Store store:selected)
+            if(store.pc()<function || !entryReach.contains(store.pc()))
+                return unknownOwnership();
         boolean limited=selected.size()>MAX_SITES_PER_FUNCTION;
         if(limited)selected=selected.subList(0,MAX_SITES_PER_FUNCTION);
         boolean uncertainty=functionUncertain||gaps;
@@ -134,10 +167,12 @@ public final class HardwareCfgStorePaths {
         int displayed=Math.min(MAX_DISPLAYED_RELATIONS,relations.size());
         for(int i=0;i<displayed;i++){
             Pair p=relations.get(i);
+            if(p==null || p.relation()==null)
+                throw new IllegalArgumentException("Invalid CFG report relation");
             out.append("- function ").append(hex(p.function()))
                .append(": ").append(hex(p.aPc())).append(" ")
-               .append(p.aRegister()).append(" / ")
-               .append(hex(p.bPc())).append(" ").append(p.bRegister())
+               .append(displayRegister(p.aRegister())).append(" / ")
+               .append(hex(p.bPc())).append(" ").append(displayRegister(p.bRegister()))
                .append("; ").append(p.relation())
                .append("; unknown call/tail branch/gap=")
                .append(p.unknownFunctionControlFlow()).append("\n");
@@ -146,6 +181,25 @@ public final class HardwareCfgStorePaths {
             .append(relations.size()-displayed)
             .append(" additional relations omitted by display cap.\n");
         return out.append("\n").toString();
+    }
+    // Report-only presentation: Ghidra-sourced/untrusted labels cannot
+    // forge Markdown lines, links or hardware assertions. Raw Pair fields
+    // remain untouched for provenance; truncation is explicitly disclosed.
+    private static String displayRegister(String value) {
+        if(value==null)return "UNKNOWN";
+        final int maxChars=64;
+        StringBuilder result=new StringBuilder();
+        int count=Math.min(maxChars,value.length());
+        for(int i=0;i<count;i++) {
+            char ch=value.charAt(i);
+            if((ch>='A' && ch<='Z') || (ch>='a' && ch<='z') ||
+                    (ch>='0' && ch<='9') || ch=='_')
+                result.append(ch);
+            else
+                result.append(String.format(Locale.ROOT,"[U+%04X]",(int)ch));
+        }
+        if(value.length()>maxChars)result.append("[ABBREVIATED LABEL]");
+        return result.toString();
     }
     private static String hex(long value){
         return String.format(Locale.ROOT,"0x%08X",value);
