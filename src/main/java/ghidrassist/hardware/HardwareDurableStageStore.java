@@ -52,10 +52,28 @@ public final class HardwareDurableStageStore {
             throw new IllegalArgumentException("Missing checkpoint path/key");
         return directory.resolve("ga12-"+key.programIdSha256()+".chk");
     }
+    /**
+     * The checkpoint SHA-256 is a corruption check, not a MAC. Reject
+     * shared-writable POSIX locations: another local account could replace
+     * a syntactically valid report together with its unkeyed checksum.
+     * POSIX metadata is optional on other supported filesystems.
+     */
+    private static void rejectSharedWriter(Path path)throws IOException {
+        try {
+            var mode=Files.getPosixFilePermissions(path,NOFOLLOW_LINKS);
+            if(mode.contains(PosixFilePermission.GROUP_WRITE) ||
+                    mode.contains(PosixFilePermission.OTHERS_WRITE))
+                throw new IOException(
+                    "Refusing group/other-writable GA-12 checkpoint source");
+        }catch(UnsupportedOperationException nonPosix) {
+            // Do not infer POSIX permissions on a non-POSIX filesystem.
+        }
+    }
     private static void checkDirectory(Path dir)throws IOException{
         if(dir==null || Files.isSymbolicLink(dir) ||
                 !Files.isDirectory(dir,NOFOLLOW_LINKS))
             throw new IOException("Checkpoint directory missing or unsafe");
+        rejectSharedWriter(dir);
     }
     public static void save(Path directory,Key key,byte[] stage)
             throws IOException{
@@ -149,6 +167,7 @@ public final class HardwareDurableStageStore {
             if(!attrs.isRegularFile() || attrs.size()>MAX_FILE_BYTES ||
                     attrs.size()<32+MAX_HEADER_BYTES/20)
                 return Optional.empty();
+            rejectSharedWriter(path);
             // Refuse a symlink at the opened final file component even if
             // the path has changed since the non-following attribute check.
             try(InputStream input=Files.newInputStream(path,NOFOLLOW_LINKS)){
