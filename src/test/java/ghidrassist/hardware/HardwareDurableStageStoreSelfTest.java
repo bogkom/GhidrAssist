@@ -102,6 +102,56 @@ public final class HardwareDurableStageStoreSelfTest {
             Files.write(file,correct);
             ok(Arrays.equals(load(dir,identity).orElseThrow(),data),
                 "oversized rejection cannot poison future valid loads");
+            // A group/world-writable cache directory permits another
+            // account to replace the report and its unkeyed checksum.
+            // This is an opt-in local cache, not a trusted actor journal.
+            if(Files.getFileStore(dir).supportsFileAttributeView("posix")) {
+                var originalMode=Files.getPosixFilePermissions(dir);
+                var restoredMode=Files.getPosixFilePermissions(file);
+                try {
+                    var shared=new java.util.HashSet<>(originalMode);
+                    shared.add(java.nio.file.attribute.PosixFilePermission.GROUP_WRITE);
+                    Files.setPosixFilePermissions(dir,shared);
+                    refused=false;
+                    try{save(dir,identity,data);}catch(IOException expected){
+                        refused=true;
+                    }
+                    ok(refused && load(dir,identity).isEmpty(),
+                        "group-writable checkpoint directory rejects save AND restore");
+                    shared.remove(java.nio.file.attribute.PosixFilePermission.GROUP_WRITE);
+                    shared.add(java.nio.file.attribute.PosixFilePermission.OTHERS_WRITE);
+                    Files.setPosixFilePermissions(dir,shared);
+                    refused=false;
+                    try{save(dir,identity,data);}catch(IOException expected){
+                        refused=true;
+                    }
+                    ok(refused && load(dir,identity).isEmpty(),
+                        "other-writable cache directory never authenticates SHA record");
+                }finally{
+                    Files.setPosixFilePermissions(dir,originalMode);
+                }
+                ok(Arrays.equals(load(dir,identity).orElseThrow(),data),
+                    "restored private directory permits unchanged valid checkpoint");
+                try {
+                    var sharedFile=new java.util.HashSet<>(restoredMode);
+                    sharedFile.add(
+                        java.nio.file.attribute.PosixFilePermission.GROUP_WRITE);
+                    Files.setPosixFilePermissions(file,sharedFile);
+                    ok(load(dir,identity).isEmpty(),
+                        "group-writable checkpoint file rejected before decode");
+                    sharedFile.remove(
+                        java.nio.file.attribute.PosixFilePermission.GROUP_WRITE);
+                    sharedFile.add(
+                        java.nio.file.attribute.PosixFilePermission.OTHERS_WRITE);
+                    Files.setPosixFilePermissions(file,sharedFile);
+                    ok(load(dir,identity).isEmpty(),
+                        "world-writable checkpoint file rejected");
+                }finally{
+                    Files.setPosixFilePermissions(file,restoredMode);
+                }
+                ok(Arrays.equals(load(dir,identity).orElseThrow(),data),
+                    "owner-only checkpoint file remains restorable after safety tests");
+            }
             // A hostile redirect cannot trick checkpoint writes.
             Files.delete(file);
             Path outside=Files.createTempFile("ga12-other",".bin");
