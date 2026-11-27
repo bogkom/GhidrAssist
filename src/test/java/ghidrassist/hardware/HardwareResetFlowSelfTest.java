@@ -364,6 +364,12 @@ public final class HardwareResetFlowSelfTest {
             0L,"0x00000000 -> 0x00000001",1,true,false));
         badResetReports.add(()->new HardwareResetFlow.Evidence(
             0L,"0x00000000 -> 0x00000000",0,true,false));
+        badResetReports.add(()->new HardwareResetFlow.Evidence(
+            0L,"0x00000000 -> 0x00000000",1,true,false));
+        badResetReports.add(()->new HardwareResetFlow.Evidence(
+            0L,"0x00000000 -> 0x00000002 -> 0x00000000",2,true,false));
+        badResetReports.add(()->new HardwareResetFlow.Evidence(
+            2L,"0x00000002 -> 0x00000004 -> 0x00000002",2,false,true));
         badResetReports.add(()->new HardwareResetFlow.Summary(
             true,1,false,false,false,
             List.of(new HardwareResetFlow.Evidence(

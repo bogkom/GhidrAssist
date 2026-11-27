@@ -72,9 +72,20 @@ public final class HardwareCallEffects {
             if(kind==null || chain==null || chain.isEmpty() ||
                     chain.size()>MAX_SOURCE_FUNCTIONS+1)
                 throw new IllegalArgumentException("Invalid static source witness");
+            // Every emitted route is a shortest BFS source prefix,
+            // never a cycle walk. Duplicate IDs could turn a fabricated
+            // public proof into an apparently inspected STORE/VBR effect.
+            Set<Long> unique=new HashSet<>();
             for(Long entry:chain)
-                if(entry==null || !address(entry))
-                    throw new IllegalArgumentException("Invalid witness address");
+                if(entry==null || !address(entry) || !unique.add(entry))
+                    throw new IllegalArgumentException("Invalid witness address/path");
+            // A depth/node cutoff needs at least one directed edge from
+            // the inspected root to a genuinely uninspected endpoint.
+            // A root-only MISSING_TARGET is legitimate when no definition
+            // for the root is present, and is intentionally unaffected.
+            if((kind==WitnessKind.DEPTH_CUTOFF ||
+                    kind==WitnessKind.NODE_CUTOFF) && chain.size()<2)
+                throw new IllegalArgumentException("Cutoff has no CALL frontier edge");
             chain=List.copyOf(chain);
         }
     }
