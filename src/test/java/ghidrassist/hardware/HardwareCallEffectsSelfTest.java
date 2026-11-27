@@ -426,6 +426,33 @@ public final class HardwareCallEffectsSelfTest {
                 HardwareCallEffects.WitnessKind.DEPTH_CUTOFF &&
             limitedRoot.frontierWitness().chain().equals(List.of(0L,1L)),
             "root-only visit can explain one explicitly uninspected frontier target");
+        // A single pathological function adjacency must be refused at the
+        // record-construction boundary, before allocating the sorted copy.
+        // Exactly the global budget remains valid as source input.
+        var adjacencyAtCap=java.util.Collections.nCopies(
+            HardwareCallEffects.MAX_SOURCE_EDGES,0x130L);
+        var capNode=new HardwareCallEffects.FunctionNode(
+            0x100L,false,false,false,adjacencyAtCap);
+        ok(capNode.directCallees().size()==HardwareCallEffects.MAX_SOURCE_EDGES &&
+            capNode.directCallees().get(0)==0x130L,
+            "exact maximum direct-CALL node adjacency remains admissible");
+        var adjacencyOverCap=java.util.Collections.nCopies(
+            HardwareCallEffects.MAX_SOURCE_EDGES+1,0x130L);
+        boolean oversizedNodeRejected=false;
+        try {
+            new HardwareCallEffects.FunctionNode(
+                0x100L,false,false,false,adjacencyOverCap);
+        }catch(IllegalArgumentException expected){
+            oversizedNodeRejected=true;
+        }
+        ok(oversizedNodeRejected,
+            "over-budget direct-CALL node must fail before copy/sort");
+        var boundedInspect=HardwareCallEffects.inspect(0x100L,
+            List.of(capNode,n(0x130L,false,false,false)),1,2);
+        ok(boundedInspect.summary().visited()==2 &&
+            !boundedInspect.summary().truncated() &&
+            !boundedInspect.summary().unresolved(),
+            "legal at-budget repeated direct calls retain bounded BFS semantics");
         System.out.println("HardwareCallEffectsSelfTest OK");
     }
 }
