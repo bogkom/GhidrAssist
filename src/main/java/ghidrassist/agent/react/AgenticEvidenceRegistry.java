@@ -102,6 +102,16 @@ public final class AgenticEvidenceRegistry<K> {
         String run;
         synchronized(this) {
             Bound<K> existing=ownerBinding(owner);
+            // A caller cannot pass one mutable findings cache to two Program
+            // owners. Separate run tokens alone would not isolate its rows,
+            // revisions or source-incomplete status.
+            for(Bound<K> another:programs.values()) {
+                K distinctOwner=another.owner.get();
+                if(distinctOwner!=null && distinctOwner!=owner &&
+                        another.findings==findings)
+                    throw new IllegalArgumentException(
+                        "Agentic findings cache already bound to another Program");
+            }
             // Publish a new generation only for the same exact owner.
             // Equals-equivalent Programs retain independent run bindings.
             Bound<K> bound=new Bound<>(owner,revision,
