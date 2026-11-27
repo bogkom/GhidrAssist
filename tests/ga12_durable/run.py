@@ -69,7 +69,7 @@ def main():
             helper.call([str(java/"bin/javac"),"-cp",cp,"-d",
                 str(work/"classes"),str(HERE/"Ga12DurableRealGhidraMain.java")],
                 work,env,out/"compile.log")
-            for phase in ("write","read","edit"):
+            for phase in ("write","read","clear","edit"):
                 helper.call([str(java/"bin/java"),
                     "-Djava.system.class.loader=ghidra.GhidraClassLoader",
                     "-Djava.awt.headless=true",
@@ -90,6 +90,9 @@ def main():
                     raise RuntimeError("Read-only real Ghidra Program modified")
                 if not proof["checkpoint_exists"]:
                     raise RuntimeError("Durable disk snapshot missing")
+                if proof.get("same_jvm_reused_after_clear") != (phase=="clear"):
+                    raise RuntimeError(
+                        "Real-Ghidra explicit clear / recompute / reuse proof missing")
             # GA-12 V2: a SECOND isolated Program with byte-exact real
             # CPU32 RESET/JSR/MOVEC witnesses, fully separate from vectors.
             source_file=work/"synthetic-reset-indirect-vbr.bin"
@@ -218,7 +221,9 @@ def main():
                 raise RuntimeError(
                     "Cross-JVM input/full-fingerprint/profile isolation failed")
             summary.update({"status":"PASSED_SYNTHETIC_REAL_GHIDRA_HEADLESS",
-                "restart_processes":3,
+                "restart_processes":4,
+                "explicit_clear_cold_recomputed":True,
+                "explicit_clear_same_jvm_reused":True,
                 "cold_computed":True,"reopened_reused":True,
                 "edited_recomputed":True,
                 "source_data":"synthetic-only",

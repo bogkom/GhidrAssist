@@ -25,7 +25,7 @@ public final class Ga12DurableRealGhidraMain {
     public static void main(String[] args)throws Exception {
         require(args.length==5,"Arguments: ghidra,project,proof,cache,phase");
         String phase=args[4];
-        require(phase.equals("write")||phase.equals("read")||phase.equals("edit"),
+        require(phase.equals("write")||phase.equals("read")||phase.equals("clear")||phase.equals("edit"),
             "Unknown durable checkpoint phase");
         Path ghidra=Path.of(args[0]).toRealPath();
         Path projectDir=Path.of(args[1]).toRealPath();
@@ -71,12 +71,32 @@ public final class Ga12DurableRealGhidraMain {
             HardwareAnalysisRevision revision=HardwareAnalysisRevision.capture(
                 full,full.getModificationNumber(),full.getLanguageID().toString(),
                 full.getExecutableSHA256(),true);
+            // The prior JVM wrote an identical, valid durable checkpoint.
+            // An explicit clear must suppress its restoration even though
+            // neither the Program revision nor complete input SHA changes.
+            if(phase.equals("clear")) {
+                Path preexisting=HardwareDurableStageStore.checkpointPath(
+                    cache,original.get());
+                require(Files.isRegularFile(preexisting),
+                    "Clear test requires a preexisting valid disk checkpoint");
+                HardwareFlowStageCache.clear(full);
+            }
             var result=HardwareFlowStageCache.loadOrAnalyze(
                 full,revision,TaskMonitor.DUMMY);
             boolean expected=phase.equals("read");
             require(result.reused()==expected,
                 "Restart cache reuse mismatch for phase "+phase+
                 ": reused="+result.reused());
+            boolean secondReused=false;
+            if(phase.equals("clear")) {
+                require(!result.reused(),
+                    "Explicit clear incorrectly reused preexisting durable stage");
+                var second=HardwareFlowStageCache.loadOrAnalyze(
+                    full,revision,TaskMonitor.DUMMY);
+                require(second.reused() && second.report().cfgReviewComplete,
+                    "Completed fresh CFG must be reusable within same Program");
+                secondReused=true;
+            }
             require(result.report().cfgReviewComplete && !result.report().limited,
                 "Incomplete CFG must not be persisted as full evidence");
             require(result.report().markdown.contains("CFG/P-code"),
@@ -89,7 +109,7 @@ public final class Ga12DurableRealGhidraMain {
                 require(full.getModificationNumber()==before,
                     "Read-only CFG checkpoint modified Program");
             String proof="{\"phase\":\""+phase+"\",\"reused\":"+
-                result.reused()+",\"synthetic_only\":true,"+
+                result.reused()+",\"same_jvm_reused_after_clear\":"+secondReused+",\"synthetic_only\":true,"+
                 "\"program_modification_unchanged\":"+
                 (full.getModificationNumber()==before)+
                 ",\"ghidra_real\":true,\"checkpoint_exists\":true}";
