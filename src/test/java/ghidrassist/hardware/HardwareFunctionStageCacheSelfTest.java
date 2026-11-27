@@ -156,6 +156,71 @@ public final class HardwareFunctionStageCacheSelfTest {
         check(isolated.get(isolatedProgram,isolatedEpoch,scope,0x100,100,
             unknownLiteral,targets)==null,
             "UNKNOWN source must never inherit the known 0xFFFF cache");
+        // GA-12: Java UTF-8 default encoding replaces isolated UTF-16
+        // surrogates with '?'. Previously these two different source mnemonics
+        // produced the SAME checkpoint key. Malformed evidence is now a miss.
+        String isolatedHigh=String.valueOf((char)0xd800);
+        String isolatedLow=String.valueOf((char)0xdc00);
+        check(java.util.Arrays.equals(
+                "?".getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                isolatedHigh.getBytes(java.nio.charset.StandardCharsets.UTF_8)),
+            "lossy UTF-8 collision fixture must reproduce old risk");
+        var fallbackText=List.of(graph.get(0),graph.get(1),
+            new HardwareDataflow.Step(0x104,OTHER,null,0,0,null,0,
+                List.of(),"?"));
+        var malformedText=List.of(graph.get(0),graph.get(1),
+            new HardwareDataflow.Step(0x104,OTHER,null,0,0,null,0,
+                List.of(),isolatedHigh));
+        check(HardwareFunctionStageCache.signature(fallbackText,targets)!=null &&
+            HardwareFunctionStageCache.signature(malformedText,targets)==null,
+            "malformed UTF-16 cannot hash identically to legitimate '?' mnemonic");
+        var signatureCache=new HardwareFunctionStageCache<Object>();
+        var signatureOwner=new Object();
+        long signatureEpoch=signatureCache.begin(signatureOwner);
+        var questionResult=HardwareDataflow.analyze(
+            0x100,fallbackText,targets,100);
+        check(signatureCache.put(signatureOwner,signatureEpoch,scope,0x100,
+                100,fallbackText,targets,questionResult),
+            "valid source-string checkpoint remains reusable");
+        check(!signatureCache.put(signatureOwner,signatureEpoch,scope,0x100,
+                100,malformedText,targets,questionResult) &&
+            signatureCache.get(signatureOwner,signatureEpoch,scope,0x100,
+                100,malformedText,targets)==null &&
+            signatureCache.get(signatureOwner,signatureEpoch,scope,0x100,
+                100,fallbackText,targets)==questionResult,
+            "malformed metadata never overwrites or reuses valid result");
+        var malformedRegister=List.of(
+            new HardwareDataflow.Step(0x100,SET_POINTER,"A"+isolatedLow,
+                0xfffa00L,0,null,0,List.of(0x102L),"MOVEA.L"),
+            graph.get(1),graph.get(2));
+        check(HardwareFunctionStageCache.signature(malformedRegister,targets)==null,
+            "malformed register identity cannot enter source fingerprint");
+        var malformedSourceRegister=List.of(
+            new HardwareDataflow.Step(0x100,COPY_POINTER,"A0",
+                "A"+isolatedHigh,0,0,null,0,List.of(0x102L),"MOVEA.L"),
+            graph.get(1),graph.get(2));
+        check(HardwareFunctionStageCache.signature(
+                malformedSourceRegister,targets)==null,
+            "malformed copied-register identity cannot be checkpointed");
+        var overlongMnemonic=List.of(graph.get(0),graph.get(1),
+            new HardwareDataflow.Step(0x104,OTHER,null,0,0,null,0,
+                List.of(),"X".repeat(
+                    HardwareFunctionStageCache.MAX_SIGNATURE_TEXT_CHARS+1)));
+        check(HardwareFunctionStageCache.signature(overlongMnemonic,targets)==null &&
+            !signatureCache.put(signatureOwner,signatureEpoch,scope,0x100,
+                100,overlongMnemonic,targets,questionResult),
+            "oversized untrusted decoded metadata fails closed without huge digest");
+        var longestAllowed=List.of(graph.get(0),graph.get(1),
+            new HardwareDataflow.Step(0x104,OTHER,null,0,0,null,0,
+                List.of(),"X".repeat(
+                    HardwareFunctionStageCache.MAX_SIGNATURE_TEXT_CHARS)));
+        check(HardwareFunctionStageCache.signature(longestAllowed,targets)!=null,
+            "maximum well-formed metadata length remains eligible");
+        var spoofedMnemonic=List.of(graph.get(0),graph.get(1),
+            new HardwareDataflow.Step(0x104,OTHER,null,0,0,null,0,
+                List.of(),"MOVE.W"+(char)0x202e));
+        check(HardwareFunctionStageCache.signature(spoofedMnemonic,targets)==null,
+            "format-control opcode cannot masquerade as a stable input");
         var differentProfile=new HardwareFunctionStageCache.Scope(
             3,"68000:BE:32:CPU32","synthetic-import",false);
         check(cache.get(first,generation,differentProfile,0x100,100,graph,targets)==null,
@@ -223,7 +288,7 @@ public final class HardwareFunctionStageCacheSelfTest {
             "changed import identity removes stale in-memory source evidence");
         for(String forbiddenLabel:List.of(
                 "68000:BE:32:CPU32\nSPOOF","68000:BE:32:CPU32\u202e",
-                "x".repeat(129))) {
+                "x".repeat(129),"cpu"+isolatedHigh,"cpu"+isolatedLow)) {
             boolean rejected=false;
             try {new HardwareFunctionStageCache.Scope(
                 3,forbiddenLabel,"synthetic-import",true);}
@@ -231,7 +296,8 @@ public final class HardwareFunctionStageCacheSelfTest {
             check(rejected,"invalid language metadata cannot spoof checkpoint identity");
         }
         for(String forbiddenImport:List.of(
-                "source\rSPOOF","source\u2066", "x".repeat(257))) {
+                "source\rSPOOF","source\u2066", "x".repeat(257),
+                "import"+isolatedHigh,"import"+isolatedLow)) {
             boolean rejected=false;
             try {new HardwareFunctionStageCache.Scope(
                 3,"68000:BE:32:CPU32",forbiddenImport,true);}

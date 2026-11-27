@@ -31,6 +31,9 @@ public final class HardwareFunctionStageCache<K> {
     public static final int MAX_REGISTER_CELLS=4096;
     /** Fail closed before sorting a hostile/oversized tracked-address list. */
     public static final int MAX_TRACKED_ADDRESSES=4096;
+    // Translated CFG text consists of small register/mnemonic labels. Do not
+    // hash arbitrarily large strings supplied by a damaged import or fixture.
+    public static final int MAX_SIGNATURE_TEXT_CHARS=256;
 
     public record Scope(long modification,String language,String sourceSha,
                         boolean mc68332) {
@@ -45,6 +48,7 @@ public final class HardwareFunctionStageCache<K> {
                     int ch=label.codePointAt(i);
                     if(Character.isISOControl(ch) ||
                             Character.getType(ch)==Character.FORMAT ||
+                            Character.getType(ch)==Character.SURROGATE ||
                             Character.getType(ch)==Character.LINE_SEPARATOR ||
                             Character.getType(ch)==Character.PARAGRAPH_SEPARATOR)
                         throw new IllegalArgumentException(
@@ -111,6 +115,23 @@ public final class HardwareFunctionStageCache<K> {
     }
     private static void text(MessageDigest digest,String value) {
         if(value==null){intValue(digest,-1);return;}
+        // The default UTF-8 encoder replaces an isolated surrogate with
+        // '?': two DIFFERENT decoded instructions can otherwise have the
+        // SAME checkpoint signature. Refuse malformed and oversized metadata
+        // before encoding any source identity; never silently normalize.
+        if(value.length()>MAX_SIGNATURE_TEXT_CHARS)
+            throw new IllegalArgumentException("Oversized CFG identity label");
+        for(int i=0;i<value.length();) {
+            int cp=value.codePointAt(i);
+            int type=Character.getType(cp);
+            if(Character.isISOControl(cp) ||
+                    type==Character.SURROGATE ||
+                    type==Character.FORMAT ||
+                    type==Character.LINE_SEPARATOR ||
+                    type==Character.PARAGRAPH_SEPARATOR)
+                throw new IllegalArgumentException("Malformed CFG identity label");
+            i+=Character.charCount(cp);
+        }
         byte[] bytes=value.getBytes(StandardCharsets.UTF_8);
         intValue(digest,bytes.length);
         digest.update(bytes);
@@ -123,7 +144,9 @@ public final class HardwareFunctionStageCache<K> {
                 targets.size()>MAX_TRACKED_ADDRESSES)return null;
         try {
             MessageDigest digest=MessageDigest.getInstance("SHA-256");
-            text(digest,"GA12-FUNCTION-CFG-FIXPOINT-3");
+            // v4 invalidates old memory/disk identities, including those
+            // computed using lossy UTF-8 surrogate replacement.
+            text(digest,"GA12-FUNCTION-CFG-FIXPOINT-4");
             intValue(digest,steps.size());
             for(HardwareDataflow.Step step:steps) {
                 if(step==null)return null;
@@ -178,6 +201,10 @@ public final class HardwareFunctionStageCache<K> {
                 longValue(digest,address);
             }
             return java.util.HexFormat.of().formatHex(digest.digest());
+        }catch(IllegalArgumentException malformed){
+            // An incomplete or ambiguous decoded CFG must be recomputed
+            // without a checkpoint, not abort the whole hardware scan.
+            return null;
         }catch(NoSuchAlgorithmException unavailable){
             throw new AssertionError(unavailable);
         }
