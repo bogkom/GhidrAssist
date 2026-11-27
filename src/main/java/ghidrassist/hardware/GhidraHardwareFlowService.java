@@ -815,6 +815,8 @@ public final class GhidraHardwareFlowService {
         int localFirstOmittedFunctions=0;
         int cfgPathLimitedFunctions=0;
         int foundFunctions=0,indirect=0,vbr=0,unresolved=0,visited=0,shown=0;
+        int csSnapshotTablesShown=0,csSnapshotTablesOmitted=0;
+        final int maxCsSnapshotTables=8;
         int reusedFunctions=0,computedFunctions=0;
         int restoredDiskFunctions=0,savedDiskFunctions=0,eligibleDiskFunctions=0;
         int restoredMidFunctionWorklists=0,savedMidFunctionWorklists=0;
@@ -1330,6 +1332,8 @@ public final class GhidraHardwareFlowService {
                 .append("; direct call references: ").append(callers)
                 .append("; propagation limit: ").append(result.truncated).append("\n")
                 .append(callerSites);
+            List<ChipSelectTable.Snapshot> csContexts=new ArrayList<>();
+            boolean badCsSource=false;
             for(HardwareDataflow.Snapshot hit:found){
                 if(shown++>=350)break;
                 detail.append("- PC ")
@@ -1368,6 +1372,18 @@ public final class GhidraHardwareFlowService {
                     if(name.startsWith("CSBAR")||name.startsWith("CSOR")||
                             name.startsWith("CSPAR")){
                         detail.append("\n").append(csEpoch(hit,name,base,mm));
+                        if(mc68332Selected && !badCsSource) {
+                            // The full table is derived from ONE frozen
+                            // function-local CFG instruction snapshot. Never
+                            // merge MM0/MM1 or multiple branch/source PCs.
+                            try {
+                                csContexts.add(new ChipSelectTable.Snapshot(
+                                    hit.instruction,base,hit.knownPeripheralWords));
+                            }catch(IllegalArgumentException invalidSource) {
+                                badCsSource=true;
+                                csContexts.clear();
+                            }
+                        }
                     }
                     if(name.equals("TRAMBAR") && hit.writtenWord!=null){
                         long ramBase=((long)(hit.writtenWord&0xfff8)<<8)&0xffffffL;
@@ -1379,8 +1395,46 @@ public final class GhidraHardwareFlowService {
                 }
                 detail.append("\n");
             }
+            if(mc68332Selected && (badCsSource || !csContexts.isEmpty())) {
+                if(badCsSource || csSnapshotTablesShown>=maxCsSnapshotTables) {
+                    csSnapshotTablesOmitted++;
+                    detail.append("- Source-scoped twelve-select CS table ")
+                        .append("WITHHELD: invalid source/duplicate or ")
+                        .append("bounded display cap; no active CS map.\n");
+                }else {
+                    try {
+                        var selected=ChipSelectTable.chooseSource(csContexts);
+                        detail.append("\n#### Function-local MC68332 CSBOOT/CS0–CS10 ")
+                            .append("source snapshot (NOT active hardware)\n\n")
+                            .append("- SOURCE PC ")
+                            .append(ChipSelectModel.hex(selected.pc(),6))
+                            .append("; possible SIM mapping ")
+                            .append(selected.simBase()==0x7ff000L?"MM0":"MM1")
+                            .append("; one retained CFG context of ")
+                            .append(selected.candidateContexts())
+                            .append("; known 16-bit CS words ")
+                            .append(selected.words().size())
+                            .append(". Selection uses source coverage/PC ")
+                            .append("only, NOT execution order, first/last ")
+                            .append("write or physical CS assertion.\n\n")
+                            .append(ChipSelectTable.markdown(
+                                selected.words(),true));
+                        csSnapshotTablesShown++;
+                    }catch(IllegalArgumentException invalidSource) {
+                        csSnapshotTablesOmitted++;
+                        detail.append("- Source-scoped CS table WITHHELD: ")
+                            .append("ambiguous source identity, no active CS map.\n");
+                    }
+                }
+            }
             detail.append("\n");
         }
+        if(csSnapshotTablesOmitted>0)
+            detail.append("- **INCOMPLETE CS TABLE DISPLAY:** ")
+                .append(csSnapshotTablesOmitted)
+                .append(" function-local sources omitted or invalid. ")
+                .append("Missing alternatives remain UNKNOWN; no ")
+                .append("cross-function active map.\n\n");
         // This is a call-tree MAY-effect inventory. No callee state is
         // imported into callers, and none of these paths are known to execute.
         StringBuilder effects=new StringBuilder();

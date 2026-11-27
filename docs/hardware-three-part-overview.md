@@ -37,3 +37,32 @@ and adversarial duplicates, reordered/mid-line headings and suffix changes.
 This is an integrity gate for static source reporting only, not firmware
 execution, active SIMCR MM or physical CS evidence. GA-07 remains PARTIAL
 until all roadmap acceptance tests are met.
+
+
+## 2026-11-27 — GA-04 selected-MCU function-local conditional CS table
+
+The 12-row `ChipSelectTable` decoder already existed and was tested,
+but detailed Analyze previously emitted only per-write window bullets.
+On explicitly selected MC68332 the detailed source report now includes
+up to eight **function-local one-CFG-instruction snapshot tables**.
+Each shows CSBOOT and CS0–CS10 as separate Start/End/Size, CSBAR, CSOR,
+CSPAR, eligibility or UNKNOWN rows. All words come from the **same**
+post-instruction joined `HardwareDataflow.Snapshot` and exactly one
+chosen SIM MM0 or MM1 address bank. No register word is merged from
+another function, source instruction or bus mapping. The bounded source
+context with most full 16-bit CS words is selected, then smallest
+instruction PC and MM0-first as deterministic ties; this ranking is
+**not** execution likelihood, first/last successful write or active
+hardware configuration. Additional contexts are NOT silently conflated.
+
+Full evidence, exported Markdown and RAG reuse the same published
+revision-bound report. Invalid/duplicate/out-of-budget source
+snapshots fail closed to an explicit omission marker; beyond eight
+source tables the report labels the omitted function count.
+Java 21 tests cover exactly 12 rows, UNKNOWN, source isolation
+between MM0 and MM1, tie ordering, immutable snapshots, invalid
+register words, foreign PCs and caps. Real synthetic Ghidra/Java25
+CI is required for integration; formal GA-04 reception still
+depends on remaining roadmap witnesses. No original ECU411
+firmware, production Program, physical CS map, active SIMCR/MM
+or Review/Apply is affected.
