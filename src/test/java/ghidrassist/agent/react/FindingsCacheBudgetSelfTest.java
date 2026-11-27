@@ -292,10 +292,17 @@ public final class FindingsCacheBudgetSelfTest {
         history.addFinding("identified register","verified Listing","listing",9);
         var cleanHistoryPage=history.page(0,10);
         history.addIterationSummary("  short complete summary  ");
-        yes(history.page(0,10,cleanHistoryPage.revision()).complete() &&
+        var shortSummaryPage=history.page(0,10);
+        yes(shortSummaryPage.complete() &&
+            shortSummaryPage.revision()>cleanHistoryPage.revision() &&
             history.getIterationSummaries().equals(
                 List.of("short complete summary")),
-            "normal complete summary neither loses source nor changes findings page");
+            "normal short summary stays complete but advances source revision");
+        rejects(()->history.page(0,10,cleanHistoryPage.revision()),
+            "even a lossless new iteration summary invalidates stale page stitching");
+        history.addIterationSummary("   ");
+        yes(history.page(0,10).revision()==shortSummaryPage.revision(),
+            "blank callback is not a new observation or page generation");
         history.addIterationSummary("X".repeat(
             FindingsCache.MAX_ITERATION_SUMMARY_CHARS+2));
         yes(history.isSourceIncomplete() &&

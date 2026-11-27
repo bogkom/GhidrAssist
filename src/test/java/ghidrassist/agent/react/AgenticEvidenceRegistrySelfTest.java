@@ -430,6 +430,76 @@ public final class AgenticEvidenceRegistrySelfTest {
         denies(()->registry.page(historyOwner,42L,"e".repeat(64),1,1,
             historyRun,completeBeforeHistoryLoss.findings().revision()),
             "pagination from before summary truncation must be rejected");
+        // GA-15: a provider may issue a stale callback even after the
+        // run was marked SUCCESS. Retaining all facts is NOT enough to
+        // certify these newly mutated rows as part of the finished run.
+        var lateOwner=new Object();
+        var lateCache=new FindingsCache();
+        lateCache.addFinding("initial fact","source v1","listing",9);
+        String lateRun=registry.begin(lateOwner,43L,
+            "f".repeat(64),lateCache);
+        registry.finish(lateOwner,lateCache,lateRun,"SUCCESS");
+        var terminalSnapshot=registry.page(lateOwner,43L,
+            "f".repeat(64),0,10,null,null);
+        yes(terminalSnapshot.complete() &&
+            terminalSnapshot.findings().complete(),
+            "exact terminal revision with all cited rows is complete");
+        lateCache.addIterationSummary("late but short summary");
+        var lateSummaryPage=registry.page(lateOwner,43L,
+            "f".repeat(64),0,10,null,null);
+        yes(!lateSummaryPage.complete() &&
+            lateSummaryPage.findings().complete() &&
+            !lateSummaryPage.findings().sourceIncomplete() &&
+            lateSummaryPage.findings().revision()>
+                terminalSnapshot.findings().revision(),
+            "lossless post-SUCCESS summary cannot silently certify a prior run");
+        denies(()->registry.page(lateOwner,43L,"f".repeat(64),1,1,
+            lateRun,terminalSnapshot.findings().revision()),
+            "old terminal page cursor cannot be stitched after late summary");
+        // Re-sending SUCCESS or a legacy callback does not re-freeze an
+        // already completed run at the later (unapproved) source revision.
+        registry.finish(lateOwner,lateCache,lateRun,"SUCCESS");
+        registry.finish(lateOwner,lateCache,"SUCCESS");
+        yes(!registry.page(lateOwner,43L,"f".repeat(64),0,10,null,null)
+                .complete(),
+            "duplicate terminal SUCCESS may not launder subsequent source");
+
+        var lateFindingsOwner=new Object();
+        var lateFindings=new FindingsCache();
+        lateFindings.addFinding("before finish","provenance","listing",8);
+        String lateFindingsRun=registry.begin(lateFindingsOwner,44L,
+            "f".repeat(64),lateFindings);
+        registry.finish(lateFindingsOwner,lateFindings,
+            lateFindingsRun,"SUCCESS");
+        lateFindings.addFinding("after finish","fresh source","listing",9);
+        var lateRowPage=registry.page(lateFindingsOwner,44L,
+            "f".repeat(64),0,10,null,null);
+        yes(!lateRowPage.complete() &&
+            lateRowPage.findings().complete() &&
+            lateRowPage.findings().rows().size()==2,
+            "late uncropped finding is visible but not certified by old SUCCESS");
+        lateFindings.getAllFindings().get(0).setRelevance(0);
+        yes(!registry.page(lateFindingsOwner,44L,
+                "f".repeat(64),0,10,null,null).complete(),
+            "late public score edit cannot restore old terminal completeness");
+        lateFindings.clear();
+        lateFindings.addFinding("repopulated","new source","listing",9);
+        yes(lateFindings.page(0,10).complete() &&
+            !registry.page(lateFindingsOwner,44L,"f".repeat(64),0,10,
+                null,null).complete(),
+            "clear/repopulate cannot reuse a successful run's old source receipt");
+        denies(()->registry.begin(lateFindingsOwner,44L,
+            "f".repeat(64),lateFindings),
+            "a completed run's mutable cache cannot be rebound after reset");
+        var legitimateNewRun=new FindingsCache();
+        legitimateNewRun.addFinding("fresh run","own evidence","listing",9);
+        String newRunToken=registry.begin(lateFindingsOwner,44L,
+            "f".repeat(64),legitimateNewRun);
+        registry.finish(lateFindingsOwner,legitimateNewRun,
+            newRunToken,"SUCCESS");
+        yes(registry.page(lateFindingsOwner,44L,"f".repeat(64),
+            0,10,null,null).complete(),
+            "a genuinely distinct run with its own cache can finish normally");
         System.out.println("AGENTIC REGISTRY PASS assertions="+assertions);
     }
 }

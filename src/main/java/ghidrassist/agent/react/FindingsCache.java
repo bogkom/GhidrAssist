@@ -100,8 +100,14 @@ public class FindingsCache {
     // Count accepted omissions, not just retained rows: pruning cannot
     // erase earlier evidence gaps.
     private long unattributedFindings;
+    // Monotone revision of ALL evidence associated with a run, including
+    // iteration summaries. Consumers must not stitch snapshots taken on
+    // opposite sides of a source mutation, even when ranked rows match.
     private long findingsRevision;
     public static final int MAX_PAGE_SIZE=100;
+
+    /** Current source generation without sorting or copying retained rows. */
+    synchronized long currentRevision() { return findingsRevision; }
 
     /** Immutable evidence copies, not mutable references to cache Findings. */
     public record FindingView(String fact,String evidence,String toolUsed,
@@ -550,6 +556,10 @@ public class FindingsCache {
         }
         iterationSummaries.add(bounded(boundedInput,
             MAX_ITERATION_SUMMARY_CHARS));
+        // Even a well-formed short summary changes the source transcript:
+        // a completed run must never silently accept later provider text,
+        // and an earlier findings cursor cannot certify the newer run.
+        findingsRevision++;
         totalIterationSummaries++;
         if(iterationSummaries.size()>MAX_ITERATION_SUMMARIES) {
             iterationSummaries.remove(0);

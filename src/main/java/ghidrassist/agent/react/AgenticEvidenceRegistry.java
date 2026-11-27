@@ -33,6 +33,10 @@ public final class AgenticEvidenceRegistry<K> {
         final FindingsCache findings;
         final Runnable onInvalidated;
         String state="RUNNING";
+        // Exact provenance revision at the first terminal SUCCESS. The
+        // mutable source cache must never be able to make this run complete
+        // again after late callbacks, scoring edits or a clear/repopulate.
+        long successfulSourceRevision=-1;
         Bound(K owner,long revision,String importSha,FindingsCache findings,
                 Runnable onInvalidated) {
             this.owner=new WeakReference<>(owner);
@@ -151,14 +155,21 @@ public final class AgenticEvidenceRegistry<K> {
         if(owner==null || findings==null || expectedRun==null)return;
         Bound<K> bound=ownerBinding(owner);
         if(bound!=null && bound.owner.get()==owner && bound.findings==findings &&
-                bound.run.equals(expectedRun) && "RUNNING".equals(bound.state))
-            bound.state=switch(outcome==null?"":outcome) {
+                bound.run.equals(expectedRun) && "RUNNING".equals(bound.state)) {
+            String terminal=switch(outcome==null?"":outcome) {
                 case "SUCCESS" -> "SUCCESS";
                 case "CANCELLED" -> "CANCELLED";
                 case "MAX_ITERATIONS" -> "MAX_ITERATIONS";
                 case "MAX_TOOLS" -> "MAX_TOOLS";
                 default -> "ERROR";
             };
+            // Page() acquires the same locks in registry -> findings order.
+            // A source callback racing this receipt is either included
+            // before SUCCESS or makes the subsequent revision mismatch.
+            if("SUCCESS".equals(terminal))
+                bound.successfulSourceRevision=findings.currentRevision();
+            bound.state=terminal;
+        }
     }
 
     /**
@@ -193,9 +204,10 @@ public final class AgenticEvidenceRegistry<K> {
             bound.findings.page(offset,limit) :
             bound.findings.page(offset,limit,expectedFindingsRevision);
         return new EvidencePage(bound.run,bound.revision,bound.importSha,
-            bound.state,"SUCCESS".equals(bound.state) && page.complete() &&
-                page.retainedCount()>0 && bound.importSha.matches(
-                    "(?i)[a-f0-9]{64}"),page);
+            bound.state,"SUCCESS".equals(bound.state) &&
+                bound.successfulSourceRevision==page.revision() &&
+                page.complete() && page.retainedCount()>0 &&
+                bound.importSha.matches("(?i)[a-f0-9]{64}"),page);
     }
 
     public void invalidate(K owner) {
