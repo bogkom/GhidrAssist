@@ -656,6 +656,45 @@ public final class HardwareTwoHopRegisterFlowSelfTest {
             safeAfterNop.rejectedBridge()==0,
             "A genuine side-effect-free NOP preserves the known two-hop SIMCR source");
 
+        // A CPU32 branch/exception opcode cannot be laundered through a
+        // synthetic CLOBBER_POINTER with one invented linear successor.
+        // Without the guard, the copied A1 survives and an impossible
+        // source CALL path would manufacture a SIMCR candidate.
+        for(String hiddenControl:new String[]{
+                "JMP","DBNE","DBRA","DBEQ.W","ILLEGAL","BKPT","TRAPV"}) {
+            var forgedFlow=new HardwareTwoHopRegisterFlow.Bridge(0x640,
+                List.of(step(0x640,COPY_POINTER,"A1","A0",0,
+                        "MOVEA.L",0x642L),
+                    step(0x642,CLOBBER_POINTER,"D7",null,0,
+                        hiddenControl,0x644L),
+                    jsr(0x644,0x64aL),ret(0x64aL)),
+                0x644,0x700L,true);
+            var denied=scan(List.of(left),List.of(forgedFlow),
+                List.of(leaf),48);
+            ok(denied.rejectedBridge()==1 &&
+                denied.possibleStores()==0 &&
+                denied.rows().isEmpty(),
+                "Hidden CPU32 control flow must refuse exact two-hop source: "+
+                    hiddenControl);
+        }
+        // Genuine linear register clobber is still allowed: CLR.L D7 has
+        // one successor and does not overwrite the source A1/D0 pair.
+        var validClobber=new HardwareTwoHopRegisterFlow.Bridge(0x640,
+            List.of(step(0x640,COPY_POINTER,"A1","A0",0,
+                    "MOVEA.L",0x642L),
+                step(0x642,CLOBBER_POINTER,"D7",null,0,
+                    "CLR.L",0x644L),
+                jsr(0x644,0x64aL),ret(0x64aL)),
+            0x644,0x700L,true);
+        var validClobberSource=scan(List.of(left),List.of(validClobber),
+            List.of(leaf),48);
+        ok(validClobberSource.rejectedBridge()==0 &&
+            validClobberSource.possibleStores()==1 &&
+            validClobberSource.rows().size()==1 &&
+            validClobberSource.rows().get(0).effectiveAddress()==simcr &&
+            validClobberSource.rows().get(0).writtenWord()==0x40ca,
+            "Ordinary CLR.L D7 preserves independent SIMCR source context");
+
         // GA-02/03: CPU32 register/opcode/width consistency is a source
         // acceptance boundary even for synthetic caller-supplied bridge
         // steps. MOVEQ cannot write An, LEA/MOVEA cannot write Dn, and
