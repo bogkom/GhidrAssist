@@ -40,6 +40,44 @@ public final class HardwareDurableStageStoreSelfTest {
                     new java.io.ByteArrayInputStream(Files.readAllBytes(
                         checkpointPath(dir,identity))),identity).orElseThrow(),data),
                 "bounded stream decode preserves exact existing checkpoint content");
+            // GA-12: a second full-source fingerprint must be compared to
+            // the source captured BEFORE the analysis, never replace it.
+            // Every variant retains the same disk slot when project ID
+            // matches, but must not overwrite the legitimate prior proof.
+            var recreatedKey=new Key(project,original,input,code,
+                "68000:BE:32:CPU32",true);
+            ok(saveIfSameSource(dir,identity,recreatedKey,data) &&
+                Arrays.equals(load(dir,identity).orElseThrow(),data),
+                "same complete pre/post-analysis source permits publication");
+            byte[] trustedBytes=Files.readAllBytes(checkpointPath(dir,identity));
+            byte[] otherStage="forged report from another source".getBytes(
+                StandardCharsets.UTF_8);
+            var staleInputs=java.util.Arrays.asList(
+                new Key(project,original,hash("edited Listing"),code,
+                    "68000:BE:32:CPU32",true),
+                new Key(project,hash("changed import"),input,code,
+                    "68000:BE:32:CPU32",true),
+                new Key(project,original,input,hash("changed engine"),
+                    "68000:BE:32:CPU32",true),
+                new Key(project,original,input,code,"OTHER",true),
+                new Key(project,original,input,code,
+                    "68000:BE:32:CPU32",false),
+                new Key(hash("other project"),original,input,code,
+                    "68000:BE:32:CPU32",true));
+            for(var changed:staleInputs){
+                ok(!saveIfSameSource(dir,identity,changed,otherStage) &&
+                    !saveIfSameSource(dir,changed,identity,otherStage) &&
+                    Arrays.equals(Files.readAllBytes(
+                        checkpointPath(dir,identity)),trustedBytes),
+                    "pre/post source drift must never overwrite a proven checkpoint");
+            }
+            ok(!saveIfSameSource(dir,null,identity,otherStage) &&
+                !saveIfSameSource(dir,identity,null,otherStage) &&
+                Arrays.equals(Files.readAllBytes(
+                    checkpointPath(dir,identity)),trustedBytes),
+                "missing first capture or failed second capture never publishes");
+            ok(Arrays.equals(load(dir,identity).orElseThrow(),data),
+                "rejected replay publication preserves genuine existing evidence");
             // Tiny read chunks still form a valid record; no readAllBytes needed.
             byte[] exact=Files.readAllBytes(checkpointPath(dir,identity));
             var chunked=new java.io.ByteArrayInputStream(exact){
