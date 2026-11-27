@@ -6,6 +6,7 @@ import java.lang.ref.WeakReference;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.WeakHashMap;
 
 /**
  * GA-12/15: read-only bridge between a real ReAct findings cache and the
@@ -70,6 +71,12 @@ public final class AgenticEvidenceRegistry<K> {
 
     private final ReferenceQueue<K> collectedOwners=new ReferenceQueue<>();
     private final Map<OwnerKey<K>,Bound<K>> programs=new HashMap<>();
+    // A FindingsCache is one run's mutable provenance. Reusing it even
+    // after invalidate() lets an old callback confuse two generations
+    // if the caller still uses the legacy completion overload. Keep a
+    // weak single-use allocation ledger: neither the owner nor cache is
+    // retained solely for this safety gate.
+    private final Map<FindingsCache,Boolean> allocatedCaches=new WeakHashMap<>();
 
     /** Called only while the registry monitor is held. */
     private void discardCollectedOwners() {
@@ -112,10 +119,17 @@ public final class AgenticEvidenceRegistry<K> {
                     throw new IllegalArgumentException(
                         "Agentic findings cache already bound to another Program");
             }
+            // Reject cache reuse BEFORE replacing/cancelling the old run.
+            // Even after invalidation, old asynchronous listeners may still
+            // hold this mutable cache and attempt a late completion.
+            if(allocatedCaches.containsKey(findings))
+                throw new IllegalArgumentException(
+                    "Agentic findings cache already used by an earlier run");
             // Publish a new generation only for the same exact owner.
             // Equals-equivalent Programs retain independent run bindings.
             Bound<K> bound=new Bound<>(owner,revision,
                 importSha==null?"UNKNOWN":importSha,findings,onInvalidated);
+            allocatedCaches.put(findings,Boolean.TRUE);
             programs.put(new OwnerKey<>(owner,collectedOwners),bound);
             run=bound.run;
             if(existing!=null && "RUNNING".equals(existing.state))
@@ -127,12 +141,17 @@ public final class AgenticEvidenceRegistry<K> {
         return run;
     }
 
-    /** Finish only the exact previously registered cache, never a later run. */
-    public synchronized void finish(K owner,FindingsCache findings,String outcome) {
-        if(owner==null || findings==null)return;
+    /**
+     * Complete only a precise run generation. A late provider callback
+     * must not finish another run, even for the same Program and cache
+     * object. Null/unknown tokens are harmless no-ops for async callers.
+     */
+    public synchronized void finish(K owner,FindingsCache findings,
+            String expectedRun,String outcome) {
+        if(owner==null || findings==null || expectedRun==null)return;
         Bound<K> bound=ownerBinding(owner);
         if(bound!=null && bound.owner.get()==owner && bound.findings==findings &&
-                "RUNNING".equals(bound.state))
+                bound.run.equals(expectedRun) && "RUNNING".equals(bound.state))
             bound.state=switch(outcome==null?"":outcome) {
                 case "SUCCESS" -> "SUCCESS";
                 case "CANCELLED" -> "CANCELLED";
@@ -140,6 +159,19 @@ public final class AgenticEvidenceRegistry<K> {
                 case "MAX_TOOLS" -> "MAX_TOOLS";
                 default -> "ERROR";
             };
+    }
+
+    /**
+     * Legacy in-process completion contract. Safe only because begin()
+     * refuses rebinding any previously registered FindingsCache object.
+     * New async producers MUST use the exact generation-token overload.
+     */
+    @Deprecated
+    public synchronized void finish(K owner,FindingsCache findings,String outcome) {
+        if(owner==null || findings==null)return;
+        Bound<K> bound=ownerBinding(owner);
+        if(bound!=null && bound.findings==findings)
+            finish(owner,findings,bound.run,outcome);
     }
 
     public synchronized EvidencePage page(K owner,long revision,String importSha,
