@@ -298,7 +298,10 @@ public final class FindingsCacheBudgetSelfTest {
             history.getIterationSummaries().equals(
                 List.of("short complete summary")),
             "normal short summary stays complete but advances source revision");
-        rejects(()->history.page(0,10,cleanHistoryPage.revision()),
+        boolean staleShortSummary=false;
+        try{history.page(0,10,cleanHistoryPage.revision());}
+        catch(IllegalStateException expected){staleShortSummary=true;}
+        yes(staleShortSummary,
             "even a lossless new iteration summary invalidates stale page stitching");
         history.addIterationSummary("   ");
         yes(history.page(0,10).revision()==shortSummaryPage.revision(),
