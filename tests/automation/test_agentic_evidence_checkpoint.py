@@ -459,9 +459,12 @@ class LocalAgenticCheckpoint(unittest.TestCase):
                             elif mismatch=="revision":
                                 f["revision"]=8
                             elif mismatch=="rows":
+                                # A forged but well-formed fact with unchanged
+                                # revision is not cryptographically detectable.
+                                # Reject objectively malformed row metadata.
                                 f["rows"]=[{"fact":"inserted","evidence":"fake",
                                     "toolUsed":"listing","relevance":3,
-                                    "timestamp":1}]
+                                    "timestamp":-1}]
                             elif mismatch=="state":
                                 a["state"]="CANCELLED"
                         return response
@@ -675,11 +678,36 @@ class LocalAgenticCheckpoint(unittest.TestCase):
         self.assertIn("public void handleAgentPlanApproved()",controller)
         self.assertNotIn("executeApprovedAgenticQuery(",bridge)
 
+    def test_no_symlink_parent_for_source_checkpoint_or_review_draft(self):
+        with tempfile.TemporaryDirectory() as work:
+            root=Path(work)
+            real=root/"real"
+            real.mkdir()
+            linked=root/"redirect"
+            linked.symlink_to(real, target_is_directory=True)
+            with patch.object(cli,"rpc",lambda _s,_m,args:page(
+                    args["offset"],args["limit"])):
+                with self.assertRaises(ValueError):
+                    cli.capture_agentic_checkpoint(
+                        {},linked/"unsafe-checkpoint.json",2)
+                self.assertFalse((real/"unsafe-checkpoint.json").exists())
+                source=real/"good.json"
+                cli.capture_agentic_checkpoint({},source,2)
+            with patch.object(cli,"rpc",lambda _s,_m,args:page(
+                    args["offset"],args["limit"])):
+                with self.assertRaises(ValueError):
+                    cli.create_agentic_review_draft({},source,
+                        linked/"unsafe-draft.json",
+                        "Independently inspect MMIO references")
+            self.assertFalse((real/"unsafe-draft.json").exists())
+
     def test_no_write_on_invalid_or_unbounded_pages(self):
         with tempfile.TemporaryDirectory() as work:
             target=Path(work)/"bad.json"
             with self.assertRaises(ValueError):
                 cli.capture_agentic_checkpoint({},target,101)
+            with self.assertRaises(ValueError):
+                cli.capture_agentic_checkpoint({},target,True)
             self.assertFalse(target.exists())
             def rpc(_session,_method,args):
                 p=page(args["offset"],args["limit"])
