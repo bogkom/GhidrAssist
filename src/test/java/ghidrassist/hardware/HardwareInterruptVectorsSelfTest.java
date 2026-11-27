@@ -256,6 +256,67 @@ public final class HardwareInterruptVectorsSelfTest {
             formattedRows.displayed().get(1).function().equals(malformed),
             "presentation escaping preserves exact raw candidate names and classifications");
 
+        // Untrusted symbol names are display-bounded by code point, not by
+        // UTF-16 units. They must not exhaust report/UI budgets or hide that
+        // source evidence was shortened for presentation.
+        String longHtml="&".repeat(100_000)+"<script>|[link]";
+        String rocketPair=new String(Character.toChars(0x1f680));
+        String boundary= "Q".repeat(255)+rocketPair+"|invisible-tail";
+        var longNames=HardwareInterruptVectors.inspect(0,List.of(
+            new HardwareInterruptVectors.Observation(50,0x7000L,true,longHtml,true),
+            new HardwareInterruptVectors.Observation(51,0x7002L,true,boundary,false),
+            new HardwareInterruptVectors.Observation(52,0x7004L,true,"short_name",true)),8);
+        String bounded=longNames.markdown();
+        ok(bounded.length()<4_000 && bounded.contains("&amp;") &&
+            !bounded.contains("<script>") && !bounded.contains("invisible-tail") &&
+            !bounded.contains("100000") &&
+            bounded.contains("2 displayed function name(s) abbreviated after 256 Unicode code points"),
+            "extreme names are bounded and abbreviation is disclosed without rendering tail");
+        ok(bounded.contains(rocketPair+"… (display abbreviated)") &&
+            !bounded.contains(String.valueOf((char)0xfffd)) &&
+            longNames.displayed().get(0).function().equals(longHtml) &&
+            longNames.displayed().get(1).function().equals(boundary) &&
+            longNames.recognizedFunctions()==2 &&
+            longNames.interiorFunctionPointers()==1 && !longNames.truncated(),
+            "valid surrogate pair at limit remains intact; raw evidence and totals unchanged");
+        int boundedRows=0;
+        for(String line:bounded.lines().toList()) {
+            if(line.startsWith("| 50 |") || line.startsWith("| 51 |") ||
+                    line.startsWith("| 52 |")) {
+                ok(markdownColumns(line)==6,"bounded names must preserve exact six-column layout");
+                boundedRows++;
+            }
+        }
+        ok(boundedRows==3,"abbreviated strings cannot create or conceal table rows");
+        // Worst-case 64 displayed rows remain bounded even if every name
+        // points to the same very large user-controlled symbol string.
+        var manyLongNames=new ArrayList<HardwareInterruptVectors.Observation>();
+        for(int number=2;number<66;number++)
+            manyLongNames.add(new HardwareInterruptVectors.Observation(
+                number,0x8000L+4L*number,true,longHtml,true));
+        var worstCase=HardwareInterruptVectors.inspect(0,manyLongNames,64);
+        String worstReport=worstCase.markdown();
+        ok(worstReport.length()<110_000 &&
+            worstReport.contains("64 displayed function name(s) abbreviated after 256 Unicode code points") &&
+            worstCase.displayed().size()==64 && !worstCase.truncated() &&
+            worstCase.recognizedFunctions()==64,
+            "maximum reported vector inventory remains bounded without losing source counts");
+
+        var exactLimit=HardwareInterruptVectors.inspect(0,List.of(
+            new HardwareInterruptVectors.Observation(54,0x7100L,true,
+                "X".repeat(256),true)),8);
+        ok(!exactLimit.markdown().contains("display abbreviated") &&
+            exactLimit.markdown().contains("X".repeat(256)),
+            "name of exactly 256 code points must never be shortened");
+        // Row pagination and name abbreviation are independent: a long name
+        // outside the displayed prefix must not claim an abbreviated row.
+        var hidden=HardwareInterruptVectors.inspect(0,List.of(
+            new HardwareInterruptVectors.Observation(55,0x7200L,true,"visible",true),
+            new HardwareInterruptVectors.Observation(56,0x7300L,true,longHtml,true)),1);
+        ok(hidden.truncated() && hidden.markdown().contains("Output truncated") &&
+            !hidden.markdown().contains("display abbreviated"),
+            "only actually displayed rows contribute to name-abbreviation count");
+
         var moved=HardwareInterruptVectors.inspect(0x800L,input,16);
         ok(moved.sampledSlots()==s.sampledSlots() &&
             moved.plausibleMapped()==s.plausibleMapped() &&
