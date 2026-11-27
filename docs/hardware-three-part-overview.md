@@ -66,3 +66,34 @@ CI is required for integration; formal GA-04 reception still
 depends on remaining roadmap witnesses. No original ECU411
 firmware, production Program, physical CS map, active SIMCR/MM
 or Review/Apply is affected.
+
+
+## 2026-11-27 — GA-04/07 source-scoped CS table to focused RAG
+
+A query for CSBAR, CSOR, CSPAR, CSBOOT/CS0–CS10 or chip selects now
+reserves context space **before** the existing Listing/XREF/P-code
+register-site fast path returns. The pure Java 21 source selector
+accepts only complete, canonical twelve-row MC68332 sections with
+bounded one-instruction PC, MM0/MM1 and full table layout; invalid
+or duplicate sections are counted but cannot be published as complete
+data. Selection prefers the snapshot whose requested CS register has
+an actual known word, with deterministic PC/MM ties. Other functions,
+paths, MM banks and tables are never combined into one fictitious
+configuration. The source header, original rows, coverage
+(e.g., 12 of 12 or a bounded subset), number of omitted other
+contexts, UNKNOWN fields and a static-only hardware disclaimer are
+all explicit. Small RAG budgets never silently claim all rows.
+
+The real disposable 12.1.4 PUBLIC CodeBrowser Xvfb regression
+must additionally call the **actual revision-bound**
+HardwareEvidenceCache.enrich for CSBAR0 on the Ghidra Program. The
+result must contain PC 0x000050, MM1, all twelve sourced rows,
+the conditional 64-KiB CS0 range and still-UNKNOWN CSOR0/CSPAR0.
+The Python GUI runner requires
+ga04_focused_cs_rag_table_verified. Existing PDF source
+claim tests and SIMCR/SYNCR focused RAG regressions remain active.
+
+Neither the source excerpt nor these synthetic CI tests prove
+program execution, active SIMCR MM, external CS pin assertion,
+real physical bus layout or independent manual GUI acceptance.
+GA-04/07 remain PARTIAL until all remaining criteria are met.

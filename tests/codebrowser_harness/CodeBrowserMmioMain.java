@@ -1104,6 +1104,32 @@ public final class CodeBrowserMmioMain {
                         !clockRag.contains("| SIMCR | MM |"),
                     "Real Ghidra RAG must keep only SYNCR D-6/D-7 field sources");
                 result.addProperty("sourced_bitfield_pdf_rag_consistent",true);
+                // GA-04/07: the exact same real CodeBrowser screenshot/tab
+                // and revision-bound cache must supply one complete, static
+                // CSBAR0-only table to the focused AI/RAG query, not merely
+                // a Listing register hit or combined MM0/MM1 map.
+                String csRag=ghidrassist.hardware.HardwareEvidenceCache.enrich(
+                    first,"#hardware CSBAR0","#hardware CSBAR0");
+                require(csRag.contains("CS TABLE SOURCE SNAPSHOT") &&
+                        csRag.contains("SOURCE PC 0x000050") &&
+                        csRag.contains("possible SIM mapping MM1") &&
+                        csRag.contains("CS TABLE ROW COVERAGE: 12 of 12") &&
+                        csRag.contains(
+                            "| CS0 | 0xF80000 | 0xF8FFFF | 64 KiB | 0xF803 | "+
+                            "UNKNOWN | UNKNOWN | PARTIAL: CSOR/CSPAR unknown |") &&
+                        csRag.contains("| CS10 | UNKNOWN | UNKNOWN | UNKNOWN |") &&
+                        csRag.contains("matched unique instruction/register sites=1") &&
+                        !csRag.contains("CONDITIONAL: possible assertion") &&
+                        csRag.contains("STATIC SOURCE ONLY:"),
+                    "Real synthetic CodeBrowser full CSBAR0 table was not "+
+                    "sourced, complete or conservatively delivered to focused RAG");
+                for(int cs=-1;cs<=10;cs++) {
+                    String label=cs<0?"CSBOOT":"CS"+cs;
+                    require(csRag.lines().filter(line->
+                            line.startsWith("| "+label+" |")).count()==1,
+                        "Focused CodeBrowser RAG lost/duplicated CS row "+label);
+                }
+                result.addProperty("ga04_focused_cs_rag_table_verified",true);
                 var page=tab.automationMmioRows("simcr",0,5);
                 require(page.get("total").getAsInt()==1 &&
                         page.getAsJsonArray("rows").size()==1 &&
