@@ -72,3 +72,18 @@ high CPU32 paths, invented sampled counts, forged source-register
 contexts, duplicate CALL provenance, and preserved clean agreement.
 Require complete Java 25 Ghidra 12.1.4 PUBLIC build and isolated
 synthetic Ghidra tests on the exact SHA. GA-02/03/12 remain PARTIAL.
+
+
+### GUI/Ghidra scan boundary for unsafe per-function sources
+
+`HardwareCfgStorePaths.analyzeOrUnknown` is the explicit **read-only
+report adapter**. It converts rejected or oversized CFG inputs to an
+empty, truncated, unknown-flow report for that function, while
+`analyze` retains strict fail-closed input exceptions. The production
+`GhidraHardwareFlowService` consumes the adapter and also contains
+invalid Node construction: malformed source successor references or
+oversized function inputs increment the existing omitted/limited
+function count rather than interrupting other functions' evidence.
+No partial STORE path relation is carried across that boundary.
+Deterministic Java 21 tests cover accepted real input, missing entry,
+excess edges and excess STORE records.
