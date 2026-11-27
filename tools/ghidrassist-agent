@@ -980,43 +980,103 @@ def verify_report_set_checkpoint(source):
             "payload_sha256":digest}
 
 
+def _agentic_capture_page(session, offset, limit, expected=None):
+    """Validate one exact, read-only Agentic evidence page before stitching.
+
+    A matching run/revision tuple alone is insufficient: the server could
+    otherwise replay page zero at offset N, lie about hasMore, or switch the
+    source after the last data page. Keep all cursor/schema checks here so
+    first, continuation and terminal fence pages use the SAME contract.
+    """
+    params = {"offset": offset, "limit": limit}
+    if expected is not None:
+        params.update({
+            "expected_run": expected[0],
+            "expected_program_revision": expected[1],
+            "expected_findings_revision": expected[4],
+        })
+    response = rpc(session, "agentic.findings.page", params)
+    if not isinstance(response, dict) or response.get("read_only") is not True:
+        raise ValueError("Agentic evidence page lacks read-only RPC receipt")
+    current = response.get("agentic")
+    if not isinstance(current, dict):
+        raise ValueError("Missing Agentic source identity")
+    findings = current.get("findings")
+    if not isinstance(findings, dict):
+        raise ValueError("Missing Agentic source page")
+    try:
+        identity = (
+            current["run"], current["programRevision"], current["importSha256"],
+            current["state"], findings["revision"], findings["retainedCount"],
+            findings["acceptedCount"], findings["evictedCount"],
+            findings["sourceIncomplete"],
+        )
+        rows = findings["rows"]
+    except KeyError as exc:
+        raise ValueError("Incomplete Agentic page evidence") from exc
+    if (not isinstance(identity[0], str) or not 1 <= len(identity[0]) <= 128
+            or type(identity[1]) is not int or identity[1] < 0
+            or not isinstance(identity[2], str) or len(identity[2]) > 128
+            or identity[3] not in ("RUNNING", "SUCCESS", "CANCELLED",
+                                  "MAX_ITERATIONS", "MAX_TOOLS", "ERROR")
+            or type(identity[4]) is not int or identity[4] < 0
+            or type(identity[5]) is not int or not 0 <= identity[5] <= 1000
+            or type(identity[6]) is not int or identity[6] < identity[5]
+            or type(identity[7]) is not int
+            or identity[7] != identity[6]-identity[5]
+            or type(identity[8]) is not bool
+            or type(findings.get("offset")) is not int
+            or findings["offset"] != offset
+            or type(findings.get("limit")) is not int
+            or findings["limit"] != limit
+            or type(findings.get("hasMore")) is not bool
+            or type(findings.get("complete")) is not bool
+            or type(current.get("complete")) is not bool
+            or not isinstance(rows, list)
+            or len(rows) > limit
+            or offset + len(rows) > identity[5]
+            or findings["hasMore"] != (offset + len(rows) < identity[5])
+            or findings["hasMore"] and not rows):
+        raise ValueError("Inconsistent bounded Agentic source page or cursor")
+    if expected is not None and identity != expected:
+        raise ValueError("Agentic findings changed during evidence checkpoint")
+    for row in rows:
+        if (not isinstance(row, dict)
+                or type(row.get("relevance")) is not int
+                or type(row.get("timestamp")) is not int
+                or row["timestamp"] < 0
+                or any(row.get(key) is not None and
+                    (not isinstance(row.get(key), str) or
+                     len(row[key]) > length)
+                    for key, length in (
+                        ("fact", 2048), ("evidence", 2048), ("toolUsed", 128)))):
+            raise ValueError("Malformed Agentic evidence row")
+    return current, identity, rows
+
+
 def capture_agentic_checkpoint(session, output, page_size=100, parent=None):
     """Explicit local read-only evidence export; never a resumable AI session."""
-    if not 1 <= page_size <= 100:
+    if type(page_size) is not int or not 1 <= page_size <= 100:
         raise ValueError("Agentic checkpoint page size must be 1..100")
-    first = rpc(session, "agentic.findings.page", {"offset": 0, "limit": page_size})["agentic"]
-    expected = (first["run"], first["programRevision"], first["importSha256"],
-                first["state"], first["findings"]["revision"],
-                first["findings"]["retainedCount"],first["findings"]["acceptedCount"],
-                first["findings"]["evictedCount"],first["findings"]["sourceIncomplete"])
-    if expected[5] > 1000 or expected[5] < 0:
-        raise ValueError("Unbounded Agentic evidence count")
-    rows = list(first["findings"]["rows"])
-    if len(rows) > page_size or len(rows) > expected[5]:
-        raise ValueError("Inconsistent first Agentic page")
+    first, expected, first_rows = _agentic_capture_page(session, 0, page_size)
+    rows = list(first_rows)
     current = first
     while current["findings"]["hasMore"]:
         offset = len(rows)
         if offset >= expected[5] or len(rows) >= 1000:
             raise ValueError("Agentic pagination made no bounded progress")
-        current = rpc(session, "agentic.findings.page", {
-            "offset": offset, "limit": page_size,
-            "expected_run": expected[0],
-            "expected_program_revision": expected[1],
-            "expected_findings_revision": expected[4],
-        })["agentic"]
-        now = (current["run"],current["programRevision"],current["importSha256"],
-               current["state"],current["findings"]["revision"],
-               current["findings"]["retainedCount"],current["findings"]["acceptedCount"],
-               current["findings"]["evictedCount"],current["findings"]["sourceIncomplete"])
-        if now != expected:
-            raise ValueError("Agentic findings changed during evidence checkpoint")
-        chunk = current["findings"]["rows"]
-        if not chunk or len(chunk)>page_size or len(rows)+len(chunk)>expected[5]:
-            raise ValueError("Agentic pagination inconsistent or stalled")
+        current, _, chunk = _agentic_capture_page(
+            session, offset, page_size, expected)
         rows.extend(chunk)
-    if len(rows)!=expected[5]:
+    if len(rows) != expected[5]:
         raise ValueError("Agentic checkpoint omitted retained rows")
+    # Capture a separate empty terminal page *after* the final data page.
+    # Its expected run, Program revision and findings revision are a live
+    # generation fence against cancellation, switching or late new evidence.
+    terminal, _, terminal_rows = _agentic_capture_page(
+        session, len(rows), page_size, expected)
+    if terminal_rows or terminal["findings"]["hasMore"]:
+        raise ValueError("Agentic checkpoint terminal generation changed")
     # A nonzero-offset page is never individually complete. Complete here
     # means the entire unchanged run was stitched without omissions AND
     # every retained finding has its own attributable observation/tool.
@@ -1060,8 +1120,8 @@ def capture_agentic_checkpoint(session, output, page_size=100, parent=None):
     if len(data)>8*1024*1024:
         raise ValueError("Agentic checkpoint exceeds local 8 MiB cap")
     dest=Path(output).expanduser()
-    if not dest.parent.is_dir():
-        raise ValueError("Agentic checkpoint destination directory must exist")
+    if not dest.parent.is_dir() or dest.parent.is_symlink():
+        raise ValueError("Agentic checkpoint requires a real existing directory")
     temp=None
     try:
         fd,temp=tempfile.mkstemp(prefix=".ghidrassist-agentic-",dir=dest.parent)
@@ -1276,8 +1336,8 @@ def create_agentic_review_draft(session, source, destination, query, ancestors=N
     if len(data) > 128*1024:
         raise ValueError("Oversized reviewed analysis draft")
     dest = Path(destination).expanduser()
-    if not dest.parent.is_dir():
-        raise ValueError("Review draft output directory must exist")
+    if not dest.parent.is_dir() or dest.parent.is_symlink():
+        raise ValueError("Review draft requires a real existing directory")
     temporary = None
     try:
         fd, temporary = tempfile.mkstemp(prefix=".ghidrassist-review-",dir=dest.parent)
