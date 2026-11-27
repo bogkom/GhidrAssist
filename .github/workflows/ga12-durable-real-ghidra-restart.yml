@@ -95,7 +95,7 @@ jobs:
           unzip -tq "$zip_file"
           echo "EXTENSION=$PWD/$zip_file" >> "$GITHUB_ENV"
           sha256sum "$zip_file"
-      - name: Run three independent real-Ghidra JVMs on isolated synthetic project
+      - name: Run four independent real-Ghidra JVMs including explicit clear
         shell: bash
         run: |
           set -euo pipefail
@@ -105,13 +105,13 @@ jobs:
             --java-home "$JAVA_HOME" \
             --extension-zip "$EXTENSION" --extension-sha256 "$HASH" \
             --output "$RUNNER_TEMP/ga12-restart"
-          python3 -c 'import json,sys; p=json.load(open(sys.argv[1])); assert p["status"]=="PASSED_SYNTHETIC_REAL_GHIDRA_HEADLESS" and p["cold_computed"] and p["reopened_reused"] and p["edited_recomputed"] and p["restart_processes"]==3' \
+          python3 -c 'import json,sys; p=json.load(open(sys.argv[1])); assert p["status"]=="PASSED_SYNTHETIC_REAL_GHIDRA_HEADLESS" and p["cold_computed"] and p["reopened_reused"] and p["edited_recomputed"] and p["restart_processes"]==4 and p["explicit_clear_cold_recomputed"] and p["explicit_clear_same_jvm_reused"]' \
             "$RUNNER_TEMP/ga12-restart/summary.json"
       - name: Show bounded synthetic-only failure diagnostics
         if: failure()
         shell: bash
         run: |
-          for log in "$RUNNER_TEMP"/ga12-restart/{import,compile,integration-write,integration-read,integration-edit}.log; do
+          for log in "$RUNNER_TEMP"/ga12-restart/{import,compile,integration-write,integration-read,integration-clear,integration-edit}.log; do
             if test -f "$log"; then echo "==== $(basename "$log") ===="; tail -n 70 "$log"; fi
           done
       - name: Preserve deterministic summary only (no Program or raw BIN)
