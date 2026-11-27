@@ -31,7 +31,7 @@ jobs:
             src/main/java/ghidrassist/hardware/HardwareStartupConfig.java \
             src/test/java/ghidrassist/hardware/HardwareStartupConfigSelfTest.java \
             src/test/java/ghidrassist/hardware/HardwareStartupResetIntegrationSelfTest.java
-      - name: Assert no false MM/CS execution conclusions
+      - name: Assert static source limits, bounded labels/literals and no false MM/CS execution
         run: |
           java -cp "$RUNNER_TEMP/startup" ghidrassist.hardware.HardwareStartupConfigSelfTest
           java -cp "$RUNNER_TEMP/startup" ghidrassist.hardware.HardwareStartupResetIntegrationSelfTest
