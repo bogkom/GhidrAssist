@@ -15,6 +15,10 @@ import java.util.Set;
 public final class HardwareInterruptVectors {
     private HardwareInterruptVectors() {}
 
+    // Bound untrusted Ghidra symbol names in the rendered report only.
+    // Evidence rows keep the full original name for independent inspection.
+    private static final int MAX_RENDERED_NAME_CODEPOINTS = 256;
+
     public enum Classification {
         UNREADABLE, NULL_OR_ERASED, ODD_POINTER,
         UNMAPPED_TARGET, OUTSIDE_SELECTED_MCU24_RANGE, MAPPED_TARGET,
@@ -134,16 +138,19 @@ public final class HardwareInterruptVectors {
              .append("; odd: ").append(odd)
              .append("; null/erased: ").append(absent)
              .append("; unreadable: ").append(unreadable).append(".\n\n");
+            int abbreviatedNames=0;
             if (!displayed.isEmpty()) {
                 b.append("| Vector | Slot | Pointer | Static classification | Function candidate | Role |\n")
                  .append("|---|---|---|---|---|---|\n");
                 for (Entry e:displayed) {
+                    RenderedName functionName=escape(e.function());
+                    if(functionName.abbreviated()) abbreviatedNames++;
                     b.append("| ").append(e.vectorNumber()).append(" | ")
                      .append(hex(e.slotAddress())).append(" | ")
                      .append(e.pointer()==null?"UNKNOWN":hex(e.pointer())).append(" | ")
                      .append(e.classification()).append(" | ")
-                     .append(escape(e.function())).append(" | ")
-                     .append(escape(e.label())).append(" |\n");
+                     .append(functionName.text()).append(" | ")
+                     .append(escape(e.label()).text()).append(" |\n");
                 }
                 b.append("\n");
             } else {
@@ -153,6 +160,12 @@ public final class HardwareInterruptVectors {
             if(truncated)
                 b.append("- Output truncated to the documented row limit; ")
                  .append("the summary counts cover all inspected slots.\n");
+            if(abbreviatedNames>0)
+                b.append("- ").append(abbreviatedNames)
+                 .append(" displayed function name(s) abbreviated after ")
+                 .append(MAX_RENDERED_NAME_CODEPOINTS)
+                 .append(" Unicode code points; original source names and ")
+                 .append("static classifications remain unchanged.\n");
             b.append("- **STATIC DATA ONLY**: ")
              .append(tableAddress==0?
                  "image-zero vector words":
@@ -256,12 +269,19 @@ public final class HardwareInterruptVectors {
     private static String hex(long number) {
         return String.format(Locale.ROOT,"0x%08X",number);
     }
-    private static String escape(String word) {
-        if(word==null)return "UNKNOWN";
+    private record RenderedName(String text, boolean abbreviated) {}
+
+    private static RenderedName escape(String word) {
+        if(word==null)return new RenderedName("UNKNOWN",false);
         StringBuilder escaped=new StringBuilder();
-        for(int at=0;at<word.length();) {
+        int at=0,codepoints=0;
+        // Do not scan the rest of an attacker-controlled, arbitrarily long
+        // symbol. The limit is in code points, so a valid surrogate pair is
+        // never split; invalid isolated surrogates become spaces.
+        while(at<word.length() && codepoints<MAX_RENDERED_NAME_CODEPOINTS) {
             int c=word.codePointAt(at);
             at+=Character.charCount(c);
+            codepoints++;
             int type=Character.getType(c);
             // Names originate in an editable Ghidra symbol table, not in
             // trusted Markdown. Escape backslashes before pipes, otherwise
@@ -284,6 +304,8 @@ public final class HardwareInterruptVectors {
                 escaped.append(' ');
             else escaped.appendCodePoint(c);
         }
-        return escaped.toString();
+        boolean abbreviated=at<word.length();
+        if(abbreviated) escaped.append("… (display abbreviated)");
+        return new RenderedName(escaped.toString(),abbreviated);
     }
 }
