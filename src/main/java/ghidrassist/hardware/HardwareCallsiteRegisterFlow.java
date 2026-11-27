@@ -63,12 +63,18 @@ public final class HardwareCallsiteRegisterFlow {
             steps=List.copyOf(steps);
             Set<Long> addresses=new HashSet<>();
             for(HardwareDataflow.Step step:steps) {
-                if(!sourcePc(step.address) || !addresses.add(step.address))
-                    throw new IllegalArgumentException("Invalid callee source PC");
+                // A complete Ghidra function cannot borrow executable
+                // instructions from BEFORE its declared entry. Without this
+                // gate an arbitrary predecessor could seed A/D constants and
+                // manufacture a possible callee MMIO write after CALL.
+                if(!sourcePc(step.address) || step.address<entry ||
+                        !addresses.add(step.address))
+                    throw new IllegalArgumentException("Foreign callee source PC");
                 for(Long successor:step.successors)
-                    if(successor==null || !sourcePc(successor))
+                    if(successor==null || !sourcePc(successor) ||
+                            successor<entry)
                         throw new IllegalArgumentException(
-                            "Invalid callee CFG successor");
+                            "Foreign callee CFG successor");
             }
         }
     }
@@ -87,7 +93,7 @@ public final class HardwareCallsiteRegisterFlow {
                     writtenWord!=null &&
                         (writtenWord<0 || writtenWord>0xffff) ||
                     writeBits!=8 && writeBits!=16 && writeBits!=32 ||
-                    sourceRegisterCount<0 ||
+                    sourceRegisterCount<1 ||
                     sourceRegisterCount>MAX_REGISTER_CELLS)
                 throw new IllegalArgumentException("Invalid CALL-site STORE candidate");
         }
@@ -106,6 +112,16 @@ public final class HardwareCallsiteRegisterFlow {
                     unresolvedAliases<0 || possibleStoreSites<0 ||
                     candidates==null || candidates.size()>MAX_REPORTED_ROWS ||
                     possibleStoreSites<candidates.size() ||
+                    // These rejection classes are mutually exclusive in a
+                    // single source CALL pass: do not report more rejected
+                    // calls than were actually sampled.
+                    (long)rejectedMissingCallee+rejectedIncomplete+
+                        rejectedNestedOrBadCfg+truncatedCalls>sampledCalls ||
+                    // A closed callee has at most one snapshot per decoded
+                    // step for each eligible CALL. Large injected counters
+                    // are not evidence of extra source STORE sites.
+                    (long)possibleStoreSites> (long)contextCalls*MAX_CALLEE_STEPS ||
+                    (long)unresolvedAliases> (long)contextCalls*MAX_CALLEE_STEPS ||
                     omittedRows!=(possibleStoreSites>candidates.size()) ||
                     candidates.stream().anyMatch(java.util.Objects::isNull))
                 throw new IllegalArgumentException("Invalid one-hop CALL summary");

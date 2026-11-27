@@ -18,28 +18,63 @@ public final class HardwareSimcrLocalFirst {
     private HardwareSimcrLocalFirst(){}
     /** Maximum total source-CFG successor references per function report. */
     public static final int MAX_SOURCE_EDGES=200_000;
+    public static final int MAX_SOURCE_NODES=50_000;
+    public static final int MAX_LOCAL_FUNCTIONS=75;
     public enum Effect { NONE, WORD_LITERAL, UNKNOWN_WORD, ALIAS_OR_CALL_BARRIER }
     public record Node(long pc,List<Long> successors,Effect effect,Integer word) {
         public Node {
-            if(pc<0 || successors==null || effect==null ||
+            if(pc<0 || pc>HardwareDataflow.MASK24 ||
+                    successors==null || successors.size()>MAX_SOURCE_EDGES ||
+                    effect==null ||
                     effect==Effect.WORD_LITERAL &&
                         (word==null || word<0 || word>0xffff) ||
                     effect!=Effect.WORD_LITERAL && word!=null)
                 throw new IllegalArgumentException("Invalid local CFG SIMCR node");
+            for(Long successor:successors)
+                if(successor==null || successor<0 ||
+                        successor>HardwareDataflow.MASK24)
+                    throw new IllegalArgumentException(
+                        "Foreign source CFG successor");
             successors=List.copyOf(successors);
         }
     }
-    public record FirstSite(long pc,int word) {}
+    public record FirstSite(long pc,int word) {
+        public FirstSite {
+            if(pc<0 || pc>HardwareDataflow.MASK24 ||
+                    word<0 || word>0xffff)
+                throw new IllegalArgumentException("Invalid first SIMCR source");
+        }
+    }
     public record Result(long function,List<FirstSite> literalCandidates,
             boolean unknownFirstPossible,boolean exitWithoutSimcr,
             boolean cyclesOrIncompleteEdges,boolean workLimitReached,
             int visitedNodes) {
-        public Result {literalCandidates=List.copyOf(literalCandidates);}
+        public Result {
+            if(function<0 || function>HardwareDataflow.MASK24 ||
+                    literalCandidates==null ||
+                    literalCandidates.size()>MAX_SOURCE_NODES ||
+                    visitedNodes<0 || visitedNodes>MAX_SOURCE_NODES ||
+                    visitedNodes<literalCandidates.size() ||
+                    (cyclesOrIncompleteEdges || workLimitReached) &&
+                        !unknownFirstPossible)
+                throw new IllegalArgumentException(
+                    "Inconsistent first-SIMCR source result");
+            long previous=-1;
+            for(FirstSite first:literalCandidates) {
+                if(first==null || first.pc()<=previous)
+                    throw new IllegalArgumentException(
+                        "Duplicate/out-of-order first SIMCR source PC");
+                previous=first.pc();
+            }
+            literalCandidates=List.copyOf(literalCandidates);
+        }
     }
     public static Result inspect(long function,long entry,
             Collection<Node> graph,boolean otherUncertainty,int visitBudget) {
-        if(function<0 || entry<0 || graph==null || visitBudget<1 ||
-                graph.size()>50000)
+        if(function<0 || function>HardwareDataflow.MASK24 ||
+                entry<0 || entry>HardwareDataflow.MASK24 ||
+                graph==null || visitBudget<1 ||
+                graph.size()>MAX_SOURCE_NODES)
             throw new IllegalArgumentException("Invalid first-site search budget");
         Map<Long,Node> nodes=new HashMap<>();
         long edges=0;
@@ -124,8 +159,10 @@ public final class HardwareSimcrLocalFirst {
         TraversalFrame(Node node){this.node=node;}
     }
     public static String markdown(List<Result> results,int omittedFunctions) {
-        if(results==null || omittedFunctions<0)
-            throw new IllegalArgumentException("Missing static first-site evidence");
+        if(results==null || omittedFunctions<0 ||
+                results.size()>MAX_LOCAL_FUNCTIONS ||
+                results.stream().anyMatch(java.util.Objects::isNull))
+            throw new IllegalArgumentException("Unbounded static first-site evidence");
         StringBuilder out=new StringBuilder(
             "## Possible first SIMCR source sites within individual functions\n\n")
             .append("A first source PC below is only FIRST ON A MODELED ")
