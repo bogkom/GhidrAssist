@@ -17,7 +17,7 @@ class DiskTombstonePublicationContract(unittest.TestCase):
 
     def test_clear_always_sets_tombstone_after_invalidating(self):
         clear = self.code.split("public static void clear(Program program)", 1)[1]
-        self.assertRegex(clear, r"EPOCHS\\.invalidate\\(program\\);[\\s\\S]*?SKIP_DISK\\.put\\(program,true\\);")
+        self.assertRegex(clear, r"EPOCHS\.invalidate\(program\);[\s\S]*?SKIP_DISK\.put\(program,true\);")
 
     def test_memory_publication_does_not_release_disk_tombstone(self):
         code = self.code
@@ -35,7 +35,7 @@ class DiskTombstonePublicationContract(unittest.TestCase):
         self.assertIn("throw new CancelledException();", fenced)
         self.assertIn("synchronized(COMPLETED)", code[code.rfind("synchronized(COMPLETED)", 0, start):start+1])
         self.assertEqual(code.count("SKIP_DISK.remove(program)"), 1)
-        self.assertNotRegex(code, r"(?m)^\\s*SKIP_DISK\\.remove\\(program\\);")
+        self.assertNotRegex(code, r"(?m)^\s*SKIP_DISK\.remove\(program\);")
 
     def test_failed_save_is_best_effort_without_releasing_tombstone(self):
         code = self.code
