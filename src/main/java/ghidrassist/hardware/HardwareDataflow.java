@@ -453,9 +453,21 @@ public final class HardwareDataflow {
                     // cannot be downcast to a known MC68332 24-bit MMIO
                     // destination or MOVEC/VBR source by discarding high
                     // bits. Preserve UNKNOWN, not a fabricated alias.
-                    if(step.operand<0 || step.operand>MASK24)
+                    // A canonical MOVEA.W sign-extends a negative 16-bit
+                    // source to 32 bits before An is used as an external
+                    // address. Only this explicit instruction may be
+                    // projected to the 24-bit MC68332 bus. A high MOVEA.L
+                    // or MOVE.L source is NOT an inferred low address.
+                    long source=step.operand;
+                    boolean signedWordAddress=step.register.startsWith("A") &&
+                        "MOVEA.W".equals(step.mnemonic) &&
+                        (source>=-0x8000L && source<0 ||
+                         source>=0xffff8000L && source<=0xffffffffL);
+                    if(signedWordAddress)
+                        source&=MASK24;
+                    if(source<0 || source>MASK24)
                         s.pointers.remove(step.register);
-                    else s.pointers.put(step.register,step.operand);
+                    else s.pointers.put(step.register,source);
                 }
             }
             case COPY_POINTER -> {
