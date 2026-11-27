@@ -1230,6 +1230,7 @@ public final class GhidraHardwareFlowService {
             }
             if(mc68332Selected){
                 List<HardwareCfgStorePaths.Store> pathStores=new ArrayList<>();
+                boolean invalidPathStoreSource=false;
                 for(HardwareDataflow.Snapshot hit:result.snapshots){
                     if(hit.effectiveAddress==null ||
                             (hit.kind!=HardwareDataflow.Kind.STORE_DIRECT &&
@@ -1239,6 +1240,11 @@ public final class GhidraHardwareFlowService {
                             !(register.equals("SIMCR") || register.equals("TRAMBAR") ||
                               register.startsWith("CSBAR") || register.startsWith("CSOR") ||
                               register.startsWith("CSPAR")))continue;
+                    if(hit.instruction<0 ||
+                            hit.instruction>0xffffffffL) {
+                        invalidPathStoreSource=true;
+                        continue;
+                    }
                     pathStores.add(new HardwareCfgStorePaths.Store(hit.instruction,register));
                 }
                 // A function may have repeated P-code STORE sites at one
@@ -1250,7 +1256,12 @@ public final class GhidraHardwareFlowService {
                     if(uniqueStores.putIfAbsent(store.pc(),store)!=null)
                         cfgPathLimitedFunctions++;
                 pathStores=new ArrayList<>(uniqueStores.values());
-                if(pathStores.size()>1 &&
+                if(invalidPathStoreSource) {
+                    // A foreign STORE PC invalidates the entire function's
+                    // bounded write-path evidence; never publish its
+                    // remaining pairs as if this observation were absent.
+                    cfgPathLimitedFunctions++;
+                }else if(pathStores.size()>1 &&
                         (steps.size()>HardwareCfgStorePaths.MAX_SOURCE_NODES ||
                          pathStores.size()>HardwareCfgStorePaths.MAX_SOURCE_STORES)){
                     cfgPathLimitedFunctions++;
