@@ -375,6 +375,44 @@ public final class HardwareCallEffectsSelfTest {
             ok(denied,
                 "CALL effect source paths/flags cannot exceed the observed function budget");
         }
+        // A client can reconstruct SourceWitness independently of the
+        // trusted decoder. Real BFS source proofs must be acyclic shortest
+        // paths; a recursive graph remains separately marked unresolved.
+        var impossibleWitnesses=List.<Runnable>of(
+            ()->new HardwareCallEffects.SourceWitness(
+                HardwareCallEffects.WitnessKind.MEMORY_STORE,
+                List.of(0L,2L,0L)),
+            ()->new HardwareCallEffects.SourceWitness(
+                HardwareCallEffects.WitnessKind.MOVEC_VBR,
+                List.of(0L,0L)),
+            ()->new HardwareCallEffects.SourceWitness(
+                HardwareCallEffects.WitnessKind.MISSING_TARGET,
+                List.of(0L,2L,0L)),
+            ()->new HardwareCallEffects.SourceWitness(
+                HardwareCallEffects.WitnessKind.DEPTH_CUTOFF,
+                List.of(0L,2L,0L)),
+            ()->new HardwareCallEffects.SourceWitness(
+                HardwareCallEffects.WitnessKind.DEPTH_CUTOFF,
+                List.of(0L)),
+            ()->new HardwareCallEffects.SourceWitness(
+                HardwareCallEffects.WitnessKind.NODE_CUTOFF,
+                List.of(0L))
+        );
+        for(Runnable impossible:impossibleWitnesses){
+            boolean denied=false;
+            try{impossible.run();}
+            catch(IllegalArgumentException expected){denied=true;}
+            ok(denied,
+                "cyclic or edge-free frontier CALL source cannot certify evidence");
+        }
+        var rootOnlyUnknown=new HardwareCallEffects.SourceWitness(
+            HardwareCallEffects.WitnessKind.MISSING_TARGET,List.of(0L));
+        var oneEdgeCutoff=new HardwareCallEffects.SourceWitness(
+            HardwareCallEffects.WitnessKind.DEPTH_CUTOFF,List.of(0L,2L));
+        ok(rootOnlyUnknown.chain().equals(List.of(0L)) &&
+            oneEdgeCutoff.chain().equals(List.of(0L,2L)) &&
+            !onlyCycle.summary().truncated(),
+            "missing RESET root and genuine one-edge cutoff remain observable");
         var missingRoot=HardwareCallEffects.inspect(0L,List.of(),0,1);
         ok(missingRoot.summary().visited()==0 &&
             missingRoot.observedUnknownWitness().kind()==

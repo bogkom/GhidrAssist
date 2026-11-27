@@ -124,10 +124,15 @@ public final class HardwareResetFlow {
                     !steps[steps.length-1].equals(hex(functionEntry)))
                 throw new IllegalArgumentException(
                     "RESET evidence chain/depth does not reach source");
+            // A real shortest direct-CALL BFS path cannot revisit a
+            // function already on the same source chain. The graph may
+            // contain recursion, but its recursion flag is independent
+            // evidence and must not be laundered into a simple RESET path.
+            Set<String> unique=new HashSet<>();
             for(String step:steps)
-                if(!step.matches("0x[0-9A-F]{8}"))
+                if(!step.matches("0x[0-9A-F]{8}") || !unique.add(step))
                     throw new IllegalArgumentException(
-                        "Invalid CPU32 RESET evidence source identity");
+                        "Invalid CPU32 RESET evidence source path");
         }
     }
 
