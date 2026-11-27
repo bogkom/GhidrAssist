@@ -1584,6 +1584,8 @@ def main():
                     data.get("human_visual_readback")!="NOT_PERFORMED"):
                 raise RuntimeError("Synthetic screenshot cannot claim human visual verification")
             expected=("synthetic_simcr_site","hardware_analyze_gui",
+                      "overview_full_export_rag_consistent",
+                      "ga07_report_manifest_pages_consistent",
                       "listing_navigation","stale_go_to_rejected",
                       "stale_double_click_rejected",
                       "listing_remained_second_program",

@@ -948,6 +948,80 @@ public final class CodeBrowserMmioMain {
                         ghidrassist.hardware.HardwareReportOverview.combine(
                             overview,full)),
                     "Displayed Overview/Full Evidence differ from export/RAG payload");
+                // GA-07/12/13/18: actual Swing evidence, all three published
+                // report formats, the per-format generation and the paginated
+                // Automation API must agree byte-for-byte at one revision.
+                JsonObject manifest=tab.automationReportManifest();
+                require(manifest.get("schema").getAsInt()==1 &&
+                        manifest.get("kind").getAsString().equals(
+                            "ghidrassist-hardware-report-set-manifest") &&
+                        manifest.get("profile").getAsString().equals(
+                            "MC68332_USER_SELECTED") &&
+                        manifest.get("scope").getAsString().contains("NO EXECUTION"),
+                    "Real CodeBrowser report manifest missing static scope");
+                JsonObject formats=manifest.getAsJsonObject("formats");
+                String reportRevision=manifest.get("revision").getAsString();
+                for(String format:new String[]{"markdown","config_csv","names_csv"}) {
+                    String canonical=switch(format) {
+                        case "markdown" -> published;
+                        case "config_csv" -> (String)field(tab,"latestConfigCsv");
+                        default -> (String)field(tab,"latestNameCsv");
+                    };
+                    JsonObject receipt=formats.getAsJsonObject(format);
+                    require(canonical!=null && receipt!=null &&
+                            receipt.get("total_characters").getAsInt()==canonical.length() &&
+                            receipt.get("sha256_utf8").getAsString().equals(
+                                ghidrassist.hardware.HardwareDurableStageStore.hash(
+                                    canonical)),
+                        "Manifest length/hash mismatch for "+format);
+                    String generation=receipt.get("generation").getAsString();
+                    require(!generation.isBlank(),
+                        "Missing format-specific report generation for "+format);
+                    StringBuilder assembled=new StringBuilder();
+                    int cursor=0,expectedLength=canonical.length();
+                    do {
+                        JsonObject page=tab.automationReport(
+                            format,cursor,1024,reportRevision,generation);
+                        String chunk=page.get("text").getAsString();
+                        int next=cursor+chunk.length();
+                        require(page.get("offset").getAsInt()==cursor &&
+                                page.get("total_characters").getAsInt()==expectedLength &&
+                                page.get("revision").getAsString().equals(
+                                    reportRevision) &&
+                                page.get("generation").getAsString().equals(
+                                    generation) &&
+                                page.get("scope").getAsString().contains(
+                                    "NO EXECUTION") &&
+                                next<=expectedLength &&
+                                (next==expectedLength)==
+                                    !page.get("more").getAsBoolean() &&
+                                (next>cursor || next==expectedLength),
+                            "Invalid bounded report page for "+format);
+                        assembled.append(chunk);
+                        cursor=next;
+                    } while(cursor<expectedLength);
+                    require(assembled.toString().equals(canonical),
+                        "Paginated report differs from Swing/export for "+format);
+                }
+                boolean staleGenerationRefused=false;
+                try {
+                    tab.automationReport("markdown",1,64,reportRevision,
+                        "forged-generation");
+                }catch(IllegalStateException expected) {
+                    staleGenerationRefused=expected.getMessage()!=null &&
+                        expected.getMessage().contains("STALE_GENERATION");
+                }
+                require(staleGenerationRefused,
+                    "Automation API accepted a forged report generation");
+                boolean unpinnedPageRefused=false;
+                try {
+                    tab.automationReport("markdown",1,64,null,null);
+                }catch(IllegalArgumentException expected) {
+                    unpinnedPageRefused=true;
+                }
+                require(unpinnedPageRefused,
+                    "Automation API accepted an unpinned subsequent page");
+                result.addProperty("ga07_report_manifest_pages_consistent",true);
                 require(overview.contains("## 1. Initialization") &&
                         overview.contains("## 2. Register write history") &&
                         overview.contains("## 3. Chip Select map") &&
