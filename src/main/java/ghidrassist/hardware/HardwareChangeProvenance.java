@@ -55,14 +55,47 @@ public final class HardwareChangeProvenance {
      * formula *inside quotes*; prefix potential formulas with an apostrophe.
      * Preserve the original spelling otherwise; this is never an Apply CSV.
      */
+    /** Any malformed surrogate is lost source evidence, even in a small
+     * cell. Java UTF-8 would otherwise encode it as '?' silently. */
+    private static boolean malformedUtf16(String text) {
+        if(text==null)return false;
+        for(int i=0;i<text.length();i++) {
+            char ch=text.charAt(i);
+            if(Character.isHighSurrogate(ch)) {
+                if(i+1>=text.length() ||
+                        !Character.isLowSurrogate(text.charAt(i+1)))return true;
+                i++;
+            }else if(Character.isLowSurrogate(ch))return true;
+        }
+        return false;
+    }
+
+    /** Used by both static Review and saved-rename audit CSVs. */
+    static boolean losesSource(String text) {
+        return text!=null && (text.length()>MAX_CSV_CELL_CHARS ||
+            malformedUtf16(text));
+    }
+
     /** Shared RFC-safe read-only CSV cell for the GA-13 receipt audit. */
     static String cell(String value) {
         if(value==null)value="";
-        // Bound raw input BEFORE chaining replace() (which would otherwise
-        // duplicate a multi-MB string) and explicitly show evidence loss.
-        if(value.length()>MAX_CSV_CELL_CHARS)
-            value=value.substring(0,MAX_CSV_CELL_CHARS-CELL_TRUNCATION.length())
-                +CELL_TRUNCATION;
+        // Bound before replacement/quoting to prevent amplification. Build
+        // the prefix in whole UTF-16 scalar values: never emit a half pair
+        // and never silently replace malformed evidence with '?'.
+        if(losesSource(value)) {
+            int limit=MAX_CSV_CELL_CHARS-CELL_TRUNCATION.length();
+            StringBuilder prefix=new StringBuilder(limit+CELL_TRUNCATION.length());
+            for(int i=0;i<value.length() && i<limit;i++) {
+                char ch=value.charAt(i);
+                if(Character.isHighSurrogate(ch)) {
+                    if(i+1<value.length() && i+1<limit &&
+                            Character.isLowSurrogate(value.charAt(i+1))) {
+                        prefix.append(ch).append(value.charAt(++i));
+                    }
+                } else if(!Character.isLowSurrogate(ch))prefix.append(ch);
+            }
+            value=prefix.append(CELL_TRUNCATION).toString();
+        }
         String normalized=value.replace("\r"," ").replace("\n"," ")
             .replace("\u0000"," ").replace("\u2028"," ")
             .replace("\u2029"," ");
@@ -91,13 +124,11 @@ public final class HardwareChangeProvenance {
     /** A bounded cell can hide source material even if all review rows
      * fit the export limit. A separate receipt must carry that loss. */
     private static boolean truncated(ReviewRow row) {
-        return over(row.kind()) || over(row.range()) ||
-            over(row.proposedName()) || over(row.displayExistingName()) ||
-            over(row.ghidraSourceType()) || over(row.decision()) ||
-            over(row.evidence());
-    }
-    private static boolean over(String text) {
-        return text!=null && text.length()>MAX_CSV_CELL_CHARS;
+        return losesSource(row.kind()) || losesSource(row.range()) ||
+            losesSource(row.proposedName()) ||
+            losesSource(row.displayExistingName()) ||
+            losesSource(row.ghidraSourceType()) ||
+            losesSource(row.decision()) || losesSource(row.evidence());
     }
 
     public static String csv(List<ReviewRow> rows) {

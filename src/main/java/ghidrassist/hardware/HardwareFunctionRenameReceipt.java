@@ -23,6 +23,18 @@ public final class HardwareFunctionRenameReceipt {
     public static final String VERSION = "GA13-FUNCTION-RENAME-1";
     public static final int MAX_RECEIPT_BYTES = 3072;
 
+    private static boolean malformedUtf16(String value) {
+        for(int i=0;i<value.length();i++) {
+            char c=value.charAt(i);
+            if(Character.isHighSurrogate(c)) {
+                if(i+1>=value.length() ||
+                        !Character.isLowSurrogate(value.charAt(i+1)))return true;
+                i++;
+            }else if(Character.isLowSurrogate(c))return true;
+        }
+        return false;
+    }
+
     public record Entry(long entry, long reviewedModification,
             String sourceSha256, String beforeName, String afterName,
             String role, String registers, int writeSites) {
@@ -37,8 +49,14 @@ public final class HardwareFunctionRenameReceipt {
                     role == null || role.isEmpty() || role.length() > 128 ||
                     registers == null || registers.isEmpty() ||
                     registers.length() > 512 ||
-                    writeSites < 3 || writeSites > 2048)
-                throw new IllegalArgumentException("Incomplete or unbounded rename receipt");
+                    writeSites < 3 || writeSites > 2048 ||
+                    malformedUtf16(sourceSha256) ||
+                    malformedUtf16(beforeName) ||
+                    malformedUtf16(afterName) ||
+                    malformedUtf16(role) ||
+                    malformedUtf16(registers))
+                throw new IllegalArgumentException(
+                    "Incomplete, malformed UTF-16 or unbounded rename receipt");
         }
 
         /** Identifies the operation, not an authenticated human/AI actor. */

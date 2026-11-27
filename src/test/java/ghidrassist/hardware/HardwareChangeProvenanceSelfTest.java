@@ -141,6 +141,39 @@ public final class HardwareChangeProvenanceSelfTest {
             mixed.lines().count()==5 &&
             mixed.contains("INCOMPLETE_EXPORT_NEVER_AUTO_APPLY"),
             "truncated-source receipt counts affected rows, not individual cells");
+        // An isolated UTF-16 surrogate is silently replaced by '?' by
+        // ordinary Java UTF-8 encoders. CSV export must instead announce
+        // the evidence loss, without yielding an invalid Unicode scalar.
+        String orphanHigh=String.valueOf((char)0xd800);
+        String orphanLow=String.valueOf((char)0xdc00);
+        var malformed=new HardwareChangeProvenance.ReviewRow(
+            "REGISTER","0x0","NAME"+orphanHigh+"?","USER"+orphanLow,
+            "USER_DEFINED","MANUAL_REVIEW",false,"proof");
+        String repaired=HardwareChangeProvenance.csv(List.of(malformed));
+        check(repaired.contains("TRUNCATED_SOURCE_ROWS") &&
+            repaired.contains("1 source rows contain truncated cells") &&
+            !repaired.contains(orphanHigh) && !repaired.contains(orphanLow) &&
+            repaired.contains("SOURCE_TRUNCATED"),
+            "invalid UTF-16 Review evidence must be sanitized and marked incomplete");
+        String emoji=new String(Character.toChars(0x1f680));
+        int prefixLimit=HardwareChangeProvenance.MAX_CSV_CELL_CHARS-
+            " [SOURCE_TRUNCATED]".length();
+        var boundaryPair=new HardwareChangeProvenance.ReviewRow(
+            "REGISTER","0x0","X".repeat(prefixLimit-1)+emoji+"Y".repeat(100),
+            null,null,"MANUAL_REVIEW",false,"source");
+        String boundaryCsv=HardwareChangeProvenance.csv(List.of(boundaryPair));
+        check(!boundaryCsv.contains(emoji) &&
+            !boundaryCsv.contains(orphanHigh) &&
+            !boundaryCsv.contains(orphanLow) &&
+            boundaryCsv.contains("TRUNCATED_SOURCE_ROWS"),
+            "truncation boundary cannot persist half a supplementary character");
+        var exactPair=new HardwareChangeProvenance.ReviewRow(
+            "REGISTER","0x0","X".repeat(
+                HardwareChangeProvenance.MAX_CSV_CELL_CHARS-2)+emoji,
+            null,null,"MANUAL_REVIEW",false,"source");
+        String exactCsv=HardwareChangeProvenance.csv(List.of(exactPair));
+        check(exactCsv.contains(emoji) && !exactCsv.contains("TRUNCATED_SOURCE_ROWS"),
+            "complete Unicode pair exactly at cell cap remains unchanged");
         System.out.println("HardwareChangeProvenanceSelfTest OK");
     }
 }
