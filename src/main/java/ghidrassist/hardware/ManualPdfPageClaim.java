@@ -34,6 +34,7 @@ public final class ManualPdfPageClaim {
             int type=Character.getType(codePoint);
             if(Character.isISOControl(codePoint) ||
                     type==Character.FORMAT ||
+                    type==Character.SURROGATE ||
                     type==Character.LINE_SEPARATOR ||
                     type==Character.PARAGRAPH_SEPARATOR ||
                     (type==Character.SPACE_SEPARATOR && codePoint!=' '))

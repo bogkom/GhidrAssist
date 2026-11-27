@@ -10,6 +10,12 @@ public final class HardwareBitfieldSourceLedgerSelfTest {
         checks++;
         if(!value)throw new AssertionError(message);
     }
+    private static void rejects(Runnable action,String message) {
+        boolean denied=false;
+        try{action.run();}
+        catch(IllegalArgumentException expected){denied=true;}
+        check(denied,message);
+    }
     public static void main(String[] args) {
         var mc=HardwareBitfieldSourceLedger.inspect(HardwareProfiles.mc68332());
         check(mc.device().equals("MC68332") &&
@@ -84,6 +90,81 @@ public final class HardwareBitfieldSourceLedgerSelfTest {
               ManualPdfPageClaim.physicalRange("PDF pages 220-219")==null &&
               ManualPdfPageClaim.physicalRange("PDF page ?")==null,
               "accepted and rejected page labels share one parser");
+        // Public row/report constructors must not promote self-declared
+        // page numbers, metadata or arbitrary fields into sourced claims.
+        rejects(()->new HardwareBitfieldSourceLedger.Entry(
+            "SIMCR","MM",0x40,219,221,"D-5/D-6 (PDF pages 219-220)"),
+            "row and label PDF-page range must agree exactly");
+        rejects(()->new HardwareBitfieldSourceLedger.Entry(
+            "SIMCR","MM",0x40,219,220,
+            "PDF page 219; PDF pages 219-220"),
+            "second physical page marker makes source ambiguous");
+        rejects(()->new HardwareBitfieldSourceLedger.Entry(
+            "SIMCR","MM",0x100000000L,219,220,
+            "D-5/D-6 (PDF pages 219-220)"),
+            "impossible bit mask cannot be reported");
+        rejects(()->new HardwareBitfieldSourceLedger.Entry(
+            "SIMCR|injected","MM",0x40,219,220,
+            "D-5/D-6 (PDF pages 219-220)"),
+            "register identity cannot inject Markdown columns");
+        rejects(()->new HardwareBitfieldSourceLedger.Entry(
+            "SIMCR","MM",0x40,219,220,
+            "D-5/D-6 (PDF pages 219-220) "+String.valueOf((char)0xd800)),
+            "lone UTF-16 surrogate invalidates page citation");
+
+        var pinned=new HardwareBitfieldSourceLedger.Report(
+            "MC68332",HardwareProfiles.MC68332_MANUAL,
+            HardwareBitfieldSourceLedger.MC68332_EDITION_CLAIM,
+            mc.entries(),mc.excludedFields());
+        check(pinned.markdown().equals(mc.markdown()),
+            "complete canonical publisher inventory remains accepted");
+        rejects(()->new HardwareBitfieldSourceLedger.Report(
+            "MC68332","https://example.invalid/other.pdf",
+            HardwareBitfieldSourceLedger.MC68332_EDITION_CLAIM,
+            mc.entries(),0),
+            "foreign PDF URL cannot borrow MC68332 SHA-256");
+        rejects(()->new HardwareBitfieldSourceLedger.Report(
+            "MC68332",HardwareProfiles.MC68332_MANUAL,"Different edition",
+            mc.entries(),0),
+            "foreign edition cannot borrow publisher digest");
+        rejects(()->new HardwareBitfieldSourceLedger.Report(
+            "MC68332",HardwareProfiles.MC68332_MANUAL,
+            HardwareBitfieldSourceLedger.MC68332_EDITION_CLAIM,
+            List.of(mc.entries().get(0)),14),
+            "a forged 1-of-15 row cannot claim a complete sourced catalog");
+        rejects(()->new HardwareBitfieldSourceLedger.Report(
+            "MC68332",HardwareProfiles.MC68332_MANUAL,
+            HardwareBitfieldSourceLedger.MC68332_EDITION_CLAIM,
+            List.of(mc.entries().get(0),mc.entries().get(0)),13),
+            "duplicate source rows cannot replace 15 canonical fields");
+        var fake=new HardwareBitfieldSourceLedger.Entry(
+            "SIMCR","FAKE",1,219,219,"D-5 (PDF page 219)");
+        rejects(()->new HardwareBitfieldSourceLedger.Report(
+            "MC68332",HardwareProfiles.MC68332_MANUAL,
+            HardwareBitfieldSourceLedger.MC68332_EDITION_CLAIM,
+            List.of(fake),14),
+            "arbitrary register bitfield cannot inherit publisher source");
+        var injected=new HardwareBitfieldSourceLedger.Entry(
+            "SIMCR","MM",0x40,219,220,
+            "D-5/D-6 (PDF pages 219-220) | <img src=x> [link](https://example.invalid)");
+        rejects(()->new HardwareBitfieldSourceLedger.Report(
+            "MC68332",HardwareProfiles.MC68332_MANUAL,
+            HardwareBitfieldSourceLedger.MC68332_EDITION_CLAIM,
+            List.of(injected),14),
+            "matching page numbers do not authorize forged HTML/Markdown");
+        rejects(()->new HardwareBitfieldSourceLedger.Report(
+            "CPU32","UNKNOWN","UNKNOWN",
+            List.of(mc.entries().get(0)),0),
+            "generic CPU32 cannot publish MC68332 register pages");
+        rejects(()->new HardwareBitfieldSourceLedger.Report(
+            "CPU32",HardwareProfiles.MC68332_MANUAL,
+            HardwareBitfieldSourceLedger.MC68332_EDITION_CLAIM,
+            List.of(),0),
+            "generic CPU32 cannot claim the publisher PDF digest");
+        rejects(()->new HardwareBitfieldSourceLedger.Report(
+            "CPU32|injected","UNKNOWN","UNKNOWN",List.of(),0),
+            "untrusted generic device labels cannot inject Markdown");
+
         System.out.println("HardwareBitfieldSourceLedgerSelfTest OK checks="+checks);
     }
 }

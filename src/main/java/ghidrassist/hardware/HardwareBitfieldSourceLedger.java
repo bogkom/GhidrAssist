@@ -23,22 +23,45 @@ public final class HardwareBitfieldSourceLedger {
     public record Entry(String register, String field, long mask,
                         int firstPage, int lastPage, String label) {
         public Entry {
-            if(register==null || register.isBlank() ||
-                    field==null || field.isBlank() || mask==0 ||
+            if(register==null || !register.matches("[A-Z][A-Z0-9_]{0,63}") ||
+                    field==null || !field.matches("[A-Z][A-Z0-9_]{0,63}") ||
+                    mask<=0 || mask>0xffffffffL ||
                     firstPage<1 || lastPage<firstPage || lastPage>100000 ||
-                    label==null || label.isBlank())
+                    label==null || label.length()>256)
                 throw new IllegalArgumentException("Invalid bitfield citation");
+            // A page number in the row is not independent evidence: it must
+            // agree with the ONE bounded, unambiguous claim in its label.
+            var claimed=ManualPdfPageClaim.physicalRange(label);
+            if(claimed==null || claimed.first()!=firstPage ||
+                    claimed.last()!=lastPage)
+                throw new IllegalArgumentException(
+                    "Published PDF page coordinates contradict source claim");
         }
     }
 
     public record Report(String device, String manualUrl, String editionClaim,
                          List<Entry> entries, int excludedFields) {
         public Report {
-            if(device==null || manualUrl==null || editionClaim==null ||
-                    entries==null || excludedFields<0 ||
-                    entries.size()>256)
+            if(device==null || !device.matches("[A-Za-z0-9_-]{1,64}") ||
+                    manualUrl==null || editionClaim==null ||
+                    entries==null || excludedFields<0 || entries.size()>256)
                 throw new IllegalArgumentException("Invalid manual citation inventory");
             entries=List.copyOf(entries);
+            if("MC68332".equals(device)) {
+                // A hand-built report cannot borrow the publisher digest for
+                // another URL, edition, incomplete set or fabricated field.
+                Catalog canonical=sourceCatalog(HardwareProfiles.mc68332());
+                if(!HardwareProfiles.MC68332_MANUAL.equals(manualUrl) ||
+                        !MC68332_EDITION_CLAIM.equals(editionClaim) ||
+                        !entries.equals(canonical.entries()) ||
+                        excludedFields!=canonical.excluded())
+                    throw new IllegalArgumentException(
+                        "Foreign MC68332 source inventory");
+            } else if(!"UNKNOWN".equals(manualUrl) ||
+                    !"UNKNOWN".equals(editionClaim) ||
+                    !entries.isEmpty() || excludedFields!=0)
+                throw new IllegalArgumentException(
+                    "Generic CPU profile cannot publish device PDF sources");
         }
 
         public String markdown() {
@@ -69,41 +92,60 @@ public final class HardwareBitfieldSourceLedger {
                     .append(" | ").append(e.firstPage());
                 if(e.lastPage()!=e.firstPage())
                     out.append("-").append(e.lastPage());
-                out.append(" (").append(e.label()).append(")")
+                out.append(" (").append(markdownCell(e.label())).append(")")
                     .append(" | CLAIM_ONLY; PDF BYTES UNVERIFIED |\n");
             }
             return out.toString();
         }
     }
 
-    public static Report inspect(HardwareProfiles.Profile profile) {
-        if(profile==null)throw new IllegalArgumentException("Missing profile");
-        if(!profile.concreteDevice || !"MC68332".equals(profile.id))
-            return new Report(profile.id,"UNKNOWN","UNKNOWN",List.of(),0);
-        List<Entry> collected=new ArrayList<>();
-        int excluded=0;
+    private static String markdownCell(String value) {
+        StringBuilder out=new StringBuilder();
+        for(int at=0;at<value.length();) {
+            int cp=value.codePointAt(at);
+            at+=Character.charCount(cp);
+            if(cp=='\\' || cp=='|' || cp=='[' || cp==']' || cp==0x60 ||
+                    cp=='*' || cp=='_' || cp=='~')
+                out.append('\\').appendCodePoint(cp);
+            else if(cp=='&')out.append("&amp;");
+            else if(cp=='<')out.append("&lt;");
+            else if(cp=='>')out.append("&gt;");
+            else out.appendCodePoint(cp);
+        }
+        return out.toString();
+    }
+
+    private record Catalog(List<Entry> entries,int excluded) {}
+
+    /** The canonical inventory is recomputed from the explicitly selected
+     * built-in MCU, never a caller-provided PDF or Report row. */
+    private static Catalog sourceCatalog(HardwareProfiles.Profile profile) {
+        List<Entry> rows=new ArrayList<>();
+        int missing=0;
         for(HardwareProfiles.Register register:profile.registers) {
-            // Historical 15-row SIMCR/SYNCR evidence, independently
-            // reviewed against D-5/D-6/D-7, remains deliberately scoped.
-            // The D-10/D-11 protection/timer field set is independently
-            // audited by HardwareSimProtectionTimerWitness; including it
-            // here would incorrectly claim those rows were in D-5/D-7.
+            // D-10/D-11 protection/timer fields have their own audit;
+            // don't silently recast them as D-5/D-7 SIMCR/SYNCR citations.
             if(!register.name.equals("SIMCR") &&
                     !register.name.equals("SYNCR"))continue;
             for(HardwareProfiles.BitField field:register.fields) {
                 var range=ManualPdfPageClaim.physicalRange(field.sourcePage);
-                if(range==null) {
-                    excluded++;
-                    continue;
-                }
-                if(collected.size()>=256)
+                if(range==null){missing++;continue;}
+                if(rows.size()>=256)
                     throw new IllegalArgumentException("Unbounded bitfield source catalog");
-                collected.add(new Entry(register.name,field.name,
+                rows.add(new Entry(register.name,field.name,
                     Integer.toUnsignedLong(field.mask),range.first(),
                     range.last(),field.sourcePage));
             }
         }
+        return new Catalog(List.copyOf(rows),missing);
+    }
+
+    public static Report inspect(HardwareProfiles.Profile profile) {
+        if(profile==null)throw new IllegalArgumentException("Missing profile");
+        if(!profile.concreteDevice || !"MC68332".equals(profile.id))
+            return new Report(profile.id,"UNKNOWN","UNKNOWN",List.of(),0);
+        Catalog catalog=sourceCatalog(profile);
         return new Report(profile.id,HardwareProfiles.MC68332_MANUAL,
-            MC68332_EDITION_CLAIM,collected,excluded);
+            MC68332_EDITION_CLAIM,catalog.entries(),catalog.excluded());
     }
 }
