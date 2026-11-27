@@ -99,6 +99,90 @@ public final class HardwareContextSelectorSelfTest {
             shortRag.contains("<<<END_LOCAL_GHIDRA_HARDWARE_EVIDENCE>>>") &&
             shortRag.length()<=700,
             "bounded RAG explicitly reports omitted field citations");
+
+        // A real selected-MCU full report has 12 independent conditional CS
+        // rows, but the old fast register-site RAG path returned before
+        // any of these source-scoped rows could reach the question.
+        String sourceHeader=
+            "#### Function-local MC68332 CSBOOT/CS0–CS10 source snapshot (NOT active hardware)\n\n";
+        String sourceTail=
+            ". Selection uses source coverage/PC only, NOT execution order, "+
+            "first/last write or physical CS assertion.\n\n";
+        String firstTable=sourceHeader+
+            "- SOURCE PC 0x000050; possible SIM mapping MM1; "+
+            "one retained CFG context of 1; known 16-bit CS words 1"+
+            sourceTail+
+            ChipSelectTable.markdown(java.util.Map.of("CSBAR0",0xf803),true);
+        String secondTable=sourceHeader+
+            "- SOURCE PC 0x000070; possible SIM mapping MM0; "+
+            "one retained CFG context of 1; known 16-bit CS words 1"+
+            sourceTail+
+            ChipSelectTable.markdown(java.util.Map.of("CSBAR7",0xff83),true);
+        String focusedCs=HardwareContextSelector.select(
+            firstTable+secondTable,"#hardware CSBAR0 map",5000);
+        ok(focusedCs.contains("SOURCE PC 0x000050") &&
+            !focusedCs.contains("SOURCE PC 0x000070") &&
+            focusedCs.contains("CS TABLE ROW COVERAGE: 12 of 12") &&
+            focusedCs.contains("other valid source contexts omitted=1") &&
+            focusedCs.contains(
+                "| CS0 | 0xF80000 | 0xF8FFFF | 64 KiB | 0xF803 | "+
+                "UNKNOWN | UNKNOWN | PARTIAL: CSOR/CSPAR unknown |") &&
+            focusedCs.contains("| CS10 | UNKNOWN | UNKNOWN | UNKNOWN |") &&
+            !focusedCs.contains("CONDITIONAL: possible assertion") &&
+            focusedCs.contains("NOT a combined map"),
+            "focused RAG must retain one full CSBAR0 snapshot with source "+
+            "PC/MM and all 12 conditional rows, not combine function sources");
+        String cs7=HardwareContextSelector.select(firstTable+secondTable,
+            "#hardware CSBAR7",5000);
+        ok(cs7.contains("SOURCE PC 0x000070") &&
+            !cs7.contains("SOURCE PC 0x000050") &&
+            cs7.contains("| CS7 |") &&
+            cs7.contains("12 of 12"),
+            "requested register with known value outranks unrelated function");
+        String reversedCs=HardwareContextSelector.select(
+            secondTable+firstTable,"#hardware CSBAR0",5000);
+        ok(reversedCs.contains("SOURCE PC 0x000050") &&
+            !reversedCs.contains("SOURCE PC 0x000070"),
+            "source selection independent of report function traversal order");
+        String withSites=firstTable+
+            "## Listing/XREF inventory\n"+
+            "### FUN_00000050\n"+
+            "- PC 0x000050: CSBAR0 at 0xFFFA4C [direct/P-code] value 0xF803\n"+
+            "### FUN_00000020\n"+
+            "- PC 0x000020: SIMCR at 0xFFFA00 [direct/P-code] value 0x40CA\n";
+        String csWithSite=HardwareContextSelector.select(
+            withSites,"#hardware CSBAR0",5000);
+        ok(csWithSite.contains("CS TABLE ROW COVERAGE: 12 of 12") &&
+            csWithSite.contains("matched unique instruction/register sites=1") &&
+            csWithSite.contains("PC 0x000050: CSBAR0"),
+            "fast matched register-site route must not omit matching CS table");
+        String simWithCs=HardwareContextSelector.select(
+            withSites,"#hardware SIMCR",5000);
+        ok(simWithCs.contains("PC 0x000020: SIMCR") &&
+            !simWithCs.contains("CS TABLE SOURCE SNAPSHOT"),
+            "SIMCR-only query must not consume budget for unrelated CS table");
+        String shortCs=HardwareContextSelector.select(
+            withSites,"#hardware CSBAR0",1400);
+        ok(shortCs.length()<=1400 &&
+            shortCs.contains("<<<END_LOCAL_GHIDRA_HARDWARE_EVIDENCE>>>") &&
+            (shortCs.contains("CS TABLE ROW COVERAGE:") ||
+                shortCs.contains("CS TABLE CONTEXT:")) &&
+            !shortCs.contains("CS TABLE ROW COVERAGE: 12 of 12"),
+            "tight context reports bounded subset/omission, never fake full table");
+        String brokenCs=firstTable.replace(
+            "| CS10 | UNKNOWN | UNKNOWN | UNKNOWN |",
+            "| CS11 | UNKNOWN | UNKNOWN | UNKNOWN |");
+        String refused=HardwareContextSelector.select(
+            brokenCs,"#hardware CSBAR0",5000);
+        ok(refused.contains("no complete, distinct 12-row") &&
+            !refused.contains("CS TABLE ROW COVERAGE: 12 of 12"),
+            "malformed 12-select source cannot become complete RAG evidence");
+        String genericCs=HardwareContextSelector.select(
+            "# Generic CPU32 — no MC68332 profile\n", "#hardware CSBAR0",5000);
+        ok(!genericCs.contains("CS TABLE SOURCE SNAPSHOT") &&
+            !genericCs.contains("CS TABLE ROW COVERAGE"),
+            "generic CPU32 must not inherit MC68332 CS source snapshots");
+
         System.out.println("HardwareContextSelectorSelfTest OK");
     }
 }

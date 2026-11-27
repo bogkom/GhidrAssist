@@ -1591,6 +1591,7 @@ def main():
             expected=("synthetic_simcr_site","hardware_analyze_gui",
                       "overview_full_export_rag_consistent",
                       "ga04_real_cs_table_source_verified",
+                      "ga04_focused_cs_rag_table_verified",
                       "ga07_report_manifest_pages_consistent",
                       "listing_navigation","stale_go_to_rejected",
                       "stale_double_click_rejected",
