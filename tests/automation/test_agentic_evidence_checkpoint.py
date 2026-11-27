@@ -127,11 +127,12 @@ class LocalAgenticCheckpoint(unittest.TestCase):
             root=Path(work)
             parent=root/"previous.json"
             child=root/"new-independent.json"
-            def report(run):
-                return page(0,100,run=run)
-            with patch.object(cli,"rpc",lambda _s,_m,args:report("historical-run")):
+            def report(run,args):
+                # A stable run still must honor explicit terminal page cursor.
+                return page(args["offset"],args["limit"],run=run)
+            with patch.object(cli,"rpc",lambda _s,_m,args:report("historical-run",args)):
                 cli.capture_agentic_checkpoint({},parent,100)
-            with patch.object(cli,"rpc",lambda _s,_m,args:report("new-run")):
+            with patch.object(cli,"rpc",lambda _s,_m,args:report("new-run",args)):
                 saved=cli.capture_agentic_checkpoint({},child,100,parent)
             self.assertTrue(saved["complete"])
             linked=cli.verify_agentic_lineage(child,parent)
@@ -151,7 +152,7 @@ class LocalAgenticCheckpoint(unittest.TestCase):
             self.assertEqual(result.returncode,0,result.stderr)
             self.assertTrue(json.loads(result.stdout)["lineage_matches"])
             other=root/"unrelated.json"
-            with patch.object(cli,"rpc",lambda _s,_m,args:report("other-run")):
+            with patch.object(cli,"rpc",lambda _s,_m,args:report("other-run",args)):
                 cli.capture_agentic_checkpoint({},other,100)
             with self.assertRaises(ValueError):
                 cli.verify_agentic_lineage(child,other)
@@ -178,12 +179,12 @@ class LocalAgenticCheckpoint(unittest.TestCase):
                 forged.write_text(json.dumps(data))
                 with self.assertRaises(ValueError):
                     cli.load_verified_agentic_payload(forged)
-            with patch.object(cli,"rpc",lambda _s,_m,args:report("new-run")):
+            with patch.object(cli,"rpc",lambda _s,_m,args:report("new-run",args)):
                 with self.assertRaises(ValueError):
                     cli.capture_agentic_checkpoint({},root/"same-run.json",100,child)
             # Changed firmware import cannot inherit the older source hash.
             def changed_firmware(_s,_m,args):
-                current=report("changed-firmware-run")
+                current=report("changed-firmware-run",args)
                 current["agentic"]["importSha256"]="b"*64
                 return current
             with patch.object(cli,"rpc",changed_firmware):
