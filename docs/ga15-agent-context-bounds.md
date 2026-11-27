@@ -152,3 +152,23 @@ plus the positive retained-finding control. This is an offline correctness
 change, not model execution, recovered omitted evidence, or an extension
 to source-completeness guarantees. Full Java 25 extension and any required
 real Ghidra integration are separate exact-SHA acceptance gates.
+
+## 2026-11-27 — canonical relevance ranking across host locales
+
+The retained evidence score is a bounded 0–10 field, regardless of
+whether a score comes from automatic tool-output extraction or from
+the legacy public `Finding.setRelevance` method. Public score updates
+now clamp to this range before testing for an actual change: repeated
+out-of-range updates with the same effective score do not invalidate
+a coherent paginated snapshot, while real retained-row score changes
+still advance the exact findings revision. Evicted or reset findings
+remain detached as described above.
+
+Keyword classification now uses `Locale.ROOT` rather than the host
+default language; otherwise capitalized `INJECTION` and `IMPORT`
+could classify differently under a Turkish UI/OS locale. Java 21
+regressions require equal relevance order under Turkish and root
+locales, reject ranking hijack via `Integer.MAX_VALUE`, and verify
+that clamped no-ops do not cause spurious stale page errors. These
+heuristics rank *retained textual findings only*: no keyword score
+authenticates a tool source, MCU event or execution path.
