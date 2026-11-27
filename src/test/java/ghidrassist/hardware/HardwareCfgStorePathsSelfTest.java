@@ -155,6 +155,29 @@ public final class HardwareCfgStorePathsSelfTest {
             catch(IllegalArgumentException expected){invalid=true;}
             ok(invalid,"unsigned 32-bit source identity cannot be forged");
         }
+        var safeMissing=HardwareCfgStorePaths.analyzeOrUnknown(10,
+            List.of(n(12,14),n(14)),ownedStores,false,10);
+        ok(safeMissing.truncated() && safeMissing.unknownFlow() &&
+            safeMissing.relations().isEmpty(),
+            "missing entry must not publish a path in production report adapter");
+        var safeEdges=HardwareCfgStorePaths.analyzeOrUnknown(10,
+            List.of(edgeAtLimit,n(12,14),n(14,12)),
+            ownedStores,false,10);
+        ok(safeEdges.truncated() && safeEdges.unknownFlow() &&
+            safeEdges.relations().isEmpty(),
+            "oversized total source edges become UNKNOWN without partial report");
+        var safeStores=HardwareCfgStorePaths.analyzeOrUnknown(10,valid,
+            java.util.Collections.nCopies(
+                HardwareCfgStorePaths.MAX_SOURCE_STORES+1,s(12,"SIMCR")),
+            false,10);
+        ok(safeStores.truncated() && safeStores.unknownFlow() &&
+            safeStores.relations().isEmpty(),
+            "oversized STORE inventory becomes UNKNOWN, not a global failure");
+        var safeValid=HardwareCfgStorePaths.analyzeOrUnknown(
+            10,valid,ownedStores,false,100);
+        ok(safeValid.equals(owned) &&
+            safeValid.relations().size()==1,
+            "valid complete source preserves exact same CFG path witness");
         // A valid high CPU32 address remains legal in the generic source
         // model. No unsupported 24-bit physical bus alias is invented.
         var high=HardwareCfgStorePaths.analyze(0xfffffff0L,
