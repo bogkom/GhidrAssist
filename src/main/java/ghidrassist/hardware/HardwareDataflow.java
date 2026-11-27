@@ -364,8 +364,26 @@ public final class HardwareDataflow {
         if(spelling.endsWith(".L"))return 32;
         return 0;
     }
+    /**
+     * A fully decoded CPU32 address source is not an arbitrary 32-bit
+     * integer reduced modulo the selected MCU24 bus. A high positive
+     * source (0x01FFFA00) must remain UNKNOWN, not a fabricated SIMCR
+     * alias. Preserve only the already recognized canonical sign-extended
+     * negative 16-bit address forms as conditional 24-bit MAY evidence.
+     * Do not use this for effective addresses computed by a bounded
+     * indexed STORE; their CPU32 arithmetic has separate provenance.
+     */
+    static Long possibleExternalAddress(long raw) {
+        if(raw>=0 && raw<=MASK24)return raw;
+        if(raw>=-0x8000L && raw<0 ||
+                raw>=0xffff8000L && raw<=0xffffffffL)
+            return raw&MASK24;
+        return null;
+    }
+
     private static Long resolve(Step step,State s) {
-        if(step.kind==Kind.STORE_DIRECT) return step.operand&MASK24;
+        if(step.kind==Kind.STORE_DIRECT)
+            return possibleExternalAddress(step.operand);
         if(step.kind==Kind.STORE_INDIRECT){
             Long base=s.pointers.get(step.register);
             if(base==null)return null;

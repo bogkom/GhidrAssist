@@ -289,6 +289,44 @@ public final class HardwareDurableFunctionStagesSelfTest {
                 HardwareDurableFunctionStages.load(
                     temp,key,0x100,100,signedIndexSteps,targets).isPresent(),
                 "MOVEQ signed .W index replay matches the source CFG on restart");
+            // A source-derived high direct address must stay unknown BOTH
+            // in the live fixed point and after independent disk replay.
+            // A substituted low24 SIMCR fixed point must not authenticate.
+            var wideDirectSteps=List.of(
+                step(0x100,STORE_DIRECT,null,0x01fffa00L,16,0x102L),
+                step(0x102,OTHER,null,0,0));
+            var wideDirectProof=HardwareDataflow.analyze(
+                0x100,wideDirectSteps,targets,100);
+            check(wideDirectProof.snapshots.size()==1 &&
+                wideDirectProof.snapshots.get(0).effectiveAddress==null &&
+                wideDirectProof.snapshots.get(0).knownPeripheralWords.isEmpty() &&
+                HardwareDurableFunctionStages.save(temp,key,0x100,100,
+                    wideDirectSteps,targets,wideDirectProof) &&
+                HardwareDurableFunctionStages.load(temp,key,0x100,100,
+                    wideDirectSteps,targets).isPresent(),
+                "wide STORE_DIRECT UNKNOWN is durable without aliasing SIMCR");
+            var lowDirectSteps=List.of(
+                step(0x100,STORE_DIRECT,null,0xfffa00L,16,0x102L),
+                step(0x102,OTHER,null,0,0));
+            var lowDirectProof=HardwareDataflow.analyze(
+                0x100,lowDirectSteps,targets,100);
+            check(lowDirectProof.snapshots.get(0).effectiveAddress==0xfffa00L &&
+                !HardwareDurableFunctionStages.save(temp,key,0x100,100,
+                    wideDirectSteps,targets,lowDirectProof) &&
+                HardwareDurableFunctionStages.load(temp,key,0x100,100,
+                    wideDirectSteps,targets).isPresent(),
+                "forged low24 direct fixed point must not replace high source");
+            var signedDirectSteps=List.of(
+                step(0x100,STORE_DIRECT,null,0xfffffa00L,16,0x102L),
+                step(0x102,OTHER,null,0,0));
+            var signedDirectProof=HardwareDataflow.analyze(
+                0x100,signedDirectSteps,targets,100);
+            check(signedDirectProof.snapshots.get(0).effectiveAddress==0xfffa00L &&
+                HardwareDurableFunctionStages.save(temp,key,0x100,100,
+                    signedDirectSteps,targets,signedDirectProof) &&
+                HardwareDurableFunctionStages.load(temp,key,0x100,100,
+                    signedDirectSteps,targets).isPresent(),
+                "legitimate signed direct candidate is revalidated after restart");
             System.out.println("HardwareDurableFunctionStagesSelfTest OK");
         }finally{
             try(var files=Files.list(temp)){

@@ -52,11 +52,14 @@ public final class HardwarePcodeConstantMath {
         }
     }
 
-    /** Only the last CPU32 external address translation is modulo 24-bit. */
+    /**
+     * Preserve full CPU32 source width until validating the external
+     * address. A forged 0x01FFFA00 source is NOT evidence for SIMCR,
+     * while canonical sign-extended negative 16-bit forms remain source-
+     * level MAY candidates. Unknown/non-32-bit STORE pointers stay unknown.
+     */
     public static Long externalAddress(Long raw,int pointerBytes) {
-        // A truncated 8/16-bit value is not an independently proven
-        // CPU32 pointer. The actual P-code STORE address is 32-bit.
         if(raw==null || pointerBytes!=4)return null;
-        return raw & HardwareDataflow.MASK24;
+        return HardwareDataflow.possibleExternalAddress(raw);
     }
 }
