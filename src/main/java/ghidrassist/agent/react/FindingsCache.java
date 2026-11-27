@@ -169,6 +169,22 @@ public class FindingsCache {
         "SOURCE INCOMPLETE: some tool output was not inspected; " +
         "retrieve the original tool source before claiming completeness.";
     public synchronized boolean isSourceIncomplete() { return sourceIncomplete; }
+    /** Legacy text renderers must carry the same loss receipts as pages. */
+    private String evidenceOmissionWarning() {
+        if(evictedFindings==0 && unattributedFindings==0)return "";
+        return "EVIDENCE INCOMPLETE: "+evictedFindings+
+            " accepted findings evicted by the relevance budget; "+
+            unattributedFindings+
+            " accepted findings lacked evidence or tool attribution. "+
+            "Do not claim a complete inventory; consult original tool outputs.";
+    }
+
+    private String textWarnings() {
+        String omitted=evidenceOmissionWarning();
+        if(!sourceIncomplete)return omitted;
+        return omitted.isEmpty() ? SOURCE_INCOMPLETE_WARNING :
+            SOURCE_INCOMPLETE_WARNING+"\n"+omitted;
+    }
 
     /**
      * Record discarded provider bytes independently from ranked findings.
@@ -403,8 +419,8 @@ public class FindingsCache {
      */
     public synchronized String formatForPrompt(int maxShow, int maxCharsPerFinding) {
         if (findings.isEmpty()) {
-            return sourceIncomplete ? SOURCE_INCOMPLETE_WARNING :
-                "No significant findings yet.";
+            return textWarnings().isEmpty() ? "No significant findings yet." :
+                textWarnings();
         }
 
         String formatted=findings.stream()
@@ -421,7 +437,8 @@ public class FindingsCache {
                 return "• " + fact;
             })
             .collect(Collectors.joining("\n"));
-        return sourceIncomplete ? SOURCE_INCOMPLETE_WARNING+"\n"+formatted : formatted;
+        String warnings=textWarnings();
+        return warnings.isEmpty() ? formatted : warnings+"\n"+formatted;
     }
 
     /**
@@ -441,8 +458,8 @@ public class FindingsCache {
      */
     public synchronized String formatDetailed(int maxFindings, boolean includeIterationSummaries) {
         StringBuilder sb = new StringBuilder();
-        if(sourceIncomplete)
-            sb.append(SOURCE_INCOMPLETE_WARNING).append("\n\n");
+        String warnings=textWarnings();
+        if(!warnings.isEmpty())sb.append(warnings).append("\n\n");
 
         // Add iteration summaries first (provides context)
         if (includeIterationSummaries && !iterationSummaries.isEmpty()) {
@@ -484,8 +501,8 @@ public class FindingsCache {
      */
     public synchronized String summarize() {
         if (findings.isEmpty()) {
-            return sourceIncomplete ? SOURCE_INCOMPLETE_WARNING :
-                "No findings to summarize.";
+            return textWarnings().isEmpty() ? "No findings to summarize." :
+                textWarnings();
         }
 
         // Get top findings by relevance
@@ -495,8 +512,8 @@ public class FindingsCache {
             .collect(Collectors.toList());
 
         StringBuilder sb = new StringBuilder();
-        if(sourceIncomplete)
-            sb.append(SOURCE_INCOMPLETE_WARNING).append("\n");
+        String warnings=textWarnings();
+        if(!warnings.isEmpty())sb.append(warnings).append("\n");
         sb.append("Key Findings Summary:\n");
         for (Finding f : topFindings) {
             sb.append("- ").append(f.getFact()).append("\n");
@@ -541,8 +558,9 @@ public class FindingsCache {
      * Get compact representation for progress tracking.
      */
     public synchronized String toCompactString() {
+        String warnings=textWarnings();
         return String.format("%d findings accumulated%s", findings.size(),
-            sourceIncomplete?"; SOURCE INCOMPLETE":"");
+            warnings.isEmpty() ? "" : "; "+warnings);
     }
 
     /**
