@@ -444,11 +444,65 @@ public final class HardwareDataflow {
         return mayTouchSimcrMmLowByte(address,step.writeBits);
     }
 
+    /**
+     * Source-value projection for the selected MCU's 24-bit external bus.
+     * Only canonical CPU32 signed values whose meaning is independently
+     * fixed by their decoded mnemonic may be interpreted as bus candidates:
+     * MOVEA.W sign-extends 16 bits; MOVEQ sign-extends 8 bits; MOVEA.L/LEA
+     * can encode an already sign-extended negative 16-bit address. This
+     * is a possible address source, never proof of execution/MM/VBR.
+     *
+     * An arbitrary 32-bit word with matching low bits (0x01000800,
+     * 0x01FFFA00) is deliberately UNKNOWN. For MOVEC VBR_CONSTANT the
+     * separate full-width gate in transfer() still refuses high sources.
+     * The GA-12 independent replay calls THIS helper, so it cannot
+     * disagree with live CFG semantics on a completed checkpoint.
+     */
+    static Long boundedSourceConstant(Step step) {
+        if(step==null || step.register==null)return null;
+        long word=step.operand;
+        String opcode=step.mnemonic;
+        // MOVEQ has an 8-bit signed source, even if caller-supplied
+        // synthetic Steps or Ghidra P-code represent it in 24/32 bits.
+        // A raw unsigned negative byte (0x80..0xFF) is not canonical.
+        if("MOVEQ".equals(opcode) && step.register.startsWith("D")) {
+            long signed=(byte)word;
+            return word==signed || word==(signed&0xffffffL) ||
+                    word==(signed&0xffffffffL) ?
+                signed&MASK24:null;
+        }
+        // MOVEA.W always sign-extends a 16-bit input. Do not accept a
+        // forged unsigned negative 0x8000..0xFFFF as a complete An value.
+        if(step.register.startsWith("A") && "MOVEA.W".equals(opcode)) {
+            if(word>=-0x8000L && word<=0x7fffL ||
+                    word>=0xffff8000L && word<=0xffffffffL)
+                return word&MASK24;
+            return null;
+        }
+        if(word>=0 && word<=MASK24)return word;
+        // Existing CPU32 Listing fixtures include full-width canonical
+        // negative MOVEA.L/LEA source addresses (e.g. 0xFFFFFA00).
+        // Do not generalize this exception to 0x01FFFA00, any Dn MOVEC
+        // source or arbitrary high 32-bit constants.
+        if(step.register.startsWith("A") &&
+                ("MOVEA.L".equals(opcode) || "LEA".equals(opcode)) &&
+                word>=0xffff8000L && word<=0xffffffffL)
+            return word&MASK24;
+        return null;
+    }
+
     private static State transfer(Step step,State in,Set<Long> targets){
         State s=in.copy();
         switch(step.kind) {
             case SET_POINTER -> {
-                if(step.register!=null)s.pointers.put(step.register,step.operand&MASK24);
+                if(step.register!=null) {
+                    // Project only bounded source words and explicitly
+                    // decoded canonical sign extensions. An arbitrary high
+                    // CPU32 value MUST NOT silently alias MCU24 MMIO.
+                    Long source=boundedSourceConstant(step);
+                    if(source==null)s.pointers.remove(step.register);
+                    else s.pointers.put(step.register,source);
+                }
             }
             case COPY_POINTER -> {
                 if(step.register!=null){
@@ -516,7 +570,11 @@ public final class HardwareDataflow {
                     }
                 }
             }
-            case VBR_CONSTANT -> s.vbr=step.operand&MASK24;
+            case VBR_CONSTANT ->
+                // A high CPU32 value cannot become a plausible 24-bit
+                // relocated source table merely by masking.
+                s.vbr=step.operand>=0 && step.operand<=MASK24?
+                    step.operand:null;
             case VBR_FROM_REGISTER -> s.vbr=s.pointers.get(step.register);
             case CALL_BARRIER -> {
                 // A call may change any peripheral or register; no summary
@@ -525,8 +583,15 @@ public final class HardwareDataflow {
                 s.crossedUnknownCall=true;
                 // Register evidence is reintroduced only after the generic
                 // CALL barrier, and only from a strictly verified leaf.
-                for(var proved:step.verifiedCallReturns.entrySet())
-                    s.pointers.put(proved.getKey(),proved.getValue()&MASK24);
+                for(var proved:step.verifiedCallReturns.entrySet()) {
+                    // A trustworthy callee can return a full CPU32 word,
+                    // but an out-of-scope value is NOT a proved MCU24
+                    // pointer. Never silently alias a high return to SIMCR.
+                    long value=proved.getValue();
+                    if(value<0 || value>MASK24)
+                        s.pointers.remove(proved.getKey());
+                    else s.pointers.put(proved.getKey(),value);
+                }
             }
             default -> {}
         }

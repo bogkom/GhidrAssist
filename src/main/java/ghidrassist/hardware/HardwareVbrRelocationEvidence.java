@@ -24,6 +24,7 @@ public final class HardwareVbrRelocationEvidence {
     // require Ghidra or the unrelated CALL solver at compile time.
     public static final int MAX_RESET_SOURCE_ENTRIES=50_000;
     public static final long MAX_24BIT=0xffffffL;
+    public static final long MAX_CPU32=0xffffffffL;
     private static final long TABLE_BYTES=1024L; // MC68332UM CPU32 VBR, 256 x 4
 
     public enum Relation {
@@ -35,6 +36,7 @@ public final class HardwareVbrRelocationEvidence {
         TABLE_BYTES_CANDIDATE,
         UNKNOWN_SOURCE_REGISTER,
         UNALIGNED_SOURCE,
+        OUTSIDE_SELECTED_MCU24_RANGE,
         CROSSES_24BIT_LIMIT
     }
     /** One decoded MOVEC-to-VBR site; value is a local joined CFG hypothesis. */
@@ -44,8 +46,12 @@ public final class HardwareVbrRelocationEvidence {
             if(functionEntry<0 || functionEntry>MAX_24BIT ||
                     instruction<functionEntry || instruction>MAX_24BIT ||
                     (functionEntry&1)!=0 || (instruction&1)!=0 ||
+                    // Preserve the original 32-bit MOVEC source word in
+                    // source-level evidence. A word above MC68332's
+                    // selected 24-bit range is INVALID for table scanning,
+                    // not a reason to abort every other source-site row.
                     sourceValue!=null && (sourceValue<0 ||
-                            sourceValue>MAX_24BIT))
+                            sourceValue>MAX_CPU32))
                 throw new IllegalArgumentException("Invalid VBR source coordinates");
         }
     }
@@ -72,6 +78,7 @@ public final class HardwareVbrRelocationEvidence {
                .append("; unknown source registers: ").append(unknownSourceValues)
                .append("; unaligned / out-of-range sources: ")
                .append(invalidSourceValues)
+               .append(" (out-of-MCU24 source words never masked to an alias)")
                .append("; distinct eligible table bases: ")
                .append(eligibleTableBases).append("; inspected bases: ")
                .append(tableBases.size()).append(".\n")
@@ -121,6 +128,8 @@ public final class HardwareVbrRelocationEvidence {
     }
     private static TableState tableState(Long base) {
         if(base==null)return TableState.UNKNOWN_SOURCE_REGISTER;
+        if(base>MAX_24BIT)
+            return TableState.OUTSIDE_SELECTED_MCU24_RANGE;
         if((base&3)!=0)return TableState.UNALIGNED_SOURCE;
         if(base>MAX_24BIT-(TABLE_BYTES-1))
             return TableState.CROSSES_24BIT_LIMIT;

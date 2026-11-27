@@ -116,3 +116,41 @@ UNKNOWN RESET root, wide/odd/null IDs, and oversized inventories.
 No active VBR, ISA execution, actual interrupt, SIMCR/MM latch, physical
 CS mapping, or program mutation follows from the source ranking.
 GA-11/18 remain PARTIAL.
+
+
+## 2026-11-27 — GA-01/11 high CPU32 MOVEC source cannot alias MCU24 VBR
+
+A genuine CPU32 register can contain a 32-bit immediate such as
+`0x01000800`. Previously the bounded 24-bit pointer-state solver
+used `source & 0xFFFFFF` for a full source constant, including
+a MOVEC-to-VBR register source. That would fabricate
+`0x000800` (or a low MMIO address) when only an out-of-device
+32-bit source was observed.
+
+`HardwareDataflow` now fails closed: a source constant or verified
+callee-register return outside unsigned MCU24 is **UNKNOWN** in the
+device-specific address domain, instead of silently truncating it.
+The direct VBR constant path is guarded similarly. Genuine source
+values **inside** 24-bit range remain unchanged. This guard does
+not assert any physical address-bus wrap, MCU execution, VBR choice,
+ISR entry or decoded chip-select hardware.
+
+The separate pure-Java21 `HardwareVbrRelocationEvidence` planner
+retains a caller-supplied **full 32-bit** source word, marks
+`OUTSIDE_SELECTED_MCU24_RANGE`, counts it invalid and never
+reads a table under its low 24 bits; values above 32 bits and
+malformed source PCs still fail validation. This keeps source
+disagreement visible rather than aborting other legitimate MOVEC
+candidate tables.
+
+Deterministic Java21 regressions exercise signed/out-of-range
+SET_POINTER, CALL result, indirect STORE, direct MOVEC and mixed
+high/in-range VBR sites. A real isolated Ghidra 12.1.4 PUBLIC
+headless regression adds a second decoded
+`MOVE.L #0x01000800,D0; MOVEC D0,VBR` Function alongside the
+valid `0x800` source, requires the high source UNKNOWN, the
+valid table still visible, an unchanged Program revision during
+read-only analysis and the new
+`ga11_high_cpu32_vbr_no_alias` marker. **This is genuine
+synthetic Ghidra CI and not a physical board/runtime VBR proof.**
+GA-01/11 remain PARTIAL beyond this exact source-boundary fix.

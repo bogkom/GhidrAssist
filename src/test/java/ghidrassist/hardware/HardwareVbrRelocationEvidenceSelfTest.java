@@ -109,8 +109,38 @@ public final class HardwareVbrRelocationEvidenceSelfTest {
             "duplicate MOVEC PC is invalid");
         reject(()->new HardwareVbrRelocationEvidence.Site(
             0x130,-1,0x800L,false,false),"bad source PC");
+        // An observed full CPU32 high register word remains visible in
+        // source evidence but is never a candidate MCU24 VBR table base.
+        var highSource=new HardwareVbrRelocationEvidence.Site(
+            0x130,0x136,0x01000800L,false,false);
+        var highPlan=HardwareVbrRelocationEvidence.plan(
+            List.of(highSource),true,false,Set.of(0x130L),3,12);
+        ok(highPlan.observedSourceSites()==1 &&
+            highPlan.invalidSourceValues()==1 &&
+            highPlan.eligibleTableBases()==0 &&
+            highPlan.tableBases().isEmpty() &&
+            highPlan.rows().get(0).sourceValue()==0x01000800L &&
+            highPlan.rows().get(0).tableState()==
+                HardwareVbrRelocationEvidence.TableState.OUTSIDE_SELECTED_MCU24_RANGE &&
+            highPlan.markdown().contains("0x01000800") &&
+            highPlan.markdown().contains("OUTSIDE_SELECTED_MCU24_RANGE"),
+            "high 32-bit MOVEC source stays as evidence but cannot alias MCU24 base");
         reject(()->new HardwareVbrRelocationEvidence.Site(
-            0x130,0x136,0x1000000L,false,false),"outside MC68332 physical address");
+            0x130,0x136,0x100000000L,false,false),
+            "source value above full CPU32 width must still fail closed");
+        reject(()->new HardwareVbrRelocationEvidence.Site(
+            0x130,0x136,-1L,false,false),
+            "negative untrusted source value is not a valid CPU32 word");
+        var combined=new java.util.ArrayList<>(sites);
+        combined.add(new HardwareVbrRelocationEvidence.Site(
+            0x420,0x426,0x01000800L,true,false));
+        var combinedPlan=HardwareVbrRelocationEvidence.plan(combined,
+            true,false,Set.of(0x130L),3,32);
+        ok(combinedPlan.observedSourceSites()==sites.size()+1 &&
+            combinedPlan.invalidSourceValues()==plan.invalidSourceValues()+1 &&
+            combinedPlan.eligibleTableBases()==plan.eligibleTableBases() &&
+            combinedPlan.tableBases().equals(plan.tableBases()),
+            "out-of-MCU24 candidate never poisons unrelated valid MOVEC bases");
         reject(()->new HardwareVbrRelocationEvidence.Site(
             0x140,0x13e,0x800L,false,false),
             "MOVEC PC cannot precede its declared owning function entry");

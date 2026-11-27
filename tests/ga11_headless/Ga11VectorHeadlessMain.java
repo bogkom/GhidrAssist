@@ -3880,6 +3880,44 @@ public final class Ga11VectorHeadlessMain {
                                 "function bodies (NOT entries): 1") &&
                         full.getModificationNumber()==restoredVbrRev,
                         "Undo failed to restore read-only relocated evidence");
+
+                    // GA-01/11: genuine Ghidra CPU32 source instruction
+                    // MOVE.L #$01000800,D0; MOVEC D0,VBR is a full 32-bit
+                    // source, not the existing valid base 0x00000800.
+                    // A distinct decoded Function ensures mixed valid/high
+                    // input cannot poison the valid table scan or promote
+                    // an alias by accidentally masking high address bits.
+                    int highTx=full.startTransaction(
+                        "GA11 isolated high CPU32 MOVEC source");
+                    try {
+                        full.getMemory().setBytes(address(full,0x5b0L),
+                            java.util.HexFormat.of().parseHex(
+                                "203c010008004e7b08014e75"));
+                    } finally {full.endTransaction(highTx,true);}
+                    defineFixtureFunction(full,0x5b0L,12,
+                        "fixture_high_cpu32_vbr_source");
+                    var highMovecInsn=full.getListing().getInstructionAt(
+                        address(full,0x5b6L));
+                    check(highMovecInsn!=null &&
+                        highMovecInsn.toString().toUpperCase(Locale.ROOT)
+                            .contains("VBR"),
+                        "Real Ghidra did not decode high CPU32 MOVEC D0,VBR");
+                    long highRevision=full.getModificationNumber();
+                    String withHigh=new GhidraHardwareFlowService()
+                        .analyze(full,TaskMonitor.DUMMY,true).markdown;
+                    check(withHigh.contains(
+                            "### Relocated **source-image** table candidate at "+
+                            "0x00000800") &&
+                        withHigh.contains("MOVEC source sites sampled: 2") &&
+                        withHigh.contains("unknown source registers: 1") &&
+                        withHigh.contains("0x000005B6") &&
+                        !withHigh.contains(
+                            "### Relocated **source-image** table candidate at "+
+                            "0x01000800") &&
+                        full.getModificationNumber()==highRevision,
+                        "High source MOVEC became a fabricated MCU24 VBR "+
+                        "or corrupted valid separate source-table evidence");
+                    result.addProperty("ga11_high_cpu32_vbr_no_alias",true);
                     result.addProperty("vbr_relocation_real_movec_decoded",true);
                     result.addProperty("vbr_relocation_exact_and_interior",true);
                     result.addProperty("vbr_relocation_edit_invalidates",true);
