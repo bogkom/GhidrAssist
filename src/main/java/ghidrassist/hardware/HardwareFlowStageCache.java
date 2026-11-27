@@ -179,7 +179,9 @@ public final class HardwareFlowStageCache {
                         !EPOCHS.current(program,computationEpoch))
                     throw new CancelledException();
                 COMPLETED.put(program,checkpoint);
-                SKIP_DISK.remove(program);
+                // Keep the explicit-clear tombstone until a *new* durable
+                // checkpoint is successfully committed. A memory-only result
+                // does not replace a previously persisted source snapshot.
             }
             // Store only complete evidence: never turn a limited/unfinished
             // CFG capture into an apparently complete restart checkpoint.
@@ -200,10 +202,16 @@ public final class HardwareFlowStageCache {
                             if(!sameRevision(program,started) ||
                                     !EPOCHS.current(program,computationEpoch))
                                 throw new CancelledException();
+                            final boolean[] saved={false};
                             if(!EPOCHS.publishIfCurrent(program,computationEpoch,
-                                    ()->HardwareDurableStageStore.saveIfSameSource(
+                                    ()->saved[0]=HardwareDurableStageStore.saveIfSameSource(
                                         directory,analysisInputKey,beforeWrite,bytes)))
                                 throw new CancelledException();
+                            // The new file is durable and the same epoch is
+                            // still live under COMPLETED's publication lock.
+                            // Failed, missing or mismatched writes must not
+                            // resurrect the old on-disk report after clear.
+                            if(saved[0])SKIP_DISK.remove(program);
                         }
                     }
                 }catch(IOException|IllegalArgumentException skip){
