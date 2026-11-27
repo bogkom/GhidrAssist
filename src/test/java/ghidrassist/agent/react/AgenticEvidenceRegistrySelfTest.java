@@ -44,9 +44,43 @@ public final class AgenticEvidenceRegistrySelfTest {
         denies(()->registry.page(programA,17L,"b".repeat(64),0,1,null,null),
             "changed imported firmware SHA refuses old evidence");
         denies(()->registry.page(equalButDifferent,17L,"a".repeat(64),
-            0,1,null,null),"equal-but-distinct Program is not same owner");
-        denies(()->registry.begin(equalButDifferent,17L,"a".repeat(64),
-            findings),"equal-but-distinct owner cannot overwrite real Program slot");
+            0,1,null,null),"unregistered equal-but-distinct Program has no evidence");
+        // Explicitly reject shared mutable source caches across distinct
+        // owners, even when the owners happen to compare equal.
+        denies(()->registry.begin(equalButDifferent,17L,
+            "a".repeat(64),findings),
+            "same findings object cannot be published under different Programs");
+        yes(registry.page(programA,17L,
+            "a".repeat(64),0,1,null,null).run().equals(run),
+            "refused cache alias leaves original source unchanged");
+        // Equals-equivalent Ghidra Programs must coexist with distinct runs,
+        // independent source identities, pages, revisions and outcomes.
+        var otherFindings=new FindingsCache();
+        otherFindings.addFinding("second owner only","address 0x500","listing",8);
+        String otherRun=registry.begin(equalButDifferent,29L,
+            "b".repeat(64),otherFindings);
+        var otherPage=registry.page(equalButDifferent,29L,
+            "b".repeat(64),0,10,null,null);
+        yes(!otherRun.equals(run) &&
+            otherPage.run().equals(otherRun) &&
+            otherPage.findings().rows().get(0).fact().equals("second owner only") &&
+            registry.page(programA,17L,"a".repeat(64),0,1,null,null)
+                .run().equals(run),
+            "equal Program wrappers must maintain independent runs and evidence");
+        denies(()->registry.page(equalButDifferent,17L,"a".repeat(64),
+            0,1,null,null),"equal owners cannot borrow another owner's revision/SHA");
+        registry.finish(equalButDifferent,otherFindings,"SUCCESS");
+        yes(registry.page(equalButDifferent,29L,
+            "b".repeat(64),0,10,null,null).complete() &&
+            registry.page(programA,17L,
+            "a".repeat(64),0,1,null,null).state().equals("RUNNING"),
+            "finishing one equal owner cannot finish another");
+        registry.invalidate(equalButDifferent);
+        denies(()->registry.page(equalButDifferent,29L,"b".repeat(64),
+            0,1,null,null),"invalidating equal owner removes only its own pages");
+        yes(registry.page(programA,17L,"a".repeat(64),
+            0,1,null,null).run().equals(run),
+            "invalidating equal Program wrapper does not erase peer evidence");
         registry.finish(programA,findings,"SUCCESS");
         var success=registry.page(programA,17L,"a".repeat(64),0,2,null,null);
         yes(success.complete() && success.state().equals("SUCCESS") &&
@@ -175,10 +209,20 @@ public final class AgenticEvidenceRegistrySelfTest {
                 0,1,null,null),"source must be absent before cancel callback");
             registry.finish(programA,active,"CANCELLED");
         });
+        var otherActive=new FindingsCache();
+        otherActive.addFinding("owner B running","address 0x600","listing",7);
+        var otherCancelCount=new java.util.concurrent.atomic.AtomicInteger();
+        String otherLive=registry.begin(equalButDifferent,17L,
+            "a".repeat(64),otherActive,()->{
+                otherCancelCount.incrementAndGet();
+                registry.finish(equalButDifferent,otherActive,"CANCELLED");
+            });
         registry.invalidate(equalButDifferent);
-        yes(cancelCount.get()==0 &&
+        yes(cancelCount.get()==0 && otherCancelCount.get()==1 &&
             registry.page(programA,17L,"a".repeat(64),0,1,null,null).run().equals(live),
-            "equal-but-distinct Program cannot cancel another source");
+            "cancelling equal-but-distinct owner B cannot cancel owner A");
+        denies(()->registry.page(equalButDifferent,17L,"a".repeat(64),
+            0,1,otherLive,null),"B pages must disappear after B invalidation");
         registry.invalidate(programA);
         registry.invalidate(programA);
         yes(cancelCount.get()==1,
@@ -273,6 +317,75 @@ public final class AgenticEvidenceRegistrySelfTest {
         yes(registry.page(programA,17L,"a".repeat(64),0,1,null,null)
             .state().equals("MAX_TOOLS"),
             "budget termination must not be promoted by late SUCCESS");
+
+        // An equals() collision and a constant hashCode collision are
+        // not grounds to share evidence, even with matching source SHAs.
+        record CollidingOwner(int number) {
+            @Override public int hashCode() {return 1;}
+        }
+        var ownerOne=new CollidingOwner(1);
+        var ownerOneEqual=new CollidingOwner(1);
+        var ownerTwo=new CollidingOwner(2);
+        var cacheOne=new FindingsCache();
+        var cacheOneEqual=new FindingsCache();
+        var cacheTwo=new FindingsCache();
+        cacheOne.addFinding("A","source A","listing",8);
+        cacheOneEqual.addFinding("B","source B","listing",8);
+        cacheTwo.addFinding("C","source C","listing",8);
+        var independent=new AgenticEvidenceRegistry<CollidingOwner>();
+        String runA=independent.begin(ownerOne,5L,"c".repeat(64),cacheOne);
+        String runB=independent.begin(ownerOneEqual,5L,"c".repeat(64),cacheOneEqual);
+        String runC=independent.begin(ownerTwo,5L,"c".repeat(64),cacheTwo);
+        independent.finish(ownerOne,cacheOne,"SUCCESS");
+        independent.finish(ownerOneEqual,cacheOneEqual,"SUCCESS");
+        independent.finish(ownerTwo,cacheTwo,"SUCCESS");
+        yes(!runA.equals(runB) && !runB.equals(runC) &&
+            independent.page(ownerOne,5L,"c".repeat(64),0,1,null,null)
+                .findings().rows().get(0).fact().equals("A") &&
+            independent.page(ownerOneEqual,5L,"c".repeat(64),0,1,null,null)
+                .findings().rows().get(0).fact().equals("B") &&
+            independent.page(ownerTwo,5L,"c".repeat(64),0,1,null,null)
+                .findings().rows().get(0).fact().equals("C"),
+            "identity keys isolate equals-equivalent and hash-colliding Programs");
+        independent.invalidate(ownerOneEqual);
+        yes(independent.page(ownerOne,5L,"c".repeat(64),0,1,null,null)
+                .complete() &&
+            independent.page(ownerTwo,5L,"c".repeat(64),0,1,null,null)
+                .complete(),
+            "invalidating one collided key does not erase other evidence");
+        denies(()->independent.page(ownerOneEqual,5L,
+            "c".repeat(64),0,1,null,null),
+            "invalidation removes exact colliding key only");
+
+        // Deterministically emulate an enqueued, cleared weak owner key:
+        // never depend on System.gc() timing for identity-map cleanup tests.
+        var cleanup=new AgenticEvidenceRegistry<Object>();
+        var disposableOwner=new Object();
+        var disposableFindings=new FindingsCache();
+        disposableFindings.addFinding("temporary","disposable source","listing",5);
+        cleanup.begin(disposableOwner,1L,"d".repeat(64),disposableFindings);
+        try {
+            var field=AgenticEvidenceRegistry.class.getDeclaredField("programs");
+            field.setAccessible(true);
+            var entries=(java.util.Map<?,?>)field.get(cleanup);
+            yes(entries.size()==1,"weak identity map stores one live owner");
+            var weak=(java.lang.ref.Reference<?>)entries.keySet().iterator().next();
+            weak.clear();
+            yes(weak.enqueue(),"synthetic weak owner can be queued exactly once");
+            var survivor=new Object();
+            var survivorFindings=new FindingsCache();
+            survivorFindings.addFinding("survivor","source","listing",6);
+            cleanup.begin(survivor,1L,"d".repeat(64),survivorFindings);
+            yes(entries.size()==1 && cleanup.page(survivor,1L,
+                "d".repeat(64),0,1,null,null)
+                    .findings().rows().get(0).fact().equals("survivor"),
+                "queued weak identity is discarded without deleting live owner");
+            denies(()->cleanup.page(disposableOwner,1L,
+                "d".repeat(64),0,1,null,null),
+                "cleared weak owner cannot be retrieved as current evidence");
+        } catch(ReflectiveOperationException e) {
+            throw new AssertionError("Identity-map queue regression setup failed",e);
+        }
 
         System.out.println("AGENTIC REGISTRY PASS assertions="+assertions);
     }
