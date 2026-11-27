@@ -350,6 +350,14 @@ public final class HardwareCallsiteRegisterFlowSelfTest {
             new HardwareDataflow.Step(0x646,STORE_INDIRECT,"A0","D0",
                 0,0,null,16,List.of(0x648L),"MOVE.W"),
             ret(0x648));
+        var smuggled=HardwareDataflow.analyzeWithEntryRegisters(
+            0x640,forgedPreEntry,Set.of(simcr),500,
+            Map.of("D0",0x40caL));
+        ok(smuggled.snapshots.size()==1 &&
+            simcr==smuggled.snapshots.get(0).effectiveAddress &&
+            smuggled.snapshots.get(0).writtenWord==0x40ca,
+            "untrusted pre-entry predecessor WOULD create a false contextual "+
+            "MMIO source without strict callee scope");
         rejects(()->new HardwareCallsiteRegisterFlow.Callee(
             0x640,forgedPreEntry,true),
             "foreign predecessor must never seed a one-hop callee MMIO");
