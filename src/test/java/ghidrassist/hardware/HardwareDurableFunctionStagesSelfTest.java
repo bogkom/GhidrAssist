@@ -200,6 +200,75 @@ public final class HardwareDurableFunctionStagesSelfTest {
                 HardwareDurableFunctionStages.load(
                     temp,key,0x100,100,ordinaryLabel,targets).isPresent(),
                 "oversized malformed source never destroys valid durable slot");
+            // GA-01/11/12: a full CPU32 high word never becomes low24
+            // MMIO/VBR merely because the disk record is independently
+            // decoded and carries a valid unkeyed SHA envelope.
+            var highSourceSteps=List.of(
+                step(0x100,SET_POINTER,"A0",0x01fffa00L,32,0x102L),
+                step(0x102,STORE_INDIRECT,"A0",0,16,0x104L),
+                step(0x104,VBR_FROM_REGISTER,"A0",0,0));
+            var highSourceProof=HardwareDataflow.analyze(
+                0x100,highSourceSteps,targets,100);
+            check(highSourceProof.snapshots.size()==2 &&
+                highSourceProof.snapshots.get(0).effectiveAddress==null &&
+                highSourceProof.snapshots.get(1).vbr==null,
+                "high source cannot generate either SIMCR or VBR candidate");
+            check(HardwareDurableFunctionStages.save(
+                temp,key,0x100,100,highSourceSteps,targets,highSourceProof) &&
+                HardwareDurableFunctionStages.load(
+                    temp,key,0x100,100,highSourceSteps,targets).isPresent(),
+                "high CPU32 UNKNOWN evidence is restorable without low24 alias");
+            check(!HardwareDurableFunctionStages.save(
+                temp,key,0x100,100,highSourceSteps,targets,computed),
+                "low24 fixed point may not impersonate high CPU32 source steps");
+            check(HardwareDurableFunctionStages.load(
+                temp,key,0x100,100,highSourceSteps,targets).isPresent(),
+                "refused forged alias cannot evict genuine UNKNOWN proof");
+
+            var signedWordSteps=List.of(
+                new HardwareDataflow.Step(0x100,SET_POINTER,
+                    "A0",0xfffffa00L,0,null,32,List.of(0x102L),
+                    "MOVEA.W"),
+                step(0x102,STORE_INDIRECT,"A0",0,16,0x104L),
+                step(0x104,OTHER,null,0,0));
+            var signedWordProof=HardwareDataflow.analyze(
+                0x100,signedWordSteps,targets,100);
+            check(signedWordProof.snapshots.size()==1 &&
+                signedWordProof.snapshots.get(0).effectiveAddress==0xfffa00L &&
+                HardwareDurableFunctionStages.save(
+                    temp,key,0x100,100,signedWordSteps,targets,signedWordProof) &&
+                HardwareDurableFunctionStages.load(
+                    temp,key,0x100,100,signedWordSteps,targets).isPresent(),
+                "canonical MOVEA.W bus projection revalidates independently");
+
+            var highReturnSteps=List.of(
+                step(0x100,CALL_BARRIER,null,0,0,0x102L)
+                    .withVerifiedCallReturns(Map.of("A0",0x01fffa00L)),
+                step(0x102,STORE_INDIRECT,"A0",0,16,0x104L),
+                step(0x104,VBR_FROM_REGISTER,"A0",0,0));
+            var highReturnProof=HardwareDataflow.analyze(
+                0x100,highReturnSteps,targets,100);
+            check(highReturnProof.snapshots.get(0).effectiveAddress==null &&
+                highReturnProof.snapshots.get(1).vbr==null &&
+                HardwareDurableFunctionStages.save(
+                    temp,key,0x100,100,highReturnSteps,targets,highReturnProof) &&
+                HardwareDurableFunctionStages.load(
+                    temp,key,0x100,100,highReturnSteps,targets).isPresent(),
+                "verified high CALL return is independently UNKNOWN after restart");
+
+            var mixedVbrSteps=List.of(
+                step(0x100,VBR_CONSTANT,null,0x01000800L,0,0x102L),
+                step(0x102,VBR_CONSTANT,null,0x800L,0));
+            var mixedVbrProof=HardwareDataflow.analyze(
+                0x100,mixedVbrSteps,targets,100);
+            check(mixedVbrProof.snapshots.size()==2 &&
+                mixedVbrProof.snapshots.get(0).vbr==null &&
+                mixedVbrProof.snapshots.get(1).vbr==0x800L &&
+                HardwareDurableFunctionStages.save(
+                    temp,key,0x100,100,mixedVbrSteps,targets,mixedVbrProof) &&
+                HardwareDurableFunctionStages.load(
+                    temp,key,0x100,100,mixedVbrSteps,targets).isPresent(),
+                "mixed invalid high/valid VBR checkpoints preserve source distinction");
             System.out.println("HardwareDurableFunctionStagesSelfTest OK");
         }finally{
             try(var files=Files.list(temp)){
