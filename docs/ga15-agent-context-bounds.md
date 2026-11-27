@@ -172,3 +172,21 @@ locales, reject ranking hijack via `Integer.MAX_VALUE`, and verify
 that clamped no-ops do not cause spurious stale page errors. These
 heuristics rank *retained textual findings only*: no keyword score
 authenticates a tool source, MCU event or execution path.
+
+## 2026-11-27 — evidence omissions carried into text synthesis
+
+Version-pinned evidence pages already refuse to certify completeness when a
+finding was evicted or accepted without attributable evidence/tool information.
+The human/LLM-facing prompt, detailed, compact and short-summary renderers
+now carry an explicit **EVIDENCE INCOMPLETE** receipt for those distinct
+conditions. Retained-row ranking alone must not hide source loss that occurred
+earlier in the same run. The source byte-truncation **SOURCE INCOMPLETE**
+receipt remains separate and is included alongside the new receipt when both
+apply. An explicit `clear()` starts a new evidence generation and resets
+both receipts.
+
+The receipt reports historical accepted-finding omissions even when the
+affected row was already pruned; it is not a claim of actual firmware
+execution, authenticated tool provenance or model correctness. Deterministic
+Java 21 regressions check every text renderer against the paginated evidence
+completeness boundary, including combined losses and fresh-generation reset.
