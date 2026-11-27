@@ -280,6 +280,38 @@ public final class HardwareCallsiteConsensusSelfTest {
             HardwareCallsiteConsensus.State.SAMPLED_AGREEMENT,
             0x500,0x500,2,0xfffa00L,0x4848,16,good.candidates()),
             "public receipt must match exact word from both callers");
+        var secondSource=good.candidates().get(1);
+        var alternateKind=new HardwareCallsiteRegisterFlow.Candidate(
+            secondSource.caller(),secondSource.callPc(),
+            secondSource.callee(),secondSource.storePc(),STORE_DIRECT,
+            secondSource.address(),secondSource.writtenWord(),
+            secondSource.writeBits(),false,false,
+            secondSource.sourceRegisterCount());
+        rejects(()->new HardwareCallsiteConsensus.Finding(
+            HardwareCallsiteConsensus.State.SAMPLED_AGREEMENT,
+            0x500,0x500,2,0xfffa00L,0x40ca,16,
+            List.of(good.candidates().get(0),alternateKind)),
+            "direct/indirect write source kinds cannot forge unanimity");
+        var differingKind=new HardwareCallsiteRegisterFlow.Summary(
+            good.sampledCalls(),good.directCalls(),good.contextCalls(),
+            good.rejectedIncomplete(),good.rejectedMissingCallee(),
+            good.rejectedNestedOrBadCfg(),good.truncatedCalls(),
+            good.unresolvedAliases(),good.possibleStoreSites(),
+            false,List.of(good.candidates().get(0),alternateKind));
+        check(HardwareCallsiteConsensus.inspect(List.of(a,b),
+            differingKind,0x500L,0x500L).state()==
+                HardwareCallsiteConsensus.State.SAMPLED_DIVERGENCE,
+            "sampled source kinds disagree even with identical address/word");
+        var withStack=new HardwareCallsiteRegisterFlow.Call(
+            a.caller(),a.callPc(),a.directCallee(),
+            Map.of("A0",0xfffa00L,"D0",0x40caL,"A7",0xfff7fcL),false);
+        var stackSafe=HardwareCallsiteConsensus.inspect(
+            List.of(withStack,b),analyze(List.of(withStack,b),8),
+            0x500L,0x500L);
+        check(stackSafe.state()==
+                HardwareCallsiteConsensus.State.SAMPLED_AGREEMENT &&
+            stackSafe.provenance().get(0).sourceRegisterCount()==2,
+            "A7 is never part of the passed A/D register context");
         rejects(()->new HardwareCallsiteConsensus.Finding(
             HardwareCallsiteConsensus.State.NO_SAMPLED_CALLS,
             0x500,0x500,0,null,null,0,good.candidates()),
