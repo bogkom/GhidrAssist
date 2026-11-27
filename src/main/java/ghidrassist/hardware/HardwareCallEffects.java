@@ -30,6 +30,12 @@ public final class HardwareCallEffects {
                     directCallees.stream().anyMatch(callee ->
                         callee==null || !address(callee)))
                 throw new IllegalArgumentException("Invalid call graph node");
+            // Enforce the global source-edge budget BEFORE allocating and
+            // sorting a second adjacency list. A hostile single node must
+            // not consume unbounded time/memory before inspect() can reject.
+            if(directCallees.size()>MAX_SOURCE_EDGES)
+                throw new IllegalArgumentException(
+                    "Unbounded direct-CALL node adjacency");
             // CALL targets are identities, not execution or source-PC
             // order. Canonical adjacency keeps both finite BFS search
             // membership and RESET witness chains invariant under the
